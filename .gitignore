@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+
+.firebase/
+repomix-output.xml

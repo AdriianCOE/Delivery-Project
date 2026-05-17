@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  @page {
+    size: auto;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-height: auto !important;
+    background: #ffffff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #receipt,
+  #receipt * {
+    visibility: visible !important;
+  }
+
+  #receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+  }
+
+  .receipt-print {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .receipt-print section,
+  .receipt-print div,
+  .receipt-print article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+@keyframes landingLoadingBar {
+  0% {
+    width: 0%;
+    opacity: 0.7;
+  }
+
+  55% {
+    width: 72%;
+    opacity: 1;
+  }
+
+  100% {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+@keyframes landingTopLine {
+  0% {
+    transform: translateX(-140%);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(330%);
+    opacity: 0;
+  }
+}
+
+@keyframes landingFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+    filter: blur(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes landingNavEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landingFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.landing-loading-bar {
+  animation: landingLoadingBar 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.landing-top-line {
+  animation: landingTopLine 1.15s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+.landing-reveal {
+  animation: landingFadeUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.landing-delay-2 {
+  animation-delay: 0.18s;
+}
+
+.landing-nav-enter {
+  animation: landingNavEnter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.landing-hero-enter {
+  animation: landingFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.landing-float {
+  animation: landingFloat 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-loading-bar,
+  .landing-top-line,
+  .landing-reveal,
+  .landing-nav-enter,
+  .landing-hero-enter,
+  .landing-float {
+    animation: none !important;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 15px, 0); 
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
