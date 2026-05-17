@@ -20,6 +20,8 @@ import {
   getDocFromCache,
 } from 'firebase/firestore'
 
+import { setSentryUser } from '../services/sentry'
+
 import { auth, db } from '../services/firebase'
 
 export const AuthContext = createContext(null)

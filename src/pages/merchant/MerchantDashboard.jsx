@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { captureAppError } from '../../services/sentry'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -1112,13 +1113,15 @@ const showToast = useCallback(
     }
 
     function handleOrdersError(error) {
-      queryErrors += 1
       console.error('Erro ao carregar pedidos:', error)
 
-      if (ordersMap.size === 0 && queryErrors <= 1) {
-        showToast('error', 'Erro ao carregar pedidos. Confira regras ou índices do Firestore.')
-      }
+      captureAppError(error, {
+        area: 'MerchantDashboard',
+        action: 'load_orders',
+        storeId: selectedStore?.id || selectedStore?.slug,
+      })
 
+      showToast('error', 'Erro ao carregar pedidos. Confira regras ou índices do Firestore.')
       setLoadingOrders(false)
     }
 
