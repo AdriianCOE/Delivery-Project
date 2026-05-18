@@ -1,6 +1,7 @@
 .env
-.env.*
-!.env.example
+.env.local
+.env.production
+.env.*.local
 
 .firebase/
 repomix-output.xml

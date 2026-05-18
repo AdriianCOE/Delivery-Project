@@ -1,0 +1,28 @@
+{
+    "rules": {
+      ".read": false,
+      ".write": false,
+  
+      "presence": {
+        "$storeId": {
+          ".read": true,
+  
+          "$sessionId": {
+            ".write": "newData.val() == null || newData.hasChildren(['online', 'connectedAt'])",
+  
+            "online": {
+              ".validate": "newData.isBoolean() && newData.val() == true"
+            },
+  
+            "connectedAt": {
+              ".validate": "newData.isNumber()"
+            },
+  
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    }
+  }

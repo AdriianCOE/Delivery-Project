@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { captureAppError } from '../../services/sentry'
+import { getPricingValidation } from '../../utils/orderValidation'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -44,6 +45,26 @@ import {
   FiX,
   FiXCircle,
 } from 'react-icons/fi'
+
+function PricingValidationBadge({ order }) {
+  const pricing = getPricingValidation(order)
+
+  const className = [
+    'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide',
+    pricing.tone === 'success' && 'bg-emerald-50 text-emerald-700',
+    pricing.tone === 'warning' && 'bg-amber-50 text-amber-700',
+    pricing.tone === 'danger' && 'bg-red-50 text-red-700',
+    pricing.tone === 'neutral' && 'bg-gray-50 text-gray-600',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <span className={className}>
+      {pricing.label}
+    </span>
+  )
+}
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const PUBLIC_STORE_BASE_URL =
@@ -706,7 +727,10 @@ function OrderRow({ order }) {
           <span className="rounded-full bg-gray-100 px-2 py-0.5 font-mono text-[10px] font-black text-gray-600">
             {getOrderDisplayNumber(order)}
           </span>
+
           <StatusPill status={order.status} />
+          <PricingValidationBadge order={order} />
+
           {urgent && (
   <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
     <FiAlertTriangle size={11} />
@@ -1169,7 +1193,12 @@ subscribeOrders(query(
     const deliveredOrders = validOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
     const activeOrders = orders.filter((order) => ACTIVE_STATUSES.includes(normalizeStatus(order.status)))
     
-const urgentOrders = activeOrders.filter((order) => isUrgentPending(order, 3))
+  const urgentOrders = activeOrders.filter((order) => isUrgentPending(order, 3))
+const priceReviewOrders = activeOrders.filter((order) => {
+  const status = order?.pricingValidation?.status
+
+  return status === 'review' || status === 'invalid' || order?.requiresManualPriceReview === true
+})
 
 const oldestPendingMinutes = urgentOrders.reduce((max, order) => {
   return Math.max(max, getPendingMinutes(order))
@@ -1256,6 +1285,7 @@ revenueDelta,
 ordersDelta,
 peakHours,
 maxPeakHour,
+priceReviewOrders,
 bestHourLabel,
       pendingCount: orders.filter((o) => normalizeStatus(o.status) === 'pendente').length,
       preparingCount: orders.filter((o) => normalizeStatus(o.status) === 'preparando').length,
@@ -1495,6 +1525,12 @@ bestHourLabel,
                   </div>
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-sm text-[#6b7280]">Atenção</span>
+                    <div className="flex items-center justify-between gap-4">
+
+                  <span
+                  >
+                  </span>
+                </div>
 <span
   className={`rounded-full px-3 py-1 text-xs font-black ${
     dashboardData.urgentOrders.length > 0

@@ -39,10 +39,6 @@ export function usePresence(storeId) {
         await set(myUserRef, {
           online: true,
           connectedAt: serverTimestamp(),
-          userAgent:
-            typeof navigator !== 'undefined'
-              ? navigator.userAgent
-              : null,
         })
       } catch (error) {
         console.error('Erro ao registrar presença:', error)

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
 import {
+  getPricingValidation,
+  shouldBlockOrderAcceptance,
+  shouldWarnOrderAcceptance,
+} from '../../utils/orderValidation'
+import {
   collection,
   doc,
   onSnapshot,
@@ -1559,6 +1564,47 @@ function EmptyState({ icon: Icon, title, description }) {
   )
 }
 
+function PricingValidationBadge({ order }) {
+  const pricing = getPricingValidation(order)
+
+  const className = [
+    'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1',
+    pricing.tone === 'success' && 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    pricing.tone === 'warning' && 'bg-amber-50 text-amber-700 ring-amber-100',
+    pricing.tone === 'danger' && 'bg-red-50 text-red-700 ring-red-100',
+    pricing.tone === 'neutral' && 'bg-gray-50 text-gray-600 ring-gray-100',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <span className={className}>
+      {pricing.label}
+    </span>
+  )
+}
+
+function PricingValidationAlert({ order }) {
+  const pricing = getPricingValidation(order)
+
+  if (pricing.status === 'valid') return null
+
+  const className = [
+    'mt-3 rounded-2xl border p-3 text-sm font-bold leading-6 md:col-span-2',
+    pricing.tone === 'warning' && 'border-amber-100 bg-amber-50 text-amber-800',
+    pricing.tone === 'danger' && 'border-red-100 bg-red-50 text-red-700',
+    pricing.tone === 'neutral' && 'border-gray-100 bg-gray-50 text-gray-600',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <div className={className}>
+      {pricing.message}
+    </div>
+  )
+}
+
 function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
   const status = normalizeStatus(order.status)
   const meta = STATUS_META[status] || STATUS_META.pendente
@@ -1620,6 +1666,7 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
             </p>
 
             <StatusBadge status={order.status} />
+            <PricingValidationBadge order={order} />
 
             {late && !isFinalStatus && (
               <span className="rounded-full bg-red-600 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white ring-1 ring-red-700">
@@ -1975,6 +2022,7 @@ function OrderModal({
                 </h2>
 
                 <StatusBadge status={order.status} />
+                <PricingValidationBadge order={order} />
 
                 {status === 'cancelado' && cancellationReason && (
   <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200">
@@ -2020,13 +2068,10 @@ function OrderModal({
               <span className="rounded-2xl bg-orange-50 px-3 py-2 text-sm font-black text-[#f97316]">
                 Total: {formatMoney(getOrderTotal(order))}
               </span>
-              
 
               <span className="rounded-2xl bg-gray-50 px-3 py-2 text-sm font-black text-[#111827]">
                 {getPaymentMethod(order)}
               </span>
-
-              
 
               <span
                 className={`rounded-2xl px-3 py-2 text-sm font-black ${
@@ -2040,6 +2085,8 @@ function OrderModal({
                 {getPaymentStatus(order)}
               </span>
             </div>
+
+            <PricingValidationAlert order={order} />
 
             {showCustomerThanksAction && (
   <div className="mt-3 rounded-2xl border border-green-200 bg-green-50 p-3">
@@ -2458,6 +2505,28 @@ export default function OrdersPage() {
     const nextStatus = normalizeStatus(status)
     const currentStatus = normalizeStatus(order.status)
 
+    if (
+      ['preparando', 'confirmado'].includes(nextStatus) &&
+      shouldBlockOrderAcceptance(order)
+    ) {
+      showToast(
+        'error',
+        'Este pedido tem valor suspeito. Confira o total antes de aceitar.'
+      )
+      return
+    }
+    
+    if (
+      ['preparando', 'confirmado'].includes(nextStatus) &&
+      shouldWarnOrderAcceptance(order)
+    ) {
+      const confirmed = window.confirm(
+        'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar mesmo assim?'
+      )
+    
+      if (!confirmed) return
+    }
+
     if (nextStatus === 'preparando' && shouldBlockPreparationUntilPayment(order)) {
       showToast('error', 'Confirme o pagamento Pix antes de iniciar o preparo.')
       return
@@ -2582,6 +2651,12 @@ export default function OrdersPage() {
       await updateDoc(doc(db, 'orders', order.id), {
         status: nextStatus,
         updatedAt: now,
+      
+        statusUpdatedBy: user?.uid || null,
+        statusUpdatedAt: now,
+        statusUpdatedFrom: currentStatus,
+        statusUpdatedTo: nextStatus,
+      
         ...(statusField ? { [statusField]: now } : {}),
         ...paymentPatch,
         ...cancellationPatch,
@@ -2622,10 +2697,26 @@ export default function OrdersPage() {
       showToast('error', 'Este pedido não é Pix manual.')
       return
     }
-
+    
     if (isPaymentPaid(order)) {
       showToast('success', 'Este pagamento já está confirmado.')
       return
+    }
+    
+    if (shouldBlockOrderAcceptance(order)) {
+      showToast(
+        'error',
+        'Este pedido tem valor suspeito. Confira o total antes de aceitar.'
+      )
+      return
+    }
+    
+    if (shouldWarnOrderAcceptance(order)) {
+      const confirmedReview = window.confirm(
+        'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar o Pix e enviar para preparo mesmo assim?'
+      )
+    
+      if (!confirmedReview) return
     }
 
     const confirmed = window.confirm(
@@ -2660,18 +2751,23 @@ export default function OrdersPage() {
 
       await updateDoc(doc(db, 'orders', order.id), {
         updatedAt: now,
-
+      
+        statusUpdatedBy: user?.uid || null,
+        statusUpdatedAt: now,
+        statusUpdatedFrom: currentStatus,
+        statusUpdatedTo: shouldStartPreparing ? 'preparando' : currentStatus,
+      
         'payment.method': getPaymentMethodId(order) || 'pix_manual',
         'payment.status': 'paid',
         'payment.paidAt': now,
         'payment.confirmedAt': now,
         'payment.confirmedBy': user?.uid || null,
         'payment.requiresConfirmation': false,
-
+      
         paymentStatus: 'paid',
         paymentRequiresConfirmation: false,
         paidAt: now,
-
+      
         ...(shouldStartPreparing
           ? {
               status: 'preparando',
