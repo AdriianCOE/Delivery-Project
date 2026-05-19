@@ -1411,6 +1411,9 @@ export default function StoreFrontPage() {
   const [searchExpanded, setSearchExpanded] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const categoryScrollRef = useRef(null)
+  const activeCategoryRef = useRef('all')
+  const isManualCategoryScrollRef = useRef(false)
+  const manualCategoryScrollTimeoutRef = useRef(null)
   const [copyMessage, setCopyMessage] = useState('')
 
   const themeColor = store?.themeColor || BRAND_GREEN
@@ -1568,22 +1571,111 @@ const canPreviewUnavailableStore = isOwner || isAdminPreview
     })
   }, [activeCategory, categories.length])
 
+  useEffect(() => {
+    activeCategoryRef.current = activeCategory
+  }, [activeCategory])
+  
+  useEffect(() => {
+    function updateActiveCategoryByScroll() {
+      if (isManualCategoryScrollRef.current) return
+  
+      const offset = isOwner ? 150 : 110
+      const menuStart = document.getElementById('menu-start')
+  
+      if (!menuStart || productSections.length === 0) {
+        if (activeCategoryRef.current !== 'all') {
+          activeCategoryRef.current = 'all'
+          setActiveCategory('all')
+        }
+  
+        return
+      }
+  
+      const menuTop = menuStart.getBoundingClientRect().top + window.scrollY
+  
+      let nextCategory = 'all'
+  
+      if (window.scrollY + offset >= menuTop - 24) {
+        for (const section of productSections) {
+          const sectionElement = document.getElementById(`category-${section.id}`)
+  
+          if (!sectionElement) continue
+  
+          const sectionTop = sectionElement.getBoundingClientRect().top
+  
+          if (sectionTop <= offset + 24) {
+            nextCategory = categoryById.has(section.id) ? section.id : 'all'
+          } else {
+            break
+          }
+        }
+      }
+  
+      if (nextCategory !== activeCategoryRef.current) {
+        activeCategoryRef.current = nextCategory
+        setActiveCategory(nextCategory)
+      }
+    }
+  
+    let animationFrame = 0
+  
+    function handleWindowScroll() {
+      window.cancelAnimationFrame(animationFrame)
+  
+      animationFrame = window.requestAnimationFrame(updateActiveCategoryByScroll)
+    }
+  
+    window.addEventListener('scroll', handleWindowScroll, { passive: true })
+    window.addEventListener('resize', handleWindowScroll)
+  
+    updateActiveCategoryByScroll()
+  
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.removeEventListener('scroll', handleWindowScroll)
+      window.removeEventListener('resize', handleWindowScroll)
+    }
+  }, [categoryById, isOwner, productSections])
+  
+  useEffect(() => {
+    return () => {
+      if (manualCategoryScrollTimeoutRef.current) {
+        window.clearTimeout(manualCategoryScrollTimeoutRef.current)
+      }
+    }
+  }, [])
+
   const handleScrollToCategory = useCallback(
     (categoryId) => {
       setActiveCategory(categoryId)
-
+      activeCategoryRef.current = categoryId
+  
+      isManualCategoryScrollRef.current = true
+  
+      if (manualCategoryScrollTimeoutRef.current) {
+        window.clearTimeout(manualCategoryScrollTimeoutRef.current)
+      }
+  
       const targetId = categoryId === 'all' ? 'menu-start' : `category-${categoryId}`
       const element = document.getElementById(targetId)
-
-      if (!element) return
-
+  
+      if (!element) {
+        isManualCategoryScrollRef.current = false
+        return
+      }
+  
       const offset = isOwner ? 132 : 92
       const y = element.getBoundingClientRect().top + window.scrollY - offset
-
+  
       window.scrollTo({
         top: Math.max(y, 0),
         behavior: 'smooth',
       })
+  
+      manualCategoryScrollTimeoutRef.current = window.setTimeout(() => {
+        isManualCategoryScrollRef.current = false
+        window.dispatchEvent(new Event('scroll'))
+      }, 850)
     },
     [isOwner],
   )

@@ -50,58 +50,67 @@ export function PhoneMockup() {
     <div className="relative w-full max-w-[390px] shrink-0">
       
       {/* BADGE ESQUERDO */}
-      <motion.div
-        initial={{ opacity: 0, y: 12, rotate: -6, scale: 0.96 }}
-        animate={{
-          opacity: 1,
-          y: [0, -7, 0],
-          rotate: [-5, -3, -5],
-          scale: 1,
-        }}
-        transition={{
-          opacity: { delay: 0.55, duration: 0.35 },
-          scale: { delay: 0.55, duration: 0.35 },
-          y: { delay: 0.9, duration: 3.2, repeat: Infinity, ease: 'easeInOut' },
-          rotate: { delay: 0.9, duration: 3.2, repeat: Infinity, ease: 'easeInOut' },
-        }}
-        className="absolute -left-4 -top-6 z-30 hidden max-w-[210px] origin-bottom-right rounded-[1.4rem] border border-orange-100 bg-white/95 px-4 py-3 shadow-2xl shadow-orange-100/70 backdrop-blur-xl sm:block lg:-left-20"
-      >
-        <div className="flex items-center gap-2 text-xs font-black text-[#111827]">
-          <LinkIcon size={14} className="text-[#f97316]" />
-          Link na bio
-        </div>
-        <p className="mt-1 truncate text-xs font-bold text-[#6b7280]">
-          {EXAMPLE_LABEL}
-        </p>
-      </motion.div>
+<motion.div
+  initial={{ opacity: 0, y: 12, rotate: -6, scale: 0.96 }}
+  animate={{
+    opacity: 1,
+    y: [0, -7, 0],
+    rotate: [-5, -3, -5],
+    scale: 1,
+  }}
+  transition={{
+    opacity: { delay: 0.55, duration: 0.35 },
+    scale: { delay: 0.55, duration: 0.35 },
+    y: { delay: 0.9, duration: 3.2, repeat: Infinity, ease: 'easeInOut' },
+    rotate: { delay: 0.9, duration: 3.2, repeat: Infinity, ease: 'easeInOut' },
+  }}
+  className="absolute left-2 top-1 z-30 max-w-[158px] origin-bottom-right rounded-[1.15rem] border border-orange-100 bg-white/95 px-3 py-2 shadow-xl shadow-orange-100/70 backdrop-blur-xl sm:-left-4 sm:-top-6 sm:max-w-[210px] sm:rounded-[1.4rem] sm:px-4 sm:py-3 sm:shadow-2xl lg:-left-20"
+>
+  <div className="flex items-center gap-1.5 text-[10px] font-black text-[#111827] sm:gap-2 sm:text-xs">
+    <LinkIcon size={13} className="text-[#f97316] sm:size-[14px]" />
+    Link na bio
+  </div>
 
-      {/* BADGE DIREITO */}
-      <motion.div
-        initial={{ opacity: 0, y: 14, rotate: 5, scale: 0.96 }}
-        animate={{
-          opacity: 1,
-          y: [0, -8, 0],
-          rotate: [4, 2, 4],
-          scale: 1,
-        }}
-        transition={{
-          opacity: { delay: 0.75, duration: 0.35 },
-          scale: { delay: 0.75, duration: 0.35 },
-          y: { delay: 1.05, duration: 3.4, repeat: Infinity, ease: 'easeInOut' },
-          rotate: { delay: 1.05, duration: 3.4, repeat: Infinity, ease: 'easeInOut' },
-        }}
-        className="absolute bottom-36 right-0 z-30 hidden max-w-[220px] origin-bottom-left rounded-[1.4rem] border border-green-100 bg-white/95 px-4 py-3 shadow-2xl shadow-green-100/70 backdrop-blur-xl sm:bottom-40 sm:block lg:-right-20 lg:bottom-44"
-      >
-        <div className="mb-2 flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs font-black text-[#111827]">Pedido recebido agora</span>
-        </div>
-        <p className="text-2xl font-black text-[#111827]">R$ 89,80</p>
-        <div className="mt-1.5 flex items-center gap-2">
-          <TrendingUp size={14} className="text-green-600" />
-          <span className="text-xs font-black text-green-600">0% taxa</span>
-        </div>
-      </motion.div>
+  <p className="mt-1 truncate text-[10px] font-bold text-[#6b7280] sm:text-xs">
+    {EXAMPLE_LABEL}
+  </p>
+</motion.div>
+
+{/* BADGE DIREITO */}
+<motion.div
+  initial={{ opacity: 0, y: 14, rotate: 5, scale: 0.96 }}
+  animate={{
+    opacity: 1,
+    y: [0, -8, 0],
+    rotate: [4, 2, 4],
+    scale: 1,
+  }}
+  transition={{
+    opacity: { delay: 0.75, duration: 0.35 },
+    scale: { delay: 0.75, duration: 0.35 },
+    y: { delay: 1.05, duration: 3.4, repeat: Infinity, ease: 'easeInOut' },
+    rotate: { delay: 1.05, duration: 3.4, repeat: Infinity, ease: 'easeInOut' },
+  }}
+  className="absolute bottom-32 right-2 z-30 max-w-[165px] origin-bottom-left rounded-[1.15rem] border border-green-100 bg-white/95 px-3 py-2 shadow-xl shadow-green-100/70 backdrop-blur-xl sm:bottom-40 sm:right-0 sm:max-w-[220px] sm:rounded-[1.4rem] sm:px-4 sm:py-3 sm:shadow-2xl lg:-right-20 lg:bottom-44"
+>
+  <div className="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
+    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse sm:h-2.5 sm:w-2.5" />
+    <span className="text-[10px] font-black text-[#111827] sm:text-xs">
+      Pedido recebido
+    </span>
+  </div>
+
+  <p className="text-lg font-black text-[#111827] sm:text-2xl">
+    R$ 89,80
+  </p>
+
+  <div className="mt-1 flex items-center gap-1.5 sm:mt-1.5 sm:gap-2">
+    <TrendingUp size={13} className="text-green-600 sm:size-[14px]" />
+    <span className="text-[10px] font-black text-green-600 sm:text-xs">
+      0% taxa
+    </span>
+  </div>
+</motion.div>
 
       {/* O CELULAR EM SI */}
       <motion.div

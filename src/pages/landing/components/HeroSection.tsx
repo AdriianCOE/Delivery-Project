@@ -146,16 +146,6 @@ export function HeroSection() {
               >
                 Ver planos
               </Link>
-
-              <a
-                href={EXAMPLE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[1.6rem] border border-gray-200 bg-white px-6 text-base font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316] active:scale-95 sm:w-auto"
-              >
-                <ExternalLink size={18} />
-                Ver exemplo
-              </a>
             </div>
 
             <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">

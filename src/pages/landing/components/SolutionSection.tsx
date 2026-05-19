@@ -37,33 +37,39 @@ const solutions = [
 export function SolutionSection() {
   return (
     <section id="recursos" className="relative overflow-hidden bg-[#f8fafc] py-16 lg:py-24">
-      <div className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-orange-100/60 blur-3xl" />
-      <div className="pointer-events-none absolute -right-32 bottom-10 h-72 w-72 rounded-full bg-slate-200/60 blur-3xl" />
+      {/* Luzes de fundo (Glow Verde/Sucesso) */}
+      <div className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-emerald-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute -right-32 bottom-10 h-72 w-72 rounded-full bg-teal-100/50 blur-3xl" />
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* Cabeçalho da Seção */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12 lg:mb-16"
+            className="text-center mb-12 lg:mb-16 flex flex-col items-center"
           >
-            <div className="inline-flex items-center gap-2 bg-white border border-orange-100 rounded-full px-5 py-2.5 mb-6 shadow-sm">
-              <div className="w-2.5 h-2.5 bg-[#f97316] rounded-full animate-pulse" />
-              <span className="text-sm font-black uppercase tracking-wide text-[#f97316]">
+            {/* Badge de Destaque Verde */}
+            <div className="inline-flex items-center gap-2 bg-white border border-emerald-100 rounded-full px-5 py-2.5 mb-6 shadow-sm ring-1 ring-emerald-50">
+              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+              <span className="text-sm font-black uppercase tracking-wide text-emerald-600">
                 A solução completa
               </span>
             </div>
+            
             <h2 className="text-3xl lg:text-5xl font-black text-gray-900 mb-4 leading-tight">
-              O PratoBy <span className="text-[#f97316]">organiza sua operação</span>
+              O PratoBy <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">organiza sua operação</span>
               <br />
               em poucos minutos.
             </h2>
-            <p className="text-lg lg:text-xl text-gray-600 max-w-2xl mx-auto">
+            
+            <p className="text-lg lg:text-xl text-gray-600 max-w-2xl mx-auto font-medium">
               Tudo que você precisa para vender mais, sem depender de apps com taxa alta.
             </p>
           </motion.div>
 
+          {/* Grid de Soluções */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
             {solutions.map((solution, index) => (
               <motion.div
@@ -72,13 +78,20 @@ export function SolutionSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="group rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-sm ring-1 ring-slate-100 transition-all duration-300 hover:-translate-y-1 hover:border-orange-100 hover:shadow-2xl hover:shadow-orange-100/50"
+                className="group rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-sm ring-1 ring-slate-100 transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-2xl hover:shadow-emerald-100/60"
               >
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] transition-colors group-hover:bg-[#f97316] group-hover:text-white">
-                  <solution.icon size={24} />
+                {/* Ícone com Efeito Premium no Hover */}
+                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 transition-all duration-300 group-hover:bg-emerald-500 group-hover:text-white group-hover:shadow-lg group-hover:shadow-emerald-500/30 group-hover:scale-110">
+                  <solution.icon size={24} strokeWidth={2.5} />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{solution.title}</h3>
-                <p className="text-gray-600">{solution.description}</p>
+                
+                <h3 className="text-lg font-black text-gray-900 mb-2 group-hover:text-emerald-700 transition-colors">
+                  {solution.title}
+                </h3>
+                
+                <p className="text-sm font-semibold leading-relaxed text-gray-500">
+                  {solution.description}
+                </p>
               </motion.div>
             ))}
           </div>

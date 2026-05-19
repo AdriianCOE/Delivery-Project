@@ -1,433 +1,409 @@
-import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
+import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
 import SEO from '../components/seo/SEO'
 import {
   FiArrowRight,
-  FiBookOpen,
   FiCheckCircle,
   FiClock,
-  FiCode,
   FiCompass,
-  FiHome,
-  FiLayers,
-  FiMail,
+  FiExternalLink,
+  FiGrid,
+  FiLink,
   FiMessageCircle,
+  FiMonitor,
+  FiPackage,
   FiShield,
   FiShoppingBag,
-  FiTarget,
-  FiTool,
+  FiSliders,
   FiTrendingUp,
   FiZap,
-  FiSmartphone,
-  FiMenu,
-  FiX
 } from 'react-icons/fi'
 
-const navLinks = [
-  { label: 'Início', to: '/' },
-  { label: 'Sobre', to: '/sobre' },
-  { label: 'Planos', to: '/planos' },
-  { label: 'Contato', to: '/contato' },
-]
-
-const TIMELINE = [
-  {
-    icon: FiCompass,
-    title: 'A dor',
-    description:
-      'Muitas lojas dependem de mensagens soltas no WhatsApp, prints de cardápio e pedidos desorganizados em horários de pico.',
-  },
-  {
-    icon: FiTool,
-    title: 'A ideia',
-    description:
-      'Criar uma ferramenta simples, bonita e acessível para transformar o cardápio digital em um fluxo real de pedido.',
-  },
-  {
-    icon: FiCode,
-    title: 'A construção',
-    description:
-      'O PratoBy começou como um produto próprio, com foco em React, Firebase, Cloudinary, mobile-first e operação em tempo real.',
-  },
+const PRINCIPLES = [
   {
     icon: FiTrendingUp,
-    title: 'O objetivo',
-    description:
-      'Ajudar estabelecimentos a venderem pelo próprio link, com menos dependência de marketplace e mais controle da operação.',
+    title: 'Menos comissão',
+    text: 'A loja vende direto pelo próprio link, sem taxa em cima de cada pedido.',
+  },
+  {
+    icon: FiLink,
+    title: 'Marca própria',
+    text: 'O cliente acessa uma loja com identidade do estabelecimento, não uma vitrine genérica.',
+  },
+  {
+    icon: FiMonitor,
+    title: 'Operação clara',
+    text: 'Pedidos, status, pagamento e atendimento ficam organizados no painel do lojista.',
   },
 ]
 
-const DIFFERENCES = [
-  'Sem comissão por pedido',
-  'Pedido salvo com snapshot completo',
-  'Comanda térmica para cozinha',
-  'Horários configuráveis por dia',
-  'Opções e adicionais estilo app de delivery',
-  'Dashboard em tempo real para o lojista',
-  'Link próprio para cada estabelecimento',
-  'Estrutura preparada para QR Code, Pix e OutScreen',
+const FEATURES = [
+  {
+    icon: FiShoppingBag,
+    title: 'Loja online própria',
+    text: 'Um link simples para divulgar no Instagram, WhatsApp, bio ou QR Code.',
+  },
+  {
+    icon: FiPackage,
+    title: 'Cardápio completo',
+    text: 'Produtos, categorias, adicionais, observações e opções do jeito que a loja vende.',
+  },
+  {
+    icon: FiClock,
+    title: 'Pedidos em tempo real',
+    text: 'O lojista recebe o pedido no painel e acompanha o andamento da operação.',
+  },
+  {
+    icon: FiSliders,
+    title: 'Controle do lojista',
+    text: 'Horários, taxas, cupons, bairros e status da loja em uma central simples.',
+  },
+  {
+    icon: FiShield,
+    title: 'Histórico confiável',
+    text: 'O pedido mantém os dados da venda salvos para consulta e organização.',
+  },
+  {
+    icon: FiZap,
+    title: 'Experiência rápida',
+    text: 'Mobile-first para o cliente comprar sem fricção direto pelo celular.',
+  },
 ]
 
-const STACK = [
-  'React',
-  'Vite',
-  'Tailwind CSS',
-  'Firebase',
-  'Firestore',
-  'Cloudinary',
-  'React Router',
-  'Mobile-first',
+const AUDIENCES = [
+  'Restaurantes',
+  'Lanchonetes',
+  'Pizzarias',
+  'Hamburguerias',
+  'Açaíterias',
+  'Cafeterias',
+  'Docerias',
+  'Marmitarias',
 ]
 
-function Logo() {
+const viewportOnce = {
+  once: true,
+  margin: '-80px',
+}
+
+const fadeUp = {
+  initial: { opacity: 0, y: 24 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: viewportOnce,
+}
+
+const fadeLeft = {
+  initial: { opacity: 0, x: -28 },
+  whileInView: { opacity: 1, x: 0 },
+  viewport: viewportOnce,
+}
+
+const fadeRight = {
+  initial: { opacity: 0, x: 28 },
+  whileInView: { opacity: 1, x: 0 },
+  viewport: viewportOnce,
+}
+
+function Badge({ children }) {
   return (
-    <div className="flex items-center gap-3">
-      <img
-        src="/icons/icon-192.png"
-        alt="PratoBy"
-        className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
-      />
-
-      <div className="leading-none">
-        <p className="text-2xl font-black tracking-tighter text-[#111827]">
-          Prato<span className="text-[#f97316]">by</span>
-        </p>
-        <p className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
-          Cardápio digital e delivery
-        </p>
-      </div>
-    </div>
+    <span className="inline-flex items-center rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316]">
+      {children}
+    </span>
   )
 }
 
-function TimelineCard({ item, index }) {
+function FeatureCard({ item, index = 0 }) {
   const Icon = item.icon
 
   return (
-    <article className="group relative rounded-[1.7rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-orange-900/5">
-      <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] transition-transform duration-300 group-hover:scale-110 group-hover:bg-[#f97316] group-hover:text-white">
-          <Icon size={21} />
-        </div>
-
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-[#f97316]">
-            0{index + 1}
-          </p>
-
-          <h3 className="mt-1 text-lg font-black text-[#111827]">
-            {item.title}
-          </h3>
-
-          <p className="mt-2 text-sm leading-6 text-[#6b7280]">
-            {item.description}
-          </p>
-        </div>
-      </div>
-    </article>
-  )
-}
-
-function MiniButton({ to, children, variant = 'dark', icon: Icon = FiArrowRight }) {
-  const styles =
-    variant === 'green' // Utilizando 'green' como nome mas aplicando as cores da marca (Laranja)
-      ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/20 hover:bg-[#ea580c] hover:shadow-orange-600/30'
-      : variant === 'white'
-        ? 'border border-gray-200 bg-white text-[#111827] shadow-sm hover:border-orange-200 hover:text-[#f97316]'
-        : 'bg-[#111827] text-white shadow-lg hover:bg-black'
-
-  return (
-    <Link
-      to={to}
-      className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-black transition-all duration-300 hover:-translate-y-1 ${styles}`}
+    <motion.article
+      {...fadeUp}
+      transition={{ duration: 0.5, delay: index * 0.07 }}
+      className="group rounded-[1.65rem] border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-100 hover:shadow-xl hover:shadow-orange-100/50"
     >
-      {children}
-      <Icon size={16} />
-    </Link>
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] transition group-hover:bg-[#f97316] group-hover:text-white">
+        <Icon size={20} />
+      </div>
+
+      <h3 className="mt-4 text-base font-black text-[#111827]">
+        {item.title}
+      </h3>
+
+      <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
+        {item.text}
+      </p>
+    </motion.article>
   )
 }
 
 export default function AboutPage() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const location = useLocation()
-
-return (
+  return (
     <>
-      <SEO title="Sobre | PratoBy" path="/sobre" />
+      <SEO
+        title="Sobre | PratoBy"
+        description="Conheça o PratoBy: cardápio digital e delivery próprio para lojistas venderem direto, sem comissão por pedido."
+        path="/sobre"
+      />
+
       <MarketingLayout>
-      
-      <main className="min-h-screen overflow-x-hidden bg-[#f9fafb] pt-[76px] text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased">
+        <main className="overflow-hidden bg-[#f9fafb] text-[#111827]">
+          <section className="relative bg-white">
+            <div className="pointer-events-none absolute -left-32 top-20 h-80 w-80 rounded-full bg-orange-100/70 blur-3xl" />
+            <div className="pointer-events-none absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-gray-100 blur-3xl" />
 
-        {/* 👇 2. MÁGICA DA ANIMAÇÃO (Com w-full a abraçar todo o conteúdo) */}
-        <div className="w-full animate-[fadeIn_0.4s_ease-out]">
-          
-          {/* ELEMENTOS DE FUNDO DO ABOUT */}
-          <div className="pointer-events-none fixed inset-0 overflow-hidden">
-            <div className="absolute -left-24 top-20 h-80 w-80 rounded-full bg-orange-100/70 blur-3xl" />
-            <div className="absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-gray-200/80 blur-3xl" />
-            <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-orange-50/80 blur-3xl" />
-          </div>
-
-          <section className="relative z-10 mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
-            <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
-              <div>
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-orange-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm">
-                  <FiBookOpen />
-                  História, missão e construção
-                </div>
-
-                <h1 className="mt-6 max-w-3xl text-4xl font-black tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
-                  O PratoBy nasceu para resolver uma operação real.
-                </h1>
-
-                <p className="mt-6 max-w-2xl text-lg leading-8 text-[#6b7280]">
-                  Não é só uma página bonita de cardápio. A ideia é dar ao pequeno estabelecimento uma forma simples de vender, organizar pedidos e atender melhor sem depender totalmente de aplicativos abusivos.
-                </p>
-
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <MiniButton to="/contato" variant="green" icon={FiMessageCircle}>
-                    Falar sobre implantação
-                  </MiniButton>
-
-                  <MiniButton to="/" variant="white" icon={FiHome}>
-                    Voltar para início
-                  </MiniButton>
-                </div>
-              </div>
-
-              <div className="rounded-[2.5rem] border border-gray-100 bg-white p-5 shadow-2xl shadow-gray-200/80 transition-all hover:shadow-orange-900/5">
-                <div className="rounded-[2rem] bg-[#111827] p-8 text-white">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-orange-300">
-                      <FiTarget size={23} />
-                    </div>
-
-                    <span className="rounded-full bg-orange-400/15 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-orange-300">
-                      Missão
-                    </span>
+            <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+              <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+              <motion.div
+                {...fadeLeft}
+                transition={{ duration: 0.6 }}
+              >
+                  <div className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316]">
+                    <FiCompass size={15} />
+                    Sobre o PratoBy
                   </div>
 
-                  <h2 className="mt-10 text-3xl font-black tracking-tight">
-                    Transformar pedido bagunçado em operação clara.
-                  </h2>
+                  <h1 className="mt-6 max-w-3xl text-4xl font-black leading-tight tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
+                    Delivery próprio para quem quer vender direto.
+                  </h1>
 
-                  <p className="mt-4 text-sm leading-7 text-white/60">
-                    O cliente monta o pedido sozinho. O lojista recebe tudo estruturado. A cozinha imprime uma comanda simples. O acompanhamento acontece em tempo real.
+                  <p className="mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg">
+                    O PratoBy ajuda lojas locais a criarem uma experiência de pedido
+                    online simples, bonita e sem comissão por venda.
                   </p>
-                </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  {[
-                    ['Mobile', 'primeiro no celular'],
-                    ['Tempo real', 'pedidos ao vivo'],
-                    ['Operação', 'menos improviso'],
-                  ].map(([title, text]) => (
-                    <div key={title} className="rounded-3xl border border-gray-100 bg-[#f9fafb] p-5 transition-colors hover:border-orange-100 hover:bg-orange-50/50">
-                      <FiCheckCircle className="text-[#f97316]" size={20} />
-                      <p className="mt-3 text-sm font-black text-[#111827]">
-                        {title}
-                      </p>
-                      <p className="mt-1 text-xs font-bold text-[#6b7280]">
-                        {text}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    <Badge>0% comissão</Badge>
+                    <Badge>Link próprio</Badge>
+                    <Badge>Pedidos em tempo real</Badge>
+                  </div>
 
-          <section className="relative z-10 mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-sm font-black uppercase tracking-wide text-[#f97316]">
-                  Por que existe
-                </p>
-                <h2 className="mt-2 text-3xl font-black tracking-tight text-[#111827]">
-                  Da dor ao produto.
-                </h2>
-              </div>
-
-              <MiniButton to="/contato" variant="white" icon={FiMail}>
-                Conversar agora
-              </MiniButton>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {TIMELINE.map((item, index) => (
-                <TimelineCard key={item.title} item={item} index={index} />
-              ))}
-            </div>
-          </section>
-
-          <section className="relative z-10 mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-            <div className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-2xl shadow-gray-200/80 lg:grid lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="bg-[#111827] p-8 text-white sm:p-12 lg:p-14">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-orange-300">
-                  <FiShoppingBag size={26} />
-                </div>
-
-                <h2 className="mt-6 text-3xl font-black tracking-tight">
-                  Para quem o PratoBy foi feito?
-                </h2>
-
-                <p className="mt-5 text-base leading-8 text-white/60">
-                  Para restaurantes, lanchonetes, pizzarias, hamburguerias, açaíterias, cafeterias, docerias, marmitarias e lojas locais que querem vender direto pelo próprio link.
-                </p>
-
-                <div className="mt-8 flex flex-wrap gap-2">
-                  {['Restaurantes', 'Pizzarias', 'Lanchonetes', 'Açaí', 'Cafeterias', 'Docerias'].map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white"
+                  <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                    <Link
+                      to="/contato"
+                      className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] bg-[#f97316] px-6 text-sm font-black text-white shadow-xl shadow-orange-600/20 transition hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-95"
                     >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
+                      Falar sobre minha loja
+                      <FiMessageCircle size={17} />
+                    </Link>
 
-              <div className="p-8 sm:p-12 lg:p-14">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                  <FiLayers size={26} />
-                </div>
-
-                <h2 className="mt-6 text-3xl font-black tracking-tight text-[#111827]">
-                  O que torna diferente?
-                </h2>
-
-                <p className="mt-5 text-base leading-8 text-[#6b7280]">
-                  O foco não é só divulgar produtos. O foco é criar um pequeno sistema operacional para a loja receber, controlar, imprimir, acompanhar e evoluir seus pedidos.
-                </p>
-
-                <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                  {DIFFERENCES.map((item) => (
-                    <div key={item} className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 transition hover:border-orange-100 hover:bg-orange-50/50">
-                      <FiCheckCircle className="mt-0.5 shrink-0 text-[#f97316]" />
-                      <p className="text-sm font-black leading-6 text-[#111827]">
-                        {item}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="relative z-10 mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-            <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-              <div className="rounded-[2.5rem] border border-gray-100 bg-white p-8 shadow-sm">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                  <FiCode size={24} />
-                </div>
-
-                <h2 className="mt-6 text-2xl font-black tracking-tight text-[#111827]">
-                  Construção técnica
-                </h2>
-
-                <p className="mt-4 text-sm leading-7 text-[#6b7280]">
-                  O projeto é construído com uma stack moderna para front-end, tempo real, imagens na nuvem e experiência mobile-first.
-                </p>
-
-                <div className="mt-8 flex flex-wrap gap-2">
-                  {STACK.map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-gray-100 bg-[#f9fafb] px-4 py-2 text-xs font-black text-[#111827] transition hover:border-orange-200 hover:text-[#f97316]"
+                    <a
+                      href="https://pratoby.com/capivaras-lanches"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] border border-gray-200 bg-white px-6 text-sm font-black text-[#111827] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] active:scale-95"
                     >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
+                      Ver exemplo
+                      <FiExternalLink size={16} />
+                    </a>
+                  </div>
+                </motion.div>
 
-              <div className="grid gap-6 sm:grid-cols-2">
-                {[
-                  {
-                    icon: FiSmartphone,
-                    title: 'UX mobile-first',
-                    text: 'O cliente precisa conseguir pedir sem pensar muito, direto no celular.',
-                  },
-                  {
-                    icon: FiClock,
-                    title: 'Operação em tempo real',
-                    text: 'Pedido chegou, painel atualiza, sino toca e o lojista age rápido.',
-                  },
-                  {
-                    icon: FiShield,
-                    title: 'Histórico confiável',
-                    text: 'O pedido salva snapshot dos itens para preservar o histórico de venda.',
-                  },
-                  {
-                    icon: FiZap,
-                    title: 'Evolução contínua',
-                    text: 'Pix, QR Code por mesa, OutScreen, clientes e financeiro entram no roadmap.',
-                  },
-                ].map((item) => {
-                  const Icon = item.icon
-
-                  return (
-                    <article key={item.title} className="group rounded-[2.5rem] border border-gray-100 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-900/5">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] transition-transform duration-300 group-hover:scale-110 group-hover:bg-[#f97316] group-hover:text-white">
-                        <Icon size={22} />
+                <motion.div
+                    {...fadeRight}
+                    transition={{ duration: 0.65, delay: 0.1 }}
+                    className="rounded-[2rem] border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200/80"
+                  >
+                  <div className="rounded-[1.7rem] bg-[#111827] p-5 text-white sm:p-6">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-orange-300">
+                          Central do lojista
+                        </p>
+                        <h2 className="mt-2 text-2xl font-black">
+                          Operação simples, pedido organizado.
+                        </h2>
                       </div>
 
-                      <h3 className="mt-6 text-lg font-black text-[#111827]">
-                        {item.title}
-                      </h3>
+                      <span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-xs font-black text-emerald-300 ring-1 ring-emerald-400/20">
+                        Loja aberta
+                      </span>
+                    </div>
 
-                      <p className="mt-2 text-sm leading-6 text-[#6b7280]">
-                        {item.text}
-                      </p>
-                    </article>
-                  )
-                })}
+                    <div className="mt-6 space-y-3">
+                      <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black">Pedido #2847</p>
+                            <p className="mt-1 text-xs font-semibold text-white/55">
+                              2x Combo Capivara · Pix manual
+                            </p>
+                          </div>
+
+                          <p className="text-sm font-black text-orange-300">
+                            R$ 89,80
+                          </p>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {['Novo', 'Preparo', 'Entrega'].map((item, index) => (
+                            <span
+                              key={item}
+                              className={`rounded-full px-3 py-1 text-[11px] font-black ${
+                                index === 0
+                                  ? 'bg-orange-400 text-white'
+                                  : 'bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
+                          <p className="text-xs font-bold text-white/50">
+                            Hoje
+                          </p>
+                          <p className="mt-1 text-xl font-black">18 pedidos</p>
+                        </div>
+
+                        <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
+                          <p className="text-xs font-bold text-white/50">
+                            Faturamento
+                          </p>
+                          <p className="mt-1 text-xl font-black">R$ 847</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ['Cliente compra', FiShoppingBag],
+                      ['Painel recebe', FiMonitor],
+                      ['Loja entrega', FiCheckCircle],
+                    ].map(([label, Icon]) => (
+                      <div
+                        key={label}
+                        className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 text-center"
+                      >
+                        <Icon className="mx-auto text-[#f97316]" size={19} />
+                        <p className="mt-2 text-xs font-black text-[#111827]">
+                          {label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
               </div>
             </div>
           </section>
 
-          <section className="relative z-10 mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-            <div className="overflow-hidden rounded-[2.5rem] bg-[#f97316] p-8 text-white shadow-2xl shadow-orange-600/20 sm:p-12 lg:p-16">
-              <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div>
-                  <p className="text-sm font-black uppercase tracking-widest text-white/70">
-                    PratoBy em teste
-                  </p>
+          <section className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+          <motion.div
+  {...fadeUp}
+  transition={{ duration: 0.55 }}
+  className="mx-auto mb-8 max-w-3xl text-center"
+>
+              <p className="text-sm font-black uppercase tracking-wide text-[#f97316]">
+                Por que existe
+              </p>
 
-                  <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight sm:text-5xl">
-                    Quer testar em uma loja real?
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                Para dar mais controle ao lojista.
+              </h2>
+
+              <p className="mt-4 text-base font-semibold leading-8 text-[#6b7280]">
+                A proposta é simples: sua loja, seus clientes, seus pedidos e sua marca.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+                        {PRINCIPLES.map((item, index) => (
+              <FeatureCard key={item.title} item={item} index={index} />
+            ))}
+            </div>
+          </section>
+
+          <section className="mx-auto max-w-7xl px-4 pb-14 sm:px-6 lg:px-8 lg:pb-16">
+          <motion.div
+  {...fadeUp}
+  transition={{ duration: 0.6 }}
+  className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-xl shadow-gray-200/60"
+>
+              <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+                <div className="bg-[#111827] p-7 text-white sm:p-9 lg:p-10">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-orange-300">
+                    <FiGrid size={23} />
+                  </div>
+
+                  <h2 className="mt-6 text-3xl font-black tracking-tight">
+                    Não é só um cardápio bonito.
                   </h2>
 
-                  <p className="mt-5 max-w-xl text-base leading-8 text-white/80">
-                    Fale sobre sua operação, cardápio e fluxo de pedidos. A gente te ajuda a entender como o PratoBy pode encaixar.
+                  <p className="mt-4 text-sm font-semibold leading-7 text-white/60">
+                    É uma base para o lojista vender online com mais organização:
+                    cardápio, pedido, status, atendimento e histórico no mesmo fluxo.
+                  </p>
+
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    {AUDIENCES.map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-white/80"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-7 lg:p-8">
+                {FEATURES.map((item, index) => (
+  <FeatureCard key={item.title} item={item} index={index} />
+))}
+                </div>
+              </div>
+            </motion.div>
+          </section>
+
+          <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8 lg:pb-20">
+          <motion.div
+  {...fadeUp}
+  transition={{ duration: 0.6 }}
+  className="relative overflow-hidden rounded-[2rem] bg-[#f97316] p-7 text-white shadow-2xl shadow-orange-600/20 sm:p-10 lg:p-12"
+>
+              <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
+
+              <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-white/70">
+                    Próximo passo
+                  </p>
+
+                  <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">
+                    Quer ver como ficaria para sua loja?
+                  </h2>
+
+                  <p className="mt-4 max-w-xl text-sm font-semibold leading-7 text-white/80 sm:text-base">
+                    Fale sobre seu cardápio, bairros de entrega e rotina de pedidos.
+                    A gente te ajuda a entender o melhor formato.
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-4 sm:flex-row lg:flex-col">
+                <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
                   <Link
                     to="/contato"
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-base font-black text-[#111827] shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-orange-50 hover:shadow-2xl"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] bg-white px-6 text-sm font-black text-[#111827] shadow-xl transition hover:-translate-y-0.5 hover:bg-orange-50 active:scale-95"
                   >
                     Entrar em contato
-                    <FiMessageCircle />
+                    <FiMessageCircle size={17} />
                   </Link>
 
                   <Link
-                    to="/login"
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-4 text-base font-black text-white transition-all duration-300 hover:-translate-y-1 hover:bg-white/15"
+                    to="/planos"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] border border-white/25 bg-white/10 px-6 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white/15 active:scale-95"
                   >
-                    Já tenho acesso
-                    <FiArrowRight />
+                    Ver planos
+                    <FiArrowRight size={17} />
                   </Link>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </section>
-
-        </div>
-        {/* 👆 FIM DA DIV DE ANIMAÇÃO */}
-      </main>
+        </main>
       </MarketingLayout>
     </>
   )

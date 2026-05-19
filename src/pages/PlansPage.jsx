@@ -1,255 +1,299 @@
-import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
+import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
 import SEO from '../components/seo/SEO'
 import {
   FiArrowRight,
-  FiCheck,
   FiAward,
+  FiCheck,
+  FiClock,
+  FiLink,
   FiMessageCircle,
+  FiMonitor,
   FiShield,
   FiStar,
   FiZap,
-  FiMenu,
-  FiX
 } from 'react-icons/fi'
-
-const navLinks = [
-  { label: 'Início', to: '/' },
-  { label: 'Sobre', to: '/sobre' },
-  { label: 'Planos', to: '/planos' },
-  { label: 'Contato', to: '/contato' },
-]
 
 const plans = [
   {
     name: 'Essencial',
+    subtitle: 'Para começar a vender online',
     price: 'R$ 59',
     period: '/mês',
-    description: 'Para pequenos restaurantes que querem começar a receber pedidos organizados online.',
+    commission: '+ 0% de comissão por venda',
     icon: FiZap,
     highlight: false,
+    cta: 'Começar agora',
     features: [
-      'Cardápio digital mobile-first',
-      'Link exclusivo do estabelecimento',
-      'Categorias, opções e adicionais',
-      'Carrinho inteligente com resumo',
-      'Pedidos estruturados no WhatsApp',
-      'Sem taxas ou comissões por venda',
+      'Cardápio digital ilimitado',
+      'Pedidos em tempo real',
+      'Link próprio da loja',
+      'Sem taxa por pedido',
+      'Painel de controle',
+      'Horários automáticos',
     ],
-    cta: 'Começar no Essencial',
   },
   {
     name: 'Profissional',
+    subtitle: 'Mais escolhido pelos lojistas',
     price: 'R$ 89',
     period: '/mês',
-    description: 'Para lojas que precisam de gestão em tempo real, Pix e atendimento no local.',
+    commission: '+ 0% de comissão por venda',
     icon: FiStar,
     highlight: true,
-    badge: 'Mais vendido',
+    badge: 'Mais popular',
+    cta: 'Começar agora',
     features: [
-      'Tudo do plano Essencial',
-      'Painel de pedidos em tempo real',
-      'Gerador de QR Code por Mesa',
-      'Pix Manual com Copia e Cola',
-      'Taxas de entrega por bairro',
-      'Controle de horários de abertura',
+      'Tudo do Essencial',
       'Cupons de desconto',
+      'Taxa por bairro',
+      'Campos personalizados',
+      'Relatórios avançados',
+      'WhatsApp integrado',
+      'Suporte prioritário',
     ],
-    cta: 'Quero o Profissional',
   },
   {
-    name: 'White-label',
+    name: 'Premium',
+    subtitle: 'Para quem quer vender mais',
     price: 'R$ 159',
     period: '/mês',
-    description: 'A experiência premium. O seu próprio ecossistema de delivery e PDV.',
+    commission: '+ 0% de comissão por venda',
     icon: FiAward,
     highlight: false,
+    cta: 'Começar agora',
     features: [
-      'Tudo do plano Profissional',
-      'OutScreen (Tela para Cozinha)',
-      'MotoBot (Gestão de Entregadores)',
-      'Identidade visual personalizada',
-      'Configuração com domínio próprio',
-      'Métricas e histórico de clientes',
-      'Suporte prioritário via WhatsApp',
+      'Tudo do Profissional',
+      'Multi-loja até 3 unidades',
+      'API de integração',
+      'Domínio personalizado',
+      'Marca branca',
+      'Gerente de conta dedicado',
     ],
-    cta: 'Montar White-label',
   },
 ]
 
 const benefits = [
-  'Zero comissão por pedido',
-  'Painel do lojista em tempo real',
-  'Pagamento via Pix integrado',
-  'QR Codes para mesas e balcão',
+  {
+    icon: FiShield,
+    label: '0% comissão por venda',
+  },
+  {
+    icon: FiClock,
+    label: 'Pedidos em tempo real',
+  },
+  {
+    icon: FiLink,
+    label: 'Link próprio da loja',
+  },
 ]
 
-function Logo() {
-  return (
-    <div className="flex items-center gap-3">
-      <img
-        src="/icons/icon-192.png"
-        alt="PratoBy"
-        className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
-      />
+function PlanCard({ plan, index }) {
+  const Icon = plan.icon
 
-      <div className="leading-none">
-        <p className="text-2xl font-black tracking-tighter text-[#111827]">
-          Prato<span className="text-[#f97316]">by</span>
-        </p>
-        <p className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
-          Cardápio digital e delivery
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      className={[
+        'group relative flex h-full flex-col rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl sm:p-7',
+        plan.highlight
+          ? 'border-orange-300 shadow-orange-100/70 ring-4 ring-orange-50'
+          : 'border-gray-100 hover:border-orange-100 hover:shadow-orange-100/50',
+      ].join(' ')}
+    >
+      {plan.badge && (
+        <div className="absolute right-5 top-5 rounded-full bg-[#111827] px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white shadow-md">
+          {plan.badge}
+        </div>
+      )}
+
+      <div
+        className={[
+          'flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300',
+          plan.highlight
+            ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/25'
+            : 'bg-orange-50 text-[#f97316] group-hover:bg-[#f97316] group-hover:text-white',
+        ].join(' ')}
+      >
+        <Icon size={22} />
+      </div>
+
+      <div className="mt-5">
+        <h2 className="text-2xl font-black tracking-tight text-[#111827]">
+          {plan.name}
+        </h2>
+
+        <p className="mt-2 min-h-[44px] text-sm font-semibold leading-6 text-[#6b7280]">
+          {plan.subtitle}
         </p>
       </div>
-    </div>
+
+      <div className="mt-5">
+        <div className="flex items-end gap-1">
+          <span className="text-4xl font-black tracking-tight text-[#111827]">
+            {plan.price}
+          </span>
+
+          <span className="pb-1 text-sm font-bold text-[#6b7280]">
+            {plan.period}
+          </span>
+        </div>
+
+        <p className="mt-2 text-xs font-black text-[#f97316]">
+          {plan.commission}
+        </p>
+      </div>
+
+      <Link
+        to="/contato"
+        className={[
+          'mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[1.25rem] px-5 text-sm font-black transition-all duration-300 hover:-translate-y-0.5 active:scale-95',
+          plan.highlight
+            ? 'bg-[#f97316] text-white shadow-xl shadow-orange-600/25 hover:bg-[#ea580c]'
+            : 'bg-[#111827] text-white shadow-md hover:bg-black',
+        ].join(' ')}
+      >
+        {plan.cta}
+        <FiArrowRight size={17} />
+      </Link>
+
+      <div className="mt-7 h-px bg-gray-100" />
+
+      <ul className="mt-6 flex-1 space-y-3">
+        {plan.features.map((feature) => (
+          <li
+            key={feature}
+            className="flex items-start gap-3 text-sm font-bold leading-6 text-[#374151]"
+          >
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50 text-[#f97316]">
+              <FiCheck size={13} />
+            </span>
+
+            <span>{feature}</span>
+          </li>
+        ))}
+      </ul>
+    </motion.article>
   )
 }
 
 export default function PlansPage() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const location = useLocation()
-
-return (
+  return (
     <>
-      <SEO title="Planos | PratoBy" />
+      <SEO
+        title="Planos | PratoBy"
+        description="Planos do PratoBy para vender online com loja própria, pedidos em tempo real e 0% comissão por venda."
+        path="/planos"
+      />
+
       <MarketingLayout>
+        <main className="overflow-hidden bg-[#f9fafb] text-[#111827]">
+          <section className="relative overflow-hidden border-b border-gray-100 bg-white">
+            <div className="pointer-events-none absolute -left-28 top-20 h-80 w-80 rounded-full bg-orange-100/70 blur-3xl" />
+            <div className="pointer-events-none absolute -right-28 -top-20 h-80 w-80 rounded-full bg-amber-100/70 blur-3xl" />
 
-      <main className="min-h-screen overflow-x-hidden bg-[#f9fafb] pt-[76px] text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased">
-
-        {/* 👇 2. MÁGICA DA ANIMAÇÃO (Com w-full para travar o pulo lateral) */}
-        <div className="w-full animate-[fadeIn_0.4s_ease-out]">
-          
-          <section className="relative overflow-hidden border-b border-gray-100 bg-white py-12 sm:py-20">
-            <div className="absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100/60 blur-3xl" />
-            <div className="absolute -right-24 -top-20 h-72 w-72 rounded-full bg-orange-50/80 blur-3xl" />
-
-            <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-              <div className="mx-auto max-w-3xl text-center">
-                <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-black text-[#f97316] shadow-sm">
-                  <FiShield />
-                  Planos justos, sem taxa escondida
+            <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+              <motion.div
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55 }}
+                className="mx-auto max-w-3xl text-center"
+              >
+                <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm">
+                  <FiShield size={15} />
+                  Planos simples e sem comissão
                 </span>
 
                 <h1 className="mt-6 text-4xl font-black tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
-                  Escolha o plano ideal para modernizar a sua loja.
+                  Escolha o plano ideal para sua loja vender online.
                 </h1>
 
-                <p className="mt-6 text-lg leading-8 text-[#6b7280]">
-                  O PratoBy entrega muito mais que um link de cardápio. É um sistema completo para gestão de pedidos, autoatendimento na mesa e integração com WhatsApp.
+                <p className="mx-auto mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg">
+                  Loja própria, pedidos em tempo real e 0% comissão por venda.
                 </p>
 
-                <div className="mt-8 flex flex-wrap justify-center gap-3">
-                  {benefits.map((item) => (
-                    <span
-                      key={item}
-                      className="inline-flex items-center gap-2 rounded-full border border-gray-100 bg-[#f9fafb] px-4 py-2 text-sm font-bold text-[#111827] shadow-sm"
-                    >
-                      <FiCheck className="text-[#f97316]" size={16} />
-                      {item}
-                    </span>
-                  ))}
+                <div className="mt-7 flex flex-wrap justify-center gap-2">
+                  {benefits.map((item) => {
+                    const Icon = item.icon
+
+                    return (
+                      <span
+                        key={item.label}
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-100 bg-white px-3.5 py-2 text-xs font-black text-[#374151] shadow-sm"
+                      >
+                        <Icon size={15} className="text-[#f97316]" />
+                        {item.label}
+                      </span>
+                    )
+                  })}
                 </div>
-              </div>
+              </motion.div>
             </div>
           </section>
 
-          <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-            <div className="grid gap-8 lg:grid-cols-3">
-              {plans.map((plan) => {
-                const Icon = plan.icon
+          <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.5 }}
+              className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
+            >
+              <div>
+                <p className="text-sm font-black uppercase tracking-wide text-[#f97316]">
+                  Planos
+                </p>
 
-                return (
-                  <article
-                    key={plan.name}
-                    className={[
-                      'group relative rounded-[2.5rem] border bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl',
-                      plan.highlight
-                        ? 'border-orange-400 ring-4 ring-orange-50'
-                        : 'border-gray-100',
-                    ].join(' ')}
-                  >
-                    {plan.badge && (
-                      <div className="absolute right-6 top-6 rounded-full bg-[#111827] px-3 py-1 text-xs font-black uppercase tracking-wide text-white shadow-md">
-                        {plan.badge}
-                      </div>
-                    )}
+                <h2 className="mt-2 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                  Comece simples. Evolua quando precisar.
+                </h2>
+              </div>
 
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] transition-transform duration-300 group-hover:scale-110 group-hover:bg-[#f97316] group-hover:text-white">
-                      <Icon size={24} />
-                    </div>
+              <p className="max-w-md text-sm font-semibold leading-7 text-[#6b7280]">
+                Todos os planos mantêm a proposta principal do PratoBy: vender
+                direto, com loja própria e sem comissão por pedido.
+              </p>
+            </motion.div>
 
-                    <h2 className="mt-6 text-2xl font-black text-[#111827]">
-                      {plan.name}
-                    </h2>
-
-                    <p className="mt-3 min-h-[72px] text-sm leading-6 text-[#6b7280]">
-                      {plan.description}
-                    </p>
-
-                    <div className="mt-6 flex items-end gap-1">
-                      <span className="text-4xl font-black tracking-tight text-[#111827]">
-                        {plan.price}
-                      </span>
-                      <span className="pb-1 text-sm font-bold text-[#6b7280]">
-                        {plan.period}
-                      </span>
-                    </div>
-
-                    <Link
-                      to="/contato"
-                      className={[
-                        'mt-8 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 text-sm font-black transition-all duration-300 hover:-translate-y-1',
-                        plan.highlight
-                          ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/30 hover:bg-[#ea580c] hover:shadow-orange-600/40'
-                          : 'bg-[#111827] text-white shadow-md hover:bg-black',
-                      ].join(' ')}
-                    >
-                      {plan.cta}
-                      <FiArrowRight size={18} />
-                    </Link>
-
-                    <ul className="mt-8 space-y-4">
-                      {plan.features.map((feature) => (
-                        <li
-                          key={feature}
-                          className="flex items-start gap-3 text-sm font-bold leading-6 text-[#111827]"
-                        >
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50 text-[#f97316]">
-                            <FiCheck size={14} />
-                          </span>
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                )
-              })}
+            <div className="grid gap-5 lg:grid-cols-3">
+              {plans.map((plan, index) => (
+                <PlanCard key={plan.name} plan={plan} index={index} />
+              ))}
             </div>
 
-            <div className="mt-16 rounded-[2.5rem] border border-orange-100 bg-[#fff7ed] p-8 shadow-sm transition-all hover:shadow-md sm:p-10">
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <motion.div
+              initial={{ opacity: 0, y: 22 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.55 }}
+              className="mt-8 rounded-[2rem] border border-orange-100 bg-[#fff7ed] p-6 shadow-sm sm:p-8"
+            >
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-2xl font-black text-[#111827]">
-                    Ainda com dúvidas sobre qual plano escolher?
+                    Não sabe qual plano escolher?
                   </h3>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6b7280]">
-                    Fale com a nossa equipe. Ajudamos a entender o tamanho da sua operação e sugerimos a estrutura perfeita para gerir o seu delivery e atendimento local.
+
+                  <p className="mt-2 max-w-2xl text-sm font-semibold leading-7 text-[#6b7280]">
+                    Fale sobre sua loja, volume de pedidos e rotina de entrega.
+                    A gente te ajuda a escolher o melhor começo.
                   </p>
                 </div>
 
                 <Link
                   to="/contato"
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
+                  className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[1.25rem] bg-[#f97316] px-6 text-sm font-black text-white shadow-xl shadow-orange-600/20 transition hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-95"
                 >
-                  <FiMessageCircle size={18} />
+                  <FiMessageCircle size={17} />
                   Falar com consultor
                 </Link>
               </div>
-            </div>
+            </motion.div>
           </section>
-
-        </div>
         </main>
       </MarketingLayout>
     </>

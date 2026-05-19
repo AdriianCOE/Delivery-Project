@@ -1,23 +1,28 @@
 import { useMemo, useState } from 'react'
-import SEO from '../components/seo/SEO'
 import { Link } from 'react-router-dom'
+import { motion } from 'motion/react'
+import SEO from '../components/seo/SEO'
+import MarketingLayout from '../pages/MarketingLayout'
 import {
   FiArrowRight,
+  FiAward,
   FiCheck,
   FiCheckCircle,
+  FiClock,
   FiCopy,
   FiLink,
   FiMail,
-  FiMapPin,
   FiMessageCircle,
+  FiMonitor,
   FiPhone,
   FiSend,
+  FiShield,
   FiShoppingBag,
   FiStar,
+  FiTrendingUp,
   FiUser,
   FiZap,
 } from 'react-icons/fi'
-import MarketingLayout from '../pages/MarketingLayout'
 
 const CONTACT_EMAIL = 'contato@pratoby.com'
 const CONTACT_WHATSAPP = '5579999786984'
@@ -27,43 +32,80 @@ const plans = [
   {
     id: 'essencial',
     name: 'Essencial',
+    subtitle: 'Para começar a vender online',
     price: 'R$ 59/mês',
-    description: 'Para começar com cardápio digital e pedidos pelo WhatsApp.',
-    features: ['Link exclusivo', 'Cardápio digital', 'Sem comissão'],
+    commission: '+ 0% de comissão por venda',
+    icon: FiZap,
+    features: [
+      'Cardápio digital ilimitado',
+      'Pedidos em tempo real',
+      'Link próprio da loja',
+      'Sem taxa por pedido',
+      'Painel de controle',
+      'Horários automáticos',
+    ],
   },
   {
     id: 'profissional',
     name: 'Profissional',
+    subtitle: 'Mais escolhido pelos lojistas',
     price: 'R$ 89/mês',
-    description: 'Para vender com painel, cupons, taxas por bairro e gestão melhor.',
-    features: ['Dashboard', 'Cupons', 'Taxa por bairro'],
+    commission: '+ 0% de comissão por venda',
+    icon: FiStar,
     popular: true,
+    features: [
+      'Tudo do Essencial',
+      'Cupons de desconto',
+      'Taxa por bairro',
+      'Campos personalizados',
+      'Relatórios avançados',
+      'WhatsApp integrado',
+      'Suporte prioritário',
+    ],
   },
   {
-    id: 'white-label',
-    name: 'White-label',
+    id: 'premium',
+    name: 'Premium',
+    subtitle: 'Para quem quer vender mais',
     price: 'R$ 159/mês',
-    description: 'Para uma experiência mais premium e personalizada.',
-    features: ['Visual premium', 'Domínio próprio', 'Suporte prioritário'],
+    commission: '+ 0% de comissão por venda',
+    icon: FiAward,
+    features: [
+      'Tudo do Profissional',
+      'Multi-loja até 3 unidades',
+      'API de integração',
+      'Domínio personalizado',
+      'Marca branca',
+      'Gerente de conta dedicado',
+    ],
   },
 ]
 
 const benefits = [
   {
-    title: 'Teste rápido',
-    text: 'A gente te ajuda a validar com uma loja piloto antes de complicar a operação.',
+    icon: FiShield,
+    title: '0% comissão',
+    text: 'Venda direto pelo seu próprio link, sem taxa por pedido.',
   },
   {
-    title: 'Configuração assistida',
-    text: 'Você pode começar com cadastro acompanhado, link pronto e cardápio organizado.',
+    icon: FiClock,
+    title: 'Pedido em tempo real',
+    text: 'Receba e acompanhe tudo pelo painel do lojista.',
   },
   {
-    title: 'Sem comissão',
-    text: 'A venda acontece pelo seu próprio link e sem taxa em cima de cada pedido.',
+    icon: FiMonitor,
+    title: 'Operação simples',
+    text: 'Cardápio, status, pagamento e contato em um só lugar.',
   },
 ]
 
-function slugify(value) {
+const contactSteps = [
+  'Você informa os dados da loja',
+  'A gente entende o melhor plano',
+  'Sua loja começa a vender pelo link',
+]
+
+function slugify(value = '') {
   return value
     .toLowerCase()
     .normalize('NFD')
@@ -73,17 +115,27 @@ function slugify(value) {
     .slice(0, 42)
 }
 
-function buildWhatsAppLink({ name, business, phone, message, selectedPlan, publicStoreLink }) {
+function buildWhatsAppLink({
+  name,
+  business,
+  phone,
+  message,
+  selectedPlan,
+  publicStoreLink,
+}) {
   const text = [
     'Olá! Vim pelo site do PratoBy.',
     '',
     name ? `Meu nome é ${name}.` : '',
-    business ? `Minha loja/negócio: ${business}.` : '',
+    business ? `Minha loja: ${business}.` : '',
     phone ? `Meu WhatsApp: ${phone}.` : '',
-    selectedPlan ? `Plano de interesse: ${selectedPlan.name} (${selectedPlan.price}).` : '',
+    selectedPlan
+      ? `Plano de interesse: ${selectedPlan.name} (${selectedPlan.price} ${selectedPlan.commission}).`
+      : '',
     publicStoreLink ? `Prévia do link desejado: ${publicStoreLink}` : '',
     '',
-    message || 'Quero saber mais sobre o cardápio digital e delivery.',
+    message ||
+      'Quero saber como começar a vender online com loja própria e 0% comissão por venda.',
   ]
     .filter(Boolean)
     .join('\n')
@@ -91,7 +143,14 @@ function buildWhatsAppLink({ name, business, phone, message, selectedPlan, publi
   return `https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent(text)}`
 }
 
-function buildMailtoLink({ name, business, phone, message, selectedPlan, publicStoreLink }) {
+function buildMailtoLink({
+  name,
+  business,
+  phone,
+  message,
+  selectedPlan,
+  publicStoreLink,
+}) {
   const subject = encodeURIComponent('Contato pelo site PratoBy')
 
   const body = encodeURIComponent(
@@ -99,15 +158,18 @@ function buildMailtoLink({ name, business, phone, message, selectedPlan, publicS
       'Olá, PratoBy!',
       '',
       name ? `Nome: ${name}` : '',
-      business ? `Loja/negócio: ${business}` : '',
+      business ? `Loja: ${business}` : '',
       phone ? `WhatsApp: ${phone}` : '',
-      selectedPlan ? `Plano de interesse: ${selectedPlan.name} (${selectedPlan.price})` : '',
+      selectedPlan
+        ? `Plano de interesse: ${selectedPlan.name} (${selectedPlan.price} ${selectedPlan.commission})`
+        : '',
       publicStoreLink ? `Prévia do link desejado: ${publicStoreLink}` : '',
       '',
-      message || 'Quero saber mais sobre o PratoBy.',
+      message ||
+        'Quero saber como começar a vender online com loja própria e 0% comissão por venda.',
     ]
       .filter(Boolean)
-      .join('\n')
+      .join('\n'),
   )
 
   return `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`
@@ -122,7 +184,10 @@ function Input({ label, icon: Icon, ...props }) {
 
       <div className="relative">
         {Icon && (
-          <Icon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Icon
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            size={18}
+          />
         )}
 
         <input
@@ -137,48 +202,56 @@ function Input({ label, icon: Icon, ...props }) {
 }
 
 function PlanOption({ plan, active, onClick }) {
+  const Icon = plan.icon
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative rounded-[1.6rem] border p-4 text-left transition-all duration-300 ${
+      className={[
+        'relative rounded-[1.45rem] border p-4 text-left transition-all duration-300',
         active
           ? 'border-[#f97316] bg-orange-50 shadow-lg shadow-orange-600/10 ring-4 ring-orange-100'
-          : 'border-gray-100 bg-white hover:-translate-y-0.5 hover:border-orange-100 hover:shadow-md'
-      }`}
+          : 'border-gray-100 bg-white hover:-translate-y-0.5 hover:border-orange-100 hover:shadow-md',
+      ].join(' ')}
     >
       {plan.popular && (
-        <span className="absolute right-4 top-4 rounded-full bg-[#f97316] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white">
-          Popular
+        <span className="absolute right-4 top-4 rounded-full bg-[#111827] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+          Mais popular
         </span>
       )}
 
-      <div className="flex items-start gap-3 pr-16">
+      <div className="flex items-start gap-3 pr-20">
         <span
-          className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+          className={[
+            'mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl',
             active
-              ? 'border-[#f97316] bg-[#f97316] text-white'
-              : 'border-gray-300 bg-white text-transparent'
-          }`}
+              ? 'bg-[#f97316] text-white shadow-md shadow-orange-600/20'
+              : 'bg-orange-50 text-[#f97316]',
+          ].join(' ')}
         >
-          <FiCheck size={13} />
+          <Icon size={18} />
         </span>
 
         <div>
           <h3 className="text-base font-black text-[#111827]">{plan.name}</h3>
 
-          <p className="mt-1 text-sm font-black text-[#f97316]">
+          <p className="mt-1 text-xs font-bold text-[#6b7280]">
+            {plan.subtitle}
+          </p>
+
+          <p className="mt-2 text-sm font-black text-[#f97316]">
             {plan.price}
           </p>
 
-          <p className="mt-2 text-xs font-semibold leading-5 text-[#6b7280]">
-            {plan.description}
+          <p className="mt-1 text-[11px] font-black text-[#f97316]">
+            {plan.commission}
           </p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {plan.features.map((feature) => (
+        {plan.features.slice(0, 3).map((feature) => (
           <span
             key={feature}
             className="rounded-full border border-gray-100 bg-white px-3 py-1 text-[11px] font-black text-[#6b7280]"
@@ -205,7 +278,7 @@ export default function ContactPage() {
 
   const selectedPlan = useMemo(
     () => plans.find((plan) => plan.id === form.planId) || plans[1],
-    [form.planId]
+    [form.planId],
   )
 
   const storeSlug = useMemo(() => {
@@ -224,7 +297,7 @@ export default function ContactPage() {
         selectedPlan,
         publicStoreLink,
       }),
-    [form, selectedPlan, publicStoreLink]
+    [form, selectedPlan, publicStoreLink],
   )
 
   const mailtoLink = useMemo(
@@ -234,7 +307,7 @@ export default function ContactPage() {
         selectedPlan,
         publicStoreLink,
       }),
-    [form, selectedPlan, publicStoreLink]
+    [form, selectedPlan, publicStoreLink],
   )
 
   function updateField(field, value) {
@@ -258,339 +331,356 @@ export default function ContactPage() {
     }
   }
 
-return (
+  return (
     <>
-      <SEO title="Contato | PratoBy" />
+      <SEO
+        title="Contato | PratoBy"
+        description="Fale com o PratoBy para criar sua loja online própria, receber pedidos em tempo real e vender com 0% comissão por venda."
+        path="/contato"
+      />
+
       <MarketingLayout>
-        
-        <div className="w-full animate-[fadeIn_0.4s_ease-out]">
-          
-          <header className="relative overflow-hidden border-b border-gray-100 bg-white">
-        <div className="absolute -left-40 top-32 h-[28rem] w-[28rem] rounded-full bg-orange-100/70 blur-3xl" />
-        <div className="absolute -right-32 top-40 h-[28rem] w-[28rem] rounded-full bg-gray-100 blur-3xl" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-[#f9fafb]" />
+        <main className="overflow-hidden bg-[#f9fafb] text-[#111827]">
+          <section className="relative overflow-hidden border-b border-gray-100 bg-white">
+            <div className="pointer-events-none absolute -left-40 top-28 h-[28rem] w-[28rem] rounded-full bg-orange-100/70 blur-3xl" />
+            <div className="pointer-events-none absolute -right-40 top-36 h-[28rem] w-[28rem] rounded-full bg-gray-100 blur-3xl" />
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-b from-transparent to-[#f9fafb]" />
 
-        <div className="relative mx-auto grid max-w-7xl items-start gap-10 px-4 py-10 sm:px-6 sm:py-16 lg:grid-cols-[0.85fr_1.15fr] lg:px-8 lg:py-20">
-          <div className="text-center lg:text-left">
-            <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm">
-              <FiZap />
-              Fale com o PratoBy
-            </span>
-
-            <h1 className="mt-6 text-4xl font-black leading-[1.04] tracking-tight text-[#111827] sm:text-6xl lg:text-7xl">
-              Vamos montar o{' '}
-              <span className="text-[#f97316]">cardápio da sua loja?</span>
-            </h1>
-
-            <p className="mx-auto mt-6 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg lg:mx-0">
-              Preencha os dados, escolha o plano de interesse e envie uma mensagem
-              pronta pelo WhatsApp ou e-mail. A ideia é deixar o primeiro contato
-              rápido, organizado e sem enrolação.
-            </p>
-
-            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
-              <a
-                href={whatsappLink}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex items-center gap-4 rounded-[1.7rem] border border-orange-100 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-900/5"
+            <div className="relative mx-auto grid max-w-7xl items-start gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[0.86fr_1.14fr] lg:px-8 lg:py-20">
+              <motion.div
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55 }}
+                className="text-center lg:text-left"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                  <FiMessageCircle size={22} />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-[#111827]">WhatsApp</p>
-                  <p className="mt-1 text-sm font-semibold text-[#6b7280]">
-                    Melhor para começar rápido.
-                  </p>
-                </div>
-
-                <FiArrowRight className="text-[#f97316] transition group-hover:translate-x-1" />
-              </a>
-
-              <a
-                href={mailtoLink}
-                className="group flex items-center gap-4 rounded-[1.7rem] border border-gray-100 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-100 hover:shadow-xl hover:shadow-orange-900/5"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gray-50 text-[#111827]">
-                  <FiMail size={22} />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-[#111827]">E-mail</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-[#6b7280]">
-                    {CONTACT_EMAIL}
-                  </p>
-                </div>
-
-                <FiArrowRight className="text-[#f97316] transition group-hover:translate-x-1" />
-              </a>
-            </div>
-
-            <div className="mt-8 rounded-[2rem] border border-gray-100 bg-[#f9fafb] p-5 text-left lg:max-w-xl">
-              <p className="flex items-center gap-2 text-sm font-black text-[#111827]">
-                <FiShoppingBag className="text-[#f97316]" />
-                Resumo do interesse
-              </p>
-
-              <div className="mt-4 grid gap-3 text-sm font-bold text-[#6b7280]">
-                <div className="flex items-center justify-between gap-4">
-                  <span>Plano escolhido</span>
-                  <span className="text-right font-black text-[#111827]">
-                    {selectedPlan.name}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-4">
-                  <span>Investimento</span>
-                  <span className="text-right font-black text-[#f97316]">
-                    {selectedPlan.price}
-                  </span>
-                </div>
-
-                <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                    Prévia do link
-                  </p>
-
-                  <p className="mt-1 break-all text-sm font-black leading-5 text-[#111827]">
-                    {publicStoreLink.replace('https://', '')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div
-            id="formulario"
-            className="rounded-[2.5rem] border border-gray-100 bg-white p-5 shadow-2xl shadow-gray-200/80 sm:p-6 lg:p-8"
-          >
-            <div className="rounded-[2rem] bg-[#111827] p-6 text-white">
-              <p className="text-sm font-black uppercase tracking-wide text-orange-300">
-                Pré-atendimento
-              </p>
-
-              <h2 className="mt-3 text-3xl font-black tracking-tight">
-                Monte sua solicitação
-              </h2>
-
-              <p className="mt-3 text-sm font-semibold leading-6 text-white/60">
-                Essas informações já entram na mensagem enviada para o contato.
-              </p>
-            </div>
-
-            <div className="mt-6 grid gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  label="Seu nome"
-                  icon={FiUser}
-                  value={form.name}
-                  onChange={(event) => updateField('name', event.target.value)}
-                  placeholder="Ex: Adrian"
-                  autoComplete="name"
-                />
-
-                <Input
-                  label="Seu WhatsApp"
-                  icon={FiPhone}
-                  value={form.phone}
-                  onChange={(event) => updateField('phone', event.target.value)}
-                  placeholder="(79) 99999-9999"
-                  inputMode="tel"
-                  autoComplete="tel"
-                />
-              </div>
-
-              <Input
-                label="Nome da loja"
-                icon={FiMapPin}
-                value={form.business}
-                onChange={(event) => updateField('business', event.target.value)}
-                placeholder="Ex: Capivaras Lanches"
-                autoComplete="organization"
-              />
-
-              <div>
-                <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                  Prévia do link
+                <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm">
+                  <FiMessageCircle size={15} />
+                  Fale com o PratoBy
                 </span>
 
-                <div className="rounded-[1.5rem] border border-orange-100 bg-orange-50 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#f97316]">
-                        <FiLink />
-                        Link sugerido
-                      </p>
+                <h1 className="mt-6 text-4xl font-black leading-[1.04] tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
+                  Vamos colocar sua loja para{' '}
+                  <span className="text-[#f97316]">vender online?</span>
+                </h1>
 
-                      <p className="mt-2 break-all text-base font-black leading-6 text-[#111827]">
-                        {publicStoreLink.replace('https://', '')}
-                      </p>
-                    </div>
+                <p className="mx-auto mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg lg:mx-0">
+                  Envie seus dados e receba um atendimento direto para escolher o
+                  melhor plano e começar com loja própria, pedidos em tempo real e
+                  0% comissão por venda.
+                </p>
 
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(publicStoreLink, setLinkCopied)}
-                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-black text-[#111827] shadow-sm transition hover:text-[#f97316]"
+                <div className="mt-7 flex flex-wrap justify-center gap-2 lg:justify-start">
+                  {[
+                    'Loja própria',
+                    '0% comissão',
+                    'Pedidos em tempo real',
+                  ].map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316]"
                     >
-                      <FiCopy />
-                      {linkCopied ? 'Copiado' : 'Copiar'}
-                    </button>
-                  </div>
-
-                  <p className="mt-3 text-xs font-semibold leading-5 text-[#9a3412]">
-                    Essa é só uma prévia automática. O link final pode ser ajustado
-                    antes da publicação.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                  Escolha de plano
-                </span>
-
-                <div className="grid gap-3">
-                  {plans.map((plan) => (
-                    <PlanOption
-                      key={plan.id}
-                      plan={plan}
-                      active={form.planId === plan.id}
-                      onClick={() => updateField('planId', plan.id)}
-                    />
+                      {item}
+                    </span>
                   ))}
                 </div>
-              </div>
 
-              <label className="block">
-                <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                  Mensagem
-                </span>
+                <div className="mt-8 grid gap-3 sm:grid-cols-3 lg:max-w-xl">
+                  {benefits.map((item, index) => {
+                    const Icon = item.icon
 
-                <textarea
-                  value={form.message}
-                  onChange={(event) => updateField('message', event.target.value)}
-                  placeholder="Quero testar o PratoBy na minha loja..."
-                  className="min-h-[140px] w-full resize-none rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 py-3 text-sm font-bold leading-6 text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
-                />
-              </label>
+                    return (
+                      <motion.article
+                        key={item.title}
+                        initial={{ opacity: 0, y: 18 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.45, delay: 0.12 + index * 0.08 }}
+                        className="rounded-[1.5rem] border border-gray-100 bg-white p-4 text-left shadow-sm"
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+                          <Icon size={18} />
+                        </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <a
-                  href={whatsappLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-6 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
-                >
-                  <FiSend />
-                  Enviar no WhatsApp
-                </a>
+                        <h3 className="mt-3 text-sm font-black text-[#111827]">
+                          {item.title}
+                        </h3>
 
-                <a
-                  href={mailtoLink}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-4 text-sm font-black text-[#111827] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:text-[#f97316]"
-                >
-                  <FiMail />
-                  Enviar e-mail
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
+                          {item.text}
+                        </p>
+                      </motion.article>
+                    )
+                  })}
+                </div>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-wide text-[#f97316]">
-              Por que começar agora
-            </p>
+                <div className="mt-8 rounded-[2rem] border border-gray-100 bg-[#f9fafb] p-5 text-left lg:max-w-xl">
+                  <p className="flex items-center gap-2 text-sm font-black text-[#111827]">
+                    <FiTrendingUp className="text-[#f97316]" />
+                    Como o contato funciona
+                  </p>
 
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
-              Um caminho simples para vender pelo seu próprio link
-            </h2>
-          </div>
+                  <div className="mt-4 grid gap-3">
+                    {contactSteps.map((step, index) => (
+                      <div
+                        key={step}
+                        className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-50 text-xs font-black text-[#f97316]">
+                          {index + 1}
+                        </span>
 
-          <p className="max-w-xl text-sm font-semibold leading-6 text-[#6b7280]">
-            Você não precisa montar um app completo para começar. O PratoBy cria
-            uma experiência moderna, rápida e fácil de divulgar.
-          </p>
-        </div>
+                        <span className="text-sm font-bold text-[#6b7280]">
+                          {step}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {benefits.map((item) => (
-            <article
-              key={item.title}
-              className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-100 hover:shadow-md"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                <FiCheckCircle size={22} />
-              </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+  <a
+    href={whatsappLink}
+    target="_blank"
+    rel="noreferrer"
+    className="group rounded-[1.5rem] border border-orange-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-xl hover:shadow-orange-100/60"
+  >
+    <div className="flex items-center gap-3">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-lg shadow-orange-600/20 transition group-hover:scale-105">
+        <FiMessageCircle size={19} />
+      </span>
 
-              <p className="mt-5 text-lg font-black text-[#111827]">
-                {item.title}
-              </p>
+      <div className="min-w-0">
+        <p className="text-sm font-black text-[#111827]">
+          Chamar no WhatsApp
+        </p>
 
-              <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
-                {item.text}
-              </p>
-            </article>
-          ))}
-        </div>
-
-        <div className="mt-12 rounded-[2.5rem] border border-orange-100 bg-[#fff7ed] p-8 shadow-sm sm:p-10">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="flex items-center gap-2 text-sm font-black text-[#f97316]">
-                <FiStar />
-                Ainda quer ver antes de chamar?
-              </p>
-
-              <h3 className="mt-3 text-2xl font-black text-[#111827] sm:text-3xl">
-                Veja os planos ou fale direto pelo WhatsApp
-              </h3>
-
-              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#6b7280]">
-                Compare os pacotes, tire dúvidas e comece com uma loja piloto antes
-                de depender de marketplace ou aplicativo próprio.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link
-                to="/planos"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111827] px-8 py-4 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
-              >
-                Ver planos
-                <FiArrowRight size={18} />
-              </Link>
-
-              <a
-                href={whatsappLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
-              >
-                Chamar no WhatsApp
-                <FiMessageCircle size={18} />
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 flex justify-center">
-          <button
-            type="button"
-            onClick={() => copyToClipboard(CONTACT_EMAIL, setEmailCopied)}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-200 hover:text-[#f97316]"
-          >
-            <FiCopy />
-            {emailCopied ? 'E-mail copiado' : `Copiar ${CONTACT_EMAIL}`}
-          </button>
-        </div>
-      </section>
+        <p className="mt-1 text-xs font-bold text-[#9ca3af]">
+          (79) 99978-69**
+        </p>
       </div>
+    </div>
+  </a>
+
+  <a
+    href={mailtoLink}
+    className="group rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-xl hover:shadow-orange-100/60"
+  >
+    <div className="flex items-center gap-3">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] transition group-hover:scale-105 group-hover:bg-[#f97316] group-hover:text-white">
+        <FiMail size={19} />
+      </span>
+
+      <div className="min-w-0">
+        <p className="text-sm font-black text-[#111827]">
+          Enviar e-mail
+        </p>
+
+        <p className="mt-1 truncate text-xs font-bold text-[#9ca3af]">
+          contato@pratoby.com
+        </p>
+      </div>
+    </div>
+  </a>
+</div>
+              </motion.div>
+
+              <motion.div
+                id="formulario"
+                initial={{ opacity: 0, y: 26 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.12 }}
+                className="rounded-[2.5rem] border border-gray-100 bg-white p-5 shadow-2xl shadow-gray-200/80 sm:p-6 lg:p-8"
+              >
+                <div className="rounded-[2rem] bg-[#111827] p-6 text-white">
+                  <p className="text-sm font-black uppercase tracking-wide text-orange-300">
+                    Solicitação
+                  </p>
+
+                  <h2 className="mt-3 text-3xl font-black tracking-tight">
+                    Monte sua mensagem
+                  </h2>
+
+                  <p className="mt-3 text-sm font-semibold leading-6 text-white/60">
+                    As informações abaixo já entram prontas no WhatsApp ou e-mail.
+                  </p>
+                </div>
+
+                <div className="mt-6 grid gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Input
+                      label="Seu nome"
+                      icon={FiUser}
+                      value={form.name}
+                      onChange={(event) => updateField('name', event.target.value)}
+                      placeholder="Ex: Adrian"
+                      autoComplete="name"
+                    />
+
+                    <Input
+                      label="Seu WhatsApp"
+                      icon={FiPhone}
+                      value={form.phone}
+                      onChange={(event) => updateField('phone', event.target.value)}
+                      placeholder="(79) 99999-9999"
+                      inputMode="tel"
+                      autoComplete="tel"
+                    />
+                  </div>
+
+                  <Input
+                    label="Nome da loja"
+                    icon={FiShoppingBag}
+                    value={form.business}
+                    onChange={(event) => updateField('business', event.target.value)}
+                    placeholder="Ex: Capivaras Lanches"
+                    autoComplete="organization"
+                  />
+
+                  <div className="rounded-[1.5rem] border border-orange-100 bg-orange-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#f97316]">
+                          <FiLink />
+                          Link sugerido
+                        </p>
+
+                        <p className="mt-2 break-all text-base font-black leading-6 text-[#111827]">
+                          {publicStoreLink.replace('https://', '')}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyToClipboard(publicStoreLink, setLinkCopied)
+                        }
+                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-black text-[#111827] shadow-sm transition hover:text-[#f97316]"
+                      >
+                        <FiCopy />
+                        {linkCopied ? 'Copiado' : 'Copiar'}
+                      </button>
+                    </div>
+
+                    <p className="mt-3 text-xs font-semibold leading-5 text-[#9a3412]">
+                      Essa é uma prévia automática. O link final pode ser ajustado
+                      antes da publicação.
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                      Plano de interesse
+                    </span>
+
+                    <div className="grid gap-3">
+                      {plans.map((plan) => (
+                        <PlanOption
+                          key={plan.id}
+                          plan={plan}
+                          active={form.planId === plan.id}
+                          onClick={() => updateField('planId', plan.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                      Mensagem
+                    </span>
+
+                    <textarea
+                      value={form.message}
+                      onChange={(event) =>
+                        updateField('message', event.target.value)
+                      }
+                      placeholder="Quero começar a vender online com loja própria..."
+                      className="min-h-[130px] w-full resize-none rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 py-3 text-sm font-bold leading-6 text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+                    />
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <a
+                      href={whatsappLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-6 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
+                    >
+                      <FiSend />
+                      Enviar no WhatsApp
+                    </a>
+
+                    <a
+                      href={mailtoLink}
+                      className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-4 text-sm font-black text-[#111827] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:text-[#f97316]"
+                    >
+                      <FiMail />
+                      Enviar e-mail
+                    </a>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </section>
+
+          <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+            <motion.div
+              initial={{ opacity: 0, y: 22 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.55 }}
+              className="rounded-[2.25rem] border border-orange-100 bg-[#fff7ed] p-6 shadow-sm sm:p-8 lg:p-10"
+            >
+              <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-black text-[#f97316]">
+                    <FiCheckCircle />
+                    Antes de começar
+                  </p>
+
+                  <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                    Quer comparar os planos antes?
+                  </h2>
+
+                  <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-[#6b7280]">
+                    Veja os detalhes do Essencial, Profissional e Premium, ou mande
+                    sua dúvida direto pelo WhatsApp.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+                  <Link
+                    to="/planos"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] bg-[#111827] px-6 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
+                  >
+                    Ver planos
+                    <FiArrowRight size={18} />
+                  </Link>
+
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] bg-[#f97316] px-6 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
+                  >
+                    Chamar no WhatsApp
+                    <FiMessageCircle size={18} />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => copyToClipboard(CONTACT_EMAIL, setEmailCopied)}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-200 hover:text-[#f97316]"
+              >
+                <FiCopy />
+                {emailCopied ? 'E-mail copiado' : `Copiar ${CONTACT_EMAIL}`}
+              </button>
+            </div>
+          </section>
+        </main>
       </MarketingLayout>
     </>
   )

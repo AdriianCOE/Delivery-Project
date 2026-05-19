@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   FiArrowRight,
@@ -46,16 +47,6 @@ const socialLinks = [
 ]
 
 const footerBadges = [
-  {
-    label: 'Sistema funcional',
-    icon: FiCheckCircle,
-    className: 'bg-orange-50 text-[#f97316] ring-orange-100',
-  },
-  {
-    label: '0% comissão por pedido',
-    icon: FiZap,
-    className: 'bg-orange-50 text-[#f97316] ring-orange-100',
-  },
 ]
 
 function Logo({ compact = false }) {
@@ -168,109 +159,161 @@ export default function MarketingLayout({ children }) {
           </div>
         </div>
 
-        {isMenuOpen && (
-          <div className="absolute inset-x-0 top-full border-b border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200/70 md:hidden">
-            <div className="grid gap-2">
-              {navLinks.map((item) => {
-                const active = isActivePath(item.to)
+        <AnimatePresence>
+  {isMenuOpen && (
+    <motion.div
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="absolute inset-x-0 top-full border-b border-gray-100 bg-white/95 p-4 shadow-2xl shadow-gray-200/70 backdrop-blur-xl md:hidden"
+    >
+      <motion.div
+        initial="closed"
+        animate="open"
+        exit="closed"
+        variants={{
+          open: {
+            transition: {
+              staggerChildren: 0.045,
+              delayChildren: 0.04,
+            },
+          },
+          closed: {
+            transition: {
+              staggerChildren: 0.025,
+              staggerDirection: -1,
+            },
+          },
+        }}
+        className="grid gap-2 rounded-[1.75rem] border border-gray-100 bg-[#fafafa] p-2 shadow-sm"
+      >
+        {navLinks.map((item) => {
+          const active = isActivePath(item.to)
 
-                return (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={`rounded-[1.25rem] px-4 py-3 text-center text-sm font-black transition active:scale-[0.98] ${
-                      active
-                        ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100'
-                        : 'bg-[#f9fafb] text-[#111827]'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-
+          return (
+            <motion.div
+              key={item.label}
+              variants={{
+                open: { opacity: 1, y: 0, scale: 1 },
+                closed: { opacity: 0, y: -8, scale: 0.98 },
+              }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            >
               <Link
-                to="/contato"
+                to={item.to}
                 onClick={() => setIsMenuOpen(false)}
-                className="mt-2 rounded-[1.25rem] bg-[#f97316] px-4 py-3 text-center text-sm font-black text-white"
+                className={`block rounded-[1.25rem] px-4 py-3 text-center text-sm font-black transition active:scale-[0.98] ${
+                  active
+                    ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100'
+                    : 'bg-white text-[#111827] shadow-sm ring-1 ring-gray-100 hover:bg-orange-50 hover:text-[#f97316]'
+                }`}
               >
-                Criar minha loja
+                {item.label}
               </Link>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )
+        })}
+
+        <motion.div
+          variants={{
+            open: { opacity: 1, y: 0, scale: 1 },
+            closed: { opacity: 0, y: -8, scale: 0.98 },
+          }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
+          <Link
+            to="/contato"
+            onClick={() => setIsMenuOpen(false)}
+            className="mt-1 flex items-center justify-center gap-2 rounded-[1.25rem] bg-[#f97316] px-4 py-3 text-center text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:bg-[#ea580c] active:scale-[0.98]"
+          >
+            Criar minha loja
+            <FiArrowRight size={16} />
+          </Link>
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
       </header>
 
       <div>{children}</div>
 
       <footer className="border-t border-gray-100 bg-white">
-  <div className="h-1 w-full bg-[#f97316]" />
+  {/* Barra superior com um leve gradiente */}
+  <div className="h-1 w-full bg-gradient-to-r from-orange-400 to-[#f97316]" />
 
-  <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
-    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-      <Link to="/" aria-label="Ir para início" className="shrink-0">
-        <Logo compact />
-      </Link>
+  <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    {/* Cartão Unificado (p-5 no mobile para não apertar muito os cantos) */}
+    <div className="flex flex-col gap-6 rounded-[2rem] border border-gray-100 bg-[#fafafa] p-5 shadow-sm sm:p-8">
+      
+      {/* Parte Superior: Logo e Ações */}
+      <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between">
+        <Link to="/" aria-label="Ir para início" className="inline-flex shrink-0 transition-transform hover:scale-105">
+          <Logo compact />
+        </Link>
 
-      <nav className="flex flex-wrap items-center justify-center gap-2">
-        {footerLinks.map((item) => (
-          <Link
-            key={item.label}
-            to={item.to}
-            className="rounded-full px-3.5 py-2 text-sm font-bold text-[#6b7280] transition hover:bg-orange-50 hover:text-[#f97316]"
+        {/* Grupo de Ações: Espaçado no mobile, Agrupado na direita no PC */}
+        <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
+          
+          {/* Redes Sociais */}
+          <div className="flex items-center gap-2">
+            {socialLinks.map((item) => {
+              const Icon = item.icon
+
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`${item.label} em breve`}
+                  title={`${item.label} em breve`}
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${item.colorClass}`}
+                >
+                  <Icon size={16} />
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Botão "Ver exemplo" */}
+          <a
+            href="https://pratoby.com/capivaras-lanches"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-10 w-fit shrink-0 items-center justify-center gap-2 rounded-full border border-orange-200 bg-white px-4 text-xs font-black text-[#f97316] shadow-sm transition-all hover:-translate-y-1 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md hover:shadow-orange-100/50"
           >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+            Ver exemplo
+            <FiExternalLink size={14} />
+          </a>
 
-      <div className="flex items-center justify-center gap-2 lg:justify-end">
-        {socialLinks.map((item) => {
-          const Icon = item.icon
+        </div>
+      </div>
 
-          return (
-            <a
+      {/* Divisória Sutil */}
+      <div className="h-px w-full bg-gray-200/70" />
+
+      {/* Parte Inferior: Links e Direitos */}
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        
+        {/* Links de Navegação (Centralizados no celular) */}
+        <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+          {footerLinks.map((item) => (
+            <Link
               key={item.label}
-              href={item.href}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={item.label}
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-100 bg-white text-[#6b7280] shadow-sm transition hover:-translate-y-0.5 ${item.colorClass}`}
+              to={item.to}
+              className="rounded-full border border-gray-200/60 bg-white px-3.5 py-1.5 text-[13px] font-bold text-gray-500 shadow-sm transition-all hover:-translate-y-0.5 hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]"
             >
-              <Icon size={18} />
-            </a>
-          )
-        })}
+              {item.label}
+            </Link>
+          ))}
+        </div>
 
-        <a
-          href="https://pratoby.com/capivaras-lanches"
-          target="_blank"
-          rel="noreferrer"
-          className="hidden h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-xs font-black text-[#111827] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:text-[#f97316] sm:inline-flex"
-        >
-          Ver exemplo
-          <FiExternalLink size={14} />
-        </a>
+        {/* Copyright (Centralizado no celular) */}
+        <p className="text-center text-[11px] font-semibold text-gray-400 sm:text-left sm:text-xs">
+          © {new Date().getFullYear()} PratoBy. Todos os direitos reservados.
+        </p>
       </div>
-    </div>
-
-    <div className="mt-6 flex flex-col gap-4 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs font-semibold text-[#9ca3af]">
-        © {new Date().getFullYear()} PratoBy. Todos os direitos reservados.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316] ring-1 ring-orange-100">
-          <FiZap size={13} />
-          0% comissão
-        </span>
-
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-black text-[#6b7280] ring-1 ring-gray-100">
-          <FiCheckCircle size={13} />
-          Sistema funcional
-        </span>
-      </div>
+      
     </div>
   </div>
 </footer>

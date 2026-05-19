@@ -28,18 +28,22 @@ const problems = [
 export function PainSection() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-white via-[#fff7ed]/50 to-[#f8fafc] py-8 lg:py-12">
+      {/* Efeitos de Glow no fundo */}
       <div className="pointer-events-none absolute -left-32 top-10 h-72 w-72 rounded-full bg-red-100/50 blur-3xl" />
       <div className="pointer-events-none absolute -right-32 bottom-0 h-72 w-72 rounded-full bg-orange-100/50 blur-3xl" />
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        
+        {/* Cabeçalho da Seção */}
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.55 }}
-          className="mx-auto mb-8 max-w-3xl text-center lg:mb-10"
+          className="mx-auto mb-8 max-w-3xl text-center lg:mb-10 flex flex-col items-center"
         >
-          <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-red-600 shadow-sm">
+          {/* Badge centralizado */}
+          <div className="mx-auto inline-flex items-center justify-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-red-600 shadow-sm">
             <Ghost size={16} />
             O custo invisível dos apps
           </div>
@@ -55,6 +59,7 @@ export function PainSection() {
           </p>
         </motion.div>
 
+        {/* Grid de Problemas (Cards centralizados) */}
         <div className="grid gap-5 sm:grid-cols-3 lg:gap-6">
           {problems.map((problem, index) => {
             const Icon = problem.icon
@@ -66,7 +71,8 @@ export function PainSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.45, delay: index * 0.08 }}
-                className="group rounded-[2rem] border border-white bg-white/90 p-6 shadow-sm ring-1 ring-red-100/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-red-100/70"
+                // Adicionado: flex flex-col items-center text-center para alinhar tudo ao meio
+                className="group flex flex-col items-center text-center rounded-[2rem] border border-white bg-white/90 p-6 shadow-sm ring-1 ring-red-100/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-red-100/70"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100 transition group-hover:bg-red-600 group-hover:text-white">
                   <Icon size={23} />
@@ -88,12 +94,13 @@ export function PainSection() {
           })}
         </div>
 
+        {/* Call to Action Inferior */}
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.25 }}
-          className="mx-auto mt-8 max-w-3xl rounded-[2rem] border border-orange-100 bg-white/90 p-5 text-center shadow-xl shadow-orange-100/40"
+          className="mx-auto mt-8 max-w-3xl flex flex-col items-center rounded-[2rem] border border-orange-100 bg-white/90 p-5 text-center shadow-xl shadow-orange-100/40"
         >
           <p className="text-base font-black text-[#111827] sm:text-lg">
             Chega de depender de uma vitrine que cobra de cada venda.

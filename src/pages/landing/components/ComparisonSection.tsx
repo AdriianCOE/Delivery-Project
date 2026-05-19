@@ -73,7 +73,7 @@ export function ComparisonSection() {
       <div className="pointer-events-none absolute -right-32 bottom-10 h-72 w-72 rounded-full bg-slate-200/80 blur-3xl" />
 
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <motion.div
+      <motion.div
           initial={{ opacity: 0, y: 18 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -86,10 +86,10 @@ export function ComparisonSection() {
           </div>
 
           <h2 className="mt-5 text-3xl font-black leading-tight tracking-tight text-[#111827] sm:text-5xl">
-            WhatsApp organiza pouco Apps cobram muito.
-            <span className="block text-[#f97316]">
-              O PratoBy fica no meio ideal.
-            </span>
+            {/* Cada span com 'block' força uma quebra de linha */}
+            <span className="block">WhatsApp organiza pouco</span>
+            <span className="block">Apps cobram muito</span>
+            <span className="block text-[#f97316]">PratoBy é o ideal</span>
           </h2>
 
           <p className="mx-auto mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280]">

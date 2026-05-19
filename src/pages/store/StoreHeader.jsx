@@ -4,8 +4,10 @@ import {
   FiCheck,
   FiClock,
   FiCopy,
+  FiCreditCard,
   FiDollarSign,
   FiExternalLink,
+  FiZap,
   FiHeart,
   FiInfo,
   FiInstagram,
@@ -853,6 +855,51 @@ function InfoRow({ icon: Icon, label, value, action, themeColor }) {
   )
 }
 
+function getAcceptedPaymentMethods(store) {
+  const paymentMethods = store?.paymentMethods || {}
+  const pixConfig =
+    store?.pix ||
+    store?.paymentSettings?.pix ||
+    store?.settings?.pix ||
+    {}
+
+  const pixKey =
+    pixConfig.key ||
+    store?.pixKey ||
+    store?.settings?.pixKey ||
+    store?.paymentSettings?.pix?.key ||
+    ''
+
+  const pixEnabled =
+    paymentMethods.pix !== false &&
+    pixConfig.enabled !== false &&
+    Boolean(pixKey)
+
+  const cardEnabled = paymentMethods.card !== false
+  const cashEnabled = paymentMethods.cash !== false
+
+  return [
+    pixEnabled && {
+      id: 'pix',
+      label: 'Pix',
+      icon: FiZap,
+      description: 'Pagamento direto para a loja',
+    },
+    cardEnabled && {
+      id: 'card',
+      label: 'Cartão',
+      icon: FiCreditCard,
+      description: 'Débito ou crédito na entrega',
+    },
+    cashEnabled && {
+      id: 'cash',
+      label: 'Dinheiro',
+      icon: FiDollarSign,
+      description: 'Com opção de troco',
+    },
+  ].filter(Boolean)
+}
+
 export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -875,6 +922,10 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const instagram = getInstagram(store)
   const twitter = getTwitter(store)
   const address = useMemo(() => getAddressData(store), [store])
+  const acceptedPaymentMethods = useMemo(
+    () => getAcceptedPaymentMethods(store),
+    [store]
+  )
   const businessHours = useMemo(() => getBusinessHours(store), [store])
   const scheduleStatus = useMemo(() => getScheduleStatus(businessHours), [businessHours])
   const todayHoursLabel = scheduleStatus.todayLabel
@@ -1238,58 +1289,124 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
             }}
           />
 
-          <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5">
-            <div className="min-w-0">
-              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 md:hidden" />
+<div
+  className="relative overflow-hidden border-b border-gray-100 p-5"
+  style={{
+    background: `linear-gradient(135deg, ${themeSofter}, #ffffff 62%, ${getRgba(
+      themeColor,
+      0.08
+    )})`,
+  }}
+>
+  <div
+    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
+    style={{ backgroundColor: getRgba(themeColor, 0.18) }}
+  />
 
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#9ca3af]">
-                Informações da loja
-              </p>
+  <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 md:hidden" />
 
-              <h3 className="mt-1 max-h-16 overflow-hidden text-2xl font-black tracking-tight text-[#111827]">
-                {store?.name || 'Loja'}
-              </h3>
+  <button
+    type="button"
+    onClick={() => setShowModal(false)}
+    className="absolute right-4 top-4 z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-[#111827] shadow-lg shadow-gray-200/70 ring-1 ring-gray-100 backdrop-blur-xl transition hover:bg-[#111827] hover:text-white active:scale-95"
+    aria-label="Fechar"
+  >
+    <FiX size={19} />
+  </button>
 
-              <div className="mt-2">
-                <StatusBadge status={operationalStatus} themeColor={themeColor} />
-              </div>
-            </div>
+  <div className="relative pr-12">
+    <div className="flex items-start gap-4">
+      <div
+        className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] border-4 border-white bg-white text-xl font-black shadow-xl shadow-gray-200/80"
+        style={{ color: themeColor }}
+      >
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt={store?.name || 'Logo da loja'}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          logoInitial
+        )}
+      </div>
 
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-white shadow-lg transition hover:bg-black active:scale-95"
-              aria-label="Fechar"
-            >
-              <FiX size={20} />
-            </button>
-          </div>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide shadow-sm ring-1 ring-gray-100"
+            style={{ color: themeColor }}
+          >
+            <FiInfo size={12} />
+            Informações da loja
+          </span>
+
+          <StatusBadge status={operationalStatus} themeColor={themeColor} />
+        </div>
+
+        <h3 className="line-clamp-2 text-2xl font-black leading-tight tracking-tight text-[#111827] sm:text-3xl">
+          {store?.name || 'Loja'}
+        </h3>
+
+      </div>
+    </div>
+
+    <div className="mt-5 grid grid-cols-2 gap-2">
+      <div className="rounded-2xl bg-white/90 p-3 shadow-sm ring-1 ring-gray-100 backdrop-blur-xl">
+        <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#9ca3af]">
+          <FiClock size={13} />
+          Hoje
+        </p>
+
+        <p className="mt-1 truncate text-sm font-black text-[#111827]">
+          {todayHoursLabel}
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-white/90 p-3 shadow-sm ring-1 ring-gray-100 backdrop-blur-xl">
+        <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#9ca3af]">
+          <FiDollarSign size={13} />
+          Pedido mínimo
+        </p>
+
+        <p className="mt-1 truncate text-sm font-black text-[#111827]">
+          {minOrder > 0 ? formatMoney(minOrder) : 'Sem mínimo'}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
-            <div
-              className="rounded-[1.5rem] border p-4"
-              style={{ borderColor: getRgba(themeColor, 0.16), backgroundColor: themeSofter }}
-            >
-              <p className="text-sm font-black" style={{ color: themeColor }}>
-                {operationalStatus.description}
-              </p>
+          <div
+  className="rounded-[1.5rem] border p-4"
+  style={{
+    borderColor: getRgba(themeColor, 0.16),
+    backgroundColor: themeSofter,
+  }}
+>
+  <p className="text-sm font-black" style={{ color: themeColor }}>
+    {operationalStatus.description}
+  </p>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white p-3 shadow-sm">
-                  <p className="text-xs font-bold text-[#6b7280]">Horário de hoje</p>
-                  <p className="mt-1 text-sm font-black text-[#111827]">
-                    {todayHoursLabel}
-                  </p>
-                </div>
+  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+    <div className="rounded-2xl bg-white p-3 shadow-sm">
+      <p className="text-xs font-bold text-[#6b7280]">Horário de hoje</p>
 
-                <div className="rounded-2xl bg-white p-3 shadow-sm">
-                  <p className="text-xs font-bold text-[#6b7280]">Pedido mínimo</p>
-                  <p className="mt-1 text-sm font-black text-[#111827]">
-                    {minOrder > 0 ? formatMoney(minOrder) : 'Sem valor mínimo'}
-                  </p>
-                </div>
-              </div>
-            </div>
+      <p className="mt-1 text-sm font-black text-[#111827]">
+        {todayHoursLabel}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-white p-3 shadow-sm">
+      <p className="text-xs font-bold text-[#6b7280]">Pedido mínimo</p>
+
+      <p className="mt-1 text-sm font-black text-[#111827]">
+        {minOrder > 0 ? formatMoney(minOrder) : 'Sem valor mínimo'}
+      </p>
+    </div>
+  </div>
+</div>
 
             <div className="grid gap-3">
               <InfoRow
@@ -1299,28 +1416,108 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
                 themeColor={themeColor}
               />
 
-              {address.full && (
-                <InfoRow
-                  icon={FiMapPin}
-                  label="Endereço"
-                  value={`${address.full}${address.complement ? ` · ${address.complement}` : ''}`}
-                  themeColor={themeColor}
-                  action={
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                        address.full
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm transition active:scale-95"
-                      style={{ color: themeColor }}
-                    >
-                      Mapa
-                      <FiExternalLink size={12} />
-                    </a>
-                  }
-                />
-              )}
+{acceptedPaymentMethods.length > 0 && (
+  <section className="rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-sm">
+    <div className="mb-3 flex items-center gap-3">
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm"
+        style={{ color: themeColor }}
+      >
+        <FiDollarSign size={19} />
+      </div>
+
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+          Pagamento
+        </p>
+
+        <p className="text-sm font-black text-[#111827]">
+          Meios aceitos pela loja
+        </p>
+      </div>
+    </div>
+
+    <div className="grid gap-2 sm:grid-cols-3">
+      {acceptedPaymentMethods.map((method) => (
+        <div
+          key={method.id}
+          className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+  <span
+    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]"
+    style={{
+      backgroundColor: themeSofter,
+      color: themeColor,
+    }}
+  >
+    <method.icon size={16} />
+  </span>
+
+  <p className="text-sm font-black text-[#111827]">
+    {method.label}
+  </p>
+</div>
+
+          <p className="mt-1 text-xs font-bold leading-5 text-[#6b7280]">
+            {method.description}
+          </p>
+        </div>
+      ))}
+    </div>
+  </section>
+)}
+
+{address.full && (
+  <section className="overflow-hidden rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] shadow-sm">
+    <div className="flex items-start gap-3 p-4">
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm"
+        style={{ color: themeColor }}
+      >
+        <FiMapPin size={19} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+          Localização
+        </p>
+
+        <p className="mt-1 break-words text-sm font-bold leading-6 text-[#111827]">
+          {address.full}
+          {address.complement ? ` · ${address.complement}` : ''}
+        </p>
+      </div>
+
+      <a
+        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          address.full
+        )}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm transition active:scale-95"
+        style={{ color: themeColor }}
+      >
+        Abrir
+        <FiExternalLink size={12} />
+      </a>
+    </div>
+
+    <div className="border-t border-gray-100 bg-white p-2">
+      <div className="overflow-hidden rounded-[1rem] border border-gray-100 bg-gray-100">
+        <iframe
+          title={`Mapa de ${store?.name || 'loja'}`}
+          src={`https://www.google.com/maps?q=${encodeURIComponent(
+            address.full
+          )}&output=embed`}
+          className="h-48 w-full border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      </div>
+    </div>
+  </section>
+)}
 
               {whatsappDigits && (
                 <InfoRow
