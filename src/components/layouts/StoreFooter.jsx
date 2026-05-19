@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   FiCheck,
   FiClock,
@@ -6,6 +7,7 @@ import {
   FiExternalLink,
   FiFacebook,
   FiInstagram,
+  FiLogIn,
   FiMapPin,
   FiMessageCircle,
   FiShield,
@@ -422,18 +424,28 @@ export default function StoreFooter({ store, todayHoursLabel }) {
             © {year} {storeName}. Todos os direitos reservados.
           </p>
 
-          <a
-            href={PRATOBY_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-[#6b7280] ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:text-[#111827]"
-          >
-            Tecnologia
-            <strong className="font-black text-[#111827]">
-              Prato<span className="text-[#f97316]">By</span>
-            </strong>
-            <FiExternalLink size={12} />
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/login"
+              className="inline-flex w-fit items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-[11px] font-black text-[#f97316] ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:bg-white hover:text-[#ea580c]"
+            >
+              <FiLogIn size={12} />
+              Área do lojista
+            </Link>
+
+            <a
+              href={PRATOBY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-[#6b7280] ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:text-[#111827]"
+            >
+              Tecnologia
+              <strong className="font-black text-[#111827]">
+                Prato<span className="text-[#f97316]">By</span>
+              </strong>
+              <FiExternalLink size={12} />
+            </a>
+          </div>
         </div>
       </div>
     </footer>

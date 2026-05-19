@@ -142,7 +142,7 @@ function PratoByLogo({ dark = false, compact = false }) {
         </p>
 
         <p
-          className={`mt-1 truncate text-[10px] font-bold uppercase tracking-widest ${
+          className={`mt-1 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.16em] ${
             dark ? 'text-white/55' : 'text-[#9ca3af]'
           }`}
         >
@@ -150,6 +150,52 @@ function PratoByLogo({ dark = false, compact = false }) {
         </p>
       </div>
     </Link>
+  )
+}
+
+function LoginMobileHeader() {
+  return (
+    <motion.header
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl lg:hidden"
+    >
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden">
+        <span className="block h-full w-full rounded-full bg-[#f97316]" />
+      </span>
+
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="shrink-0" aria-label="Ir para início">
+          <div className="flex items-center gap-3">
+            <img
+              src="/icons/icon-192.png"
+              alt="PratoBy"
+              className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
+            />
+
+            <div className="leading-none">
+              <p className="text-2xl font-black tracking-tighter text-[#111827]">
+                Prato<span className="text-[#f97316]">By</span>
+              </p>
+
+              <p className="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
+                Cardápio digital e delivery
+              </p>
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          to="/"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-[1.25rem] border border-gray-200 bg-white px-4 text-sm font-black text-[#111827] shadow-sm active:scale-95"
+          aria-label="Voltar para o site"
+        >
+          <FiArrowLeft size={17} />
+          Voltar
+        </Link>
+      </div>
+    </motion.header>
   )
 }
 
@@ -324,7 +370,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-[#f9fafb] text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased">
+    <main className="relative min-h-dvh overflow-hidden bg-[#f9fafb] pt-20 text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased lg:pt-0">
+      <LoginMobileHeader />
       
       {/* 1. BLOBS FLUTUANTES (Animados com Framer Motion) */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -438,17 +485,6 @@ export default function LoginPage() {
         {/* LADO DIREITO (Login) */}
         <section className="flex min-h-dvh items-center justify-center px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
           <div className="w-full max-w-md">
-            <div className="mb-6 flex items-center justify-between gap-4 lg:hidden">
-              <PratoByLogo compact />
-
-              <Link
-                to="/"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-orange-100 bg-white text-[#111827] shadow-sm transition hover:text-[#f97316] active:scale-95"
-                aria-label="Voltar para início"
-              >
-                <FiArrowLeft />
-              </Link>
-            </div>
 
             {/* 2. CARTÃO DE LOGIN COM ANIMAÇÃO PRINCIPAL */}
             <motion.div
@@ -467,10 +503,13 @@ export default function LoginPage() {
               >
                 
                 {/* ELEMENTOS FILHOS ANIMADOS EM CASCATA COM FADEUP */}
-                <motion.div variants={fadeUp} className="mb-8 hidden items-start justify-between gap-4 lg:flex">
-                  <PratoByLogo />
+                <motion.div
+                  variants={fadeUp}
+                  className="mb-8 hidden rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:flex lg:items-center lg:justify-between lg:gap-4"
+                >
+                  <PratoByLogo compact />
 
-                  <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-[#f97316] ring-1 ring-orange-100">
+                  <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-[#9ca3af] ring-1 ring-gray-100">
                     v{APP_VERSION}
                   </span>
                 </motion.div>
