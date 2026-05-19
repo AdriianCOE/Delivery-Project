@@ -571,97 +571,6 @@ exports.auditOrderChanges = onDocumentUpdated(
   }
 )
 
-exports.auditOrderChanges = onDocumentUpdated(
-    {
-      document: 'orders/{orderId}',
-      region: 'southamerica-east1',
-      timeoutSeconds: 30,
-      memory: '256MiB',
-    },
-    async (event) => {
-      const beforeData = event.data?.before?.data() || {}
-      const afterData = event.data?.after?.data() || {}
-      const orderId = event.params.orderId
-  
-      const changedFields = getChangedFields(beforeData, afterData, [
-        'status',
-        'payment.status',
-        'paymentStatus',
-        'payment.confirmedAt',
-        'payment.confirmedBy',
-        'payment.paidAt',
-        'cancellationReason',
-        'cancelReason',
-        'canceledBy',
-        'deliveredAt',
-        'customerLastNotifiedStatus',
-      ])
-  
-      if (!changedFields.length) return
-  
-      let action = 'order_updated'
-  
-      if (beforeData.status !== afterData.status) {
-        action = `order_status_changed_to_${afterData.status}`
-      }
-  
-      if (
-        beforeData.status !== 'cancelado' &&
-        afterData.status === 'cancelado'
-      ) {
-        action = 'order_canceled'
-      }
-  
-      if (
-        beforeData.payment?.status !== afterData.payment?.status &&
-        afterData.payment?.status === 'paid'
-      ) {
-        action = 'pix_payment_confirmed'
-      }
-  
-      if (
-        beforeData.paymentStatus !== afterData.paymentStatus &&
-        afterData.paymentStatus === 'paid'
-      ) {
-        action = 'payment_confirmed'
-      }
-  
-      await createAuditLog({
-        action,
-        entity: 'order',
-        entityId: orderId,
-        storeId: afterData.storeId || afterData.storeSlug || beforeData.storeId || '',
-        storeSlug: afterData.storeSlug || beforeData.storeSlug || '',
-        actorUid: pickActorUid(beforeData, afterData),
-        changedFields,
-        before: {
-          status: beforeData.status || null,
-          paymentStatus: beforeData.paymentStatus || null,
-          payment: {
-            status: beforeData.payment?.status || null,
-            confirmedBy: beforeData.payment?.confirmedBy || null,
-          },
-          cancellationReason:
-            beforeData.cancellationReason ||
-            beforeData.cancelReason ||
-            null,
-        },
-        after: {
-          status: afterData.status || null,
-          paymentStatus: afterData.paymentStatus || null,
-          payment: {
-            status: afterData.payment?.status || null,
-            confirmedBy: afterData.payment?.confirmedBy || null,
-          },
-          cancellationReason:
-            afterData.cancellationReason ||
-            afterData.cancelReason ||
-            null,
-        },
-      })
-    }
-  )
-
   exports.auditProductPriceChanges = onDocumentUpdated(
     {
       document: 'products/{productId}',
@@ -714,6 +623,131 @@ exports.auditOrderChanges = onDocumentUpdated(
           isActive: afterData.isActive ?? null,
           isVisible: afterData.isVisible ?? null,
         },
+      })
+    }
+  )
+
+  exports.reserveCouponUsage = onDocumentCreated(
+    {
+      document: 'orders/{orderId}',
+      region: 'southamerica-east1',
+      timeoutSeconds: 60,
+      memory: '256MiB',
+    },
+    async (event) => {
+      const orderId = event.params.orderId
+      const order = event.data?.data() || {}
+  
+      const couponId = String(order.couponId || order.coupon?.id || '').trim()
+      const couponCode = String(order.couponCode || order.coupon?.code || '').trim()
+  
+      if (!couponId && !couponCode) return
+  
+      const orderRef = db.collection('orders').doc(orderId)
+  
+      await db.runTransaction(async (transaction) => {
+        let couponRef = null
+        let couponSnap = null
+  
+        if (couponId) {
+          couponRef = db.collection('coupons').doc(couponId)
+          couponSnap = await transaction.get(couponRef)
+        }
+  
+        if ((!couponSnap || !couponSnap.exists) && couponCode) {
+          const storeId = String(order.storeId || order.storeSlug || '').trim()
+  
+          if (!storeId) {
+            transaction.update(orderRef, {
+              couponValidation: {
+                status: 'invalid',
+                reason: 'Pedido sem storeId para validar cupom.',
+                checkedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              requiresManualCouponReview: true,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+            return
+          }
+  
+          const querySnap = await transaction.get(
+            db
+              .collection('coupons')
+              .where('storeId', '==', storeId)
+              .where('code', '==', couponCode.toUpperCase())
+              .limit(1)
+          )
+  
+          if (!querySnap.empty) {
+            couponSnap = querySnap.docs[0]
+            couponRef = couponSnap.ref
+          }
+        }
+  
+        if (!couponRef || !couponSnap || !couponSnap.exists) {
+          transaction.update(orderRef, {
+            couponValidation: {
+              status: 'invalid',
+              reason: 'Cupom não encontrado.',
+              checkedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            requiresManualCouponReview: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+          return
+        }
+  
+        const coupon = couponSnap.data() || {}
+        const usageLimit = Number(coupon.usageLimit || 0)
+        const usedCount = Number(coupon.usedCount || 0)
+  
+        if (coupon.isDeleted === true || coupon.active === false) {
+          transaction.update(orderRef, {
+            couponValidation: {
+              status: 'invalid',
+              reason: 'Cupom inativo ou excluído.',
+              couponId: couponSnap.id,
+              checkedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            requiresManualCouponReview: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+          return
+        }
+  
+        if (usageLimit > 0 && usedCount >= usageLimit) {
+          transaction.update(orderRef, {
+            couponValidation: {
+              status: 'invalid',
+              reason: 'Limite de uso do cupom atingido.',
+              couponId: couponSnap.id,
+              usageLimit,
+              usedCount,
+              checkedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            requiresManualCouponReview: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+          return
+        }
+  
+        transaction.update(couponRef, {
+          usedCount: admin.firestore.FieldValue.increment(1),
+          lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+  
+        transaction.update(orderRef, {
+          couponId: couponSnap.id,
+          couponValidation: {
+            status: 'reserved',
+            couponId: couponSnap.id,
+            usageLimit: usageLimit || null,
+            usedCountBefore: usedCount,
+            checkedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
       })
     }
   )

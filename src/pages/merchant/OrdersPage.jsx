@@ -2505,27 +2505,24 @@ export default function OrdersPage() {
     const nextStatus = normalizeStatus(status)
     const currentStatus = normalizeStatus(order.status)
 
-    if (
-      ['preparando', 'confirmado'].includes(nextStatus) &&
-      shouldBlockOrderAcceptance(order)
-    ) {
-      showToast(
-        'error',
-        'Este pedido tem valor suspeito. Confira o total antes de aceitar.'
-      )
-      return
-    }
-    
-    if (
-      ['preparando', 'confirmado'].includes(nextStatus) &&
-      shouldWarnOrderAcceptance(order)
-    ) {
-      const confirmed = window.confirm(
-        'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar mesmo assim?'
-      )
-    
-      if (!confirmed) return
-    }
+    const isMeaningfulStatusChange =
+  nextStatus !== currentStatus && nextStatus !== 'cancelado'
+
+if (isMeaningfulStatusChange && shouldBlockOrderAcceptance(order)) {
+  showToast(
+    'error',
+    'Este pedido tem valor suspeito. Confira o total antes de aceitar ou avançar.'
+  )
+  return
+}
+
+if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+  const confirmed = window.confirm(
+    'O PratoBy marcou este pedido para revisão de valor. Deseja avançar mesmo assim?'
+  )
+
+  if (!confirmed) return
+}
 
     if (nextStatus === 'preparando' && shouldBlockPreparationUntilPayment(order)) {
       showToast('error', 'Confirme o pagamento Pix antes de iniciar o preparo.')

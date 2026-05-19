@@ -27,7 +27,7 @@ const plans = [
   {
     id: 'essencial',
     name: 'Essencial',
-    price: 'R$ 49/mês',
+    price: 'R$ 59/mês',
     description: 'Para começar com cardápio digital e pedidos pelo WhatsApp.',
     features: ['Link exclusivo', 'Cardápio digital', 'Sem comissão'],
   },
@@ -42,7 +42,7 @@ const plans = [
   {
     id: 'white-label',
     name: 'White-label',
-    price: 'R$ 149/mês',
+    price: 'R$ 159/mês',
     description: 'Para uma experiência mais premium e personalizada.',
     features: ['Visual premium', 'Domínio próprio', 'Suporte prioritário'],
   },

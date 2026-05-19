@@ -58,7 +58,7 @@ const PLAN_OPTIONS = [
   {
     id: 'essencial',
     label: 'Essencial',
-    price: 'R$ 49/mês',
+    price: 'R$ 59/mês',
     badge: 'Entrada',
     description: 'Cardápio digital, carrinho e WhatsApp.',
   },
@@ -72,7 +72,7 @@ const PLAN_OPTIONS = [
   {
     id: 'white-label',
     label: 'White-label',
-    price: 'R$ 149/mês',
+    price: 'R$ 159/mês',
     badge: 'Premium',
     description: 'Personalização, domínio próprio e suporte prioritário.',
   },

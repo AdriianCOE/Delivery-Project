@@ -10,12 +10,14 @@ import ScrollToTop from '../utils/ScrollToTop'
 // Públicas
 import AboutPage from '../pages/AboutPage'
 import ContactPage from '../pages/ContactPage'
-import LandingPage from '../pages/LandingPage'
+import LandingPage from "../pages/landing/LandingPage";
 import NotFoundPage from '../pages/NotFoundPage'
 import StoreFrontPage from '../pages/store/StoreFrontPage'
 import OrderTrackingPage from '../pages/store/OrderTrackingPage'
 import PlansPage from '../pages/PlansPage'
 import RestaurantExamplesPage from '../pages/RestaurantExamplesPage'
+import PrivacyPage from '../pages/PrivacyPage'
+import TermsPage from '../pages/TermsPage'
 
 // Admin
 import AdminLayout from '../components/layouts/AdminLayout'
@@ -73,6 +75,8 @@ export default function AppRoutes() {
         <Route path="/contato" element={<ContactPage />} />
         <Route path="/planos" element={<PlansPage />} />
         <Route path="/exemplos" element={<RestaurantExamplesPage />} />
+        <Route path="/privacidade" element={<PrivacyPage />} />
+        <Route path="/termos" element={<TermsPage />} />
 
         {/* Página 404 manual */}
         <Route path="/404" element={<NotFoundPage />} />
