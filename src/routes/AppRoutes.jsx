@@ -5,6 +5,7 @@ import {
 } from 'react-router-dom'
 
 import LoginPage from '../pages/auth/LoginPage'
+import SignupPage from '../pages/auth/SignupPage'
 import ScrollToTop from '../utils/ScrollToTop'
 
 // Públicas
@@ -71,6 +72,7 @@ export default function AppRoutes() {
         {/* Públicas */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/cadastro" element={<SignupPage />} />
         <Route path="/sobre" element={<AboutPage />} />
         <Route path="/contato" element={<ContactPage />} />
         <Route path="/planos" element={<PlansPage />} />
