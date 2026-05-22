@@ -40,6 +40,11 @@ import { usePresence } from '../../hooks/usePresence'
 
 import ProductCard from './ProductCard'
 import MerchantDrawer from './MerchantDrawer'
+import {
+  getStoreDocId,
+  getStorePublicSlug,
+  getStoreKeys as getGlobalStoreKeys,
+} from '../../utils/storeIdentity'
 import CartDrawer from './CartDrawer'
 import CustomerDrawer from './CustomerDrawer'
 import ProductOptionsModal from './ProductOptionsModal'
@@ -579,15 +584,13 @@ function getStoreSlug(store, fallbackSlug) {
 }
 
 function getStoreKeys(store, fallbackSlug) {
-  return [
-    store?.storeId,
-    store?.storeSlug,
-    store?.slug,
-    store?.id,
-    fallbackSlug,
-  ]
-    .filter(Boolean)
-    .filter((value, index, array) => array.indexOf(value) === index)
+  const baseKeys = getGlobalStoreKeys(store)
+  const keys = [...new Set([...baseKeys, fallbackSlug].filter(Boolean))]
+
+  if (import.meta.env.DEV) {
+    console.log('[StoreFront] storeKeys gerados:', keys)
+  }
+  return keys
 }
 
 function normalizeStore(input, fallbackSlug = '') {
@@ -595,9 +598,8 @@ function normalizeStore(input, fallbackSlug = '') {
 
   const isSnapshot = typeof input.data === 'function'
   const data = isSnapshot ? input.data() || {} : input
-  const docId = isSnapshot ? input.id : input.id || input.docId || input.storeId || data.id || ''
-  
-  const storeSlug = data.storeSlug || data.slug || fallbackSlug || docId
+  const docId = getStoreDocId(input) || input?.id || fallbackSlug
+  const storeSlug = getStorePublicSlug(input) || input?.slug || fallbackSlug || docId
 
   const logoUrl = getCloudinaryOptimizedUrl(
     firstFilled(data.logoUrl, data.logo, data.avatarUrl, data.photoUrl),
@@ -663,9 +665,14 @@ function isStoreUnavailable(store) {
 function isProductAvailable(product) {
   if (!product) return false
   if (product.deletedAt) return false
+  if (product.isDeleted === true) return false
   if (product.isVisible === false) return false
   if (product.isActive === false) return false
   if (product.active === false) return false
+  if (product.isAvailable === false) return false
+
+  const hasStockControl = product.stock !== undefined && product.stock !== null && product.stock !== ''
+  if (hasStockControl && Number(product.stock) <= 0) return false
 
   return true
 }
@@ -1941,13 +1948,20 @@ const handleToggleFavorite = useCallback(() => {
     return undefined
   }
 
-    const storeKeys = getStoreKeys(store, slug)
+    const targetStoreId = getStoreDocId(store)
 
-    if (storeKeys.length === 0) {
+    if (!targetStoreId) {
       setCategories([])
       setProducts([])
       setLoadingMenu(false)
-      return undefined
+      return
+    }
+
+    const categoriesQuery = query(collection(db, 'categories'), where('storeId', '==', targetStoreId))
+    const productsQuery = query(collection(db, 'products'), where('storeId', '==', targetStoreId))
+
+    if (import.meta.env.DEV) {
+      console.log(`[StoreFront] Iniciando buscas com targetStoreId:`, targetStoreId)
     }
 
     setMenuError('')
@@ -1960,18 +1974,6 @@ const handleToggleFavorite = useCallback(() => {
       if (pendingListeners <= 0) setLoadingMenu(false)
     }
 
-    const usableStoreKeys = storeKeys.slice(0, 10)
-
-    const categoriesQuery =
-      usableStoreKeys.length === 1
-        ? query(collection(db, 'categories'), where('storeId', '==', usableStoreKeys[0]))
-        : query(collection(db, 'categories'), where('storeId', 'in', usableStoreKeys))
-
-    const productsQuery =
-      usableStoreKeys.length === 1
-        ? query(collection(db, 'products'), where('storeId', '==', usableStoreKeys[0]))
-        : query(collection(db, 'products'), where('storeId', 'in', usableStoreKeys))
-
     const unsubscribeCategories = onSnapshot(
       categoriesQuery,
       (snapshot) => {
@@ -1981,30 +1983,41 @@ const handleToggleFavorite = useCallback(() => {
             ...categoryDoc.data(),
           }))
           .filter((category) => category.isVisible !== false)
+          .filter((category) => category.isActive !== false)
+          .filter((category) => category.isDeleted !== true && !category.deletedAt)
           .sort(sortByOrderThenName)
+
+        if (import.meta.env.DEV) {
+          console.log(`[StoreFront] Categorias: ${snapshot.docs.length} docs -> ${nextCategories.length} visíveis`)
+        }
 
         setCategories(nextCategories)
         markLoaded()
       },
-      () => {
+      (err) => {
+        if (import.meta.env.DEV) console.error('[StoreFront] Erro nas categorias:', err)
         setCategories([])
         setMenuError('Não foi possível carregar as categorias.')
         markLoaded()
-      },
+      }
     )
 
     const unsubscribeProducts = onSnapshot(
       productsQuery,
       (snapshot) => {
         const nextProducts = snapshot.docs.map(normalizeProduct)
+        if (import.meta.env.DEV) {
+          console.log(`[StoreFront] Produtos: ${snapshot.docs.length} docs -> ${nextProducts.length} mapeados`)
+        }
         setProducts(nextProducts)
         markLoaded()
       },
-      () => {
+      (err) => {
+        if (import.meta.env.DEV) console.error('[StoreFront] Erro nos produtos:', err)
         setProducts([])
         setMenuError('Não foi possível carregar os produtos.')
         markLoaded()
-      },
+      }
     )
 
     return () => {

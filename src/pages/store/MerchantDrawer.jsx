@@ -37,6 +37,12 @@ import {
 } from 'react-icons/fi'
 
 import { db } from '../../services/firebase'
+import {
+  getStoreDocId,
+  getStorePublicSlug,
+  getStoreKeys,
+  buildStoreScopedPayload,
+} from '../../utils/storeIdentity'
 
 const BAIRROS_ARACAJU = [
   '13 de Julho',
@@ -152,26 +158,7 @@ const TABS = [
   { id: 'avaliacoes', icon: FiStar, label: 'Avaliações' },
 ]
 
-function uniqueArray(values) {
-  return [...new Set(values.filter(Boolean))]
-}
 
-function getStoreDocId(store) {
-  return store?.id || store?.storeId || store?.storeSlug || store?.slug
-}
-
-function getFinalStoreId(store) {
-  return store?.storeSlug || store?.slug || store?.storeId || store?.id
-}
-
-function getStoreKeys(store) {
-  return uniqueArray([
-    store?.storeSlug,
-    store?.slug,
-    store?.storeId,
-    store?.id,
-  ])
-}
 
 function parseCurrency(value) {
   let cleaned = String(value || '0').replace(/[^\d.,]/g, '')
@@ -530,14 +517,26 @@ export default function MerchantDrawer({
   const [couponForm, setCouponForm] = useState(EMPTY_COUPON_FORM)
 
   const storeDocId = getStoreDocId(store)
-  const finalStoreId = getFinalStoreId(store)
   const storeKeys = useMemo(() => getStoreKeys(store), [store])
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('[MerchantDrawer] props products/categories:', products?.length, categories?.length)
+      console.log('[MerchantDrawer] storeKeys:', storeKeys)
+    }
+  }, [products, categories, storeKeys])
 
   const sortedCategories = useMemo(() => {
     return [...categories]
       .filter((category) => category?.isDeleted !== true)
+      .filter((category) => category?.isActive !== false)
+      .filter((category) => category?.isVisible !== false)
+      .filter((category) => {
+         const catStoreId = category?.storeId;
+         return catStoreId && storeKeys.includes(catStoreId);
+      })
       .sort((a, b) => Number(a?.order ?? 9999) - Number(b?.order ?? 9999))
-  }, [categories])
+  }, [categories, storeKeys])
 
   const visibleBairros = useMemo(() => {
     const term = deliverySearch.trim().toLowerCase()
@@ -554,6 +553,17 @@ export default function MerchantDrawer({
 
     return [...products]
       .filter((product) => product?.isDeleted !== true && !product?.deletedAt)
+      .filter((product) => product?.isActive !== false)
+      .filter((product) => product?.isVisible !== false)
+      .filter((product) => product?.isAvailable !== false)
+      .filter((product) => {
+         if (product?.stock != null && Number(product.stock) === 0) return false;
+         return true;
+      })
+      .filter((product) => {
+         const pStoreId = product?.storeId;
+         return pStoreId && storeKeys.includes(pStoreId);
+      })
       .filter((product) => {
         if (!term) return true
 
@@ -574,7 +584,7 @@ export default function MerchantDrawer({
 
         return String(a?.name || '').localeCompare(String(b?.name || ''))
       })
-  }, [productSearch, products])
+  }, [productSearch, products, storeKeys])
 
   const groupedProducts = useMemo(() => {
     return sortedCategories.map((category) => ({
@@ -772,7 +782,8 @@ export default function MerchantDrawer({
   }, [showToast, storeDocId, storeEdit])
 
   const handleAddCategory = useCallback(async () => {
-    if (!newCategoryName.trim() || !finalStoreId) {
+    const storeId = getStoreDocId(store)
+    if (!newCategoryName.trim() || !storeId) {
       showToast('Digite o nome da categoria.')
       return
     }
@@ -780,11 +791,11 @@ export default function MerchantDrawer({
     setLoading(true)
 
     try {
+      const scope = buildStoreScopedPayload(store)
       await addDoc(collection(db, 'categories'), {
+        ...scope,
         name: newCategoryName.trim(),
         description: newCategoryDescription.trim(),
-        storeId: finalStoreId,
-        storeSlug: finalStoreId,
         order: sortedCategories.length,
         isVisible: true,
         createdAt: serverTimestamp(),
@@ -801,11 +812,11 @@ export default function MerchantDrawer({
       setLoading(false)
     }
   }, [
-    finalStoreId,
     newCategoryDescription,
     newCategoryName,
     showToast,
     sortedCategories.length,
+    store,
   ])
 
   const handleUpdateCategory = useCallback(
@@ -1053,7 +1064,8 @@ export default function MerchantDrawer({
   }, [])
 
   const handleSaveProduct = useCallback(async () => {
-    if (!finalStoreId) return
+    const storeId = getStoreDocId(store)
+    if (!storeId) return
 
     if (!productForm.name.trim()) {
       showToast('Digite o nome do produto.')
@@ -1093,7 +1105,9 @@ export default function MerchantDrawer({
         productForm.optionGroups
       )
 
+      const scope = buildStoreScopedPayload(store)
       const productData = {
+        ...scope,
         name: productForm.name.trim(),
         description: productForm.description.trim(),
         categoryId: productForm.categoryId,
@@ -1120,8 +1134,6 @@ export default function MerchantDrawer({
         isFeatured: productForm.isFeatured,
         featured: productForm.isFeatured,
         couponEligible: productForm.couponEligible,
-        storeId: finalStoreId,
-        storeSlug: finalStoreId,
         updatedAt: serverTimestamp(),
       }
 
@@ -1148,10 +1160,10 @@ export default function MerchantDrawer({
   }, [
     cancelProductEdit,
     editingProductId,
-    finalStoreId,
     productForm,
     products.length,
     showToast,
+    store,
   ])
 
   const handleToggleProductStatus = useCallback(
@@ -1259,7 +1271,8 @@ export default function MerchantDrawer({
   }, [addressEdit, deliveryFees, showToast, storeDocId])
 
   const handleAddCoupon = useCallback(async () => {
-    if (!finalStoreId) return
+    const storeId = getStoreDocId(store)
+    if (!storeId) return
 
     if (!couponForm.code.trim() || !couponForm.value) {
       showToast('Preencha o código e o desconto.')
@@ -1306,7 +1319,7 @@ export default function MerchantDrawer({
     } finally {
       setLoading(false)
     }
-  }, [couponForm, finalStoreId, showToast])
+  }, [couponForm, store, showToast])
 
   const handleToggleCoupon = useCallback(
     async (couponId, currentStatus) => {
@@ -1382,7 +1395,7 @@ export default function MerchantDrawer({
   }, [showToast])
 
   const handleCopyStoreLink = useCallback(async () => {
-    const slug = store?.storeSlug || store?.slug || finalStoreId
+    const slug = getStorePublicSlug(store) || getStoreDocId(store)
     const url =
       typeof window !== 'undefined'
         ? `${window.location.origin}/${slug}`
@@ -1394,7 +1407,7 @@ export default function MerchantDrawer({
     } catch {
       showToast('Não foi possível copiar o link.')
     }
-  }, [finalStoreId, showToast, store])
+  }, [store, showToast])
 
   if (!isOpen) return null
 
@@ -1449,7 +1462,7 @@ export default function MerchantDrawer({
               </p>
 
               <p className="truncate text-xs text-[#6b7280]">
-                /{store?.storeSlug || store?.slug || finalStoreId}
+                /{getStorePublicSlug(store) || getStoreDocId(store)}
               </p>
             </div>
 

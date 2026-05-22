@@ -150,7 +150,6 @@ export function HeroSection() {
 
             <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
               {[
-                '14 dias grátis',
                 'Sem comissão por venda',
                 'Cliente e link da loja',
                 'Pix com QR Code',

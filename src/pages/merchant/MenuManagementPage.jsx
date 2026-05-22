@@ -46,6 +46,12 @@ import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { uploadImageToCloudinary } from '../../services/cloudinary'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+import {
+  getStoreDocId,
+  getStorePublicSlug,
+  getStoreKeys,
+  buildStoreScopedPayload,
+} from '../../utils/storeIdentity'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -517,12 +523,11 @@ function ProductDrawer({ open, onClose, editingProduct, categories, store, store
       }
 
       const oldPriceValue = form.oldPrice ? parseCurrency(form.oldPrice) : null
-      const storeSlug     = store?.storeSlug || store?.slug || ''
-      const storeKeys     = [storeId, storeSlug].filter(Boolean)
+      const scope = buildStoreScopedPayload(store)
       const catName       = categories.find((c) => c.id === form.categoryId)?.name || ''
 
       const data = cleanObject({
-        storeId, storeSlug, storeKeys,
+        ...scope,
         name:         form.name.trim().slice(0, 120),
         description:  form.description.trim().slice(0, 500),
         categoryId:   form.categoryId || '',
@@ -548,6 +553,10 @@ function ProductDrawer({ open, onClose, editingProduct, categories, store, store
         isDeleted:    false,
         updatedAt:    serverTimestamp(),
       })
+
+      if (import.meta.env.DEV) {
+        console.log('[MenuManagementPage] Salvando produto scope:', scope)
+      }
 
       if (editingProduct?.id) {
         await updateDoc(doc(db, 'products', editingProduct.id), data)
@@ -820,25 +829,28 @@ function CategoryDrawer({ open, onClose, editingCategory, storeId, store, catego
     if (!form.name.trim()) { onToast({ type: 'error', message: 'Nome da categoria é obrigatório.' }); return }
     setSaving(true)
     try {
-      const storeSlug = store?.storeSlug || store?.slug || ''
-      const storeKeys = [storeId, storeSlug].filter(Boolean)
+      const scope = buildStoreScopedPayload(store)
       const nextOrder = categories.filter((c) => !c.isDeleted).length
 
-      const data = {
-        storeId, storeSlug, storeKeys,
+      const data = cleanObject({
+        ...scope,
         name:        form.name.trim().slice(0, 60),
-        description: form.description.trim().slice(0, 200),
+        description: form.description.trim().slice(0, 300),
+        order:       nextOrder,
+        position:    nextOrder,
         isActive:    Boolean(form.isActive),
         isDeleted:   false,
         updatedAt:   serverTimestamp(),
+      })
+
+      if (import.meta.env.DEV) {
+        console.log('[MenuManagementPage] Salvando categoria scope:', scope)
       }
 
       if (editingCategory?.id) {
         await updateDoc(doc(db, 'categories', editingCategory.id), data)
         onToast({ type: 'success', message: 'Categoria atualizada!' })
       } else {
-        data.order     = nextOrder
-        data.position  = nextOrder
         data.createdAt = serverTimestamp()
         await addDoc(collection(db, 'categories'), data)
         onToast({ type: 'success', message: 'Categoria criada!' })
@@ -1256,14 +1268,17 @@ export default function MenuManagementPage() {
   const handleDuplicateProduct = useCallback(async (product) => {
     if (!storeId || !store) return
     try {
-      const storeSlug = store?.storeSlug || store?.slug || ''
+      const scope = buildStoreScopedPayload(store)
+      
+      if (import.meta.env.DEV) {
+        console.log('[MenuManagementPage] Duplicando produto scope:', scope)
+      }
+
       const { id: _id, createdAt: _ca, ...rest } = product
       await addDoc(collection(db, 'products'), cleanObject({
         ...rest,
+        ...scope,
         name:      `${product.name} (cópia)`,
-        storeId,
-        storeSlug,
-        storeKeys: [storeId, storeSlug].filter(Boolean),
         isDeleted: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -1361,7 +1376,7 @@ export default function MenuManagementPage() {
     )
   }
 
-  const storeSlugForUrl = store?.storeSlug || store?.slug
+  const storeSlugForUrl = getStorePublicSlug(store)
 
   // ── Main render ──
   return (

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 
 import { auth } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import ProfilePanel from '../merchant/ProfilePanel'
 
 import {
   FiArchive,
@@ -73,6 +74,7 @@ const MAIN_ITEMS = [
     label: 'Perfil',
     description: 'Conta e segurança',
     to: '/dashboard/profile',
+    action: 'PROFILE_MODAL',
     icon: FiUser,
   },
 ]
@@ -202,14 +204,24 @@ function SidebarSection({ title, children }) {
   )
 }
 
-function MainNavItem({ item, onNavigate }) {
+function MainNavItem({ item, onNavigate, onCustomAction }) {
   const Icon = item.icon
+
+  const handleClick = (e) => {
+    if (item.action) {
+      e.preventDefault()
+      if (onCustomAction) onCustomAction(item.action)
+      if (onNavigate) onNavigate()
+      return
+    }
+    if (onNavigate) onNavigate()
+  }
 
   return (
     <NavLink
       to={item.to}
       end={item.end}
-      onClick={onNavigate}
+      onClick={handleClick}
       className={({ isActive }) =>
         cn(
           'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99]',
@@ -372,25 +384,44 @@ function SoonToast({ feature, onClose }) {
   )
 }
 
-function MobileMoreSheet({ open, onClose, onLogout }) {
+function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfileModal }) {
   if (!open) return null
+
+  const name =
+    userData?.displayName ||
+    userData?.name ||
+    user?.displayName ||
+    user?.email?.split('@')?.[0] ||
+    'Lojista'
+
+  const email = user?.email || ''
+  const photoURL = userData?.photoURL || userData?.avatarUrl || user?.photoURL || null
+  const initial = (name[0] || 'L').toUpperCase()
 
   return (
     <div className="fixed inset-0 z-[80] lg:hidden">
-      <button
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         type="button"
         onClick={onClose}
         aria-label="Fechar menu"
-        className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+        className="absolute inset-0 w-full cursor-default border-none bg-black/35 backdrop-blur-sm"
       />
 
-      <div className="absolute bottom-0 left-0 right-0 max-h-[88vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70">
-        <div className="flex items-center justify-between border-b border-gray-100 p-4">
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+        className="absolute bottom-0 left-0 right-0 max-h-[92vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 flex flex-col"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4">
           <div>
             <p className="text-lg font-black text-[#111827]">
               Menu do painel
             </p>
-
             <p className="text-xs font-bold text-[#6b7280]">
               Áreas atuais e futuras do PratoBy.
             </p>
@@ -406,13 +437,44 @@ function MobileMoreSheet({ open, onClose, onLogout }) {
           </button>
         </div>
 
-        <div className="max-h-[calc(88vh-73px)] space-y-6 overflow-y-auto p-4 pb-28 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="shrink-0 p-4 pb-0">
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              onOpenProfileModal()
+            }}
+            className="group flex w-full items-center gap-3 rounded-[1.25rem] border border-gray-100 bg-white p-3 text-left shadow-sm transition active:scale-[0.98] active:bg-orange-50"
+          >
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[0.85rem] bg-orange-50 text-[#f97316]">
+              {photoURL ? (
+                <img src={photoURL} alt={name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-lg font-black">
+                  {initial}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black text-[#111827]">{name}</p>
+              {email && <p className="truncate text-xs font-semibold text-[#6b7280]">{email}</p>}
+            </div>
+            <FiChevronRight size={16} className="text-gray-300 transition group-hover:text-[#f97316]" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4 pb-28 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarSection title="Principal">
             {MAIN_ITEMS.map((item) => (
               <MainNavItem
                 key={item.to}
                 item={item}
                 onNavigate={onClose}
+                onCustomAction={(action) => {
+                  if (action === 'PROFILE_MODAL') {
+                    onOpenProfileModal()
+                  }
+                }}
               />
             ))}
           </SidebarSection>
@@ -429,23 +491,77 @@ function MobileMoreSheet({ open, onClose, onLogout }) {
             </SidebarSection>
           ))}
 
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Profile Modal ──────────────────────────────────────────────────────────
+
+function ProfileModal({ open, onClose, onLogout, user, userData }) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 w-full cursor-default border-none bg-black/40 backdrop-blur-sm"
+        aria-label="Fechar"
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+        className="relative flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4">
+          <div>
+            <p className="text-lg font-black text-[#111827]">Perfil da Conta</p>
+            <p className="text-xs font-bold text-[#6b7280]">Gerencie sua conta e segurança</p>
+          </div>
           <button
-            type="button"
-            onClick={onLogout}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600 transition hover:bg-red-100"
+            onClick={onClose}
+            className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100"
           >
-            <FiLogOut size={17} />
+            <FiX size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#f9fafb] p-4 sm:p-6 [scrollbar-width:thin]">
+          <ProfilePanel onLogout={null} />
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-100 bg-white p-4">
+          <button
+            onClick={onClose}
+            className="rounded-2xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827]"
+          >
+            Fechar
+          </button>
+          <button
+            onClick={() => {
+              onClose()
+              onLogout()
+            }}
+            className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100"
+          >
+            <FiLogOut size={16} />
             Sair da conta
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }
 
 // ─── User card (sidebar footer) ──────────────────────────────────────────────
 
-function SidebarUserCard({ user, userData, onLogout }) {
+function SidebarUserCard({ user, userData, onOpenProfileModal }) {
   const name =
     userData?.displayName ||
     userData?.name ||
@@ -458,11 +574,12 @@ function SidebarUserCard({ user, userData, onLogout }) {
   const initial = (name[0] || 'L').toUpperCase()
 
   return (
-    <div className="mt-4 space-y-2">
+    <div className="mt-4">
       {/* Card do usuário */}
-      <Link
-        to="/dashboard/profile"
-        className="group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40"
+      <button
+        type="button"
+        onClick={onOpenProfileModal}
+        className="group flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40"
       >
         {/* Avatar */}
         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl">
@@ -488,22 +605,12 @@ function SidebarUserCard({ user, userData, onLogout }) {
           size={14}
           className="shrink-0 text-gray-300 transition group-hover:text-[#f97316]"
         />
-      </Link>
-
-      {/* Botão sair */}
-      <button
-        type="button"
-        onClick={onLogout}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100"
-      >
-        <FiLogOut size={16} />
-        Sair da conta
       </button>
     </div>
   )
 }
 
-function Sidebar({ onLogout, user, userData }) {
+function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
   return (
     <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block">
       <div className="flex h-full min-h-0 flex-col">
@@ -514,7 +621,15 @@ function Sidebar({ onLogout, user, userData }) {
         <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarSection title="Principal">
             {MAIN_ITEMS.map((item) => (
-              <MainNavItem key={item.to} item={item} />
+              <MainNavItem
+                key={item.to}
+                item={item}
+                onCustomAction={(action) => {
+                  if (action === 'PROFILE_MODAL') {
+                    onOpenProfileModal()
+                  }
+                }}
+              />
             ))}
           </SidebarSection>
 
@@ -527,8 +642,8 @@ function Sidebar({ onLogout, user, userData }) {
           ))}
         </nav>
 
-        {/* Rodapé — card de usuário + logout */}
-        <SidebarUserCard user={user} userData={userData} onLogout={onLogout} />
+        {/* Rodapé — card de usuário */}
+        <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} />
       </div>
     </aside>
   )
@@ -567,6 +682,7 @@ export default function DashboardLayout() {
   const authContext = useAuth()
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
 
   const { user, userData, logout } = authContext || {}
@@ -613,7 +729,7 @@ export default function DashboardLayout() {
       </div>
 
       <div className="relative flex h-[100dvh] min-h-0 overflow-hidden">
-        <Sidebar onLogout={handleLogout} user={user} userData={userData} />
+        <Sidebar onLogout={handleLogout} user={user} userData={userData} onOpenProfileModal={() => setProfileModalOpen(true)} />
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
   <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
@@ -637,11 +753,27 @@ export default function DashboardLayout() {
           onOpenMore={() => setMobileMenuOpen(true)}
         />
 
-        <MobileMoreSheet
-          open={mobileMenuOpen}
-          onClose={() => setMobileMenuOpen(false)}
-          onLogout={handleLogout}
-        />
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <MobileMoreSheet
+              open={mobileMenuOpen}
+              onClose={() => setMobileMenuOpen(false)}
+              onLogout={handleLogout}
+              user={user}
+              userData={userData}
+              onOpenProfileModal={() => setProfileModalOpen(true)}
+            />
+          )}
+          {profileModalOpen && (
+            <ProfileModal
+              open={profileModalOpen}
+              onClose={() => setProfileModalOpen(false)}
+              onLogout={handleLogout}
+              user={user}
+              userData={userData}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </main>
   )

@@ -189,15 +189,16 @@ function SignupMobileHeader() {
       <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden">
         <span className="block h-full w-full rounded-full bg-[#f97316]" />
       </span>
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-        <PratoByLogo />
+      <div className="mx-auto flex h-16 sm:h-[68px] max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <PratoByLogo compact />
         <Link
           to="/login"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-[1.25rem] border border-gray-200 bg-white px-4 text-sm font-black text-[#111827] shadow-sm active:scale-95"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 sm:px-4 text-xs sm:text-sm font-black text-[#111827] shadow-sm active:scale-95"
           aria-label="Já tenho conta"
         >
-          <FiArrowLeft size={16} />
-          Já tenho conta
+          <FiArrowLeft size={14} className="hidden sm:block" />
+          <span className="hidden sm:block">Já tenho conta</span>
+          <span className="sm:hidden">Entrar</span>
         </Link>
       </div>
     </motion.header>
@@ -374,10 +375,10 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
           </AnimatePresence>
   
           <ul className="mt-4 space-y-1.5">
-            {plan.features.map((feat) => (
+            {plan.features.map((feat, idx) => (
               <li
                 key={feat}
-                className="flex items-start gap-2 text-xs font-semibold text-[#6b7280]"
+                className={`flex items-start gap-2 text-xs font-semibold text-[#6b7280] ${idx >= 3 ? 'hidden sm:flex' : ''}`}
               >
                 <FiCheckCircle
                   size={13}
@@ -385,7 +386,7 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
                     selected ? 'text-[#f97316]' : 'text-gray-400'
                   }`}
                 />
-                {feat}
+                <span className="truncate">{feat}</span>
               </li>
             ))}
           </ul>
@@ -419,7 +420,7 @@ function SummaryCard({ plan, cycle }) {
             exit={{ opacity: 0, y: -8, scale: 0.985 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-base font-black text-[#111827]">
                   Plano {plan.name}
@@ -429,7 +430,7 @@ function SummaryCard({ plan, cycle }) {
                 </p>
               </div>
   
-              <div className="text-right">
+              <div className="text-left sm:text-right">
                 <p className="text-xl font-black text-[#111827]">
                   R$ {price}
                   <span className="text-xs font-bold text-[#9ca3af]">
@@ -716,12 +717,12 @@ export default function SignupPage() {
 
   if (submitted) {
     return (
-      <main className="relative flex min-h-dvh items-center justify-center bg-[#f9fafb] px-4 text-[#111827] antialiased">
+      <main className="relative flex min-h-dvh items-center justify-center bg-[#f9fafb] px-4 text-[#111827] antialiased overflow-x-hidden">
         <motion.div
           initial={{ opacity: 0, y: 28, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md rounded-[2rem] border border-orange-100/80 bg-white p-8 text-center shadow-2xl shadow-orange-900/10"
+          className="w-full max-w-sm sm:max-w-md rounded-[2rem] border border-orange-100/80 bg-white p-5 sm:p-8 text-center shadow-2xl shadow-orange-900/10 min-w-0"
         >
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-orange-50 ring-1 ring-orange-100">
             <FiCheckCircle size={32} className="text-[#f97316]" />
@@ -761,7 +762,7 @@ export default function SignupPage() {
   // ─────────────────────────────────────────────────────────
 
   return (
-    <main className="relative min-h-dvh bg-[#f9fafb] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
+    <main className="relative min-h-dvh bg-[#f9fafb] pt-16 sm:pt-[68px] text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0 overflow-x-hidden">
       <SignupMobileHeader />
 
       {/* Blobs flutuantes — idêntico ao LoginPage */}
@@ -865,16 +866,27 @@ export default function SignupPage() {
         </section>
 
         {/* ── PAINEL DIREITO — conteúdo principal ─────────── */}
-        <section className="flex flex-col justify-start px-4 py-6 sm:px-6 lg:overflow-y-auto lg:max-h-dvh lg:px-8 lg:py-10 xl:px-12">
-          <div className="mx-auto w-full max-w-2xl">
+        <section className="flex flex-col justify-start px-4 pb-10 pt-5 sm:px-6 lg:overflow-y-auto lg:max-h-dvh lg:px-8 lg:py-10 xl:px-12">
+          <div className="mx-auto w-full max-w-md sm:max-w-2xl min-w-0">
             <motion.div
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
             >
 
-              {/* Cabeçalho da seção */}
-              <motion.div variants={fadeUp} className="mb-7">
+              {/* Hero mobile compacto */}
+              <div className="mb-6 rounded-2xl bg-orange-50/50 p-4 border border-orange-100 sm:hidden">
+                <h2 className="text-xl font-black text-[#111827] leading-tight">Crie sua loja em minutos</h2>
+                <p className="mt-1 text-xs font-bold text-[#6b7280]">Teste grátis por 14 dias. Sem comissão por pedido.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-[#f97316] px-2 py-1 text-[10px] font-black text-white">14 dias grátis</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-[10px] font-black text-[#111827]">Sem comissão</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-[10px] font-black text-[#111827]">Link próprio</span>
+                </div>
+              </div>
+
+              {/* Cabeçalho da seção desktop (hide on mobile) */}
+              <motion.div variants={fadeUp} className="mb-7 hidden sm:block">
                 <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100">
                   <FiZap size={11} />
                   Etapa 1 de 2 — Conta e plano
@@ -892,7 +904,7 @@ export default function SignupPage() {
                 <p className="mb-3 text-xs font-black uppercase tracking-widest text-[#6b7280]">
                   Ciclo de cobrança
                 </p>
-                <div className="inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
+                <div className="grid grid-cols-2 w-full sm:inline-flex sm:w-auto rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
                   {[
                     { value: 'monthly', label: 'Mensal' },
                     { value: 'annual', label: 'Anual' },
@@ -903,20 +915,20 @@ export default function SignupPage() {
                       onClick={() => handleCycleChange(opt.value)}
                       aria-pressed={billingCycle === opt.value}
                       className={[
-                        'relative rounded-[1rem] px-4 py-2 text-sm font-black transition-all duration-200',
+                        'relative flex items-center justify-center rounded-[1rem] px-2 sm:px-4 py-2 text-sm font-black transition-all duration-200 min-w-0',
                         billingCycle === opt.value
                           ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/25'
                           : 'text-[#6b7280] hover:text-[#111827]',
                       ].join(' ')}
                     >
-                      {opt.label}
+                      <span className="truncate">{opt.label}</span>
                       {opt.value === 'annual' && billingCycle !== 'annual' && (
-                        <span className="ml-2 inline-block rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black text-[#f97316]">
+                        <span className="ml-1.5 shrink-0 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-black text-[#f97316]">
                           -17%
                         </span>
                       )}
                       {opt.value === 'annual' && billingCycle === 'annual' && (
-                        <span className="ml-2 inline-block rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white">
+                        <span className="ml-1.5 shrink-0 inline-block rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-black text-white">
                           2 meses grátis
                         </span>
                       )}
@@ -931,17 +943,16 @@ export default function SignupPage() {
                   Escolha seu plano
                 </p>
 
-                {/* Mobile: scroll horizontal com snap */}
-                <div className="flex gap-3 overflow-x-auto px-1 pt-4 pb-3 sm:hidden" style={{ scrollSnapType: 'x mandatory' }}>
+                {/* Mobile: Lista vertical empilhada */}
+                <div className="grid gap-3 sm:hidden pt-2">
                   {PLANS.map((plan) => (
-                    <div key={plan.id} className="w-[78vw] shrink-0" style={{ scrollSnapAlign: 'start' }}>
-                      <PlanCard
-                        plan={plan}
-                        selected={selectedPlanId === plan.id}
-                        cycle={billingCycle}
-                        onSelect={handlePlanSelect}
-                      />
-                    </div>
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      selected={selectedPlanId === plan.id}
+                      cycle={billingCycle}
+                      onSelect={handlePlanSelect}
+                    />
                   ))}
                 </div>
 
@@ -970,8 +981,8 @@ export default function SignupPage() {
                 </div>
               </motion.div>
 
-              {/* Botão Google */}
-              <motion.div variants={fadeUp} className="mb-5">
+              {/* Botão Google (Mobile-first placement) */}
+              <motion.div variants={fadeUp} className="mb-6">
                 <button
                   type="button"
                   onClick={handleGoogleSignup}

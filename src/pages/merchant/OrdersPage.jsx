@@ -2460,7 +2460,7 @@ function OrderModal({
 }
 
 export default function OrdersPage() {
-  const { user } = useAuth()
+  const { user, userData } = useAuth()
 
   const [stores, setStores] = useState([])
   const [orders, setOrders] = useState([])
@@ -3111,15 +3111,11 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
     const cutoffDate = Timestamp.fromDate(new Date(Date.now() - 31 * 86400000))
 
-    // Collect all unique keys for this store so we catch orders saved
-    // with the real docId AND orders saved with the slug.
-    const storeKeySet = new Set([
-      selectedStore.id,
-      selectedStore.storeId,
-      selectedStore.docId,
-      selectedStore.storeSlug,
-      selectedStore.slug,
-    ].filter(Boolean))
+    // Simplifica a busca para usar apenas o docId principal.
+    // Garante que a regra de segurança passe tranquilamente sem analisar slugs.
+    const docId = selectedStore.id || selectedStore.docId || selectedStore.storeId
+
+    const storeKeySet = new Set([docId].filter(Boolean))
 
     if (!storeKeySet.size) {
       setOrders([])

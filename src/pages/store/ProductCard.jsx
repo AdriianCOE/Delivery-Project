@@ -202,7 +202,8 @@ function isProductAvailable(product, disabled) {
   if (product.isActive === false) return false
   if (product.active === false) return false
   if (product.paused === true) return false
-  if (Number(product.stock) === 0) return false
+  const hasStockControl = product.stock !== undefined && product.stock !== null && product.stock !== ''
+  if (hasStockControl && Number(product.stock) <= 0) return false
 
   return true
 }

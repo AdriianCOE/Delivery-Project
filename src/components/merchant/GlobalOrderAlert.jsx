@@ -48,7 +48,7 @@ function isNewOrderStatus(status) {
 export function GlobalOrderAlert() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, userData, storeId, storeIds } = useAuth()
 
   // 1. Estados (Lendo do Cache do Navegador)
   const [enabled, setEnabled] = useState(() => {
@@ -113,72 +113,68 @@ export function GlobalOrderAlert() {
       }
     }
 
-    const qStores = query(collection(db, 'stores'), where('ownerId', '==', user.uid))
+    // Simplifica a busca para usar apenas o storeId principal (docId).
+    // Como novos pedidos exigem validPublicOrderCreate(publicStoreExists),
+    // o storeId salvo no pedido sempre será o docId real, tornando a busca por slugs desnecessária e evitando falhas de permissão nas regras.
+    const safeKeys = [storeId].filter(Boolean)
 
-    const unsubscribeStores = onSnapshot(qStores, (storesSnapshot) => {
-      clearOrderListeners()
+    const deduplicatedKeys = [...new Set(safeKeys)]
 
-      const storeKeys = [...new Set(storesSnapshot.docs.flatMap(getStoreSearchKeys))]
-
-      if (storeKeys.length === 0) {
-        seenOrderIdsRef.current = new Set()
-        isBootingOrdersRef.current = false
-        return
-      }
-
-      const storeKeyChunks = chunkArray(storeKeys)
-      const cutoffDate = getStartOfTodayTimestamp()
-
+    if (deduplicatedKeys.length === 0) {
       seenOrderIdsRef.current = new Set()
-      isBootingOrdersRef.current = true
-      initialSnapshotsPendingRef.current = storeKeyChunks.length
+      isBootingOrdersRef.current = false
+      return
+    }
 
-      storeKeyChunks.forEach((storeKeyChunk) => {
-        let isFirstChunkSnapshot = true
+    const storeKeyChunks = chunkArray(deduplicatedKeys)
+    const cutoffDate = getStartOfTodayTimestamp()
 
-        const qOrders = query(
-          collection(db, 'orders'),
-          where('storeId', 'in', storeKeyChunk),
-          where('createdAt', '>=', cutoffDate)
-        )
+    seenOrderIdsRef.current = new Set()
+    isBootingOrdersRef.current = true
+    initialSnapshotsPendingRef.current = storeKeyChunks.length
 
-        const unsubscribeOrders = onSnapshot(qOrders, (ordersSnapshot) => {
-          const pendingOrders = ordersSnapshot.docs
-            .map((orderDoc) => ({ id: orderDoc.id, ...orderDoc.data() }))
-            .filter((order) => isNewOrderStatus(order.status))
+    storeKeyChunks.forEach((storeKeyChunk) => {
+      let isFirstChunkSnapshot = true
 
-          if (isFirstChunkSnapshot) {
-            pendingOrders.forEach((order) => seenOrderIdsRef.current.add(order.id))
-            isFirstChunkSnapshot = false
-            initialSnapshotsPendingRef.current -= 1
-            if (initialSnapshotsPendingRef.current <= 0) {
-              isBootingOrdersRef.current = false
-            }
-            return
+      const qOrders = query(
+        collection(db, 'orders'),
+        where('storeId', 'in', storeKeyChunk),
+        where('createdAt', '>=', cutoffDate)
+      )
+
+      const unsubscribeOrders = onSnapshot(qOrders, (ordersSnapshot) => {
+        const pendingOrders = ordersSnapshot.docs
+          .map((orderDoc) => ({ id: orderDoc.id, ...orderDoc.data() }))
+          .filter((order) => isNewOrderStatus(order.status))
+
+        if (isFirstChunkSnapshot) {
+          pendingOrders.forEach((order) => seenOrderIdsRef.current.add(order.id))
+          isFirstChunkSnapshot = false
+          initialSnapshotsPendingRef.current -= 1
+          if (initialSnapshotsPendingRef.current <= 0) {
+            isBootingOrdersRef.current = false
           }
+          return
+        }
 
-          if (isBootingOrdersRef.current) {
-            pendingOrders.forEach((order) => seenOrderIdsRef.current.add(order.id))
-            return
-          }
+        if (isBootingOrdersRef.current) {
+          pendingOrders.forEach((order) => seenOrderIdsRef.current.add(order.id))
+          return
+        }
 
-          pendingOrders.forEach((order) => {
-            if (seenOrderIdsRef.current.has(order.id)) return
-            seenOrderIdsRef.current.add(order.id)
-            notifyNewOrder(order)
-          })
-        }, (error) => {
-          console.error('[GlobalOrderAlert] Erro no listener de orders:', error)
+        pendingOrders.forEach((order) => {
+          if (seenOrderIdsRef.current.has(order.id)) return
+          seenOrderIdsRef.current.add(order.id)
+          notifyNewOrder(order)
         })
-
-        orderUnsubscribersRef.current.push(unsubscribeOrders)
+      }, (error) => {
+        console.error('[GlobalOrderAlert] Erro no listener de orders:', error)
       })
-    }, (error) => {
-      console.error('[GlobalOrderAlert] Erro no listener de stores:', error)
+
+      orderUnsubscribersRef.current.push(unsubscribeOrders)
     })
 
     return () => {
-      unsubscribeStores()
       clearOrderListeners()
     }
   }, [user?.uid])
@@ -251,7 +247,7 @@ export function GlobalOrderAlert() {
           <button
             onClick={() => {
               setLatestOrder(null)
-              navigate('/orders')
+              navigate('/dashboard/orders')
             }}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-4 py-2.5 text-xs font-black text-white transition hover:bg-black"
           >

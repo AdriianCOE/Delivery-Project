@@ -8,6 +8,7 @@ import {
   onSnapshot,
   serverTimestamp,
   updateDoc,
+  setDoc,
 } from 'firebase/firestore'
 
 import {
@@ -1777,13 +1778,15 @@ const isDelivered = status === 'entregue'
 
       const reviewStoreKeys = getOrderStoreKeys(order)
 
-      const reviewDoc = await addDoc(collection(db, 'reviews'), {
+      const reviewRef = doc(db, 'reviews', order.id)
+      await setDoc(reviewRef, {
         storeId: finalStoreId,
         storeSlug: finalStoreSlug,
         storeDocId: order.storeDocId || order.storeId || null,
         storeKeys: reviewStoreKeys,
 
         orderId: order.id,
+        trackingToken: order.trackingToken || order.id,
 
         customerName: getCustomerName(order),
         customerPhone: getCustomerPhone(order),
@@ -1804,7 +1807,7 @@ const isDelivered = status === 'entregue'
       })
 
       await updateDoc(doc(db, 'orders', order.id), {
-        reviewId: reviewDoc.id,
+        reviewId: order.id,
         review: {
           submitted: true,
           rating: Number(review.rating),

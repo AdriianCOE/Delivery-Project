@@ -251,13 +251,42 @@ function publicOrderUpdateAllowed(orderId) {
 );
     }
 
-    function validReviewCreate() {
-      return request.resource.data.get('storeId', '') is string
-        && publicStoreExists(request.resource.data.storeId)
+    function validReviewCreate(reviewId) {
+      let orderId = request.resource.data.get('orderId', '');
+      let orderPath = /databases/$(database)/documents/orders/$(orderId);
+      let orderData = get(orderPath).data;
+
+      return orderId is string
+        && orderId != ''
+        && reviewId == orderId
+        && exists(orderPath)
+        && request.resource.data.keys().hasOnly([
+          'storeId',
+          'storeSlug',
+          'storeDocId',
+          'storeKeys',
+          'orderId',
+          'trackingToken',
+          'customerName',
+          'customerPhone',
+          'rating',
+          'foodRating',
+          'deliveryRating',
+          'serviceRating',
+          'wouldOrderAgain',
+          'tags',
+          'comment',
+          'isPublic',
+          'resolved',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.get('storeId', '') == orderData.get('storeId', '')
+        && request.resource.data.get('trackingToken', '') == orderData.get('trackingToken', '')
+        && orderData.get('status', '') in ['entregue', 'delivered', 'concluido', 'concluído', 'finalizado', 'finished']
         && request.resource.data.get('rating', 0) is number
         && request.resource.data.rating >= 1
         && request.resource.data.rating <= 5
-        && request.resource.data.get('orderId', '') is string
         && request.resource.data.get('isPublic', false) == false
         && request.resource.data.get('resolved', false) == false;
     }
@@ -370,7 +399,7 @@ match /auditLogs/{logId} {
     match /reviews/{reviewId} {
       allow get, list: if canManageStoreId(resource.data.get('storeId', ''))
         || (resource.data.get('isPublic', false) == true && publicStoreExists(resource.data.get('storeId', '')));
-      allow create: if validReviewCreate();
+      allow create: if validReviewCreate(reviewId);
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
         && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
       allow delete: if isAdmin();

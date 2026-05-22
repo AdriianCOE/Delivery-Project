@@ -1144,13 +1144,14 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
   const subscriptionStatus = vData.subscriptionStatus || 'trialing'
   const customSlug = String(vData.customSlug || '').trim()
 
-  const { phoneE164, phoneDigits, isValid } = normalizeBrazilianPhone(whatsappRaw)
+  const normalizedPhone = normalizeBrazilianPhone(whatsappRaw)
+  if (!normalizedPhone) throw new HttpsError('invalid-argument', 'WhatsApp inválido.')
+  const { phoneE164, phoneDigits } = normalizedPhone
 
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError('invalid-argument', 'E-mail inválido.')
   if (!password || password.length < 6) throw new HttpsError('invalid-argument', 'A senha precisa ter pelo menos 6 caracteres.')
   if (!name) throw new HttpsError('invalid-argument', 'Nome da loja obrigatório.')
   if (!ownerName) throw new HttpsError('invalid-argument', 'Nome do proprietário obrigatório.')
-  if (!isValid) throw new HttpsError('invalid-argument', 'WhatsApp inválido.')
 
   if (!['essential', 'professional', 'premium'].includes(plan)) {
     throw new HttpsError('invalid-argument', 'Plano inválido. Use essential, professional ou premium.')
