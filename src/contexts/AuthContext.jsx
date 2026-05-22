@@ -80,13 +80,7 @@ export function AuthProvider({ children }) {
     let unsubscribeAuth = null
 
     async function bootAuth() {
-      try {
-        // Mantém a sessão somente enquanto a aba/janela existir.
-        // Ao fechar o navegador/aba, o usuário precisará logar novamente.
-        await setPersistence(auth, browserSessionPersistence)
-      } catch (error) {
-        console.warn('[Auth] Não foi possível definir persistência de sessão.', error)
-      }
+
 
       unsubscribeAuth = onAuthStateChanged(auth, async (currentFirebaseUser) => {
         if (!isMounted) return
@@ -155,6 +149,33 @@ export function AuthProvider({ children }) {
     setUserData(null)
   }, [])
 
+  const refreshUserData = useCallback(async () => {
+    const currentUser = auth.currentUser || firebaseUser
+    if (!currentUser) return null
+
+    try {
+      const firestoreUserData = await loadUserData(currentUser.uid)
+      const normalizedRole = getNormalizedRole(firestoreUserData)
+
+      const mergedUser = {
+        ...normalizeFirebaseUser(currentUser),
+        ...(firestoreUserData || {}),
+        role: normalizedRole || firestoreUserData?.role || '',
+      }
+
+      setUser(mergedUser)
+      setUserData({
+        ...(firestoreUserData || {}),
+        role: normalizedRole || firestoreUserData?.role || '',
+      })
+
+      return firestoreUserData
+    } catch (error) {
+      console.error('[Auth] Erro ao recarregar dados do usuário:', error)
+      return null
+    }
+  }, [firebaseUser])
+
   const role = useMemo(() => getNormalizedRole(userData) || getNormalizedRole(user), [user, userData])
 
   const hasRole = useCallback(
@@ -192,8 +213,9 @@ export function AuthProvider({ children }) {
       storeIds: userData?.storeIds || user?.storeIds || [],
       hasRole,
       logout,
+      refreshUserData,
     }),
-    [authError, firebaseUser, hasRole, loading, logout, role, user, userData]
+    [authError, firebaseUser, hasRole, loading, logout, refreshUserData, role, user, userData]
   )
 
   return (

@@ -133,10 +133,10 @@ export function HeroSection() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
               <Link
-                to="/contato"
+                to="/cadastro"
                 className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[1.6rem] bg-[#f97316] px-6 text-base font-black text-white shadow-2xl shadow-orange-200 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c] hover:shadow-lg hover:shadow-orange-600/20 active:scale-95 sm:w-auto"
               >
-                Criar minha loja
+                Começar 14 dias grátis
                 <ArrowRight size={18} />
               </Link>
 
@@ -150,6 +150,7 @@ export function HeroSection() {
 
             <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
               {[
+                '14 dias grátis',
                 'Sem comissão por venda',
                 'Cliente e link da loja',
                 'Pix com QR Code',

@@ -79,19 +79,46 @@ export default function ProtectedRoute({
     )
   }
 
+  // Redirect pending merchants to onboarding (never blocks admin/developer/active merchants)
+  if (auth?.role === 'merchant') {
+    const onboardingStatus =
+      auth?.userData?.onboardingStatus ||
+      auth?.user?.onboardingStatus ||
+      ''
+
+    const subscriptionStatus =
+      auth?.userData?.subscriptionStatus ||
+      auth?.user?.subscriptionStatus ||
+      ''
+
+    const hasMerchantStore =
+      Boolean(auth?.storeId || auth?.userData?.storeId || auth?.user?.storeId) ||
+      (Array.isArray(auth?.storeIds) && auth.storeIds.length > 0) ||
+      (Array.isArray(auth?.userData?.storeIds) && auth.userData.storeIds.length > 0) ||
+      (Array.isArray(auth?.user?.storeIds) && auth.user.storeIds.length > 0)
+
+      const isPendingMerchant =
+      !hasMerchantStore ||
+      ['phone_pending'].includes(onboardingStatus) ||
+      ['pending_checkout'].includes(subscriptionStatus)
+
+    if (isPendingMerchant && location.pathname !== '/onboarding') {
+      return <Navigate to="/onboarding" replace />
+    }
+  }
+
   const hasRoleRestriction =
-    Array.isArray(allowedRoles) && allowedRoles.length > 0
+    Array.isArray(allowedRoles) && allowedRoles.length > 0;
 
   if (hasRoleRestriction && !auth.hasRole(allowedRoles)) {
-    const fallbackRoute = unauthorizedTo || getFallbackRouteByRole(auth.role)
-    const isSameRoute = fallbackRoute === location.pathname
-
+    const fallbackRoute = unauthorizedTo || getFallbackRouteByRole(auth.role);
+    const isSameRoute = fallbackRoute === location.pathname;
     return (
       <Navigate
         to={isSameRoute ? '/' : fallbackRoute}
         replace
       />
-    )
+    );
   }
 
   return children || <Outlet />

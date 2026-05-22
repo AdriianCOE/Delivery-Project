@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../services/firebase'
+import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePresence } from '../../hooks/usePresence'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
@@ -581,8 +582,23 @@ function getStoreLogoUrl(store) {
     store?.branding?.logoUrl ||
     store?.settings?.logoURL ||
     store?.settings?.logoUrl ||
+    store?.settings?.logoUrl ||
     ''
   )
+}
+
+function toDate(value) {
+  if (!value) return null
+  if (value?.toDate) return value.toDate()
+  if (value?.seconds) return new Date(value.seconds * 1000)
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function getDaysLeft(value) {
+  const date = toDate(value)
+  if (!date) return null
+  return Math.max(0, Math.ceil((date.getTime() - Date.now()) / 86400000))
 }
 
 function StoreLogo({
@@ -868,7 +884,7 @@ function PeakHoursCard({ peakHours, maxPeakHour, bestHourLabel }) {
 }
 
 export default function MerchantDashboard() {
-  const { user, storeId: authStoreId, storeIds: authStoreIds = [] } = useAuth()
+  const { user, userData, storeId: authStoreId, storeIds: authStoreIds = [] } = useAuth()
 
   const [stores, setStores] = useState([])
   const [orders, setOrders] = useState([])
@@ -877,6 +893,8 @@ export default function MerchantDashboard() {
   const [toast, setToast] = useState(null)
   const [loadingStores, setLoadingStores] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
+  const [hasCatalog, setHasCatalog] = useState(true)
+  const [loadingCatalog, setLoadingCatalog] = useState(true)
   const [storeActionLoading, setStoreActionLoading] = useState(false)
 
   const period = PERIOD_OPTIONS[periodIdx]
@@ -920,8 +938,7 @@ const merchantName =
 
 const loading = loadingStores || loadingOrders
 
-const activeUsers = usePresence(selectedStore?.id)
-
+const activeUsers = usePresence(selectedStore?.id || selectedStore?.storeId)
 const menuPeopleCount = Number(activeUsers || 0)
 
 const menuPeopleLabel =
@@ -1179,6 +1196,42 @@ subscribeOrders(query(
     }
   }, [selectedStore, showToast])
 
+  useEffect(() => {
+    if (!selectedStore) {
+      setHasCatalog(false)
+      setLoadingCatalog(false)
+      return undefined
+    }
+
+    setLoadingCatalog(true)
+
+    const orderStoreId =
+      getStoreDocId?.(selectedStore) ||
+      selectedStore?.id ||
+      selectedStore?.docId ||
+      selectedStore?.slug ||
+      getStoreSlug(selectedStore)
+
+    if (!orderStoreId) {
+      setHasCatalog(false)
+      setLoadingCatalog(false)
+      return undefined
+    }
+
+    const q = query(collection(db, 'products'), where('storeId', '==', orderStoreId))
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHasCatalog(!snapshot.empty)
+      setLoadingCatalog(false)
+    }, (error) => {
+      console.error('Erro ao carregar produtos:', error)
+      setHasCatalog(true) // assume has catalog on error to avoid blocking
+      setLoadingCatalog(false)
+    })
+
+    return () => unsubscribe()
+  }, [selectedStore])
+
   const dashboardData = useMemo(() => {
     const now = Date.now()
     const startOfToday = new Date().setHours(0, 0, 0, 0)
@@ -1296,154 +1349,126 @@ bestHourLabel,
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
+  const rawTrialEndsAt = selectedStore?.trialEndsAt || userData?.trialEndsAt
+  const trialEndsAt = toDate(rawTrialEndsAt)
+  const trialDaysRemaining = getDaysLeft(rawTrialEndsAt)
+  const isTrialActive = selectedStore?.subscriptionStatus === 'trialing' || userData?.subscriptionStatus === 'trialing'
+
   return (
     <div className="min-w-0 pb-24 lg:pb-0">
-      <header className="sticky top-0 z-30 mb-6 border-b border-gray-100 bg-[#f9fafb]/90 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          
-          {/* LADO ESQUERDO */}
-          <div className="flex items-center gap-4">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-        {selectedStore?.logoUrl ? (
-          <img src={selectedStore.logoUrl} className="h-full w-full rounded-2xl object-cover" alt="" />
-        ) : (
-          <FiActivity size={24} />
-        )}
-      </div>
-      <div>
-        <h1 className="text-2xl font-black tracking-tight text-[#111827]">
-          Central de operação
-        </h1>
-        <p className="text-sm font-bold text-[#6b7280]">
-          {selectedStore?.name || 'Sua loja'} · Gestão em tempo real
-        </p>
-      </div>
-    </div>
+      <DashboardPageHeader
+        eyebrow="Tempo real"
+        title={`Olá, ${merchantName}`}
+        description="Acompanhe pedidos, faturamento e operação da sua loja."
+        icon={FiHome}
+        badge={
+          selectedStore
+            ? {
+                label: isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada',
+                color: isStoreOpen(selectedStore) ? 'green' : 'red',
+                dot: true,
+                pulse: isStoreOpen(selectedStore),
+              }
+            : undefined
+        }
+        actions={
+          selectedStore ? (
+            <>
+              {/* Badge "Painel Ativo" */}
+              <div className="hidden items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 ring-1 ring-emerald-100/50 sm:flex lg:px-4 lg:py-2">
+                <div className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 lg:text-xs">
+                  Painel Ativo
+                </span>
+              </div>
 
-          {/* LADO DIREITO: Botões de Ação */}
-          <div className="flex flex-wrap items-center gap-2">
-            {stores.length > 1 && (
-              <select
-                value={selectedStoreId}
-                onChange={(event) => handleSelectStore(event.target.value)}
-                className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+              {/* Visitantes no cardápio */}
+              <div className={`hidden items-center gap-1.5 rounded-xl px-3 py-1.5 ring-1 sm:flex lg:px-4 lg:py-2 ${
+                activeUsers > 0 
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-100/50' 
+                  : 'bg-gray-50 text-gray-500 ring-gray-200/50'
+              }`}>
+                {activeUsers > 0 && (
+                  <div className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </div>
+                )}
+                <FiUsers size={14} className={activeUsers === 0 ? 'opacity-60' : ''} />
+                <span className="text-[10px] font-black uppercase tracking-widest lg:text-xs">
+                  {activeUsers > 0 
+                    ? `${activeUsers} ${activeUsers === 1 ? 'pessoa no cardápio' : 'pessoas no cardápio'}` 
+                    : 'Sem visitantes agora'}
+                </span>
+              </div>
+
+              {/* Trial Badge */}
+              {(isTrialActive || trialDaysRemaining !== null) && (
+                <div className={`hidden flex-col justify-center rounded-xl px-3 py-1 ring-1 sm:flex lg:px-4 lg:py-1.5 ${
+                  trialDaysRemaining > 0 
+                    ? 'bg-indigo-50 ring-indigo-100/50' 
+                    : 'bg-red-50 ring-red-100/50'
+                }`}>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${
+                    trialDaysRemaining > 0 ? 'text-indigo-700' : 'text-red-700'
+                  }`}>
+                    {trialDaysRemaining > 0 ? 'Teste ativo' : 'Teste vencido'}
+                  </span>
+                  <span className={`text-[10px] font-bold ${
+                    trialDaysRemaining > 0 ? 'text-indigo-600/80' : 'text-red-600/80'
+                  }`}>
+                    {trialDaysRemaining > 0 ? `Restam ${trialDaysRemaining} dias` : '0 dias'}
+                  </span>
+                </div>
+              )}
+
+              {/* Ver loja */}
+              <a
+                href={storePublicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316]"
               >
-                {stores.map((store) => (
-                  <option key={store.id} value={getStoreDocId(store)}>
-                    {store.name || store.storeSlug || store.id}
-                  </option>
-                ))}
-              </select>
-            )}
+                <FiExternalLink />
+                <span className="hidden sm:inline">Ver loja</span>
+              </a>
 
-            {selectedStore && (
-  <>
-    <div className="hidden h-11 items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm sm:flex">
-      <FiClock
-        className={isStoreOpen(selectedStore) ? 'text-[#3aa824]' : 'text-red-500'}
-        size={16}
+              {/* Toggle abrir/fechar */}
+              <button
+                type="button"
+                onClick={handleToggleStoreOpen}
+                disabled={storeActionLoading}
+                className={`relative flex h-11 min-w-[140px] items-center justify-center gap-2.5 rounded-[1.15rem] px-5 text-sm font-black text-white shadow-lg transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-95 disabled:pointer-events-none disabled:opacity-70 ${
+                  isStoreOpen(selectedStore)
+                    ? 'bg-red-500 shadow-red-500/30 hover:bg-red-600'
+                    : 'bg-emerald-500 shadow-emerald-500/30 hover:bg-emerald-600'
+                }`}
+              >
+                {storeActionLoading ? (
+                  <><FiLoader size={16} className="animate-spin" /><span>Atualizando...</span></>
+                ) : isStoreOpen(selectedStore) ? (
+                  <><FiPower size={16} className="opacity-90" /><span>Fechar loja</span></>
+                ) : (
+                  <><FiPower size={16} className="opacity-90" /><span>Abrir loja</span></>
+                )}
+              </button>
+
+              {/* Copiar link */}
+              <button
+                type="button"
+                onClick={handleCopyStoreLink}
+                className="hidden h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316] lg:inline-flex"
+                title="Copiar link da loja"
+              >
+                <FiCopy />
+              </button>
+            </>
+          ) : undefined
+        }
       />
-
-      <span>{todayOpeningHoursLabel}</span>
-    </div>
-
-    <div
-      className={`inline-flex h-11 items-center gap-3 rounded-2xl border px-4 text-sm font-black shadow-sm transition ${
-        hasPeopleOnMenu
-          ? 'border-orange-100 bg-orange-50 text-[#111827]'
-          : 'border-gray-100 bg-white text-[#111827]'
-      }`}
-      title={`${menuPeopleCount} ${menuPeopleLabel}`}
-    >
-      <div
-        className={`relative flex h-8 w-8 items-center justify-center rounded-xl ${
-          hasPeopleOnMenu
-            ? 'bg-white text-[#f97316]'
-            : 'bg-gray-50 text-[#6b7280]'
-        }`}
-      >
-        <FiUsers size={16} />
-
-        {hasPeopleOnMenu && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f97316]" />
-          </span>
-        )}
-      </div>
-
-      <div className="leading-none">
-        <p className="text-sm font-black text-[#111827]">
-          {menuPeopleCount}
-        </p>
-
-        <p className="mt-0.5 hidden text-[10px] font-black uppercase tracking-wide text-[#6b7280] sm:block">
-          {menuPeopleLabel}
-        </p>
-      </div>
-    </div>
-        <a
-          href={storePublicUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316]"
-        >
-          <FiExternalLink />
-          <span className="hidden sm:inline">Ver loja</span>
-        </a>
-
-    <button
-  type="button"
-  onClick={handleToggleStoreOpen}
-  disabled={storeActionLoading}
-  className={`
-    relative flex h-11 min-w-[140px] items-center justify-center gap-2.5 rounded-[1.15rem] px-5 text-sm font-black text-white shadow-lg transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-95 disabled:pointer-events-none disabled:opacity-70
-    ${
-      isStoreOpen(selectedStore)
-        ? 'bg-red-500 shadow-red-500/30 hover:bg-red-600 hover:shadow-red-500/40'
-        : 'bg-emerald-500 shadow-emerald-500/30 hover:bg-emerald-600 hover:shadow-emerald-500/40'
-    }
-  `}
->
-  {storeActionLoading ? (
-    <>
-      <FiLoader size={16} className="animate-spin" />
-      <span>Atualizando...</span>
-    </>
-  ) : isStoreOpen(selectedStore) ? (
-    <>
-      <FiPower size={16} className="opacity-90" />
-      <span>Fechar loja</span>
-    </>
-  ) : (
-    <>
-      <FiPower size={16} className="opacity-90" />
-      <span>Abrir loja</span>
-    </>
-  )}
-</button>
-    <button
-      type="button"
-      onClick={handleCopyStoreLink}
-      className="hidden h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316] lg:inline-flex"
-      title="Copiar link da loja"
-    >
-      <FiCopy />
-    </button>
-  </>
-)}
-          <div className="hidden items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 ring-1 ring-emerald-100/50 sm:flex lg:px-4 lg:py-2">
-        <div className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-        </div>
-        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 lg:text-xs">
-          Painel Ativo
-        </span>
-      </div>
-      </div>
-        </div>
-      </header>
       
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         {loadingStores ? (
@@ -1458,6 +1483,80 @@ bestHourLabel,
             title="Nenhuma loja encontrada"
             description="Seu usuário ainda não possui uma loja vinculada. Peça ao administrador para criar ou vincular uma loja ao seu acesso."
           />
+        ) : !loadingCatalog && !hasCatalog && orders.length === 0 ? (
+          <div className="mx-auto max-w-4xl pt-8">
+            <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-100/50">
+              <div className="bg-gradient-to-br from-orange-50 to-white px-8 py-10 sm:px-12 sm:py-16">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-lg shadow-orange-200">
+                  <FiPackage size={28} />
+                </div>
+                <h2 className="mt-6 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                  Bem-vindo à sua nova loja!
+                </h2>
+                <p className="mt-4 max-w-xl text-lg leading-8 text-[#6b7280]">
+                  Sua loja foi criada com sucesso e os {isTrialActive && trialDaysRemaining !== null ? `${trialDaysRemaining} dias de teste grátis` : 'dias de teste'} já estão ativos. Agora só falta configurar seu cardápio para começar a vender.
+                </p>
+              </div>
+
+              <div className="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="bg-white p-8">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
+                    <FiLayout size={24} />
+                  </div>
+                  <h3 className="mt-5 text-lg font-black text-[#111827]">Configure sua loja</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                    Acesse as configurações para adicionar sua logo, banner e horários de funcionamento.
+                  </p>
+                  <Link to="/dashboard/settings" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
+                    Ir para configurações <FiChevronRight />
+                  </Link>
+                </div>
+
+                <div className="bg-white p-8">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
+                    <FiLayout size={24} />
+                  </div>
+                  <h3 className="mt-5 text-lg font-black text-[#111827]">Adicione sua primeira categoria</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                    Crie categorias como "Pizzas", "Bebidas" ou "Promoções" para organizar seu cardápio.
+                  </p>
+                  <Link to="/dashboard/menu" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
+                    Ir para cardápio <FiChevronRight />
+                  </Link>
+                </div>
+
+                <div className="bg-white p-8 sm:col-span-2 lg:col-span-1">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
+                    <FiPackage size={24} />
+                  </div>
+                  <h3 className="mt-5 text-lg font-black text-[#111827]">Cadastre seu primeiro produto</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                    Adicione fotos atraentes, preços e descrições para deixar os clientes com água na boca.
+                  </p>
+                  <Link to="/dashboard/menu" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
+                    Cadastrar produto <FiChevronRight />
+                  </Link>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 bg-gray-50 px-8 py-6 sm:px-12">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-[#111827]">Abra a loja quando estiver pronta</h4>
+                    <p className="mt-1 text-sm text-[#6b7280]">Sua loja nasce fechada para você arrumar a casa primeiro.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleToggleStoreOpen}
+                    disabled={storeActionLoading}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#111827] px-6 text-sm font-black text-white shadow-sm transition hover:bg-black active:scale-95 disabled:opacity-50"
+                  >
+                    {storeActionLoading ? <FiLoader className="animate-spin" /> : 'Abrir loja agora'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           <>
             <div className="mb-6 grid gap-4 xl:grid-cols-[1fr_auto]">

@@ -1,5 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import {
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  updateProfile,
+  signOut,
+  deleteUser,
+  sendEmailVerification,
+} from 'firebase/auth'
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { auth, db, googleProvider } from '../../services/firebase'
+import { useAuth } from '../../contexts/AuthContext'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FiArrowLeft,
@@ -8,6 +19,7 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiLoader,
+  FiLock,
   FiMail,
   FiMapPin,
   FiPhone,
@@ -86,6 +98,25 @@ const SEGMENTS = [
   'Bar / Petiscos',
   'Outro',
 ]
+
+// ─────────────────────────────────────────────────────────────
+// FUNÇÕES AUXILIARES
+// ─────────────────────────────────────────────────────────────
+
+function getPasswordStrength(password) {
+  const value = String(password || '')
+  let score = 0
+
+  if (value.length >= 8) score += 1
+  if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1
+  if (/\d/.test(value)) score += 1
+  if (/[^A-Za-z0-9]/.test(value)) score += 1
+
+  if (!value) return { level: 'empty', label: '', score: 0 }
+  if (value.length < 8 || score <= 1) return { level: 'weak', label: 'Senha fraca', score }
+  if (score <= 3) return { level: 'medium', label: 'Senha boa', score }
+  return { level: 'strong', label: 'Senha forte', score }
+}
 
 // ─────────────────────────────────────────────────────────────
 // ANIMAÇÕES (espelhando LoginPage)
@@ -413,7 +444,7 @@ function SummaryCard({ plan, cycle }) {
   
             <div className="mt-4 space-y-2 border-t border-orange-100 pt-4">
               {[
-                { icon: FiCheckCircle, text: '14 dias de teste grátis' },
+                { icon: FiCheckCircle, text: '14 dias grátis inclusos' },
                 { icon: FiCheckCircle, text: '0% de comissão por pedido' },
                 { icon: FiCheckCircle, text: 'Cancelamento a qualquer hora' },
               ].map(({ icon: Icon, text }, index) => (
@@ -486,8 +517,20 @@ function AlertBox({ children }) {
 // ─────────────────────────────────────────────────────────────
 
 export default function SignupPage() {
-  const [selectedPlanId, setSelectedPlanId] = useState('professional')
-  const [billingCycle, setBillingCycle] = useState('monthly')
+  const [searchParams] = useSearchParams()
+  const { refreshUserData } = useAuth()
+
+  const [selectedPlanId, setSelectedPlanId] = useState(() => {
+    const plan = searchParams.get('plan')
+    const validPlans = ['essential', 'professional', 'premium']
+    return validPlans.includes(plan) ? plan : 'professional'
+  })
+
+  const [billingCycle, setBillingCycle] = useState(() => {
+    const cycle = searchParams.get('cycle')
+    const validCycles = ['monthly', 'annual']
+    return validCycles.includes(cycle) ? cycle : 'monthly'
+  })
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -495,6 +538,8 @@ export default function SignupPage() {
     storeName: '',
     segment: '',
     city: '',
+    password: '',
+    confirmPassword: '',
   })
   const [formError, setFormError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -513,12 +558,73 @@ export default function SignupPage() {
           form.email.trim() &&
           form.whatsapp.trim() &&
           form.storeName.trim() &&
+          form.password.trim() &&
+          form.confirmPassword.trim() &&
+          getPasswordStrength(form.password).level !== 'weak' &&
           !isLoading
       ),
     [form, isLoading]
   )
 
   // ── Handlers ──────────────────────────────
+  const getFriendlyError = (error) => {
+    const code = error?.code || ''
+    if (code === 'auth/email-already-in-use') return (
+      <span className="flex items-center gap-1 flex-wrap">
+        Este e-mail já está em uso. <Link to="/login" className="underline hover:text-red-900 transition">Entre com sua conta</Link> ou use outro e-mail.
+      </span>
+    )
+    if (code === 'auth/invalid-email') return 'Digite um e‑mail válido.'
+    if (code === 'auth/weak-password') return 'Use uma senha com ao menos 6 caracteres.'
+    if (code === 'auth/popup-closed-by-user') return 'Cadastro com Google cancelado.'
+    if (code === 'auth/network-request-failed') return 'Falha de conexão. Verifique sua internet.'
+    if (error?.message?.includes('signup/existing-account'))
+      return 'Esta conta já possui um cadastro pendente. Use o login para continuar.'
+    if (error?.message?.includes('signup/account-already-has-store'))
+      return 'Esta conta já possui uma loja. Entre pelo login.'
+    if (error?.message?.includes('permission-denied'))
+      return 'Acesso negado. Contate o suporte.'
+    return 'Ocorreu um erro ao criar a conta. Tente novamente.'
+  }
+
+  const saveUserDocument = useCallback(async (user, authProvider, displayNameOverride) => {
+    const userRef = doc(db, 'users', user.uid);
+    const snapshot = await getDoc(userRef);
+    if (snapshot.exists()) {
+      // Document already exists, prevent overwrite
+      throw new Error('signup/existing-account');
+    }
+    const finalDisplayName = displayNameOverride || form.name.trim();
+    await setDoc(userRef, {
+      uid: user.uid,
+      role: 'merchant',
+      email: user.email,
+      displayName: finalDisplayName,
+      phone: form.whatsapp || '',
+      phoneVerified: false,
+      plan: selectedPlanId,
+      billingCycle,
+      subscriptionStatus: 'pending_checkout',
+      onboardingStatus: 'phone_pending',
+      storeId: null,
+      storeIds: [],
+      storeKeys: [],
+      signup: {
+        storeName: form.storeName || '',
+        segment: form.segment || '',
+        city: form.city || '',
+        source: 'signup_page',
+        authProvider,
+      },
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    
+    if (refreshUserData) {
+      await refreshUserData()
+    }
+  }, [form, selectedPlanId, billingCycle, refreshUserData])
+
   const handleField = useCallback((field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
     setFormError('')
@@ -532,33 +638,76 @@ export default function SignupPage() {
     setBillingCycle(cycle)
   }, [])
 
-  const handleGoogleSignup = useCallback(() => {
-    console.log('[SignupPage] Google signup — integração pendente')
-  }, [])
+  const handleGoogleSignup = useCallback(async () => {
+    setFormError('')
+    if (!form.whatsapp.trim()) return setFormError('Preencha seu WhatsApp primeiro.')
+    if (!form.storeName.trim()) return setFormError('Preencha o nome da sua loja primeiro.')
+
+    setIsLoading(true)
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const user = result.user
+      try {
+        await saveUserDocument(user, 'google', user.displayName)
+        setSubmitted('google')
+      } catch (docError) {
+        // Roll back created Google account if doc creation fails
+        await signOut(auth);
+        setFormError(getFriendlyError(docError));
+      }
+    } catch (error) {
+      console.error(error)
+      setFormError(getFriendlyError(error))
+      try { await signOut(auth) } catch (e) {}
+    } finally {
+      setIsLoading(false)
+    }
+  }, [form.whatsapp, form.storeName, saveUserDocument])
 
   const handleContinue = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault()
       if (!form.name.trim()) return setFormError('Informe seu nome completo.')
       if (!form.email.trim()) return setFormError('Informe seu e-mail.')
       if (!/\S+@\S+\.\S+/.test(form.email)) return setFormError('Digite um e-mail válido.')
       if (!form.whatsapp.trim()) return setFormError('Informe seu WhatsApp.')
       if (!form.storeName.trim()) return setFormError('Informe o nome da sua loja.')
+      const strength = getPasswordStrength(form.password)
+      if (strength.level === 'weak') {
+        return setFormError('Use uma senha mais forte, com pelo menos 8 caracteres, letras e números.')
+      }
+      if (form.password !== form.confirmPassword) return setFormError('As senhas não coincidem.')
 
       setIsLoading(true)
-      console.log('[SignupPage] Dados do cadastro:', {
-        plan: selectedPlanId,
-        cycle: billingCycle,
-        ...form,
-      })
-
-      // Simulação — integração real virá nas próximas etapas
-      setTimeout(() => {
+      try {
+        const result = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
+        const user = result.user;
+        await updateProfile(user, { displayName: form.name.trim() });
+        try {
+          await saveUserDocument(user, 'password', form.name.trim());
+          try {
+            if (!user.emailVerified) {
+              await sendEmailVerification(user)
+            }
+          } catch (emailError) {
+            console.warn('[Signup] Não foi possível enviar verificação de e-mail.', emailError)
+          }
+          setSubmitted('password');
+        } catch (docError) {
+          // Roll back auth account if user document creation fails
+          await deleteUser(user).catch(() => {});
+          await signOut(auth);
+          setFormError(getFriendlyError(docError));
+        }
+      } catch (error) {
+        console.error(error)
+        setFormError(getFriendlyError(error))
+        try { await signOut(auth) } catch (e) {}
+      } finally {
         setIsLoading(false)
-        setSubmitted(true)
-      }, 1200)
+      }
     },
-    [form, selectedPlanId, billingCycle]
+    [form, selectedPlanId, billingCycle, saveUserDocument]
   )
 
   // ─────────────────────────────────────────────────────────
@@ -582,19 +731,24 @@ export default function SignupPage() {
           </h2>
           <p className="mt-3 text-sm font-semibold leading-6 text-[#6b7280]">
           Recebemos seus dados. Na próxima etapa, você poderá confirmar seu WhatsApp{' '}
-            <strong className="text-[#111827]">{form.whatsapp}</strong>, iniciar o teste grátis
-            e ativar sua loja com segurança.
+            <strong className="text-[#111827]">{form.whatsapp}</strong> e ativar 14 dias grátis
+            para testar sua loja com segurança.
           </p>
+          {submitted === 'password' && (
+            <p className="mt-2 text-sm font-semibold leading-6 text-[#111827]">
+              Também enviamos um e-mail de verificação para sua caixa de entrada.
+            </p>
+          )}
           <div className="mt-6 rounded-2xl border border-orange-100 bg-orange-50/60 px-4 py-4 text-sm font-bold text-[#374151]">
             Plano <span className="text-[#f97316]">{selectedPlan.name}</span> ·{' '}
             {billingCycle === 'annual' ? 'Cobrança anual' : 'Cobrança mensal'} ·{' '}
             14 dias grátis
           </div>
           <Link
-            to="/"
+            to="/onboarding"
             className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:bg-[#ea580c]"
           >
-            Voltar ao site
+            Continuar ativação 
             <FiArrowRight size={15} />
           </Link>
         </motion.div>
@@ -645,10 +799,10 @@ export default function SignupPage() {
           <div className="relative z-10 flex items-center justify-between gap-4">
             <PratoByLogo dark />
             <Link
-              to="/"
+              to="/login"
               className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-white/80 backdrop-blur transition hover:bg-white hover:text-[#111827]"
             >
-              Voltar ao site
+              Voltar ao login
             </Link>
           </div>
 
@@ -671,7 +825,7 @@ export default function SignupPage() {
 
             <div className="mt-9 grid gap-3 text-sm font-bold text-gray-200 sm:grid-cols-2">
               {[
-                '14 dias de teste grátis',
+                '14 dias grátis',
                 '0% de comissão por pedido',
                 'Link próprio da loja',
                 'Suporte no WhatsApp',
@@ -729,7 +883,7 @@ export default function SignupPage() {
                   Crie sua loja online
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
-                  Escolha um plano, configure sua conta e comece seu teste grátis.
+                  Escolha um plano, configure sua conta e comece com 14 dias grátis. Seu teste será ativado após a confirmação.
                 </p>
               </motion.div>
 
@@ -907,6 +1061,44 @@ export default function SignupPage() {
                     value={form.city}
                     onChange={handleField('city')}
                   />
+                  <InputField
+                    label="Senha *"
+                    icon={FiLock}
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={handleField('password')}
+                    required
+                  />
+                  {form.password && (
+                    <div className="mt-1 px-1">
+                      <div className="flex gap-1 h-1.5 w-full max-w-[200px] mb-1">
+                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 1 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 2 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 3 ? (getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 4 ? 'bg-green-500' : 'bg-gray-200'}`} />
+                      </div>
+                      <p className={`text-[10px] font-bold ${getPasswordStrength(form.password).level === 'weak' ? 'text-red-600' : getPasswordStrength(form.password).level === 'medium' ? 'text-amber-600' : 'text-green-600'}`}>
+                        {getPasswordStrength(form.password).label}
+                      </p>
+                      <p className="text-[9px] font-semibold text-gray-500 mt-0.5">
+                        Use pelo menos 8 caracteres, misturando letras e números.
+                      </p>
+                    </div>
+                  )}
+                  <InputField
+                    label="Confirmar senha *"
+                    icon={FiLock}
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    value={form.confirmPassword}
+                    onChange={handleField('confirmPassword')}
+                    required
+                  />
                 </div>
 
                 {/* Resumo */}
@@ -927,7 +1119,7 @@ export default function SignupPage() {
                     </>
                   ) : (
                     <>
-                      Continuar cadastro
+                      Criar conta e continuar
                       <FiArrowRight
                         size={15}
                         className="transition group-hover:translate-x-0.5"

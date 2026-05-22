@@ -4,9 +4,12 @@ import SEO from '../../components/seo/SEO'
 import {
   collection,
   doc,
+  getDoc,
+  getDocs,
   onSnapshot,
   query,
   where,
+  limit,
 } from 'firebase/firestore'
 
 import {
@@ -137,6 +140,99 @@ function getOpeningHoursSource(store) {
     store?.hours ||
     null
   )
+}
+
+async function findStoreBySlug(db, slugParam) {
+  const cleanSlug = String(slugParam || '').trim().replace(/^\/+|\/+$/g, '')
+
+  if (!cleanSlug) return null
+
+  if (import.meta.env.DEV) {
+    console.log('[StoreFront] slug recebido:', slugParam)
+    console.log('[StoreFront] cleanSlug:', cleanSlug)
+  }
+
+  const publicConstraints = [
+    where('isActive', '==', true),
+    where('isBlocked', '==', false),
+    where('isDeleted', '==', false)
+  ]
+
+  try {
+    const directRef = doc(db, 'stores', cleanSlug)
+    const directSnap = await getDoc(directRef)
+
+    if (import.meta.env.DEV) {
+      console.log('[StoreFront] direct doc exists:', directSnap.exists())
+    }
+
+    if (directSnap.exists()) {
+      const data = directSnap.data() || {}
+      return {
+        ...data,
+        ref: directRef,
+        id: directSnap.id,
+        docId: directSnap.id,
+        storeId: directSnap.id,
+        storeSlug: data.storeSlug || data.slug || cleanSlug,
+        slug: data.slug || data.storeSlug || cleanSlug,
+      }
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.log('[StoreFront] getDoc ignorado:', error.message)
+  }
+
+  try {
+    const byStoreSlug = query(collection(db, 'stores'), where('storeSlug', '==', cleanSlug), ...publicConstraints, limit(1))
+    const storeSlugSnap = await getDocs(byStoreSlug)
+    
+    if (import.meta.env.DEV) {
+      console.log('[StoreFront] by storeSlug empty:', storeSlugSnap.empty)
+    }
+
+    if (!storeSlugSnap.empty) {
+      const storeDoc = storeSlugSnap.docs[0]
+      const data = storeDoc.data() || {}
+      return {
+        ...data,
+        ref: storeDoc.ref,
+        id: storeDoc.id,
+        docId: storeDoc.id,
+        storeId: storeDoc.id,
+        storeSlug: data.storeSlug || data.slug || cleanSlug,
+        slug: data.slug || data.storeSlug || cleanSlug,
+      }
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.log('[StoreFront] getDocs storeSlug ignorado:', error.message)
+  }
+
+  try {
+    const bySlug = query(collection(db, 'stores'), where('slug', '==', cleanSlug), ...publicConstraints, limit(1))
+    const slugSnap = await getDocs(bySlug)
+
+    if (import.meta.env.DEV) {
+      console.log('[StoreFront] by slug empty:', slugSnap.empty)
+    }
+
+    if (!slugSnap.empty) {
+      const storeDoc = slugSnap.docs[0]
+      const data = storeDoc.data() || {}
+      return {
+        ...data,
+        ref: storeDoc.ref,
+        id: storeDoc.id,
+        docId: storeDoc.id,
+        storeId: storeDoc.id,
+        storeSlug: data.storeSlug || data.slug || cleanSlug,
+        slug: data.slug || data.storeSlug || cleanSlug,
+      }
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.log('[StoreFront] getDocs slug ignorado:', error.message)
+  }
+
+  return null
 }
 
 function findDayHours(source, day) {
@@ -494,10 +590,14 @@ function getStoreKeys(store, fallbackSlug) {
     .filter((value, index, array) => array.indexOf(value) === index)
 }
 
-function normalizeStore(storeDoc, fallbackSlug) {
-  const data = storeDoc.data() || {}
-  const storeSlug = firstFilled(data.storeSlug, data.slug, fallbackSlug, storeDoc.id)
-  const storeId = firstFilled(data.storeId, storeDoc.id, storeSlug)
+function normalizeStore(input, fallbackSlug = '') {
+  if (!input) return null
+
+  const isSnapshot = typeof input.data === 'function'
+  const data = isSnapshot ? input.data() || {} : input
+  const docId = isSnapshot ? input.id : input.id || input.docId || input.storeId || data.id || ''
+  
+  const storeSlug = data.storeSlug || data.slug || fallbackSlug || docId
 
   const logoUrl = getCloudinaryOptimizedUrl(
     firstFilled(data.logoUrl, data.logo, data.avatarUrl, data.photoUrl),
@@ -511,8 +611,9 @@ function normalizeStore(storeDoc, fallbackSlug) {
 
   return {
     ...data,
-    id: storeDoc.id,
-    storeId,
+    id: docId,
+    docId,
+    storeId: docId,
     storeSlug,
     slug: data.slug || storeSlug,
     logoUrl,
@@ -805,17 +906,16 @@ function StoreIdentityCard({
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-600">
                     <FiStar size={12} />
                     {store?.rating || '4.9'}
-                  </span>
-
-                  {activeUsers > 1 && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-blue-600">
-                      <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                    {activeUsers > 0 && (
+                    <span className="hidden items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-500 ring-1 ring-slate-100 sm:inline-flex sm:px-3 sm:py-1.5 sm:text-[11px]">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-70" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />
                       </span>
-                      {activeUsers} vendo agora
+                      {activeUsers} {activeUsers === 1 ? 'pessoa vendo agora' : 'pessoas vendo agora'}
                     </span>
                   )}
+                  </span>
                 </div>
               </div>
 
@@ -1388,7 +1488,7 @@ function HeaderIconButton({ icon: Icon, label, onClick, active = false }) {
 
 export default function StoreFrontPage() {
   const { slug } = useParams()
-  const { user, hasRole } = useAuth()
+  const { user, userData, loading: authLoading, hasRole } = useAuth()
   const { cartItems, cartTotal } = useCart()
 
   const [isFavorite, setIsFavorite] = useState(false)
@@ -1432,9 +1532,14 @@ export default function StoreFrontPage() {
       ? `${window.location.origin}/${storeSlug}`
       : `/${storeSlug}`
 
-const isOwner = canEditStorefront(user, store, slug)
-const isAdminPreview = Boolean(hasRole?.(['admin', 'developer']))
-const canPreviewUnavailableStore = isOwner || isAdminPreview
+  const combinedUser = useMemo(() => {
+    if (!user && !userData) return null
+    return { ...user, ...userData }
+  }, [user, userData])
+
+  const isOwner = authLoading ? false : canEditStorefront(combinedUser, store, slug)
+  const isAdminPreview = Boolean(hasRole?.(['admin', 'developer']))
+  const canPreviewUnavailableStore = isOwner || isAdminPreview
 
   const shouldBlockStorefront = Boolean(
     store && isStoreUnavailable(store) && !canPreviewUnavailableStore
@@ -1788,26 +1893,44 @@ const handleToggleFavorite = useCallback(() => {
 
     setLoadingStore(true)
 
-  const storeRef = doc(db, 'stores', slug)
+    let unsubscribe = null
+    let isMounted = true
 
-  const unsubscribeStore = onSnapshot(
-    storeRef,
-    (snapshot) => {
-      if (snapshot.exists()) {
-        setStore(normalizeStore(snapshot, slug))
-      } else {
-        setStore(null)
+    async function resolveStore() {
+      try {
+        const foundStore = await findStoreBySlug(db, slug)
+
+        if (!isMounted) return
+
+        if (import.meta.env.DEV) {
+          console.log('[StoreFront] slugParam:', slug)
+          console.log('[StoreFront] store found:', foundStore)
+        }
+
+        if (foundStore) {
+          setStore(normalizeStore(foundStore, slug))
+        } else {
+          setStore(null)
+        }
+        
+        setLoadingStore(false)
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[StoreFront] erro ao buscar loja:', error)
+        }
+        if (isMounted) {
+          setStore(null)
+          setLoadingStore(false)
+        }
       }
+    }
 
-      setLoadingStore(false)
-    },
-    () => {
-      setStore(null)
-      setLoadingStore(false)
-    },
-  )
+    resolveStore()
 
-    return () => unsubscribeStore()
+    return () => {
+      isMounted = false
+      if (unsubscribe) unsubscribe()
+    }
   }, [slug])
 
   useEffect(() => {

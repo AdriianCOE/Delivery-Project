@@ -5,11 +5,15 @@ import { Link } from 'react-router-dom';
 
 const plans = [
   {
+    id: 'essential',
     name: 'Essencial',
     description: 'Para começar a vender online',
-    price: 'R$ 59',
+    price: 59,
+    priceAnnual: 590,
+    equivalentMonthly: 49,
     period: '/mês',
     features: [
+      '14 dias grátis inclusos',
       'Cardápio digital ilimitado',
       'Pedidos em tempo real',
       'Link próprio da loja',
@@ -17,16 +21,20 @@ const plans = [
       'Painel de controle',
       'Horários automáticos',
     ],
-    cta: 'Começar agora',
+    cta: 'Começar 14 dias grátis',
     highlighted: false,
   },
   {
+    id: 'professional',
     name: 'Profissional',
     description: 'Mais escolhido pelos lojistas',
-    price: 'R$ 89',
+    price: 89,
+    priceAnnual: 890,
+    equivalentMonthly: 74,
     period: '/mês',
     badge: 'Mais popular',
     features: [
+      '14 dias grátis inclusos',
       'Tudo do Essencial',
       'Cupons de desconto',
       'Taxa por bairro',
@@ -35,15 +43,19 @@ const plans = [
       'WhatsApp integrado',
       'Suporte prioritário',
     ],
-    cta: 'Começar agora',
+    cta: 'Começar 14 dias grátis',
     highlighted: true,
   },
   {
+    id: 'premium',
     name: 'Premium',
     description: 'Para quem quer vender mais',
-    price: 'R$ 159',
+    price: 159,
+    priceAnnual: 1590,
+    equivalentMonthly: 133,
     period: '/mês',
     features: [
+      '14 dias grátis inclusos',
       'Tudo do Profissional',
       'Multi-loja (até 3)',
       'API de integração',
@@ -51,13 +63,14 @@ const plans = [
       'Marca branca',
       'Gerente de conta dedicado',
     ],
-    cta: 'Começar agora',
+    cta: 'Começar 14 dias grátis',
     highlighted: false,
   },
 ];
 
 export function PricingSection() {
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
 
   return (
     <section id="planos" className="relative overflow-hidden bg-gradient-to-b from-white via-orange-50/30 to-white py-16 lg:py-24">
@@ -110,10 +123,46 @@ export function PricingSection() {
               </div>
             </div>
           </div>
+          
+          <div className="mt-10 flex justify-center">
+            <div className="inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
+              {[
+                { value: 'monthly', label: 'Mensal' },
+                { value: 'annual', label: 'Anual' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setBillingCycle(opt.value as 'monthly' | 'annual')}
+                  className={[
+                    'relative rounded-[1rem] px-5 py-2.5 text-sm font-black transition-all duration-200',
+                    billingCycle === opt.value
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/25'
+                      : 'text-gray-500 hover:text-gray-900',
+                  ].join(' ')}
+                >
+                  {opt.label}
+                  {opt.value === 'annual' && (
+                    <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-black ${
+                      billingCycle === 'annual' 
+                        ? 'bg-white/25 text-white' 
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      -17%
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
         </motion.div>
 
         <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
-          {plans.map((plan, index) => (
+          {plans.map((plan, index) => {
+            const isAnnual = billingCycle === 'annual';
+            const displayPrice = isAnnual ? plan.equivalentMonthly : plan.price;
+
+            return (
             <motion.div
               key={plan.name}
               initial={{ opacity: 0, y: 20 }}
@@ -142,9 +191,19 @@ export function PricingSection() {
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                 <p className="text-sm text-gray-600 mb-4">{plan.description}</p>
                 <div className="flex items-baseline justify-center gap-1 mb-2">
-                  <span className="text-5xl font-black text-gray-900">{plan.price}</span>
+                  <span className="text-5xl font-black text-gray-900">R$ {displayPrice}</span>
                   <span className="text-gray-600">{plan.period}</span>
                 </div>
+                {isAnnual && (
+                  <div className="mb-2">
+                    <span className="inline-block rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700 ring-1 ring-green-100">
+                      2 meses grátis
+                    </span>
+                    <p className="mt-1 text-xs text-gray-500">
+                      R$ {plan.priceAnnual} cobrados ao ano
+                    </p>
+                  </div>
+                )}
                 <div className="text-sm text-green-600 font-semibold">
                   + 0% de comissão por venda
                 </div>
@@ -162,7 +221,7 @@ export function PricingSection() {
 
               {/* CTA */}
               <Link
-                to="/contato"
+                to={`/cadastro?plan=${plan.id}&cycle=${billingCycle}`}
                 className={`flex w-full items-center justify-center rounded-[1.4rem] py-3.5 font-bold transition-all ${
                   plan.highlighted
                     ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:scale-105 hover:shadow-xl hover:shadow-orange-500/40'
@@ -172,7 +231,8 @@ export function PricingSection() {
                 {plan.cta}
               </Link>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Bottom note */}
@@ -184,7 +244,7 @@ export function PricingSection() {
           className="text-center mt-12"
         >
           <p className="text-gray-600">
-            Todos os planos incluem <span className="font-bold text-gray-900">período de teste gratuito</span> de 14 dias
+            O teste grátis de 14 dias vale para qualquer plano escolhido.
           </p>
         </motion.div>
       </div>

@@ -6,6 +6,8 @@ import {
 
 import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
+import OnboardingPage from '../pages/auth/OnboardingPage'
+import AuthActionPage from '../pages/auth/AuthActionPage'
 import ScrollToTop from '../utils/ScrollToTop'
 
 // Públicas
@@ -16,6 +18,7 @@ import NotFoundPage from '../pages/NotFoundPage'
 import StoreFrontPage from '../pages/store/StoreFrontPage'
 import OrderTrackingPage from '../pages/store/OrderTrackingPage'
 import PlansPage from '../pages/PlansPage'
+import ProfilePage from '../pages/merchant/ProfilePage'
 import RestaurantExamplesPage from '../pages/RestaurantExamplesPage'
 import PrivacyPage from '../pages/PrivacyPage'
 import TermsPage from '../pages/TermsPage'
@@ -31,6 +34,7 @@ import OrdersPage from '../pages/merchant/OrdersPage'
 import Statistics from '../pages/merchant/Statistics'
 import Settings from '../pages/merchant/Settings'
 import Reviews from '../pages/merchant/Reviews'
+import MenuManagementPage from '../pages/merchant/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 
 // Layouts / Proteção
@@ -73,6 +77,8 @@ export default function AppRoutes() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/cadastro" element={<SignupPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/auth/action" element={<AuthActionPage />} />
         <Route path="/sobre" element={<AboutPage />} />
         <Route path="/contato" element={<ContactPage />} />
         <Route path="/planos" element={<PlansPage />} />
@@ -92,6 +98,7 @@ export default function AppRoutes() {
         <Route path="/tracking/:orderId" element={<OrderTrackingPage />} />
         <Route path="/pedido/:orderId" element={<OrderTrackingPage />} />
         <Route path="/order/:orderId" element={<OrderTrackingPage />} />
+        <Route path="/menu" element={<Navigate to="/dashboard/menu" replace />} />
 
         {/* Admin */}
         <Route
@@ -141,7 +148,7 @@ export default function AppRoutes() {
           <Route index element={<MerchantDashboard />} />
 
           <Route path="orders" element={<OrdersPage />} />
-          <Route path="menu" element={<ComingSoon title="Gestão de Cardápio" icon={FiGrid} />} />
+          <Route path="menu" element={<MenuManagementPage />} />
           <Route path="stats" element={<Statistics />} />
           <Route path="reviews" element={<Reviews />} />
           <Route path="settings" element={<Settings />} />
@@ -158,6 +165,7 @@ export default function AppRoutes() {
           <Route path="equipe" element={<ComingSoon title="Equipe e permissões" icon={FiLayers} />} />
           <Route path="automacoes" element={<ComingSoon title="Automações" icon={FiZap} />} />
           <Route path="assinatura" element={<ComingSoon title="Assinatura da loja" icon={FiArchive} />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
 
         {/* Compatibilidade com URLs antigas */}

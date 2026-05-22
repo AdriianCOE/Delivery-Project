@@ -9,6 +9,10 @@ const faqs = [
       'Não! No PratoBy você não paga nenhuma taxa por pedido. Você paga apenas a mensalidade do plano escolhido e 100% do valor dos pedidos é seu.',
   },
   {
+    question: 'Preciso de cartão de crédito para começar?',
+    answer: 'Sim. Você informa o cartão para ativar o teste, mas não paga nada durante os 14 dias grátis. A cobrança só acontece depois do período de teste, caso você continue com o plano.',
+  },
+  {
     question: 'O cliente precisa baixar aplicativo?',
     answer:
       'Não. Seu cliente acessa a loja direto pelo navegador do celular, sem precisar instalar nada. Ele clica no link e já pode fazer o pedido.',

@@ -1,17 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { initializeApp, deleteApp } from 'firebase/app'
-import {
-  createUserWithEmailAndPassword,
-  getAuth,
-  signOut,
-} from 'firebase/auth'
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  writeBatch,
-} from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import {
   FiAlertCircle,
   FiArrowLeft,
@@ -42,7 +31,7 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
-import { auth, db } from '../../services/firebase'
+import { auth, functions } from '../../services/firebase'
 import { uploadImageToCloudinary } from '../../services/cloudinary'
 
 const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -82,14 +71,14 @@ const PUBLIC_STORE_BASE_PATH = ''
 
 const PLAN_OPTIONS = [
   {
-    id: 'essencial',
+    id: 'essential',
     label: 'Essencial',
     price: 'R$ 5/mês',
     description: 'Cardápio digital, link próprio e pedido pelo WhatsApp.',
     features: ['Link próprio', 'Sem comissão', 'Cardápio digital'],
   },
   {
-    id: 'profissional',
+    id: 'professional',
     label: 'Profissional',
     price: 'R$ 89/mês',
     description: 'Mais controle para cupons, entrega, painel e operação.',
@@ -97,19 +86,23 @@ const PLAN_OPTIONS = [
     popular: true,
   },
   {
-    id: 'white-label',
-    label: 'White-label',
+    id: 'premium',
+    label: 'Premium (White-label)',
     price: 'R$ 159/mês',
     description: 'Experiência premium para marcas maiores ou redes.',
     features: ['Visual premium', 'Domínio próprio', 'Suporte prioritário'],
   },
 ]
 
+const BILLING_CYCLE_OPTIONS = [
+  { id: 'monthly', label: 'Mensal', description: 'Cobrança mês a mês.' },
+  { id: 'annual', label: 'Anual', description: 'Cobrança anual com desconto.' },
+]
+
 const SUBSCRIPTION_STATUS_OPTIONS = [
-  { id: 'trial', label: 'Em teste', description: 'Onboarding ou período de validação.' },
-  { id: 'active', label: 'Ativa', description: 'Assinatura liberada e operacional.' },
-  { id: 'past_due', label: 'Pendente', description: 'Pagamento atrasado ou pendente.' },
-  { id: 'blocked', label: 'Bloqueada', description: 'Acesso bloqueado por inadimplência, fraude ou decisão administrativa.' },
+  { id: 'trialing', label: 'Em teste (Trialing)', description: 'Período gratuito ativo.' },
+  { id: 'active', label: 'Ativa', description: 'Assinatura paga em andamento.' },
+  { id: 'blocked', label: 'Bloqueada', description: 'Acesso suspenso ou cancelado.' },
 ]
 
 const DEFAULT_FORM = {
@@ -131,8 +124,9 @@ const DEFAULT_FORM = {
   themeColor: DEFAULT_THEME,
   email: '',
   password: '',
-  planId: 'profissional',
-  subscriptionStatus: 'trial',
+  planId: 'professional',
+  billingCycle: 'monthly',
+  subscriptionStatus: 'trialing',
   isActive: true,
   isOpen: true,
   cep: '',
@@ -142,6 +136,21 @@ const DEFAULT_FORM = {
   complement: '',
   city: 'Aracaju',
   state: 'SE',
+}
+
+function getPasswordStrength(password) {
+  const value = String(password || '')
+  let score = 0
+
+  if (value.length >= 8) score += 1
+  if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1
+  if (/\d/.test(value)) score += 1
+  if (/[^A-Za-z0-9]/.test(value)) score += 1
+
+  if (!value) return { level: 'empty', label: '', score: 0 }
+  if (value.length < 8 || score <= 1) return { level: 'weak', label: 'Senha fraca', score }
+  if (score <= 3) return { level: 'medium', label: 'Senha boa', score }
+  return { level: 'strong', label: 'Senha forte', score }
 }
 
 function cn(...classes) {
@@ -250,23 +259,7 @@ function validateImageFile(file) {
   return ''
 }
 
-async function getAvailableSlug(baseSlug) {
-  let candidate = baseSlug
-  let counter = 1
 
-  while (counter <= 99) {
-    const storeSnap = await getDoc(doc(db, 'stores', candidate))
-
-    if (!storeSnap.exists()) {
-      return candidate
-    }
-
-    candidate = `${baseSlug}-${counter}`
-    counter += 1
-  }
-
-  throw new Error('Não foi possível gerar um link disponível para essa loja.')
-}
 
 async function uploadStoreAsset(file, folder) {
   if (!file) return null
@@ -661,7 +654,9 @@ export default function CreateStorePage() {
     if (!formData.ownerName.trim()) return 'Informe o nome do responsável.'
     if (!normalizedEmail) return 'Informe o e-mail de login do lojista.'
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) return 'Informe um e-mail válido.'
-    if (formData.password.length < 6) return 'A senha precisa ter pelo menos 6 caracteres.'
+    if (formData.password.length < 8) return 'A senha provisória precisa ter pelo menos 8 caracteres.'
+    const strength = getPasswordStrength(formData.password)
+    if (strength.level === 'weak') return 'Use uma senha provisória mais forte, misturando letras e números.'
     if (!formData.whatsapp1.trim()) return 'Informe o WhatsApp principal da loja.'
     if (!isValidPhoneBR(formData.whatsapp1)) return 'Informe um WhatsApp brasileiro válido com DDD.'
     if (formData.whatsapp2 && !isValidPhoneBR(formData.whatsapp2)) return 'Informe um WhatsApp secundário válido ou deixe em branco.'
@@ -689,246 +684,44 @@ export default function CreateStorePage() {
 
       setLoading(true)
 
-      let secondaryApp = null
-
       try {
-        const baseSlug = slugify(formData.customSlug || formData.name)
-        const finalSlug = await getAvailableSlug(baseSlug)
-        const publicPath = getPublicStorePath(finalSlug)
-        const legacyPublicPath = `/store/${finalSlug}`
-
-        const normalizedEmail = formData.email.trim().toLowerCase()
-        const whatsapp1 = normalizePhoneBR(formData.whatsapp1)
-        const whatsapp2 = normalizePhoneBR(formData.whatsapp2)
-        const instagram = sanitizeSocial(formData.instagram)
-
-        const minOrder = parseCurrency(formData.minOrder)
-        const deliveryFee = parseCurrency(formData.deliveryFee)
-        const freeDeliveryFrom = parseCurrency(formData.freeDeliveryFrom)
-
-        const plan = PLAN_OPTIONS.find((item) => item.id === formData.planId) || PLAN_OPTIONS[1]
-        const subscriptionStatus =
-          SUBSCRIPTION_STATUS_OPTIONS.find((item) => item.id === formData.subscriptionStatus)?.id || 'trial'
-
-        secondaryApp = initializeApp(auth.app.options, `merchant-create-${Date.now()}`)
-        const secondaryAuth = getAuth(secondaryApp)
-
-        const userCredential = await createUserWithEmailAndPassword(
-          secondaryAuth,
-          normalizedEmail,
-          formData.password
-        )
-
-        const merchantUid = userCredential.user.uid
-
-        await signOut(secondaryAuth)
-
-        const [bannerURL, logoURL] = await Promise.all([
-          uploadStoreAsset(bannerFile, `PratoBy/stores/${finalSlug}/branding/banner`),
-          uploadStoreAsset(logoFile, `PratoBy/stores/${finalSlug}/branding/logo`),
-        ])
-
-        const activeDays = DAYS_OF_WEEK.filter((day) => formData.activeDays.includes(day))
-        const weeklyOpeningHours = buildWeeklyOpeningHours(
-          activeDays,
-          formData.hoursOpen,
-          formData.hoursClose
-        )
-
-        const openingHoursMap = buildOpeningHoursMap(
-          activeDays,
-          formData.hoursOpen,
-          formData.hoursClose
-        )
-        const trimmedName = formData.name.trim()
-        const category = formData.category.trim() || 'Restaurante'
-        const createdBy = auth.currentUser?.uid || null
-
-        const owner = {
-          uid: merchantUid,
-          name: formData.ownerName.trim(),
-          email: normalizedEmail,
-        }
-
-        const storePayload = {
-          name: trimmedName,
-          normalizedName: trimmedName.toLowerCase(),
-          slug: finalSlug,
-          storeSlug: finalSlug,
-          storeId: finalSlug,
-          id: finalSlug,
-          docId: finalSlug,
-          storeDocId: finalSlug,
-          finalStoreId: finalSlug,
-          storeKeys: Array.from(
-            new Set([
-              finalSlug,
-              merchantUid,
-              normalizedEmail,
-              trimmedName.toLowerCase(),
-              slugify(trimmedName),
-            ].filter(Boolean))
-          ),
-
-          description: formData.description.trim(),
-          category,
-          type: category,
-          segment: category,
-
-          owner,
-          ownerId: merchantUid,
-          ownerUid: merchantUid,
-          ownerName: owner.name,
-          ownerEmail: owner.email,
-
-          whatsapp: whatsapp1,
-          whatsapp1,
-          whatsapp2: whatsapp2 || null,
-
-          instagram,
-          social: {
-            instagram,
-          },
-
-          themeColor: formData.themeColor || DEFAULT_THEME,
-          brandColor: formData.themeColor || DEFAULT_THEME,
-          bannerURL: bannerURL || null,
-          bannerUrl: bannerURL || null,
-          bannerImage: bannerURL || null,
-          logoURL: logoURL || null,
-          logoUrl: logoURL || null,
-          logo: logoURL || null,
-
-          publicPath,
-          legacyPublicPath,
-
-          activeDays,
-
-          hoursOpen: formData.hoursOpen,
-          hoursClose: formData.hoursClose,
-
-          hours: weeklyOpeningHours,
-          businessHours: weeklyOpeningHours,
-          openingHours: weeklyOpeningHours,
-
-          openingHoursMap,
-          businessHoursMap: openingHoursMap,
-
-          weeklySchedule: openingHoursMap,
-          schedule: openingHoursMap,
-
-          deliveryTime: formData.deliveryTime.trim() || '25-40 min',
-          minOrder,
-          minOrderCents: Math.round(minOrder * 100),
-          deliveryFee,
-          deliveryFeeCents: Math.round(deliveryFee * 100),
-          freeDeliveryFrom: freeDeliveryFrom || null,
-          freeDeliveryFromCents: freeDeliveryFrom ? Math.round(freeDeliveryFrom * 100) : null,
-
-          planId: plan.id,
-          planName: plan.label,
-          subscriptionStatus,
-          subscription: {
-            planId: plan.id,
-            planName: plan.label,
-            priceLabel: plan.price,
-            status: subscriptionStatus,
-            startedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-
-          settings: {
-            acceptDelivery: true,
-            acceptPickup: true,
-            acceptDineIn: false,
-            newOrderSoundEnabled: true,
-            printAfterConfirm: true,
-            autoCloseEnabled: false,
-            autoCloseGraceMinutes: 30,
-            showProductImages: true,
-            couponsEnabled: true,
-            reviewsEnabled: true,
-          },
-
-          address: {
-            cep: formData.cep.trim(),
-            street: formData.street.trim(),
-            number: formData.number.trim(),
-            neighborhood: formData.neighborhood.trim(),
-            complement: formData.complement.trim(),
-            city: formData.city.trim(),
-            state: formData.state,
-          },
-
-          cep: formData.cep.trim(),
-          city: formData.city.trim(),
-          neighborhood: formData.neighborhood.trim(),
-          state: formData.state,
-
-          isOpen: formData.isOpen,
+        const adminCreateStore = httpsCallable(functions, 'adminCreateStore')
+        
+        const payload = {
+          email: formData.email,
+          password: formData.password,
+          name: formData.name,
+          ownerName: formData.ownerName,
+          whatsapp: formData.whatsapp1,
+          customSlug: formData.customSlug,
+          plan: formData.planId,
+          billingCycle: formData.billingCycle,
+          subscriptionStatus: formData.subscriptionStatus,
           isActive: formData.isActive,
-          isBlocked: false,
-          isDeleted: false,
-          onboardingStatus: 'completed',
-
-          acceptsCoupons: true,
-          paymentMethods: {
-            pix: true,
-            card: true,
-            cash: true,
-          },
-          deliveryFees: {},
-          deliveryAreas: [],
-
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy,
+          isOpen: formData.isOpen,
+          category: formData.category,
+          city: formData.city
         }
 
-        const userPayload = {
-          uid: merchantUid,
-          name: owner.name,
-          displayName: owner.name,
-          email: normalizedEmail,
-          role: 'merchant',
-          storeId: finalSlug,
-          storeSlug: finalSlug,
-          storeIds: [finalSlug],
-          storeKeys: [finalSlug],
-          planId: plan.id,
-          subscriptionStatus,
-          isActive: true,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy,
+        const result = await adminCreateStore(payload)
+        const data = result.data
+
+        if (!data?.ok) {
+          throw new Error('Erro ao criar loja.')
         }
 
-        const batch = writeBatch(db)
-        batch.set(doc(db, 'users', merchantUid), userPayload)
-        batch.set(doc(db, 'stores', finalSlug), storePayload)
-        await batch.commit()
-
-        setSuccessMessage(`Loja criada com sucesso: ${publicPath}`)
+        const finalSlug = data.storeSlug
+        
+        setSuccessMessage(`Loja criada! ID: ${data.storeId} | Link: ${data.publicUrl}`)
 
         window.setTimeout(() => {
           navigate('/admin')
-        }, 900)
+        }, 1500)
       } catch (error) {
         console.error(error)
-
-        const message =
-          error?.code === 'auth/email-already-in-use'
-            ? 'Este e-mail já está cadastrado em outro usuário.'
-            : error?.code === 'auth/invalid-email'
-              ? 'Informe um e-mail válido para o lojista.'
-              : error?.message || 'Erro ao criar loja.'
-
+        const message = error?.message || 'Erro ao criar loja.'
         setFormError(message)
       } finally {
-        if (secondaryApp) {
-          await deleteApp(secondaryApp).catch(() => {})
-        }
-
         setLoading(false)
       }
     },
@@ -1023,83 +816,8 @@ export default function CreateStorePage() {
           <Section
             icon={FiImage}
             title="Identidade visual"
-            description="Adicione banner, logo e cor da loja. As imagens serão enviadas para o Cloudinary automaticamente."
-          >
-            <div className="overflow-hidden rounded-[1.7rem] border border-gray-100 bg-[#f9fafb]">
-              <button
-                type="button"
-                onClick={() => bannerInputRef.current?.click()}
-                className="relative flex h-48 w-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#111827] to-[#f97316] text-white"
-                style={{
-                  background: bannerPreview
-                    ? undefined
-                    : `linear-gradient(135deg, #111827, ${formData.themeColor || DEFAULT_THEME})`,
-                }}
-              >
-                {bannerPreview ? (
-                  <img
-                    src={bannerPreview}
-                    alt="Prévia do banner"
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="relative z-10 text-center">
-                    <FiUpload className="mx-auto mb-3" size={30} />
-                    <p className="font-black">Adicionar banner</p>
-                    <p className="mt-1 text-xs text-white/70">
-                      Recomendado: 1200 × 400px
-                    </p>
-                  </div>
-                )}
-
-                <div className="absolute inset-0 bg-black/10" />
-              </button>
-
-              <input
-                ref={bannerInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(event) => handleImagePreview(event.target.files?.[0], 'banner')}
-              />
-
-              <div className="relative flex items-end gap-4 px-5 pb-5">
-                <button
-                  type="button"
-                  onClick={() => logoInputRef.current?.click()}
-                  className="-mt-10 flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[1.4rem] border-4 border-white bg-white shadow-xl"
-                >
-                  {logoPreview ? (
-                    <img
-                      src={logoPreview}
-                      alt="Prévia da logo"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <FiCamera className="text-gray-400" size={30} />
-                  )}
-                </button>
-
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(event) => handleImagePreview(event.target.files?.[0], 'logo')}
-                />
-
-                <div className="min-w-0 pb-1">
-                  <p className="text-sm font-black text-[#111827]">
-                    Logo da loja
-                  </p>
-
-                  <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-                    Use uma imagem quadrada em PNG, JPG ou WEBP. Máximo 4MB.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Section>
+            description="Imagens podem ser adicionadas depois nas configurações da loja."
+          />
 
           <Section
             icon={FiShoppingBag}
@@ -1183,13 +901,24 @@ export default function CreateStorePage() {
               ))}
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {SUBSCRIPTION_STATUS_OPTIONS.map((option) => (
                 <StatusOption
                   key={option.id}
                   option={option}
                   active={formData.subscriptionStatus === option.id}
                   onClick={() => updateField('subscriptionStatus', option.id)}
+                />
+              ))}
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {BILLING_CYCLE_OPTIONS.map((option) => (
+                <StatusOption
+                  key={option.id}
+                  option={option}
+                  active={formData.billingCycle === option.id}
+                  onClick={() => updateField('billingCycle', option.id)}
                 />
               ))}
             </div>
@@ -1244,6 +973,19 @@ export default function CreateStorePage() {
                     {showPassword ? <FiEyeOff /> : <FiEye />}
                   </button>
                 </div>
+                {formData.password && (
+                  <div className="mt-2 px-1">
+                    <div className="flex gap-1 h-1.5 w-full max-w-[200px] mb-1">
+                      <div className={`h-full flex-1 rounded-full ${getPasswordStrength(formData.password).score >= 1 ? (getPasswordStrength(formData.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(formData.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                      <div className={`h-full flex-1 rounded-full ${getPasswordStrength(formData.password).score >= 2 ? (getPasswordStrength(formData.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(formData.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                      <div className={`h-full flex-1 rounded-full ${getPasswordStrength(formData.password).score >= 3 ? (getPasswordStrength(formData.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                      <div className={`h-full flex-1 rounded-full ${getPasswordStrength(formData.password).score >= 4 ? 'bg-green-500' : 'bg-gray-200'}`} />
+                    </div>
+                    <p className={`text-[10px] font-bold ${getPasswordStrength(formData.password).level === 'weak' ? 'text-red-600' : getPasswordStrength(formData.password).level === 'medium' ? 'text-amber-600' : 'text-green-600'}`}>
+                      {getPasswordStrength(formData.password).label}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </Section>

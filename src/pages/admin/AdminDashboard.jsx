@@ -4,6 +4,8 @@ import {
   collection,
   doc,
   onSnapshot,
+  query,
+  where,
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
@@ -56,22 +58,22 @@ const PUBLIC_STORE_BASE_URL =
 
 const PLAN_OPTIONS = [
   {
-    id: 'essencial',
-    label: 'Essencial',
+    id: 'essential',
+    label: 'Essential',
     price: 'R$ 59/mês',
     badge: 'Entrada',
     description: 'Cardápio digital, carrinho e WhatsApp.',
   },
   {
-    id: 'profissional',
-    label: 'Profissional',
+    id: 'professional',
+    label: 'Professional',
     price: 'R$ 89/mês',
     badge: 'Mais vendido',
     description: 'Dashboard, cupons, bairros e avaliações.',
   },
   {
-    id: 'white-label',
-    label: 'White-label',
+    id: 'premium',
+    label: 'Premium',
     price: 'R$ 159/mês',
     badge: 'Premium',
     description: 'Personalização, domínio próprio e suporte prioritário.',
@@ -79,11 +81,13 @@ const PLAN_OPTIONS = [
 ]
 
 const SUBSCRIPTION_STATUS = [
-  { id: 'trial', label: 'Teste', tone: 'blue' },
+  { id: 'pending_checkout', label: 'Checkout Pendente', tone: 'blue' },
+  { id: 'trialing', label: 'Em Teste', tone: 'amber' },
   { id: 'active', label: 'Ativa', tone: 'green' },
   { id: 'past_due', label: 'Pendente', tone: 'amber' },
   { id: 'paused', label: 'Pausada', tone: 'gray' },
   { id: 'canceled', label: 'Cancelada', tone: 'red' },
+  { id: 'blocked', label: 'Bloqueada', tone: 'red' },
 ]
 
 const FILTERS = [
@@ -93,7 +97,7 @@ const FILTERS = [
   { id: 'open', label: 'Abertas', icon: FiZap },
   { id: 'closed', label: 'Fechadas', icon: FiClock },
   { id: 'blocked', label: 'Bloqueadas', icon: FiLock },
-  { id: 'trial', label: 'Teste', icon: FiStar },
+  { id: 'trialing', label: 'Teste', icon: FiStar },
   { id: 'past_due', label: 'Pendentes', icon: FiAlertTriangle },
   { id: 'archived', label: 'Arquivadas', icon: FiArchive },
 ]
@@ -125,22 +129,16 @@ const DEV_CHECKLIST = [
 
 const DEFAULT_EDIT_FORM = {
   name: '',
-  storeSlug: '',
   description: '',
   category: '',
   city: '',
   neighborhood: '',
-  ownerName: '',
-  ownerEmail: '',
-  ownerUid: '',
   themeColor: '#f97316',
   whatsapp: '',
   instagram: '',
   deliveryTime: '25-40 min',
   minOrder: '0,00',
   deliveryFee: '0,00',
-  planId: 'profissional',
-  subscriptionStatus: 'trial',
   isOpen: true,
   isActive: true,
   isBlocked: false,
@@ -159,7 +157,7 @@ function getStoreDocId(store) {
 }
 
 function getPlan(store) {
-  const planId = store?.planId || store?.plan || store?.subscription?.planId || 'essencial'
+  const planId = store?.planId || store?.plan || store?.subscription?.planId || 'essential'
   return PLAN_OPTIONS.find((plan) => plan.id === planId) || PLAN_OPTIONS[0]
 }
 
@@ -168,7 +166,7 @@ function getSubscriptionStatus(store) {
     store?.subscriptionStatus ||
     store?.subscription?.status ||
     store?.billingStatus ||
-    (store?.isActive === false ? 'paused' : 'trial')
+    (store?.isActive === false ? 'paused' : 'trialing')
 
   return SUBSCRIPTION_STATUS.find((status) => status.id === id) || SUBSCRIPTION_STATUS[0]
 }
@@ -767,6 +765,8 @@ function StoreCard({ store, onCopyLink, onToggleStore, onArchiveStore, onEditSto
 
 export default function AdminDashboard() {
   const [stores, setStores] = useState([])
+  const [users, setUsers] = useState([])
+  const [activeTab, setActiveTab] = useState('stores') // 'stores' or 'pending_users'
   const [searchTerm, setSearchTerm] = useState('')
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -784,7 +784,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     setLoading(true)
 
-    const unsubscribe = onSnapshot(
+    const unsubscribeStores = onSnapshot(
       collection(db, 'stores'),
       (snapshot) => {
         const list = snapshot.docs.map((storeDoc) => ({
@@ -792,19 +792,35 @@ export default function AdminDashboard() {
           storeId: storeDoc.id,
           ...storeDoc.data(),
         }))
-
         setStores(list)
+      },
+      (error) => {
+        console.error(error)
+        showToast('error', 'Erro ao carregar lojas.')
+      }
+    )
+
+    const unsubscribeUsers = onSnapshot(
+      query(collection(db, 'users'), where('role', '==', 'merchant')),
+      (snapshot) => {
+        const list = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }))
+        setUsers(list)
         setLoading(false)
       },
       (error) => {
         console.error(error)
-        setStores([])
         setLoading(false)
-        showToast('error', 'Erro ao carregar lojas. Confira permissão, internet e regras do Firestore.')
+        showToast('error', 'Erro ao carregar usuários.')
       }
     )
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribeStores()
+      unsubscribeUsers()
+    }
   }, [showToast])
 
   const stats = useMemo(() => {
@@ -813,21 +829,47 @@ export default function AdminDashboard() {
     const openStores = notArchived.filter(
       (store) => store.isActive !== false && store.isBlocked !== true && store.isOpen !== false
     )
-    const trialStores = notArchived.filter((store) => getSubscriptionStatus(store).id === 'trial')
-    const pastDueStores = notArchived.filter((store) => getSubscriptionStatus(store).id === 'past_due')
-    const whiteLabelStores = notArchived.filter((store) => getPlan(store).id === 'white-label')
+    const trialStores = notArchived.filter((store) => store.subscriptionStatus === 'trialing' || store.subscriptionStatus === 'trial' || store.subscription?.status === 'trialing')
+    const blockedStores = notArchived.filter((store) => store.isBlocked === true || store.isActive === false)
+    const pastDue = notArchived.filter((store) => store.subscriptionStatus === 'past_due' || store.subscription?.status === 'past_due')
+    
+    const now = new Date()
+    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+
+    const trialsExpiringSoon = notArchived.filter((store) => {
+      if (store.subscriptionStatus !== 'trialing') return false
+      if (!store.trialEndsAt) return false
+      const end = store.trialEndsAt?.toDate ? store.trialEndsAt.toDate() : new Date(store.trialEndsAt)
+      return end > now && end <= threeDaysFromNow
+    })
+
+    const trialsExpired = notArchived.filter((store) => {
+      if (store.subscriptionStatus !== 'trialing') return false
+      if (!store.trialEndsAt) return false
+      const end = store.trialEndsAt?.toDate ? store.trialEndsAt.toDate() : new Date(store.trialEndsAt)
+      return end <= now
+    })
+
+    // Users stats
+    const pendingSignups = users.filter((u) => !u.storeId && u.onboardingStatus !== 'checkout_pending')
+    const phonePending = users.filter((u) => u.onboardingStatus === 'phone_pending')
+    const checkoutPending = users.filter((u) => u.onboardingStatus === 'checkout_pending')
 
     return {
       total: notArchived.length,
       active: activeStores.length,
       open: openStores.length,
-      blocked: notArchived.filter((store) => store.isBlocked).length,
+      blocked: blockedStores.length,
       archived: stores.filter((store) => store.isDeleted).length,
       trial: trialStores.length,
-      pastDue: pastDueStores.length,
-      whiteLabel: whiteLabelStores.length,
+      pastDue: pastDue.length,
+      trialsExpiringSoon: trialsExpiringSoon.length,
+      trialsExpired: trialsExpired.length,
+      pendingSignups: pendingSignups.length,
+      phonePending: phonePending.length,
+      checkoutPending: checkoutPending.length,
     }
-  }, [stores])
+  }, [stores, users])
 
   const planStats = useMemo(() => {
     return PLAN_OPTIONS.map((plan) => ({
@@ -977,22 +1019,16 @@ export default function AdminDashboard() {
     setEditingStore(store)
     setEditForm({
       name: store.name || '',
-      storeSlug: getStoreSlug(store),
       description: store.description || '',
       category: store.category || store.type || '',
       city: store.city || '',
       neighborhood: store.neighborhood || '',
-      ownerName: store.ownerName || store.owner?.name || '',
-      ownerEmail: store.ownerEmail || store.owner?.email || '',
-      ownerUid: store.ownerUid || store.owner?.uid || '',
       themeColor: store.themeColor || '#f97316',
       whatsapp: store.whatsapp || store.whatsapp1 || '',
       instagram: store.instagram || store.social?.instagram || '',
       deliveryTime: store.deliveryTime || '25-40 min',
       minOrder: moneyToInput(store.minOrder, store.minOrderCents),
       deliveryFee: moneyToInput(store.deliveryFee, store.deliveryFeeCents),
-      planId: getPlan(store).id,
-      subscriptionStatus: getSubscriptionStatus(store).id,
       isOpen: store.isOpen ?? true,
       isActive: store.isActive ?? true,
       isBlocked: store.isBlocked ?? false,
@@ -1028,13 +1064,6 @@ export default function AdminDashboard() {
       return
     }
 
-    const safeSlug = slugify(editForm.storeSlug || editForm.name)
-
-    if (!safeSlug) {
-      showToast('error', 'Informe um slug válido para a loja.')
-      return
-    }
-
     setSaving(true)
 
     try {
@@ -1042,29 +1071,14 @@ export default function AdminDashboard() {
       const deliveryFee = parseCurrency(editForm.deliveryFee)
       const whatsapp = normalizePhoneBR(editForm.whatsapp)
       const instagram = sanitizeSocial(editForm.instagram)
-      const selectedPlan = PLAN_OPTIONS.find((plan) => plan.id === editForm.planId) || PLAN_OPTIONS[1]
 
       await updateDoc(doc(db, 'stores', storeDocId), {
         name: editForm.name.trim(),
-        storeSlug: safeSlug,
-        slug: safeSlug,
-        storeId: editingStore.storeId || storeDocId,
-        storeKeys: Array.from(
-          new Set([editingStore.storeId, storeDocId, safeSlug, editingStore.storeSlug, editingStore.slug].filter(Boolean))
-        ),
         description: editForm.description.trim(),
         category: editForm.category.trim(),
         type: editForm.category.trim(),
         city: editForm.city.trim(),
         neighborhood: editForm.neighborhood.trim(),
-        ownerName: editForm.ownerName.trim(),
-        ownerEmail: editForm.ownerEmail.trim(),
-        ownerUid: editForm.ownerUid.trim(),
-        owner: {
-          name: editForm.ownerName.trim(),
-          email: editForm.ownerEmail.trim(),
-          uid: editForm.ownerUid.trim(),
-        },
         themeColor: editForm.themeColor || '#f97316',
         whatsapp,
         whatsapp1: whatsapp,
@@ -1077,17 +1091,6 @@ export default function AdminDashboard() {
         minOrderCents: Math.round(minOrder * 100),
         deliveryFee,
         deliveryFeeCents: Math.round(deliveryFee * 100),
-        planId: selectedPlan.id,
-        planName: selectedPlan.label,
-        subscriptionStatus: editForm.subscriptionStatus,
-        subscription: {
-          ...(editingStore.subscription || {}),
-          planId: selectedPlan.id,
-          planName: selectedPlan.label,
-          status: editForm.subscriptionStatus,
-          priceLabel: selectedPlan.price,
-          updatedAt: serverTimestamp(),
-        },
         isOpen: editForm.isOpen,
         isActive: editForm.isActive,
         isBlocked: editForm.isBlocked,
@@ -1174,49 +1177,91 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             icon={FiShoppingBag}
-            label="Total"
+            label="Total de Lojas"
             value={stats.total}
-            description="lojas visíveis"
+            description="lojas não arquivadas"
             tone="orange"
           />
           <StatCard
             icon={FiActivity}
-            label="Ativas"
+            label="Lojas Ativas"
             value={stats.active}
             description="liberadas no sistema"
             tone="blue"
           />
           <StatCard
-            icon={FiZap}
-            label="Abertas"
-            value={stats.open}
-            description="recebendo pedidos"
-            tone="green"
+            icon={FiStar}
+            label="Lojas em Teste"
+            value={stats.trial}
+            description="trialing"
+            tone="amber"
           />
           <StatCard
-            icon={FiStar}
-            label="Em teste"
-            value={stats.trial}
-            description="trial/onboarding"
+            icon={FiLock}
+            label="Lojas Bloqueadas"
+            value={stats.blocked}
+            description="inativas ou bloqueadas"
+            tone="red"
+          />
+          <StatCard
+            icon={FiUser}
+            label="Cadastros Pendentes"
+            value={stats.pendingSignups}
+            description="sem loja criada"
+            tone="gray"
+          />
+          <StatCard
+            icon={FiPhone}
+            label="WhatsApp Pendente"
+            value={stats.phonePending}
+            description="não confirmaram número"
+            tone="amber"
+          />
+          <StatCard
+            icon={FiCreditCard}
+            label="Checkout Pendente"
+            value={stats.checkoutPending}
+            description="aguardando iniciar trial"
+            tone="blue"
+          />
+          <StatCard
+            icon={FiAlertTriangle}
+            label="Alerta de Trials"
+            value={stats.trialsExpiringSoon + stats.trialsExpired}
+            description="vencendo ou vencidos"
             tone="amber"
           />
           <StatCard
             icon={FiAlertTriangle}
-            label="Pendentes"
+            label="Assinaturas Atrasadas"
             value={stats.pastDue}
-            description="assinatura atrasada"
+            description="past_due"
             tone="red"
           />
-          <StatCard
-            icon={FiArchive}
-            label="Arquivadas"
-            value={stats.archived}
-            description="fora da lista"
-            tone="gray"
-          />
+        </div>
+
+        <div className="mb-6 flex border-b border-gray-200">
+          <button
+            className={cn(
+              'px-6 py-3 text-sm font-bold border-b-2 transition-colors',
+              activeTab === 'stores' ? 'border-[#f97316] text-[#f97316]' : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+            onClick={() => setActiveTab('stores')}
+          >
+            Lojas ({stats.total})
+          </button>
+          <button
+            className={cn(
+              'px-6 py-3 text-sm font-bold border-b-2 transition-colors',
+              activeTab === 'pending_users' ? 'border-[#f97316] text-[#f97316]' : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+            onClick={() => setActiveTab('pending_users')}
+          >
+            Cadastros Pendentes ({stats.pendingSignups})
+          </button>
         </div>
 
         {/* LAYOUT EM DUAS COLUNAS ESTRUTURAIS */}
@@ -1268,8 +1313,7 @@ export default function AdminDashboard() {
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 text-xs font-bold text-[#6b7280]">
                 <span>
-                  Mostrando <strong className="text-[#111827]">{filteredStores.length}</strong> de{' '}
-                  <strong className="text-[#111827]">{stores.length}</strong> lojas carregadas.
+                  Mostrando <strong className="text-[#111827]">{activeTab === 'stores' ? filteredStores.length : users.filter(u => !u.storeId).length}</strong> resultados.
                 </span>
 
                 <button
@@ -1287,19 +1331,73 @@ export default function AdminDashboard() {
             </section>
 
             <section className="min-w-0 space-y-4">
-              {filteredStores.length === 0 ? (
-                <EmptyState loading={loading} filter={filter} searchTerm={searchTerm} />
+              {activeTab === 'stores' ? (
+                filteredStores.length === 0 ? (
+                  <EmptyState loading={loading} filter={filter} searchTerm={searchTerm} />
+                ) : (
+                  filteredStores.map((store) => (
+                    <StoreCard
+                      key={getStoreDocId(store)}
+                      store={store}
+                      onCopyLink={handleCopyLink}
+                      onToggleStore={handleToggleStore}
+                      onArchiveStore={handleArchiveStore}
+                      onEditStore={openEditModal}
+                    />
+                  ))
+                )
               ) : (
-                filteredStores.map((store) => (
-                  <StoreCard
-                    key={getStoreDocId(store)}
-                    store={store}
-                    onCopyLink={handleCopyLink}
-                    onToggleStore={handleToggleStore}
-                    onArchiveStore={handleArchiveStore}
-                    onEditStore={openEditModal}
-                  />
-                ))
+                <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#f9fafb] text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                      <tr>
+                        <th className="px-6 py-4">Nome / Email</th>
+                        <th className="px-6 py-4">Contato</th>
+                        <th className="px-6 py-4">Plano / Status</th>
+                        <th className="px-6 py-4">Onboarding</th>
+                        <th className="px-6 py-4">Data</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {users.filter(u => !u.storeId).map(user => (
+                        <tr key={user.uid} className="transition hover:bg-orange-50/30">
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-[#111827]">{user.name || user.displayName}</p>
+                            <p className="text-xs text-[#6b7280]">{user.email}</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-medium text-[#111827]">{user.phone || '-'}</p>
+                            {user.phoneVerified && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full mt-1 inline-block">WhatsApp Confirmado</span>}
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-[#111827]">{user.plan || '-'}</p>
+                            <p className="text-xs text-[#6b7280]">{user.subscriptionStatus || '-'}</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={cn(
+                              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-black",
+                              user.onboardingStatus === 'phone_pending' ? "bg-amber-50 text-amber-700" :
+                              user.onboardingStatus === 'checkout_pending' ? "bg-blue-50 text-blue-700" :
+                              "bg-gray-100 text-gray-700"
+                            )}>
+                              {user.onboardingStatus}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-medium text-[#6b7280]">
+                            {user.createdAt?.toDate ? user.createdAt.toDate().toLocaleDateString() : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                      {users.filter(u => !u.storeId).length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-8 text-center text-sm font-medium text-gray-500">
+                            Nenhum cadastro pendente.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </section>
           </div>
@@ -1495,35 +1593,10 @@ export default function AdminDashboard() {
               <section>
                 <div className="mb-3 flex items-center gap-2 text-sm font-black text-[#111827]">
                   <FiUser className="text-[#f97316]" />
-                  Responsável e contato
+                  Contato e Localização
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Nome do responsável">
-                    <TextInput
-                      value={editForm.ownerName}
-                      onChange={(event) => updateEditForm('ownerName', event.target.value)}
-                      placeholder="Nome do lojista"
-                    />
-                  </Field>
-
-                  <Field label="E-mail do responsável">
-                    <TextInput
-                      type="email"
-                      value={editForm.ownerEmail}
-                      onChange={(event) => updateEditForm('ownerEmail', event.target.value)}
-                      placeholder="email@loja.com"
-                    />
-                  </Field>
-
-                  <Field label="UID do usuário Firebase">
-                    <TextInput
-                      value={editForm.ownerUid}
-                      onChange={(event) => updateEditForm('ownerUid', event.target.value)}
-                      placeholder="uid do Auth"
-                    />
-                  </Field>
-
                   <Field label="WhatsApp">
                     <TextInput
                       value={editForm.whatsapp}
@@ -1591,50 +1664,7 @@ export default function AdminDashboard() {
                 </div>
               </section>
 
-              <section>
-                <div className="mb-3 flex items-center gap-2 text-sm font-black text-[#111827]">
-                  <FiCreditCard className="text-[#f97316]" />
-                  Plano e assinatura
-                </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {PLAN_OPTIONS.map((plan) => (
-                      <button
-                        key={plan.id}
-                        type="button"
-                        onClick={() => updateEditForm('planId', plan.id)}
-                        className={cn(
-                          'rounded-[1.4rem] border p-4 text-left transition',
-                          editForm.planId === plan.id
-                            ? 'border-[#f97316] bg-orange-50 ring-4 ring-orange-100'
-                            : 'border-gray-100 bg-[#f9fafb] hover:border-orange-100 hover:bg-white'
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-black text-[#111827]">{plan.label}</p>
-                          {editForm.planId === plan.id && <FiCheck className="text-[#f97316]" />}
-                        </div>
-                        <p className="mt-1 text-xs font-black text-[#f97316]">{plan.price}</p>
-                        <p className="mt-2 text-xs font-semibold leading-5 text-[#6b7280]">{plan.description}</p>
-                      </button>
-                    ))}
-                  </div>
-
-                  <Field label="Status da assinatura">
-                    <SelectInput
-                      value={editForm.subscriptionStatus}
-                      onChange={(event) => updateEditForm('subscriptionStatus', event.target.value)}
-                    >
-                      {SUBSCRIPTION_STATUS.map((status) => (
-                        <option key={status.id} value={status.id}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </SelectInput>
-                  </Field>
-                </div>
-              </section>
 
               <section>
                 <div className="mb-3 flex items-center gap-2 text-sm font-black text-[#111827]">

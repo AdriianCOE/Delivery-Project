@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
+import { AnimatePresence, motion } from 'motion/react'
 
 import { auth } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -8,7 +9,6 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
   FiArchive,
   FiBarChart2,
-  FiBell,
   FiChevronRight,
   FiClock,
   FiCreditCard,
@@ -25,6 +25,7 @@ import {
   FiShoppingBag,
   FiStar,
   FiTruck,
+  FiUser,
   FiUsers,
   FiX,
   FiZap,
@@ -45,6 +46,12 @@ const MAIN_ITEMS = [
     icon: FiShoppingBag,
   },
   {
+    label: 'Cardápio',
+    description: 'Produtos e categorias',
+    to: '/dashboard/menu',
+    icon: FiGrid,
+  },
+  {
     label: 'Estatísticas',
     description: 'Resumo de vendas',
     to: '/dashboard/stats',
@@ -62,18 +69,18 @@ const MAIN_ITEMS = [
     to: '/dashboard/settings',
     icon: FiSettings,
   },
+  {
+    label: 'Perfil',
+    description: 'Conta e segurança',
+    to: '/dashboard/profile',
+    icon: FiUser,
+  },
 ]
 
 const FUTURE_SECTIONS = [
   {
     title: 'Crescimento',
     items: [
-      {
-        label: 'Cardápio',
-        description: 'Categorias, produtos e adicionais',
-        icon: FiGrid,
-        to: '/dashboard/menu',
-      },
       {
         label: 'QR Codes',
         description: 'Mesas, balcão e cardápio impresso',
@@ -436,7 +443,67 @@ function MobileMoreSheet({ open, onClose, onLogout }) {
   )
 }
 
-function Sidebar({ onLogout }) {
+// ─── User card (sidebar footer) ──────────────────────────────────────────────
+
+function SidebarUserCard({ user, userData, onLogout }) {
+  const name =
+    userData?.displayName ||
+    userData?.name ||
+    user?.displayName ||
+    user?.email?.split('@')?.[0] ||
+    'Lojista'
+
+  const email = user?.email || ''
+  const photoURL = userData?.photoURL || userData?.avatarUrl || user?.photoURL || null
+  const initial = (name[0] || 'L').toUpperCase()
+
+  return (
+    <div className="mt-4 space-y-2">
+      {/* Card do usuário */}
+      <Link
+        to="/dashboard/profile"
+        className="group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40"
+      >
+        {/* Avatar */}
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl">
+          {photoURL ? (
+            <img src={photoURL} alt={name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-orange-50 text-sm font-black text-[#f97316]">
+              {initial}
+            </div>
+          )}
+        </div>
+
+        {/* Texto */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-black text-[#111827]">{name}</p>
+          {email && (
+            <p className="truncate text-[11px] font-semibold text-[#9ca3af]">{email}</p>
+          )}
+        </div>
+
+        {/* Ícone de perfil */}
+        <FiUser
+          size={14}
+          className="shrink-0 text-gray-300 transition group-hover:text-[#f97316]"
+        />
+      </Link>
+
+      {/* Botão sair */}
+      <button
+        type="button"
+        onClick={onLogout}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100"
+      >
+        <FiLogOut size={16} />
+        Sair da conta
+      </button>
+    </div>
+  )
+}
+
+function Sidebar({ onLogout, user, userData }) {
   return (
     <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block">
       <div className="flex h-full min-h-0 flex-col">
@@ -460,28 +527,8 @@ function Sidebar({ onLogout }) {
           ))}
         </nav>
 
-        <div className="mt-5 rounded-[1.5rem] border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-[#f97316]">
-            <FiBell />
-
-            <p className="text-xs font-black uppercase tracking-wide">
-              Operação ao vivo
-            </p>
-          </div>
-
-          <p className="mt-2 text-xs font-bold leading-5 text-[#9a3412]">
-            Deixe o painel aberto para receber alertas de pedidos, Pix e confirmações em tempo real.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onLogout}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600 transition hover:bg-red-100"
-        >
-          <FiLogOut size={17} />
-          Sair da conta
-        </button>
+        {/* Rodapé — card de usuário + logout */}
+        <SidebarUserCard user={user} userData={userData} onLogout={onLogout} />
       </div>
     </aside>
   )
@@ -522,7 +569,7 @@ export default function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
 
-  const { logout } = authContext || {}
+  const { user, userData, logout } = authContext || {}
 
 
   const moreActive = useMemo(() => {
@@ -566,11 +613,22 @@ export default function DashboardLayout() {
       </div>
 
       <div className="relative flex h-[100dvh] min-h-0 overflow-hidden">
-        <Sidebar onLogout={handleLogout} />
+        <Sidebar onLogout={handleLogout} user={user} userData={userData} />
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
   <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
-    <Outlet />
+    <AnimatePresence>
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+        className="min-h-full"
+      >
+        <Outlet />
+      </motion.div>
+    </AnimatePresence>
   </div>
 </section>
 

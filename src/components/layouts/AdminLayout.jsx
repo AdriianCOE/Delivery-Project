@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   FiActivity,
   FiArrowRight,
@@ -778,7 +779,18 @@ export default function AdminLayout() {
 
           {/* Área de Conteúdo Rolável (Scroll isolado) */}
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-28 lg:pb-0">
-            <Outlet />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="min-h-full"
+              >
+                <Outlet />
+              </motion.div>
+            </AnimatePresence>
           </div>
         </section>
       </div>

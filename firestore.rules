@@ -55,7 +55,14 @@ function orderStoreKeys(data) {
 }
 
     function isAdmin() {
-      return hasProfile() && me().get('role', '') in ['admin', 'developer', 'dev'];
+      // Reads users/{uid} directly — safe outside the users match block.
+      // When called from users/{userId} allow get, this branch is only
+      // reached when request.auth.uid != userId (admin reading someone
+      // else's doc), so there is no circular read.
+      let callerData = get(userPath(request.auth.uid)).data;
+      return signedIn()
+        && callerData != null
+        && callerData.get('role', '') in ['admin', 'developer', 'dev'];
     }
 
     function isPublicStoreData(data) {
@@ -112,7 +119,16 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('subscriptionStatus')
         && storeFieldUnchanged('subscription')
         && storeFieldUnchanged('planId')
-        && storeFieldUnchanged('planName');
+        && storeFieldUnchanged('planName')
+        && storeFieldUnchanged('slug')
+        && storeFieldUnchanged('storeSlug')
+        && storeFieldUnchanged('storeId')
+        && storeFieldUnchanged('storeKeys')
+        && storeFieldUnchanged('plan')
+        && storeFieldUnchanged('billingCycle')
+        && storeFieldUnchanged('trialStartedAt')
+        && storeFieldUnchanged('trialEndsAt')
+        && storeFieldUnchanged('onboardingStatus');
     }
 
 function ownsOrderData(data) {
@@ -246,10 +262,57 @@ function publicOrderUpdateAllowed(orderId) {
         && request.resource.data.get('resolved', false) == false;
     }
 
-match /users/{userId} {
+    function validSignupUserCreate(data) {
+  return data.keys().hasOnly([
+    'uid',
+    'role',
+    'email',
+    'displayName',
+    'phone',
+    'phoneVerified',
+    'plan',
+    'billingCycle',
+    'subscriptionStatus',
+    'onboardingStatus',
+    'storeId',
+    'storeIds',
+    'storeKeys',
+    'signup',
+    'createdAt',
+    'updatedAt'
+  ])
+  && data.signup is map
+  && data.signup.keys().hasOnly([
+    'storeName',
+    'segment',
+    'city',
+    'source',
+    'authProvider'
+  ])
+  && data.uid == request.auth.uid
+  && data.role == 'merchant'
+  && data.subscriptionStatus == 'pending_checkout'
+  && data.onboardingStatus == 'phone_pending'
+  && data.phoneVerified == false
+  && data.storeId == null
+  && data.storeIds == []
+  && data.storeKeys == []
+  && data.plan in ['essential', 'professional', 'premium']
+  && data.billingCycle in ['monthly', 'annual']
+  && data.signup.source == 'signup_page'
+  && data.signup.authProvider in ['google', 'password'];
+}
+
+  match /users/{userId} {
   allow get: if (signedIn() && request.auth.uid == userId) || isAdmin();
   allow list: if isAdmin();
-  allow create, update, delete: if isAdmin();
+
+  allow create: if signedIn()
+    && request.auth.uid == userId
+    && !exists(userPath(userId))
+    && validSignupUserCreate(request.resource.data);
+
+  allow update, delete: if isAdmin();
 }
 
     match /stores/{storeId} {
@@ -311,6 +374,18 @@ match /auditLogs/{logId} {
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
         && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
       allow delete: if isAdmin();
+    }
+
+    match /phoneVerifications/{docId} {
+      allow read, write: if false;
+    }
+
+    match /phoneClaims/{docId} {
+      allow read, write: if false;
+    }
+
+    match /storeSlugClaims/{docId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {

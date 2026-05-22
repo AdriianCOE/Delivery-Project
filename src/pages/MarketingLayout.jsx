@@ -110,7 +110,7 @@ export function BtnCriarLoja({ className = '', onClick, size = 'md' }) {
 
   return (
     <Link
-      to="/contato"
+      to="/cadastro"
       onClick={onClick}
       className={[
         // base
@@ -280,7 +280,17 @@ export default function MarketingLayout({ children }) {
       </header>
 
       {/* ── CONTEÚDO ──────────────────────────────────────────── */}
-      <div>{children}</div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
 
       {/* ── FOOTER PREMIUM COMPACTO ───────────────────────────── */}
       <footer className="border-t border-gray-100 bg-white">

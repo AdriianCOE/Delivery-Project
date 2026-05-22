@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
@@ -17,15 +18,18 @@ import {
 
 const plans = [
   {
+    id: 'essential',
     name: 'Essencial',
     subtitle: 'Para começar a vender online',
-    price: 'R$ 59',
-    period: '/mês',
+    price: 59,
+    priceAnnual: 590,
+    equivalentMonthly: 49,
     commission: '+ 0% de comissão por venda',
     icon: FiZap,
     highlight: false,
     cta: 'Começar agora',
     features: [
+      '14 dias grátis inclusos',
       'Cardápio digital ilimitado',
       'Pedidos em tempo real',
       'Link próprio da loja',
@@ -35,16 +39,19 @@ const plans = [
     ],
   },
   {
+    id: 'professional',
     name: 'Profissional',
     subtitle: 'Mais escolhido pelos lojistas',
-    price: 'R$ 89',
-    period: '/mês',
+    price: 89,
+    priceAnnual: 890,
+    equivalentMonthly: 74,
     commission: '+ 0% de comissão por venda',
     icon: FiStar,
     highlight: true,
     badge: 'Mais popular',
     cta: 'Começar agora',
     features: [
+      '14 dias grátis inclusos',
       'Tudo do Essencial',
       'Cupons de desconto',
       'Taxa por bairro',
@@ -55,15 +62,18 @@ const plans = [
     ],
   },
   {
+    id: 'premium',
     name: 'Premium',
     subtitle: 'Para quem quer vender mais',
-    price: 'R$ 159',
-    period: '/mês',
+    price: 159,
+    priceAnnual: 1590,
+    equivalentMonthly: 133,
     commission: '+ 0% de comissão por venda',
     icon: FiAward,
     highlight: false,
     cta: 'Começar agora',
     features: [
+      '14 dias grátis inclusos',
       'Tudo do Profissional',
       'Multi-loja até 3 unidades',
       'API de integração',
@@ -89,8 +99,10 @@ const benefits = [
   },
 ]
 
-function PlanCard({ plan, index }) {
+function PlanCard({ plan, index, cycle }) {
   const Icon = plan.icon
+  const isAnnual = cycle === 'annual'
+  const displayPrice = isAnnual ? plan.equivalentMonthly : plan.price
 
   return (
     <motion.article
@@ -135,21 +147,32 @@ function PlanCard({ plan, index }) {
       <div className="mt-5">
         <div className="flex items-end gap-1">
           <span className="text-4xl font-black tracking-tight text-[#111827]">
-            {plan.price}
+            R$ {displayPrice}
           </span>
 
           <span className="pb-1 text-sm font-bold text-[#6b7280]">
-            {plan.period}
+            /mês
           </span>
         </div>
+        
+        {isAnnual && (
+          <div className="mt-1">
+            <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100/50">
+              2 meses grátis
+            </span>
+            <p className="mt-1.5 text-xs font-semibold text-[#6b7280]">
+              R$ {plan.priceAnnual} cobrados ao ano
+            </p>
+          </div>
+        )}
 
-        <p className="mt-2 text-xs font-black text-[#f97316]">
+        <p className={`text-xs font-black text-[#43A047] ${isAnnual ? 'mt-2' : 'mt-2'}`}>
           {plan.commission}
         </p>
       </div>
 
       <Link
-        to="/contato"
+        to={`/cadastro?plan=${plan.id}&cycle=${cycle}`}
         className={[
           'mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[1.25rem] px-5 text-sm font-black transition-all duration-300 hover:-translate-y-0.5 active:scale-95',
           plan.highlight
@@ -182,6 +205,8 @@ function PlanCard({ plan, index }) {
 }
 
 export default function PlansPage() {
+  const [billingCycle, setBillingCycle] = useState('monthly')
+
   return (
     <>
       <SEO
@@ -251,18 +276,58 @@ export default function PlansPage() {
                 <h2 className="mt-2 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
                   Comece simples. Evolua quando precisar.
                 </h2>
+                
+                <p className="mt-4 max-w-md text-sm font-semibold leading-7 text-[#6b7280]">
+                  Todos os planos mantêm a proposta principal do PratoBy: vender
+                  direto, com loja própria e sem comissão por pedido.
+                </p>
               </div>
 
-              <p className="max-w-md text-sm font-semibold leading-7 text-[#6b7280]">
-                Todos os planos mantêm a proposta principal do PratoBy: vender
-                direto, com loja própria e sem comissão por pedido.
-              </p>
+              <div className="mt-6 flex sm:mt-0">
+                <div className="inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
+                  {[
+                    { value: 'monthly', label: 'Mensal' },
+                    { value: 'annual', label: 'Anual' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setBillingCycle(opt.value)}
+                      aria-pressed={billingCycle === opt.value}
+                      className={[
+                        'relative rounded-[1rem] px-5 py-2.5 text-sm font-black transition-all duration-200',
+                        billingCycle === opt.value
+                          ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/25'
+                          : 'text-[#6b7280] hover:text-[#111827]',
+                      ].join(' ')}
+                    >
+                      {opt.label}
+                      {opt.value === 'annual' && (
+                        <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-black ${
+                          billingCycle === 'annual' 
+                            ? 'bg-white/25 text-white' 
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          -17%
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
 
             <div className="grid gap-5 lg:grid-cols-3">
               {plans.map((plan, index) => (
-                <PlanCard key={plan.name} plan={plan} index={index} />
+                <PlanCard key={plan.name} plan={plan} index={index} cycle={billingCycle} />
               ))}
+            </div>
+
+            <div className="mt-10 text-center">
+              <p className="text-sm font-semibold text-[#6b7280]">
+                <strong className="text-[#374151]">Nesta etapa, você pode criar sua loja e iniciar o teste grátis.</strong><br/>
+                Após o período de 14 dias, você escolhe continuar no plano selecionado. A cobrança real será configurada apenas na etapa de pagamento.
+              </p>
             </div>
 
             <motion.div

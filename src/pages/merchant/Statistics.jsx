@@ -470,7 +470,7 @@ const recurrenceRate =
                 </h1>
               </div>
               <p className="mt-1 text-sm text-[#6b7280]">
-                PratoBy · Inteligência de vendas e acompanhamento de resultados.
+                Inteligência de vendas e acompanhamento de resultados.
               </p>
             </div>
           </div>
@@ -517,9 +517,13 @@ const recurrenceRate =
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-[#6b7280]">
-            <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-orange-100 border-t-[#f97316]" />
-            <p className="font-bold">Calculando estatísticas...</p>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-[120px] animate-pulse rounded-3xl border border-gray-100 bg-white shadow-sm" />
+              ))}
+            </div>
+            <div className="h-[400px] animate-pulse rounded-[2rem] border border-gray-100 bg-white shadow-sm" />
           </div>
         ) : dashboardData.periodOrders.length === 0 ? (
           <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-8 text-center">

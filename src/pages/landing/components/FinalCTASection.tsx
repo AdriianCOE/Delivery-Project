@@ -24,7 +24,7 @@ export function FinalCTASection() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/contato" className="px-8 py-4 bg-white text-orange-500 rounded-lg font-bold hover:bg-gray-50 transition-all hover:shadow-xl inline-flex items-center justify-center gap-2">
+            <Link to="/cadastro" className="px-8 py-4 bg-white text-orange-500 rounded-lg font-bold hover:bg-gray-50 transition-all hover:shadow-xl inline-flex items-center justify-center gap-2">
               Criar minha loja
               <ArrowRight size={20} />
             </Link>

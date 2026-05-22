@@ -38,6 +38,7 @@ import {
   FiX,
   FiZap,
 } from 'react-icons/fi'
+import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -880,27 +881,14 @@ export default function Settings() {
     if (!selectedStore || saving) return
 
     const cleanName = form.name.trim()
-    const nextSlug = slugify(form.slug || form.name)
-
     if (!cleanName) {
       showToast('error', 'Digite o nome da loja.')
-      return
-    }
-
-    if (!nextSlug || nextSlug.length < 3) {
-      showToast('error', 'O link da loja precisa ter pelo menos 3 caracteres.')
       return
     }
 
     setSaving(true)
 
     try {
-      const isSlugAvailable = await checkSlugAvailability(nextSlug)
-
-      if (!isSlugAvailable) {
-        showToast('error', 'Esse link já está em uso por outra loja.')
-        return
-      }
 
       const minOrder = parseCurrency(form.minOrder)
       const openingHours = form.openingHours || getDefaultOpeningHours()
@@ -939,18 +927,13 @@ export default function Settings() {
 
       const payload = {
         name: cleanName,
+        storeName: cleanName,
         description: form.description.trim(),
         segment: form.segment || 'Restaurante',
         category: form.segment || 'Restaurante',
 
-        storeSlug: nextSlug,
-        slug: nextSlug,
-        storeKeys: getStoreKeys(selectedStore, nextSlug),
-
         logoUrl: form.logoUrl?.trim() || null,
-        logo: form.logoUrl?.trim() || null,
         bannerUrl: form.bannerUrl?.trim() || null,
-        coverUrl: form.bannerUrl?.trim() || null,
         themeColor: form.themeColor || DEFAULT_THEME,
 
         whatsapp: normalizePhoneBR(form.whatsapp),
@@ -1013,7 +996,24 @@ export default function Settings() {
         updatedAt: serverTimestamp(),
       }
 
-      await updateDoc(doc(db, 'stores', selectedStore.id), payload)
+      const ALLOWED_KEYS = [
+        'name', 'storeName', 'description', 'segment', 'category',
+        'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+        'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
+        'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+        'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+        'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
+        'number', 'neighborhood', 'city', 'state', 'updatedAt'
+      ]
+
+      const finalPayload = Object.keys(payload).reduce((acc, key) => {
+        if (ALLOWED_KEYS.includes(key)) {
+          acc[key] = payload[key]
+        }
+        return acc
+      }, {})
+
+      await updateDoc(doc(db, 'stores', selectedStore.id), finalPayload)
 
       safeSetLocalStorage(SELECTED_STORE_KEY, selectedStore.id)
       showToast('success', 'Configurações da loja salvas.')
@@ -1027,12 +1027,20 @@ export default function Settings() {
 
   if (loadingStores) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f9fafb]">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="h-14 w-14 animate-spin rounded-full border-4 border-orange-100 border-t-[#f97316]" />
-          <p className="text-sm font-black text-[#111827]">
-            Carregando configurações...
-          </p>
+      <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
+        <header className="sticky top-0 z-30 border-b border-gray-100 bg-[#f9fafb]/90 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-7xl items-center gap-4">
+            <div className="h-10 w-10 animate-pulse rounded-2xl bg-gray-200" />
+            <div className="h-6 w-48 animate-pulse rounded-lg bg-gray-200" />
+          </div>
+        </header>
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
+          <div className="h-[300px] animate-pulse rounded-[1.8rem] border border-gray-100 bg-white shadow-sm lg:order-2" />
+          <div className="space-y-6 lg:order-1">
+            <div className="h-64 animate-pulse rounded-[1.8rem] border border-gray-100 bg-white shadow-sm" />
+            <div className="h-64 animate-pulse rounded-[1.8rem] border border-gray-100 bg-white shadow-sm" />
+            <div className="h-64 animate-pulse rounded-[1.8rem] border border-gray-100 bg-white shadow-sm" />
+          </div>
         </div>
       </main>
     )
@@ -1048,29 +1056,12 @@ export default function Settings() {
     >
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      <header className="sticky top-0 z-30 border-b border-gray-100 bg-[#f9fafb]/90 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-
-          <div className="flex items-center gap-4">
-
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                  <FiSettings size={18} />
-                </span>
-
-                <h1 className="text-2xl font-black tracking-tight text-[#111827]">
-                  Configurações
-                </h1>
-              </div>
-
-              <p className="mt-1 text-sm text-[#6b7280]">
-                Identidade, link, contato, horários e operação da loja.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+      <DashboardPageHeader
+        title="Configurações"
+        description="Identidade, link, contato, horários e operação da loja."
+        icon={FiSettings}
+        actions={
+          <>
             <a
               href={publicUrl}
               target="_blank"
@@ -1080,7 +1071,6 @@ export default function Settings() {
               <FiExternalLink />
               Ver loja
             </a>
-
             <button
               type="button"
               onClick={handleSave}
@@ -1090,9 +1080,9 @@ export default function Settings() {
               {saving ? <FiLoader className="animate-spin" /> : <FiSave />}
               {saving ? 'Salvando...' : 'Salvar alterações'}
             </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
         <aside className="space-y-5 lg:order-2">
@@ -1134,7 +1124,7 @@ export default function Settings() {
                     {form.name || 'Nome da loja'}
                   </p>
                   <p className="truncate text-xs font-bold opacity-80">
-                    /store/{publicSlug || 'nome-da-loja'}
+                    /{publicSlug || 'nome-da-loja'}
                   </p>
                 </div>
               </div>
@@ -1173,7 +1163,22 @@ export default function Settings() {
           </section>
         </aside>
 
-        <div className="space-y-6 lg:order-1">  
+        <div className="space-y-6 lg:order-1">
+
+          <div className="flex flex-col gap-4 rounded-[1.8rem] border border-orange-100 bg-orange-50 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-[#111827]">Quer editar produtos e categorias? Acesse Gerenciar cardápio.</h3>
+              <p className="mt-1 text-sm text-[#6b7280]">
+                A gestão de itens do cardápio mudou para uma área dedicada.
+              </p>
+            </div>
+            <Link
+              to="/dashboard/menu"
+              className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+            >
+              Gerenciar cardápio
+            </Link>
+          </div>
           <Section
             icon={FiGlobe}
             title="Identidade da loja"
@@ -1200,13 +1205,23 @@ export default function Settings() {
                 ))}
               </Select>
 
-              <Input
-                label="Link da loja"
-                icon={FiLink}
-                value={form.slug}
-                onChange={(event) => updateField('slug', slugify(event.target.value))}
-                placeholder="la-bella-pizza"
-              />
+              <div>
+                <label className="mb-2 block text-sm font-black text-[#111827]">Link da loja</label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                    <FiLink size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    readOnly
+                    value={publicSlug || 'nome-da-loja'}
+                    className="w-full rounded-2xl border border-gray-100 bg-gray-50 py-3 pl-11 pr-4 text-sm font-bold text-gray-500 shadow-sm outline-none cursor-not-allowed"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-[#6b7280]">
+                  Para alterar o link público da loja, fale com o suporte.
+                </p>
+              </div>
 
               <Input
                 label="Cor principal"

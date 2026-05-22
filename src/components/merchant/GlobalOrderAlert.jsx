@@ -167,10 +167,14 @@ export function GlobalOrderAlert() {
             seenOrderIdsRef.current.add(order.id)
             notifyNewOrder(order)
           })
+        }, (error) => {
+          console.error('[GlobalOrderAlert] Erro no listener de orders:', error)
         })
 
         orderUnsubscribersRef.current.push(unsubscribeOrders)
       })
+    }, (error) => {
+      console.error('[GlobalOrderAlert] Erro no listener de stores:', error)
     })
 
     return () => {

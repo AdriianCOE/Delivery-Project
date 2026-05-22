@@ -24,6 +24,7 @@ import {
 
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
 // --- UTILIDADES ---
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -342,48 +343,27 @@ export default function Reviews() {
 
   return (
     <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
-      <header className="sticky top-0 z-30 border-b border-gray-100 bg-[#f9fafb]/90 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          
-          {/* LADO ESQUERDO */}
-          <div className="flex items-center gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                  <FiStar size={18} /> 
-                </span>
-                <h1 className="text-2xl font-black tracking-tight text-[#111827]">
-                  Avaliações
-                </h1>
-              </div>
-              <p className="mt-1 text-sm text-[#6b7280]">
-                Gestão de qualidade e feedback dos seus clientes.
-              </p>
-            </div>
-          </div>
-
-          {/* LADO DIREITO */}
-          <div className="flex flex-wrap items-center gap-2">
-            {stores.length > 1 && (
-              <select
-                value={selectedStoreId}
-                onChange={(e) => {
-                  setSelectedStoreId(e.target.value)
-                  localStorage.setItem(SELECTED_STORE_KEY, e.target.value)
-                }}
-                className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
-              >
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name || 'Loja'}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-          
-        </div>
-      </header>
+      <DashboardPageHeader
+        title="Avaliações"
+        description="Gestão de qualidade e feedback dos seus clientes."
+        icon={FiStar}
+        actions={
+          stores.length > 1 ? (
+            <select
+              value={selectedStoreId}
+              onChange={(e) => {
+                setSelectedStoreId(e.target.value)
+                localStorage.setItem(SELECTED_STORE_KEY, e.target.value)
+              }}
+              className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+            >
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>{s.name || 'Loja'}</option>
+              ))}
+            </select>
+          ) : undefined
+        }
+      />
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {loadingStores || loadingReviews ? (

@@ -22,8 +22,7 @@ const menuItems = [
     price: 'R$ 28,00',
     oldPrice: 'R$ 32,00',
     badge: 'Popular',
-    image:
-      'https://png.pngtree.com/png-vector/20231016/ourmid/pngtree-burger-food-png-free-download-png-image_10199386.png',
+    image: 'https://res.cloudinary.com/dsionrn26/image/upload/q_auto/f_auto/v1779426519/burguer_srbdst.png',
   },
   {
     name: 'Batata Rústica',
@@ -40,8 +39,7 @@ const menuItems = [
     price: 'R$ 6,00',
     oldPrice: '',
     badge: 'Opções',
-    image:
-      'https://bomdemais.instantdelivery.com.br/_core/_uploads/447/2024/09/133817092429kgajifed.png',
+    image: 'https://res.cloudinary.com/dsionrn26/image/upload/q_auto/f_auto/v1779426519/refri_ueqyna.png',
   },
 ]
 

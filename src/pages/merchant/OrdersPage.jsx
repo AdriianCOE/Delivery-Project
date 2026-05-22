@@ -47,6 +47,7 @@ import {
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
+import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 
@@ -3109,29 +3110,38 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     }
 
     const cutoffDate = Timestamp.fromDate(new Date(Date.now() - 31 * 86400000))
-const slug = getStoreSlug(selectedStore)
 
-const baseKeys = slug ? [slug] : []
+    // Collect all unique keys for this store so we catch orders saved
+    // with the real docId AND orders saved with the slug.
+    const storeKeySet = new Set([
+      selectedStore.id,
+      selectedStore.storeId,
+      selectedStore.docId,
+      selectedStore.storeSlug,
+      selectedStore.slug,
+    ].filter(Boolean))
 
-if (!baseKeys.length) {
-  setOrders([])
-  setLoadingOrders(false)
-  return
-}
+    if (!storeKeySet.size) {
+      setOrders([])
+      setLoadingOrders(false)
+      return
+    }
 
-function subscribeOrders(ordersQuery) {
-  const unsubscribe = onSnapshot(ordersQuery, handleSnapshot, handleError)
-  unsubscribers.push(unsubscribe)
-}
+    function subscribeOrders(ordersQuery) {
+      const unsubscribe = onSnapshot(ordersQuery, handleSnapshot, handleError)
+      unsubscribers.push(unsubscribe)
+    }
 
-subscribeOrders(
-  query(
-    collection(db, 'orders'),
-    where('storeId', '==', slug),
-    where('createdAt', '>=', cutoffDate),
-    orderBy('createdAt', 'desc')
-  )
-)
+    storeKeySet.forEach((key) => {
+      subscribeOrders(
+        query(
+          collection(db, 'orders'),
+          where('storeId', '==', key),
+          where('createdAt', '>=', cutoffDate),
+          orderBy('createdAt', 'desc')
+        )
+      )
+    })
 
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
@@ -3233,28 +3243,21 @@ subscribeOrders(
 
   return (
     <main className="min-h-screen bg-[#f9fafb] text-[#111827]">
-      <header className="sticky top-0 z-30 border-b border-gray-100 bg-[#f9fafb]/90 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          
-          {/* LADO ESQUERDO: Ícone, Título e Descrição */}
-          <div className="flex items-center gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
-                  <FiShoppingBag size={18} />
-                </span>
-                <h1 className="text-2xl font-black tracking-tight text-[#111827]">
-                  Gerenciamento de pedidos
-                </h1>
-              </div>
-              <p className="mt-1 text-sm text-[#6b7280]">
-                PratoBy · Operação e acompanhamento em tempo real.
-              </p>
-            </div>
-          </div>
-
-          {/* LADO DIREITO: Ações e Seletor */}
-          <div className="flex flex-wrap items-center gap-2">
+      <DashboardPageHeader
+        title="Gerenciamento de pedidos"
+        description="Operação e acompanhamento em tempo real."
+        icon={FiShoppingBag}
+        badge={
+          selectedStore
+            ? {
+                label: selectedStore.isOpen ? 'Loja aberta' : 'Loja fechada',
+                color: selectedStore.isOpen ? 'green' : 'red',
+                dot: true,
+              }
+            : undefined
+        }
+        actions={
+          <>
             {stores.length > 1 && (
               <select
                 value={selectedStoreId}
@@ -3268,7 +3271,6 @@ subscribeOrders(
                 ))}
               </select>
             )}
-
             {selectedStore && (
               <a
                 href={`/${getStoreSlug(selectedStore)}`}
@@ -3280,7 +3282,6 @@ subscribeOrders(
                 Ver loja
               </a>
             )}
-
             <button
               type="button"
               onClick={() => showToast('success', 'Os pedidos já estão sincronizados em tempo real.')}
@@ -3289,9 +3290,9 @@ subscribeOrders(
               <FiRefreshCw />
               Tempo real
             </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {loadingStores ? (

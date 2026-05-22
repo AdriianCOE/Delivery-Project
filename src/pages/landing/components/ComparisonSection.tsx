@@ -285,7 +285,7 @@ export function ComparisonSection() {
           className="mt-10 text-center"
         >
           <Link
-            to="/contato"
+            to="/cadastro"
             className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-base font-black text-white shadow-xl shadow-orange-200 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
           >
             Criar minha loja

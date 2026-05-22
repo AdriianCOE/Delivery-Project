@@ -1385,8 +1385,8 @@ export default function MerchantDrawer({
     const slug = store?.storeSlug || store?.slug || finalStoreId
     const url =
       typeof window !== 'undefined'
-        ? `${window.location.origin}/store/${slug}`
-        : `/store/${slug}`
+        ? `${window.location.origin}/${slug}`
+        : `/${slug}`
 
     try {
       await navigator.clipboard.writeText(url)
@@ -1449,7 +1449,7 @@ export default function MerchantDrawer({
               </p>
 
               <p className="truncate text-xs text-[#6b7280]">
-                /store/{store?.storeSlug || store?.slug || finalStoreId}
+                /{store?.storeSlug || store?.slug || finalStoreId}
               </p>
             </div>
 
