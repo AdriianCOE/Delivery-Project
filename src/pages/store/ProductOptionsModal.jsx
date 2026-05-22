@@ -10,6 +10,7 @@ import {
 
 import { useCart } from '../../contexts/CartContext'
 import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
+import { canAddProductToCart, isProductUnavailable, hasOutOfStock } from '../../utils/productStatus'
 
 const DEFAULT_THEME_COLOR = '#f97316'
 const INCLUDED_PRICING_MODES = new Set([
@@ -345,6 +346,15 @@ export default function ProductOptionsModal({
 
   if (!isOpen || !product) return null
 
+  const productCanAdd = canAddProductToCart(product)
+  const productUnavailable = isProductUnavailable(product)
+  const productOutOfStock = hasOutOfStock(product)
+  const blockedReason = productOutOfStock
+    ? 'Este item está esgotado no momento.'
+    : productUnavailable
+      ? 'Este item está indisponível no momento.'
+      : ''
+
   function isExtraSelected(extra) {
     const key = getOptionKey(extra, extra.name)
     return selectedExtras.some((item) => getOptionKey(item, item.name) === key)
@@ -440,6 +450,8 @@ export default function ProductOptionsModal({
   }
 
   function handleAddToCart() {
+    if (!productCanAdd) return
+
     const validationError = validateOptions()
 
     if (validationError) {
@@ -775,6 +787,13 @@ export default function ProductOptionsModal({
             />
           </section>
 
+          {blockedReason && (
+            <div className="mt-4 flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-sm font-bold text-orange-700">
+              <FiAlertCircle className="mt-0.5 shrink-0" />
+              <span>{blockedReason}</span>
+            </div>
+          )}
+
           {error && (
             <div className="mt-4 flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600">
               <FiAlertCircle className="mt-0.5 shrink-0" />
@@ -821,11 +840,12 @@ export default function ProductOptionsModal({
           <button
             type="button"
             onClick={handleAddToCart}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-black text-white shadow-lg transition hover:brightness-95"
-            style={{ backgroundColor: themeColor }}
+            disabled={!productCanAdd}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-black text-white shadow-lg transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
+            style={{ backgroundColor: productCanAdd ? themeColor : undefined }}
           >
             <FiShoppingBag />
-            Adicionar ao carrinho
+            {blockedReason ? 'Indisponível' : 'Adicionar ao carrinho'}
           </button>
         </footer>
       </div>

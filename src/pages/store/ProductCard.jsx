@@ -14,6 +14,12 @@ import {
 
 import { useCart } from '../../contexts/CartContext'
 import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
+import {
+  shouldShowProductInStorefront,
+  canAddProductToCart,
+  isProductUnavailable,
+  hasOutOfStock,
+} from '../../utils/productStatus'
 
 const FAVORITES_KEY = '@PratoBy:favorites'
 
@@ -191,21 +197,12 @@ function getProductDisplayPrice(product, basePrice) {
   }
 }
 
-function isProductAvailable(product, disabled) {
+// isProductAvailable — determina se o produto DEVE SER MOSTRADO no cardário.
+// usa shouldShowProductInStorefront: não filtra isAvailable.
+// Para controle do CTA, use canAddProductToCart.
+function isProductAvailableToShow(product, disabled) {
   if (disabled) return false
-  if (!product) return false
-  if (product.deletedAt) return false
-  if (product.isAvailable === false) return false
-  if (product.available === false) return false
-  if (product.isVisible === false) return false
-  if (product.visible === false) return false
-  if (product.isActive === false) return false
-  if (product.active === false) return false
-  if (product.paused === true) return false
-  const hasStockControl = product.stock !== undefined && product.stock !== null && product.stock !== ''
-  if (hasStockControl && Number(product.stock) <= 0) return false
-
-  return true
+  return shouldShowProductInStorefront(product)
 }
 
 function getProductPrice(product) {
@@ -297,7 +294,13 @@ function ProductCard({
   })
 
   const themeColor = store?.themeColor || store?.primaryColor || '#f97316'
-  const available = isProductAvailable(product, disabled)
+  // shouldShow: produto deve aparecer no cardário?
+  const shouldShow = isProductAvailableToShow(product, disabled)
+  // canAdd: pode adicionar ao carrinho? (considera isAvailable e stock)
+  const canAdd = shouldShow && canAddProductToCart(product)
+  // flags de UX
+  const unavailable = shouldShow && isProductUnavailable(product)
+  const outOfStock = shouldShow && hasOutOfStock(product)
   const hasOptions = hasProductOptions(product)
 
   const price = getProductPrice(product)
@@ -321,16 +324,20 @@ function ProductCard({
 
   const cardStatusLabel = useMemo(() => {
     if (disabled) return 'Loja fechada'
-    if (!available) return 'Indisponível'
+    if (outOfStock) return 'Esgotado'
+    if (unavailable) return 'Indisponível'
     if (justAdded) return 'Adicionado'
     if (hasOptions) return 'Personalizar'
     return 'Adicionar'
-  }, [available, disabled, hasOptions, justAdded])
+  }, [unavailable, outOfStock, disabled, hasOptions, justAdded])
 
   const handleOpen = useCallback(() => {
-    if (!available && !isOwner) return
+    // Produto indisponível: não abre modal de compra, apenas informa.
+    // Produto oculto/inativo/deletado: não deve estar aqui (filtrado antes).
+    if (!shouldShow && !isOwner) return
+    if ((unavailable || outOfStock) && !isOwner) return  // sem modal de compra se bloqueado
     onClick?.(product)
-  }, [available, isOwner, onClick, product])
+  }, [shouldShow, unavailable, outOfStock, isOwner, onClick, product])
 
   const handleQuickEdit = useCallback(
     (event) => {
@@ -344,7 +351,7 @@ function ProductCard({
     (event) => {
       event.stopPropagation()
 
-      if (!available) return
+      if (!canAdd) return
 
       if (hasOptions && onClick) {
         onClick(product)
@@ -358,7 +365,7 @@ function ProductCard({
         setJustAdded(false)
       }, 1200)
     },
-    [addToCart, available, hasOptions, onClick, product]
+    [addToCart, canAdd, hasOptions, onClick, product]
   )
 
   const handleFavorite = useCallback(
@@ -384,11 +391,13 @@ function ProductCard({
       className={`
         group relative overflow-hidden rounded-[1.65rem] border bg-white/95 p-3 shadow-sm ring-1 ring-black/[0.02] sm:p-4
         transition-all duration-300 flex flex-col
-        h-full min-h-[176px] sm:min-h-[192px] /* 👈 ADICIONE ESSA LINHA AQUI */
+        h-full min-h-[176px] sm:min-h-[192px]
         ${
-          available
+          canAdd
             ? 'cursor-pointer border-gray-100 hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-xl hover:shadow-gray-200/70'
-            : 'cursor-not-allowed border-gray-100 opacity-60 grayscale'
+            : (unavailable || outOfStock)
+              ? 'cursor-default border-gray-100 opacity-75'
+              : 'cursor-not-allowed border-gray-100 opacity-60 grayscale'
         }
       `}
       style={{ '--theme-color': themeColor }}
@@ -402,14 +411,14 @@ function ProductCard({
           {/* BLOCO DO TOPO (Tags, Título e Descrição) */}
           <div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {product?.isPopular && available && (
+              {product?.isPopular && canAdd && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 ring-1 ring-amber-100">
                   <FiStar size={12} className="fill-amber-500" />
                   Popular
                 </span>
               )}
 
-              {product?.isFeatured && available && (
+              {product?.isFeatured && canAdd && (
                 <span
                   className="rounded-full px-2.5 py-1 text-[11px] font-black ring-1"
                   style={{
@@ -422,20 +431,27 @@ function ProductCard({
                 </span>
               )}
 
-              {hasDiscount && available && (
+              {hasDiscount && canAdd && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
                   <FiTag size={12} />-{discountPercent}%
                 </span>
               )}
 
-              {lowStock && available && (
+              {lowStock && canAdd && (
                 <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-600 ring-1 ring-orange-100">
                   Últimas unidades
                 </span>
               )}
 
-              {!available && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
+              {outOfStock && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-black text-gray-600 ring-1 ring-gray-200">
+                  <FiInfo size={12} />
+                  Esgotado
+                </span>
+              )}
+
+              {unavailable && !outOfStock && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-700 ring-1 ring-orange-200">
                   <FiInfo size={12} />
                   Indisponível
                 </span>
@@ -452,6 +468,7 @@ function ProductCard({
 
             {(preparationTime || serves || hasOptions) && (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-gray-500">
+
                 {preparationTime && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 ring-1 ring-gray-100">
                     <FiClock size={12} />
@@ -510,9 +527,9 @@ function ProductCard({
                 <button
                   type="button"
                   onClick={handleAdd}
-                  disabled={!available}
+                  disabled={!canAdd}
                   className="flex h-11 min-w-[116px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black text-white shadow-lg shadow-gray-200 transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none sm:h-12 sm:min-w-[132px] sm:px-5"
-                  style={{ backgroundColor: available ? themeColor : undefined }}
+                  style={{ backgroundColor: canAdd ? themeColor : undefined }}
                   aria-label={`${cardStatusLabel} ${productName}`}
                 >
                   {justAdded ? <FiCheckCircle size={15} /> : hasOptions ? <FiShoppingCart size={15} /> : <FiPlus size={15} />}
@@ -567,7 +584,7 @@ function ProductCard({
             />
           </button>
 
-          {hasDiscount && available && (
+          {hasDiscount && canAdd && (
             <div className="absolute bottom-2 left-2 rounded-xl bg-red-500 px-2 py-1 text-[11px] font-black text-white shadow-lg">
               -{discountPercent}%
             </div>

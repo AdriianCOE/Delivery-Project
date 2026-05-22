@@ -332,14 +332,21 @@ function isPixManualOrder(order) {
 
 function isPaymentPaid(order) {
   const status = getPaymentStatusId(order)
-
-  return (
-    status === 'paid' ||
-    status === 'confirmed' ||
-    Boolean(order?.payment?.paidAt) ||
-    Boolean(order?.paidAt) ||
-    Boolean(order?.payment?.confirmedAt)
+  const hasPaidStatus = ['paid', 'confirmed', 'pago'].includes(status)
+  const hasConfirmationTime = Boolean(
+    order?.payment?.confirmedAt ||
+      order?.payment?.paidAt ||
+      order?.paidAt
   )
+  const hasTrustedConfirmation = Boolean(
+    order?.payment?.confirmedBy ||
+      order?.payment?.confirmedSource ||
+      order?.payment?.webhookEventId ||
+      order?.payment?.providerPaymentId ||
+      order?.payment?.gatewayTransactionId
+  )
+
+  return hasPaidStatus && hasConfirmationTime && hasTrustedConfirmation
 }
 
 function isPixPaymentPending(order) {

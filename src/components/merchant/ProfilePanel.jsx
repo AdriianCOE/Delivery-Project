@@ -156,7 +156,7 @@ function Badge({ verified, labelTrue, labelFalse }) {
 
 function SectionCard({ icon: Icon, title, description, children, className = '' }) {
   return (
-    <div className={`rounded-[1.75rem] border border-gray-100 bg-white shadow-sm ${className}`}>
+    <div className={`rounded-[1.75rem] border border-gray-100 bg-white shadow-sm min-w-0 overflow-hidden ${className}`}>
       <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316]">
           <Icon size={17} />
@@ -474,13 +474,13 @@ function SecurityCard({ user, onSuccess, onError }) {
     <SectionCard icon={FiShield} title="Segurança da conta" description="E-mail e senha">
 
       {/* E-mail atual */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+      <div className="mb-4 min-w-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+          <div className="min-w-0">
             <FieldLabel>E-mail atual</FieldLabel>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <FiMail size={14} className="shrink-0 text-[#9ca3af]" />
-              <span className="min-w-0 truncate text-sm font-bold text-[#111827]">{user?.email || '—'}</span>
+              <span className="min-w-0 truncate break-all text-sm font-bold text-[#111827]">{user?.email || '—'}</span>
               <Badge
                 verified={auth.currentUser?.emailVerified}
                 labelTrue="Verificado"
@@ -488,7 +488,7 @@ function SecurityCard({ user, onSuccess, onError }) {
               />
             </div>
           </div>
-          <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+          <div className="flex flex-col gap-1.5 sm:flex-row w-full sm:w-auto shrink-0">
             {!auth.currentUser?.emailVerified && (
               <button
                 type="button"
@@ -500,7 +500,7 @@ function SecurityCard({ user, onSuccess, onError }) {
                     onError('Não foi possível enviar a verificação.')
                   }
                 }}
-                className="rounded-2xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316] transition hover:bg-orange-100"
+                className="w-full sm:w-auto rounded-2xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316] transition hover:bg-orange-100"
               >
                 Verificar
               </button>
@@ -508,7 +508,7 @@ function SecurityCard({ user, onSuccess, onError }) {
             <button
               type="button"
               onClick={() => setSection(section === 'email' ? null : 'email')}
-              className="rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-gray-300 hover:text-[#111827]"
+              className="w-full sm:w-auto rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-gray-300 hover:text-[#111827]"
             >
               {section === 'email' ? 'Cancelar' : 'Alterar'}
             </button>
@@ -559,11 +559,11 @@ function SecurityCard({ user, onSuccess, onError }) {
       <div className="h-px w-full bg-gray-100" />
 
       {/* Senha */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+      <div className="mt-4 min-w-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+          <div className="min-w-0">
             <FieldLabel>Senha</FieldLabel>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <FiLock size={14} className="shrink-0 text-[#9ca3af]" />
               <span className="text-sm font-bold text-[#111827]">••••••••</span>
             </div>
@@ -571,7 +571,7 @@ function SecurityCard({ user, onSuccess, onError }) {
           <button
             type="button"
             onClick={() => setSection(section === 'password' ? null : 'password')}
-            className="shrink-0 rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-gray-300 hover:text-[#111827]"
+            className="w-full sm:w-auto shrink-0 rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-gray-300 hover:text-[#111827]"
           >
             {section === 'password' ? 'Cancelar' : 'Alterar'}
           </button>
@@ -671,8 +671,8 @@ function PhoneCard({ userData, onSuccess }) {
 
   return (
     <SectionCard icon={FiPhone} title="Telefone / WhatsApp" description="Verificação e contato">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="min-w-0">
           <FieldLabel>Número atual</FieldLabel>
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="truncate text-sm font-bold text-[#111827]">{phone || 'Não cadastrado'}</span>
@@ -686,7 +686,7 @@ function PhoneCard({ userData, onSuccess }) {
         <button
           type="button"
           onClick={() => setEditing(e => !e)}
-          className="shrink-0 rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-gray-300 hover:text-[#111827]"
+          className="w-full sm:w-auto shrink-0 rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-gray-300 hover:text-[#111827]"
         >
           {editing ? 'Cancelar' : 'Alterar'}
         </button>
@@ -810,7 +810,7 @@ export default function ProfilePanel({ onLogout }) {
         />
 
         {/* 2-column grid on desktop */}
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-4 grid-cols-1 xl:grid-cols-2">
           {/* Left column */}
           <div className="space-y-4">
             <DisplayNameCard

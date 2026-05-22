@@ -6,10 +6,26 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
 const crypto = require('crypto')
+const { createPublicOrderHandler } = require('./publicOrder')
 
 admin.initializeApp()
 
 const db = admin.firestore()
+exports.createPublicOrder = onCall(
+  {
+    region: 'southamerica-east1',
+    timeoutSeconds: 60,
+    memory: '256MiB',
+  },
+  createPublicOrderHandler({
+    db,
+    admin,
+    HttpsError,
+    logger,
+    maxOrderCents: 100000000,
+  })
+)
+
 function getChangedFields(beforeData, afterData, fields) {
     return fields.filter((field) => {
       const beforeValue = field
@@ -373,6 +389,14 @@ exports.validateOrderPricing = onDocumentCreated(
 
     const validationRef = db.collection('orders').doc(orderId)
 
+    if (
+      order?.source === 'storefront' &&
+      order?.pricingValidation?.checkedBy === 'createPublicOrder' &&
+      order?.pricingValidation?.status === 'valid'
+    ) {
+      return
+    }
+
     if (!items.length) {
       await validationRef.update({
         pricingValidation: {
@@ -637,6 +661,11 @@ exports.auditOrderChanges = onDocumentUpdated(
       memory: '256MiB',
     },
     async (event) => {
+      logger.info('reserveCouponUsage skipped; coupon usage is reserved in createPublicOrder', {
+        orderId: event.params.orderId,
+      })
+      return
+
       const orderId = event.params.orderId
       const order = event.data?.data() || {}
   
@@ -734,7 +763,7 @@ exports.auditOrderChanges = onDocumentUpdated(
         }
   
         transaction.update(couponRef, {
-          usedCount: admin.firestore.FieldValue.increment(1),
+          usedCount,
           lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         })

@@ -738,7 +738,7 @@ function OrderRow({ order }) {
         {initials}
       </div>
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
           <p className="truncate text-sm font-black text-[#111827]">{customerName}</p>
           <span className="rounded-full bg-gray-100 px-2 py-0.5 font-mono text-[10px] font-black text-gray-600">
             {getOrderDisplayNumber(order)}
@@ -1342,7 +1342,7 @@ priceReviewOrders,
 bestHourLabel,
       pendingCount: orders.filter((o) => normalizeStatus(o.status) === 'pendente').length,
       preparingCount: orders.filter((o) => normalizeStatus(o.status) === 'preparando').length,
-      routeCount: orders.filter((o) => normalizeStatus(o.status) === 'em_rota').length,
+      routeCount: orders.filter((o) => normalizeStatus(o.status) === 'entregando').length,
       canceledCount: periodOrders.filter((o) => normalizeStatus(o.status) === 'cancelado').length,
     }
   }, [orders, period.days])
@@ -1356,121 +1356,208 @@ bestHourLabel,
 
   return (
     <div className="min-w-0 pb-24 lg:pb-0">
-      <DashboardPageHeader
-        eyebrow="Tempo real"
-        title={`Olá, ${merchantName}`}
-        description="Acompanhe pedidos, faturamento e operação da sua loja."
-        icon={FiHome}
-        badge={
-          selectedStore
-            ? {
-                label: isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada',
-                color: isStoreOpen(selectedStore) ? 'green' : 'red',
-                dot: true,
-                pulse: isStoreOpen(selectedStore),
-              }
-            : undefined
-        }
-        actions={
-          selectedStore ? (
-            <>
-              {/* Badge "Painel Ativo" */}
-              <div className="hidden items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 ring-1 ring-emerald-100/50 sm:flex lg:px-4 lg:py-2">
-                <div className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 lg:text-xs">
-                  Painel Ativo
-                </span>
-              </div>
-
-              {/* Visitantes no cardápio */}
-              <div className={`hidden items-center gap-1.5 rounded-xl px-3 py-1.5 ring-1 sm:flex lg:px-4 lg:py-2 ${
-                activeUsers > 0 
-                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-100/50' 
-                  : 'bg-gray-50 text-gray-500 ring-gray-200/50'
-              }`}>
-                {activeUsers > 0 && (
-                  <div className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  </div>
-                )}
-                <FiUsers size={14} className={activeUsers === 0 ? 'opacity-60' : ''} />
-                <span className="text-[10px] font-black uppercase tracking-widest lg:text-xs">
-                  {activeUsers > 0 
-                    ? `${activeUsers} ${activeUsers === 1 ? 'pessoa no cardápio' : 'pessoas no cardápio'}` 
-                    : 'Sem visitantes agora'}
-                </span>
-              </div>
-
-              {/* Trial Badge */}
-              {(isTrialActive || trialDaysRemaining !== null) && (
-                <div className={`hidden flex-col justify-center rounded-xl px-3 py-1 ring-1 sm:flex lg:px-4 lg:py-1.5 ${
-                  trialDaysRemaining > 0 
-                    ? 'bg-indigo-50 ring-indigo-100/50' 
-                    : 'bg-red-50 ring-red-100/50'
-                }`}>
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${
-                    trialDaysRemaining > 0 ? 'text-indigo-700' : 'text-red-700'
-                  }`}>
-                    {trialDaysRemaining > 0 ? 'Teste ativo' : 'Teste vencido'}
-                  </span>
-                  <span className={`text-[10px] font-bold ${
-                    trialDaysRemaining > 0 ? 'text-indigo-600/80' : 'text-red-600/80'
-                  }`}>
-                    {trialDaysRemaining > 0 ? `Restam ${trialDaysRemaining} dias` : '0 dias'}
-                  </span>
-                </div>
-              )}
-
-              {/* Ver loja */}
-              <a
-                href={storePublicUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316]"
-              >
-                <FiExternalLink />
-                <span className="hidden sm:inline">Ver loja</span>
-              </a>
-
-              {/* Toggle abrir/fechar */}
-              <button
-                type="button"
-                onClick={handleToggleStoreOpen}
-                disabled={storeActionLoading}
-                className={`relative flex h-11 min-w-[140px] items-center justify-center gap-2.5 rounded-[1.15rem] px-5 text-sm font-black text-white shadow-lg transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-95 disabled:pointer-events-none disabled:opacity-70 ${
-                  isStoreOpen(selectedStore)
-                    ? 'bg-red-500 shadow-red-500/30 hover:bg-red-600'
-                    : 'bg-emerald-500 shadow-emerald-500/30 hover:bg-emerald-600'
-                }`}
-              >
-                {storeActionLoading ? (
-                  <><FiLoader size={16} className="animate-spin" /><span>Atualizando...</span></>
-                ) : isStoreOpen(selectedStore) ? (
-                  <><FiPower size={16} className="opacity-90" /><span>Fechar loja</span></>
-                ) : (
-                  <><FiPower size={16} className="opacity-90" /><span>Abrir loja</span></>
-                )}
-              </button>
-
-              {/* Copiar link */}
-              <button
-                type="button"
-                onClick={handleCopyStoreLink}
-                className="hidden h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316] lg:inline-flex"
-                title="Copiar link da loja"
-              >
-                <FiCopy />
-              </button>
-            </>
-          ) : undefined
-        }
-      />
+      {loadingStores ? (
+        <div className="bg-[#111827] border-b border-white/5 px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex animate-pulse items-center gap-4">
+            <div className="h-16 w-16 rounded-2xl bg-white/10" />
+            <div className="space-y-2">
+              <div className="h-3 w-20 rounded bg-white/10" />
+              <div className="h-6 w-48 rounded bg-white/10" />
+              <div className="h-3 w-32 rounded bg-white/10" />
+            </div>
+          </div>
+        </div>
+      ) : selectedStore ? (
+        <section className="relative overflow-hidden border-b border-orange-100/70 bg-gradient-to-br from-orange-50 via-white to-white">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#f97316]/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
       
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
+          <div className="relative px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#f97316] shadow-sm ring-1 ring-orange-100">
+                    <span className="h-2 w-2 rounded-full bg-[#f97316]" />
+                    Tempo real
+                  </span>
+      
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
+                      isStoreOpen(selectedStore)
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                        : 'bg-red-50 text-red-700 ring-1 ring-red-100'
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full bg-current ${isStoreOpen(selectedStore) ? 'animate-pulse' : ''}`} />
+                    {isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada'}
+                  </span>
+      
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
+                      hasPeopleOnMenu
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                        : 'bg-gray-50 text-gray-500 ring-1 ring-gray-100'
+                    }`}
+                  >
+                    <FiUsers size={12} />
+                    {hasPeopleOnMenu
+                      ? `${menuPeopleCount} ${menuPeopleLabel}`
+                      : 'Sem visitantes agora'}
+                  </span>
+      
+                  {(isTrialActive || trialDaysRemaining !== null) && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
+                        trialDaysRemaining > 0
+                          ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100'
+                          : 'bg-red-50 text-red-700 ring-1 ring-red-100'
+                      }`}
+                    >
+                      <FiClock size={12} />
+                      {trialDaysRemaining > 0 ? `${trialDaysRemaining} dias de teste` : 'Teste expirado'}
+                    </span>
+                  )}
+                </div>
+      
+                <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <StoreLogo
+                    store={selectedStore}
+                    className="h-16 w-16 shrink-0 shadow-lg shadow-orange-100"
+                    rounded="rounded-[1.35rem]"
+                    fallbackClassName="bg-orange-50 text-[#f97316] ring-orange-100"
+                  />
+      
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-[#6b7280]">
+                      Olá, {merchantName}
+                    </p>
+      
+                    <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                      {selectedStore.name || 'Sua loja'}
+                    </h1>
+      
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-[#6b7280]">
+                      {storeSlug && (
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[#f97316] ring-1 ring-orange-100">
+                          /{storeSlug}
+                        </span>
+                      )}
+      
+                      {todayOpeningHoursLabel && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 ring-1 ring-gray-100">
+                          <FiClock size={12} />
+                          {todayOpeningHoursLabel}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+      
+                <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#6b7280]">
+                  Acompanhe pedidos, faturamento, clientes online e os principais pontos da operação em tempo real.
+                </p>
+              </div>
+      
+              <div className="flex flex-col gap-3 xl:w-[360px] xl:items-end xl:justify-between">
+                <div className="flex flex-wrap gap-2 xl:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleToggleStoreOpen}
+                    disabled={storeActionLoading}
+                    className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-lg transition active:scale-95 disabled:opacity-70 sm:w-auto ${
+                      isStoreOpen(selectedStore)
+                        ? 'bg-red-500 shadow-red-200 hover:bg-red-600'
+                        : 'bg-emerald-500 shadow-emerald-200 hover:bg-emerald-600'
+                    }`}
+                  >
+                    {storeActionLoading ? (
+                      <>
+                        <FiLoader size={16} className="animate-spin" />
+                        Atualizando...
+                      </>
+                    ) : isStoreOpen(selectedStore) ? (
+                      <>
+                        <FiPower size={16} />
+                        Fechar loja
+                      </>
+                    ) : (
+                      <>
+                        <FiPower size={16} />
+                        Abrir loja
+                      </>
+                    )}
+                  </button>
+      
+                  <a
+                    href={storePublicUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:w-auto"
+                  >
+                    <FiExternalLink size={16} />
+                    Ver loja
+                  </a>
+      
+                  <button
+                    type="button"
+                    onClick={handleCopyStoreLink}
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-[#6b7280] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:h-12 sm:w-12 sm:px-0"
+                    title="Copiar link da loja"
+                  >
+                    <FiCopy size={16} />
+                    <span className="sm:hidden">Copiar link</span>
+                  </button>
+                </div>
+      
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 xl:w-full">
+                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Pendentes</p>
+                    <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.pendingCount}</p>
+                  </div>
+      
+                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Preparo</p>
+                    <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.preparingCount}</p>
+                  </div>
+      
+                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Em rota</p>
+                    <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.routeCount}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+      
+            {(dashboardData.urgentOrders.length > 0 || dashboardData.priceReviewOrders.length > 0 || dashboardData.activeOrders.length > 0) && (
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-orange-100 bg-white/80 p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">Pedidos ativos</p>
+                  <p className="mt-1 text-xl font-black text-[#111827]">{dashboardData.activeOrders.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#6b7280]">Em andamento agora</p>
+                </div>
+      
+                <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">Atenção</p>
+                  <p className="mt-1 text-xl font-black text-[#111827]">{dashboardData.urgentOrders.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#6b7280]">
+                    {dashboardData.oldestPendingMinutes > 0
+                      ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
+                      : 'Nenhum pedido atrasado'}
+                  </p>
+                </div>
+      
+                <div className="rounded-2xl border border-red-100 bg-white/80 p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">Revisão</p>
+                  <p className="mt-1 text-xl font-black text-[#111827]">{dashboardData.priceReviewOrders.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#6b7280]">Pedidos com alerta de preço</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+      
+      <div className="px-4 py-5 sm:px-6 lg:px-8">
         {loadingStores ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((item) => (
@@ -1559,140 +1646,6 @@ bestHourLabel,
           </div>
         ) : (
           <>
-            <div className="mb-6 grid gap-4 xl:grid-cols-[1fr_auto]">
-              <div className="rounded-[1.7rem] bg-[#111827] p-6 text-white shadow-xl shadow-gray-300/40">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black text-orange-100">
-                      <FiShield className="text-[#f97316]" />
-                      PratoBy em tempo real
-                    </div>
-                    <div className="mt-4 flex items-center gap-4">
-                      <StoreLogo
-                        store={selectedStore}
-                        className="h-16 w-16"
-                        rounded="rounded-[1.3rem]"
-                        fallbackClassName="bg-white/10 text-white ring-white/10"
-                      />
-
-                      <div className="min-w-0">
-                        <h2 className="truncate text-2xl font-black tracking-tight sm:text-3xl">
-                          {selectedStore.name || 'Sua loja'}
-                        </h2>
-
-                        {storeSlug && (
-                          <p className="mt-1 truncate text-xs font-bold text-gray-400">
-                            /{storeSlug}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-300">
-                      Acompanhe pedidos, faturamento, produtos vendidos, promoções e pontos de atenção da operação.
-                    </p>
-                  </div>
-
-                  <div className="grid min-w-0 gap-3 sm:grid-cols-3 lg:min-w-0 xl:min-w-[420px]">
-                    <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                      <p className="text-xs font-bold text-gray-300">Pendentes</p>
-                      <p className="mt-2 text-2xl font-black">{dashboardData.pendingCount}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                      <p className="text-xs font-bold text-gray-300">Em preparo</p>
-                      <p className="mt-2 text-2xl font-black">{dashboardData.preparingCount}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                      <p className="text-xs font-bold text-gray-300">Em rota</p>
-                      <p className="mt-2 text-2xl font-black">{dashboardData.routeCount}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm xl:w-80">
-                <p className="text-sm font-black text-[#111827]">Status operacional</p>
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-[#6b7280]">Loja</span>
-                    <span className={`rounded-full px-3 py-1 text-xs font-black ${isStoreOpen(selectedStore) ? 'bg-green-50 text-[#3aa824]' : 'bg-red-50 text-red-600'}`}>
-                      {isStoreOpen(selectedStore) ? 'Aberta' : 'Fechada'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-[#6b7280]">Pedidos ativos</span>
-                    <span className="text-sm font-black text-[#111827]">{dashboardData.activeOrders.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-[#6b7280]">Atenção</span>
-                    <div className="flex items-center justify-between gap-4">
-
-                  <span
-                  >
-                  </span>
-                </div>
-<span
-  className={`rounded-full px-3 py-1 text-xs font-black ${
-    dashboardData.urgentOrders.length > 0
-      ? 'bg-red-50 text-red-600 ring-1 ring-red-100'
-      : 'bg-green-50 text-[#3aa824]'
-  }`}
->
-  {dashboardData.urgentOrders.length > 0
-    ? `${dashboardData.urgentOrders.length} urgente(s)`
-    : 'Tudo certo'}
-</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-{(dashboardData.urgentOrders.length > 0 || !isStoreOpen(selectedStore)) && (
-  <div
-    className={`mb-6 rounded-[1.5rem] border p-4 shadow-lg ${
-      dashboardData.urgentOrders.length > 0
-        ? 'border-red-200 bg-red-50 text-red-700 shadow-red-100/70'
-        : 'border-amber-200 bg-amber-50 text-amber-800 shadow-amber-100/50'
-    }`}
-  >
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-3">
-        <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${
-            dashboardData.urgentOrders.length > 0 ? 'bg-red-600' : 'bg-amber-500'
-          }`}
-        >
-          <FiAlertTriangle
-            className={dashboardData.urgentOrders.length > 0 ? 'animate-pulse' : ''}
-            size={22}
-          />
-        </div>
-
-        <div>
-          <p className="text-sm font-black">
-            {dashboardData.urgentOrders.length > 0
-              ? `${dashboardData.urgentOrders.length} pedido(s) pendente(s) há mais de 3 minutos`
-              : 'Loja fechada no momento'}
-          </p>
-
-          <p className="mt-1 text-xs font-bold leading-5">
-            {dashboardData.urgentOrders.length > 0
-              ? `Pedido mais antigo parado há ${dashboardData.oldestPendingMinutes} min. Aceite ou cancele para não deixar o cliente esperando.`
-              : 'Abra a loja para voltar a receber pedidos no cardápio público.'}
-          </p>
-        </div>
-      </div>
-
-      {dashboardData.urgentOrders.length > 0 && (
-        <Link
-          to="/dashboard/orders"
-          className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-red-700"
-        >
-          Ver pedidos
-        </Link>
-      )}
-    </div>
-  </div>
-)}
 
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div className="inline-flex rounded-2xl border border-gray-100 bg-white p-1 shadow-sm">

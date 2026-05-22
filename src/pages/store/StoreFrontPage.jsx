@@ -45,6 +45,7 @@ import {
   getStorePublicSlug,
   getStoreKeys as getGlobalStoreKeys,
 } from '../../utils/storeIdentity'
+import { shouldShowProductInStorefront } from '../../utils/productStatus'
 import CartDrawer from './CartDrawer'
 import CustomerDrawer from './CustomerDrawer'
 import ProductOptionsModal from './ProductOptionsModal'
@@ -662,19 +663,11 @@ function isStoreUnavailable(store) {
   )
 }
 
+// isProductAvailable — usa regra centralizada do helper productStatus.
+// IMPORTANTE: isAvailable === false não é filtrado aqui!
+// Produto indisponível ainda aparece no cardápio (mas com CTA bloqueado no ProductCard).
 function isProductAvailable(product) {
-  if (!product) return false
-  if (product.deletedAt) return false
-  if (product.isDeleted === true) return false
-  if (product.isVisible === false) return false
-  if (product.isActive === false) return false
-  if (product.active === false) return false
-  if (product.isAvailable === false) return false
-
-  const hasStockControl = product.stock !== undefined && product.stock !== null && product.stock !== ''
-  if (hasStockControl && Number(product.stock) <= 0) return false
-
-  return true
+  return shouldShowProductInStorefront(product)
 }
 
 function sortByOrderThenName(a, b) {

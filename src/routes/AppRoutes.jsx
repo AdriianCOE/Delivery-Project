@@ -34,7 +34,7 @@ import OrdersPage from '../pages/merchant/OrdersPage'
 import Statistics from '../pages/merchant/Statistics'
 import Settings from '../pages/merchant/Settings'
 import Reviews from '../pages/merchant/Reviews'
-import MenuManagementPage from '../pages/merchant/MenuManagementPage'
+import MenuManagementPage from '../pages/merchant/menu/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 
 // Layouts / Proteção

@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   collection,
-  doc,
   getDocs,
   query,
-  serverTimestamp,
-  setDoc,
   where,
 } from 'firebase/firestore' 
+import { httpsCallable } from 'firebase/functions'
 
 import {
   FiAlertCircle,
@@ -32,7 +30,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
@@ -881,6 +879,37 @@ function getCouponMaxDiscount(coupon) {
   return normalizeMoney(coupon.maxDiscount, coupon.maxDiscountCents)
 }
 
+function productAcceptsCoupon(item) {
+  if (!item) return false
+  if (item.acceptsCoupons !== undefined) return Boolean(item.acceptsCoupons)
+  if (item.acceptsCoupon !== undefined) return Boolean(item.acceptsCoupon)
+  if (item.couponEligible !== undefined) return Boolean(item.couponEligible)
+  return true
+}
+
+function couponAppliesToItem(coupon, item) {
+  if (!coupon || !item) return false
+  if (!productAcceptsCoupon(item)) return false
+
+  // Suporte a cupom legado com targetId específico
+  if (coupon.targetId && coupon.targetId !== 'all') {
+    return item.id === coupon.targetId
+  }
+
+  const appliesTo = coupon.appliesTo || 'all'
+  const productIds = Array.isArray(coupon.productIds) ? coupon.productIds : []
+
+  if (appliesTo === 'includeProducts') {
+    return productIds.includes(item.id)
+  }
+  if (appliesTo === 'excludeProducts') {
+    return !productIds.includes(item.id)
+  }
+
+  // appliesTo === 'all'
+  return true
+}
+
 function SectionCard({ title, icon: Icon, children, description }) {
   return (
     <section className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
@@ -1532,23 +1561,16 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const eligibleCouponSubtotal = useMemo(() => {
     if (!appliedCoupon) return 0
 
-    if (appliedCoupon.targetId && appliedCoupon.targetId !== 'all') {
-      return cartItems
-        .filter(
-          (item) =>
-            item.id === appliedCoupon.targetId &&
-            item.couponEligible !== false
-        )
-        .reduce((acc, item) => acc + getItemTotal(item), 0)
-    }
-
     return cartItems
-      .filter((item) => item.couponEligible !== false)
+      .filter((item) => couponAppliesToItem(appliedCoupon, item))
       .reduce((acc, item) => acc + getItemTotal(item), 0)
   }, [appliedCoupon, cartItems])
 
   const discount = useMemo(() => {
     if (!appliedCoupon || eligibleCouponSubtotal <= 0) return 0
+
+    const minOrder = getCouponMinOrder(appliedCoupon)
+    if (minOrder > 0 && eligibleCouponSubtotal < minOrder) return 0
 
     let rawDiscount = 0;
 
@@ -1718,31 +1740,23 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         return
       }
 
-      const couponMinOrder = getCouponMinOrder(coupon)
+      const couponEligibleSubtotal = cartItems
+        .filter((item) => couponAppliesToItem(coupon, item))
+        .reduce((acc, item) => acc + getItemTotal(item), 0)
 
-      if (couponMinOrder > 0 && subtotal < couponMinOrder) {
-        setCouponError(`Pedido mínimo para este cupom: ${formatMoney(couponMinOrder)}.`)
+      if (couponEligibleSubtotal <= 0) {
+        setCouponError('Este cupom não se aplica a nenhum item do seu carrinho.')
         return
       }
 
-      if (coupon.targetId && coupon.targetId !== 'all') {
-        const targetItems = cartItems.filter((item) => item.id === coupon.targetId)
+      const couponMinOrder = getCouponMinOrder(coupon)
 
-        if (targetItems.length === 0) {
-          setCouponError('Este cupom não se aplica aos itens do carrinho.')
-          return
-        }
-
-        if (!targetItems.some((item) => item.couponEligible !== false)) {
-          setCouponError('Este produto não aceita cupom.')
-          return
-        }
-      }
-
-      const hasEligibleItems = cartItems.some((item) => item.couponEligible !== false)
-
-      if (!hasEligibleItems) {
-        setCouponError('Os itens deste carrinho não aceitam cupom.')
+      if (couponMinOrder > 0 && couponEligibleSubtotal < couponMinOrder) {
+        setCouponError(
+          `O subtotal elegível de ${formatMoney(
+            couponEligibleSubtotal
+          )} não atinge o pedido mínimo de ${formatMoney(couponMinOrder)}.`
+        );
         return
       }
 
@@ -1891,269 +1905,110 @@ if (orderType === 'delivery') {
 
       saveCustomer(normalizedCustomer)
 
-const address =
-  orderType === 'delivery'
-    ? {
-        cep: formatCep(customer.cep),
-        neighborhood: customer.neighborhood.trim(),
-        street: customer.street.trim(),
-        number: sanitizeAddressNumber(customer.number),
-        complement: customer.complement.trim(),
-        reference: customer.reference.trim(),
-        city: customer.city?.trim?.() || '',
-        state: customer.state?.trim?.() || '',
+      const address =
+        orderType === 'delivery'
+          ? {
+              cep: formatCep(customer.cep),
+              neighborhood: customer.neighborhood.trim(),
+              street: customer.street.trim(),
+              number: sanitizeAddressNumber(customer.number),
+              complement: customer.complement.trim(),
+              reference: customer.reference.trim(),
+              city: customer.city?.trim?.() || '',
+              state: customer.state?.trim?.() || '',
 
-        cepNeighborhood: customer.cepNeighborhood || '',
-        cepStreet: customer.cepStreet || '',
-        cepCity: customer.cepCity || customer.city || '',
-        cepState: customer.cepState || customer.state || '',
-        cepValidated: Boolean(customer.cepValidated),
-      }
-    : null
-
-      const legacyAddress =
-  orderType === 'delivery'
-    ? [
-        `${customer.street}, ${sanitizeAddressNumber(customer.number)}`,
-        customer.complement ? customer.complement : '',
-        customer.neighborhood ? customer.neighborhood : '',
-        customer.cep ? `CEP ${formatCep(customer.cep)}` : '',
-      ]
-        .filter(Boolean)
-        .join(' — ')
-    : 'Retirada na loja'
-
-      const changeForValue =
-        paymentMethod === 'cash' && changeFor !== 'sem_troco'
-          ? parseCurrency(changeFor)
+              cepNeighborhood: customer.cepNeighborhood || '',
+              cepStreet: customer.cepStreet || '',
+              cepCity: customer.cepCity || customer.city || '',
+              cepState: customer.cepState || customer.state || '',
+              cepValidated: Boolean(customer.cepValidated),
+            }
           : null
 
-      const totalCents = Math.round(total * 100)
-      const pixPaymentSnapshot =
-        paymentMethod === 'pix_manual'
-          ? buildPixPaymentSnapshot({
-              store,
-              total,
-              totalCents,
-              storeSlug,
-            })
-          : null
-
-      if (paymentMethod === 'pix_manual' && !pixPaymentSnapshot?.pixCopyPaste) {
-        alert('O Pix da loja não está configurado corretamente. Escolha outra forma de pagamento ou avise a loja.')
-        setIsSubmitting(false)
-        return
-      }
+      const sanitizeSelectedOption = (option) => ({
+        id: option?.id || option?.optionId || option?.name || '',
+        optionId: option?.optionId || option?.id || '',
+        name: option?.name || option?.title || '',
+        groupId: option?.groupId || '',
+        groupTitle: option?.groupTitle || option?.groupName || '',
+        quantity: Number(option?.quantity || option?.qty || 1),
+      })
 
       const items = cartItems.map((item) => {
-        const unitPrice = getItemUnitPrice(item)
-        const quantity = getItemQuantity(item)
-        const extras = getItemExtras(item).map((extra) => normalizeExtraForCart(extra))
-        const selectedOptions = extras.filter(
-          (extra) => extra.type === 'option' || extra.groupTitle || extra.groupId
-        )
-        const selectedOptionGroups = buildSelectedOptionGroupsSnapshot(item)
-        const extrasTotal = getItemExtrasTotal(item)
-        const itemTotal = getItemTotal(item)
+        const selectedOptionGroups = buildSelectedOptionGroupsSnapshot(item).map((group) => ({
+          groupId: group.groupId || group.id || group.title || '',
+          id: group.id || group.groupId || group.title || '',
+          title: group.title || group.groupTitle || group.name || '',
+          name: group.name || group.title || group.groupTitle || '',
+          options: Array.isArray(group.options)
+            ? group.options.map((option) => sanitizeSelectedOption({
+                ...option,
+                groupId: option.groupId || group.groupId || group.id,
+                groupTitle: option.groupTitle || group.title || group.groupTitle,
+              }))
+            : [],
+        }))
 
-        const promo = getPromotionInfo(item)
-        const oldPrice = getItemOldPrice(item)
+        const selectedOptions = getOptionItems(item).map(sanitizeSelectedOption)
+        const addons = getAdditionalItems(item).map(sanitizeSelectedOption)
 
         return {
-          id: item.id,
-          originalProductId: item.originalProductId || item.id,
-          cartItemId: item.cartItemId || null,
-
-          name: item.name,
-          description: getItemDescription(item),
-          quantity,
-
-          price: unitPrice,
-          priceCents: Math.round(unitPrice * 100),
-          basePrice: unitPrice,
-          basePriceCents: Math.round(unitPrice * 100),
-          unitPrice: unitPrice + extrasTotal,
-          unitPriceCents: Math.round((unitPrice + extrasTotal) * 100),
-
-          oldPrice: oldPrice || null,
-          oldPriceCents: oldPrice ? Math.round(oldPrice * 100) : null,
-
-          imageUrl: getItemImage(item) || null,
-
+          productId: item.originalProductId || item.productId || item.id,
+          quantity: getItemQuantity(item),
           observation: item.observation || '',
           itemObservation: item.observation || '',
-
-          extras,
           selectedOptions,
-          selectedOptionsFlat: selectedOptions,
           selectedOptionGroups,
+          selectedOptionsFlat: selectedOptions,
           optionGroupsSnapshot: selectedOptionGroups,
-
-          optionsSummary: getItemOptionsSummary(item),
-
-          couponEligible: item.couponEligible !== false,
-
-          isPromotion: promo.active,
-          promotion: {
-            active: promo.active,
-            oldPrice: promo.oldPrice || null,
-            oldPriceCents: promo.oldPrice ? Math.round(promo.oldPrice * 100) : null,
-            currentPrice: promo.currentPrice,
-            currentPriceCents: Math.round(promo.currentPrice * 100),
-            percent: promo.percent,
-            savings: promo.savings,
-            savingsCents: Math.round(promo.savings * 100),
-          },
-
-          total: itemTotal,
-          totalCents: Math.round(itemTotal * 100),
+          addons,
         }
       })
 
-      const orderRef = doc(collection(db, 'orders'))
-      const trackingToken = orderRef.id
-
-      const orderPayload = {
-        trackingToken,
-        trackingTokenVersion: 1,
-        trackingUrlPath: `/${storeSlug}/pedido/${trackingToken}`,
-
+      const createPublicOrder = httpsCallable(functions, 'createPublicOrder')
+      const result = await createPublicOrder({
         storeId: finalStoreId,
         storeSlug,
         storeDocId,
-        storeKeys,
-        storeName: store?.name || '',
-        store: {
-          id: finalStoreId,
-          docId: storeDocId,
-          slug: storeSlug,
-          name: store?.name || '',
-        },
-
         customerName: normalizedCustomer.name.trim(),
         customerPhone: normalizedCustomer.phone,
-        customer: {
-          name: normalizedCustomer.name.trim(),
-          phone: normalizedCustomer.phone,
-        },
-
-        orderType,
         deliveryType: orderType,
+        orderType,
         neighborhood: customer.neighborhood.trim(),
-        address: legacyAddress,
-        deliveryAddress: address,
-        delivery: {
-          type: orderType,
-          neighborhood: customer.neighborhood.trim(),
-          fee: deliveryFee,
-          feeCents: Math.round(deliveryFee * 100),
-          address,
-        },
-
-        items,
-        itemsSummary: items
-          .map((item) => {
-            const options = item.optionsSummary ? ` (${item.optionsSummary})` : ''
-            return `${item.quantity}x ${item.name}${options}`
-          })
-          .join(', '),
-
-        subtotal,
-        subtotalCents: Math.round(subtotal * 100),
-
-        subtotalWithoutPromotions,
-        subtotalWithoutPromotionsCents: Math.round(subtotalWithoutPromotions * 100),
-        promotionSavings,
-        promotionSavingsCents: Math.round(promotionSavings * 100),
-
-        discount,
-        discountCents: Math.round(discount * 100),
-        deliveryFee,
-        deliveryFeeCents: Math.round(deliveryFee * 100),
-        total,
-        totalCents,
-
-        paymentMethod: selectedPayment?.legacyLabel || paymentMethod,
-        paymentType: paymentMethod,
-        paymentStatus:
-          paymentMethod === 'pix_manual'
-            ? 'pending'
-            : selectedPayment?.paymentStatus || 'pending',
-        changeFor:
-          paymentMethod === 'cash'
-            ? changeFor === 'sem_troco'
-              ? 'Sem troco'
-              : changeFor
-            : null,
-        payment:
-          paymentMethod === 'pix_manual'
-            ? {
-                ...pixPaymentSnapshot,
-                changeFor: null,
-              }
-            : {
-                method: paymentMethod,
-                label: selectedPayment?.label || paymentMethod,
-                status: selectedPayment?.paymentStatus || 'pending',
-                amount: total,
-                amountCents: totalCents,
-                changeFor: changeForValue,
-                confirmedAt: null,
-                confirmedBy: null,
-              },
-
-        ...(paymentMethod === 'pix_manual'
-          ? {
-              pixCopyPaste: pixPaymentSnapshot?.pixCopyPaste || '',
-              pixKey: pixPaymentSnapshot?.pixKey || '',
-              pixTxid: pixPaymentSnapshot?.pixTxid || '',
-            }
-          : {}),
-
-        couponId: appliedCoupon?.id || null,
+        ...(address || {}),
+        address,
+        paymentMethod,
+        changeFor,
         couponCode: appliedCoupon?.code || null,
-        coupon: appliedCoupon
-          ? {
-              id: appliedCoupon.id,
-              code: appliedCoupon.code,
-              type: appliedCoupon.type,
-              value: appliedCoupon.value,
-              discount,
-              discountCents: Math.round(discount * 100),
-            }
-          : null,
+        items,
+      })
 
-        customerObservation: null,
-        orderObservation: null,
+      const createdOrder = result?.data || {}
+      const trackingToken = createdOrder.trackingToken || createdOrder.orderId
 
-        status: 'pendente',
-        statusKey: 'pending',
-        paymentRequiresConfirmation: paymentMethod === 'pix_manual',
-        source: 'storefront',
-        platform: 'PratoBy',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      if (!trackingToken) {
+        throw new Error('Pedido criado sem token de acompanhamento.')
       }
 
-await setDoc(orderRef, orderPayload)
+      const savedTokens = JSON.parse(
+        localStorage.getItem('@PratoBy:trackingTokens') || '[]'
+      )
 
-const savedTokens = JSON.parse(
-  localStorage.getItem('@PratoBy:trackingTokens') || '[]'
-)
+      const nextTokens = Array.from(
+        new Set([
+          trackingToken,
+          ...savedTokens,
+        ])
+      ).slice(0, 30)
 
-const nextTokens = Array.from(
-  new Set([
-    trackingToken,
-    ...savedTokens,
-  ])
-).slice(0, 30)
+      localStorage.setItem('@PratoBy:trackingTokens', JSON.stringify(nextTokens))
 
-localStorage.setItem('@PratoBy:trackingTokens', JSON.stringify(nextTokens))
-
-navigate(`/${storeSlug}/pedido/${trackingToken}`)
+      clearCart()
+      onClose?.()
+      navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`)
     } catch (error) {
       console.error(error)
-      alert('Erro ao enviar pedido. Tente novamente.')
+      alert(error?.message || 'Erro ao enviar pedido. Tente novamente.')
     } finally {
       setIsSubmitting(false)
     }
@@ -2163,23 +2018,14 @@ navigate(`/${storeSlug}/pedido/${trackingToken}`)
     changeFor,
     clearCart,
     customer,
-    deliveryFee,
-    discount,
     finalStoreId,
     isSubmitting,
     navigate,
     onClose,
     orderType,
     paymentMethod,
-    selectedPayment,
-    store,
     storeDocId,
-    storeKeys,
     storeSlug,
-    subtotal,
-    subtotalWithoutPromotions,
-    promotionSavings,
-    total,
     validateCheckout,
   ])
 

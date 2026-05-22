@@ -415,26 +415,31 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-        className="absolute bottom-0 left-0 right-0 max-h-[92vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 flex flex-col"
+        className="absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4">
-          <div>
-            <p className="text-lg font-black text-[#111827]">
-              Menu do painel
-            </p>
-            <p className="text-xs font-bold text-[#6b7280]">
-              Áreas atuais e futuras do PratoBy.
-            </p>
-          </div>
+        <div className="shrink-0 border-b border-orange-100/70 bg-[#fffaf5] px-4 pb-4 pt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#f97316] shadow-sm ring-1 ring-orange-100">
+                Painel do lojista
+              </span>
+              <p className="mt-2 text-xl font-black leading-tight text-[#111827]">
+                Menu do painel
+              </p>
+              <p className="mt-1 max-w-[17rem] text-xs font-semibold leading-5 text-[#6b7280]">
+                Acesse sua conta, recursos e próximas áreas do PratoBy.
+              </p>
+            </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827]"
-            aria-label="Fechar menu"
-          >
-            <FiX />
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-[#111827] shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-50 active:scale-[0.98]"
+              aria-label="Fechar menu"
+            >
+              <FiX />
+            </button>
+          </div>
         </div>
 
         <div className="shrink-0 p-4 pb-0">
@@ -463,7 +468,7 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4 pb-28 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarSection title="Principal">
             {MAIN_ITEMS.map((item) => (
               <MainNavItem
@@ -491,6 +496,24 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
             </SidebarSection>
           ))}
 
+          {/* Logout rápido no mobile */}
+          <div className="space-y-3 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                onClose()
+                onLogout()
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3 text-sm font-black text-red-600 transition hover:border-red-200 hover:bg-red-100 active:scale-[0.98]"
+            >
+              <FiLogOut size={16} />
+              Sair da conta
+            </button>
+
+            <p className="text-center text-[10px] font-bold text-[#c7cbd1]">
+              PratoBy · Painel do lojista
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -644,6 +667,16 @@ function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
 
         {/* Rodapé — card de usuário */}
         <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} />
+        
+        {/* Logout rápido no desktop */}
+        <button
+          type="button"
+          onClick={onLogout}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer"
+        >
+          <FiLogOut size={13} className="shrink-0" />
+          <span>Sair da conta</span>
+        </button>
       </div>
     </aside>
   )

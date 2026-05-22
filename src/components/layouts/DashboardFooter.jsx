@@ -302,7 +302,7 @@ export default function DashboardFooter({
 
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 ring-1 ring-gray-100">
               <FiHelpCircle size={12} />
-              v0.6
+              v0.7
             </span>
           </div>
         </div>
