@@ -36,6 +36,8 @@ import Settings from '../pages/merchant/Settings'
 import Reviews from '../pages/merchant/Reviews'
 import MenuManagementPage from '../pages/merchant/menu/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
+import BillingPage from '../pages/merchant/BillingPage'
+import AdminSubscriptionsPage from '../pages/admin/AdminSubscriptionsPage'
 
 // Layouts / Proteção
 import ProtectedRoute from '../components/auth/ProtectedRoute'
@@ -118,10 +120,7 @@ export default function AppRoutes() {
             element={<ComingSoon title="Pedidos globais" icon={FiShoppingBag} />}
           />
 
-          <Route
-            path="subscriptions"
-            element={<ComingSoon title="Assinaturas" icon={FiCreditCard} />}
-          />
+          <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
 
           <Route
             path="users"
@@ -164,7 +163,8 @@ export default function AppRoutes() {
           <Route path="relatorios" element={<ComingSoon title="Relatórios avançados" icon={FiPieChart} />} />
           <Route path="equipe" element={<ComingSoon title="Equipe e permissões" icon={FiLayers} />} />
           <Route path="automacoes" element={<ComingSoon title="Automações" icon={FiZap} />} />
-          <Route path="assinatura" element={<ComingSoon title="Assinatura da loja" icon={FiArchive} />} />
+          <Route path="billing" element={<BillingPage />} />
+          <Route path="assinatura" element={<Navigate to="/dashboard/billing" replace />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 

@@ -200,6 +200,89 @@ function isPublicStoreActive(store) {
     && store.isOpen !== false
 }
 
+function toDate(value) {
+  if (!value) return null
+  if (typeof value.toDate === 'function') return value.toDate()
+  if (typeof value.toMillis === 'function') return new Date(value.toMillis())
+  if (value.seconds) return new Date(value.seconds * 1000)
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function getBillingGraceEndsAt(store) {
+  return toDate(store?.billingGraceEndsAt || store?.pastDueGraceEndsAt || store?.paymentGraceEndsAt)
+}
+
+function getStoreSubscriptionStatus(store) {
+  const status = String(store?.subscriptionStatus || store?.subscription?.status || '').trim()
+  return status === 'pending_checkout' ? 'checkout_pending' : status
+}
+
+function isFutureDate(value) {
+  const date = toDate(value)
+  return Boolean(date && date.getTime() > Date.now())
+}
+
+function assertStoreBillingAllowsPublicOrder(store, logger) {
+  const storeId = getStoreDocId(store)
+  const subscriptionStatus = getStoreSubscriptionStatus(store)
+
+  if (store?.isBillingBlocked === true) {
+    logger.warn('createPublicOrder blocked by explicit billing block', { storeId, subscriptionStatus })
+    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+  }
+
+  if (subscriptionStatus === 'blocked' || subscriptionStatus === 'canceled') {
+    logger.warn('createPublicOrder blocked by subscription status', { storeId, subscriptionStatus })
+    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+  }
+
+  if (subscriptionStatus === 'trialing') {
+    if (isFutureDate(store?.trialEndsAt || store?.subscription?.trialEndsAt)) return
+
+    logger.warn('createPublicOrder blocked by expired trial', {
+      storeId,
+      subscriptionStatus,
+      hasAsaasSubscription: Boolean(store?.asaasSubscriptionId || store?.subscription?.providerSubscriptionId),
+    })
+    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+  }
+
+  if (subscriptionStatus === 'active') return
+
+  if (subscriptionStatus === 'checkout_pending') {
+    logger.warn('createPublicOrder blocked by checkout pending billing', { storeId, subscriptionStatus })
+    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+  }
+
+  if (subscriptionStatus === 'past_due') {
+    const graceEndsAt = getBillingGraceEndsAt(store)
+    if (graceEndsAt && graceEndsAt.getTime() <= Date.now()) {
+      logger.warn('createPublicOrder blocked by expired past_due grace period', {
+        storeId,
+        subscriptionStatus,
+        graceEndsAt: graceEndsAt.toISOString(),
+      })
+      fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+    }
+
+    logger.warn('createPublicOrder allowed with past_due subscription status', { storeId, subscriptionStatus })
+    return
+  }
+
+  if (!subscriptionStatus) {
+    logger.warn('createPublicOrder allowed for legacy store without subscriptionStatus', { storeId })
+    return
+  }
+
+  logger.warn('createPublicOrder blocked by unknown subscription status', {
+    storeId,
+    subscriptionStatus,
+  })
+
+  fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+}
+
 async function findStoreForPublicOrder(db, input) {
   const candidates = uniqueArray([input.storeId, input.storeSlug, input.storeDocId])
 
@@ -229,6 +312,70 @@ async function findStoreForPublicOrder(db, input) {
   }
 
   return null
+}
+
+async function incrementPublicOrderAttemptLimit({ db, admin, storeDocId, phoneHash, ipHash }) {
+  const nowMs = Date.now()
+  const windowMs = 10 * 60 * 1000
+  const phoneLimit = 10
+  const ipLimit = 20
+
+  await db.runTransaction(async (transaction) => {
+    const phoneAttemptRef = db.collection('rateLimits').doc(`createPublicOrder_attempt_${storeDocId}_${phoneHash}`)
+    const phoneAttemptSnap = await transaction.get(phoneAttemptRef)
+    const ipAttemptRef = ipHash
+      ? db.collection('rateLimits').doc(`createPublicOrder_attempt_ip_${storeDocId}_${ipHash}`)
+      : null
+    const ipAttemptSnap = ipAttemptRef ? await transaction.get(ipAttemptRef) : null
+
+    const phoneData = phoneAttemptSnap.exists ? phoneAttemptSnap.data() : null
+    let phoneCount = 1
+    let phoneWindowStart = admin.firestore.Timestamp.fromMillis(nowMs)
+
+    if (phoneData) {
+      const windowStartMs = phoneData.windowStart?.toMillis?.() || 0
+      if (nowMs - windowStartMs < windowMs) {
+        if ((phoneData.count || 0) >= phoneLimit) {
+          fail('resource-exhausted', 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.')
+        }
+        phoneCount = (phoneData.count || 0) + 1
+        phoneWindowStart = phoneData.windowStart
+      }
+    }
+
+    transaction.set(phoneAttemptRef, {
+      count: phoneCount,
+      limit: phoneLimit,
+      windowSeconds: Math.floor(windowMs / 1000),
+      windowStart: phoneWindowStart,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+
+    if (!ipAttemptRef) return
+
+    const ipData = ipAttemptSnap.exists ? ipAttemptSnap.data() : null
+    let ipCount = 1
+    let ipWindowStart = admin.firestore.Timestamp.fromMillis(nowMs)
+
+    if (ipData) {
+      const ipWindowStartMs = ipData.windowStart?.toMillis?.() || 0
+      if (nowMs - ipWindowStartMs < windowMs) {
+        if ((ipData.count || 0) >= ipLimit) {
+          fail('resource-exhausted', 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.')
+        }
+        ipCount = (ipData.count || 0) + 1
+        ipWindowStart = ipData.windowStart
+      }
+    }
+
+    transaction.set(ipAttemptRef, {
+      count: ipCount,
+      limit: ipLimit,
+      windowSeconds: Math.floor(windowMs / 1000),
+      windowStart: ipWindowStart,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+  })
 }
 
 function productBelongsToStore(product, storeKeys) {
@@ -1012,6 +1159,7 @@ function createPublicOrderHandler({ db, admin, HttpsError, logger, maxOrderCents
       const store = await findStoreForPublicOrder(db, input)
 
       if (!isPublicStoreActive(store)) fail('failed-precondition', 'Loja indisponivel para pedidos.')
+      assertStoreBillingAllowsPublicOrder(store, logger)
 
       const storeDocId = getStoreDocId(store)
       const storeSlug = getStoreSlug(store) || storeDocId
@@ -1024,6 +1172,42 @@ function createPublicOrderHandler({ db, admin, HttpsError, logger, maxOrderCents
 
       if (customerName.length < 2) fail('invalid-argument', 'Nome do cliente obrigatorio.')
       if (!customerPhone) fail('invalid-argument', 'WhatsApp do cliente invalido.')
+
+      const phoneE164 = customerPhone.phoneE164
+      const phoneHash = crypto.createHash('sha256').update(phoneE164).digest('hex')
+      const ip = request.ip || request.rawRequest?.ip || ''
+      const ipHash = ip ? crypto.createHash('sha256').update(ip).digest('hex') : ''
+
+      await incrementPublicOrderAttemptLimit({ db, admin, storeDocId, phoneHash, ipHash })
+
+      // A) Cheap initial rate limit check (outside transaction, before product reads)
+      const initialLimitRef = db.collection('rateLimits').doc(`createPublicOrder_${storeDocId}_${phoneHash}`)
+      const initialLimitSnap = await initialLimitRef.get()
+      if (initialLimitSnap.exists) {
+        const rateLimitData = initialLimitSnap.data()
+        const nowMs = Date.now()
+        const windowStartMs = rateLimitData?.windowStart?.toMillis?.() || 0
+        if (nowMs - windowStartMs < 10 * 60 * 1000) {
+          if (rateLimitData?.count >= 5) {
+            fail('resource-exhausted', 'Limite de pedidos excedido para este telefone. Por favor, aguarde alguns minutos.')
+          }
+        }
+      }
+
+      if (ipHash) {
+        const initialIpRef = db.collection('rateLimits').doc(`createPublicOrder_ip_${storeDocId}_${ipHash}`)
+        const initialIpSnap = await initialIpRef.get()
+        if (initialIpSnap.exists) {
+          const ipLimitData = initialIpSnap.data()
+          const nowMs = Date.now()
+          const ipWindowStartMs = ipLimitData?.windowStart?.toMillis?.() || 0
+          if (nowMs - ipWindowStartMs < 10 * 60 * 1000) {
+            if (ipLimitData?.count >= 10) {
+              fail('resource-exhausted', 'Limite de pedidos excedido para esta rede. Por favor, aguarde alguns minutos.')
+            }
+          }
+        }
+      }
 
       const { items, subtotalCents } = await buildServerOrderItems(db, input.items, storeKeys)
 
@@ -1042,6 +1226,50 @@ function createPublicOrderHandler({ db, admin, HttpsError, logger, maxOrderCents
       const couponCode = sanitizeText(input.couponCode || input.coupon?.code, 80).toUpperCase()
 
       const result = await db.runTransaction(async (transaction) => {
+        // 1. Check phone rate limit
+        const rateLimitRef = db.collection('rateLimits').doc(`createPublicOrder_${storeDocId}_${phoneHash}`)
+        const rateLimitSnap = await transaction.get(rateLimitRef)
+        const nowMs = Date.now()
+
+        let rateLimitData = rateLimitSnap.exists ? rateLimitSnap.data() : null
+        let newCount = 1
+        let newWindowStart = admin.firestore.Timestamp.fromMillis(nowMs)
+
+        if (rateLimitData) {
+          const windowStartMs = rateLimitData.windowStart?.toMillis?.() || 0
+          if (nowMs - windowStartMs < 10 * 60 * 1000) { // 10 minutes window
+            if (rateLimitData.count >= 5) {
+              fail('resource-exhausted', 'Limite de pedidos excedido para este telefone. Por favor, aguarde alguns minutos.')
+            }
+            newCount = rateLimitData.count + 1
+            newWindowStart = rateLimitData.windowStart
+          }
+        }
+
+        // 2. Check IP rate limit (if available)
+        let ipLimitRef = null
+        let newIpCount = 1
+        let newIpWindowStart = admin.firestore.Timestamp.fromMillis(nowMs)
+        let hasIpLimit = false
+
+        if (ipHash) {
+          ipLimitRef = db.collection('rateLimits').doc(`createPublicOrder_ip_${storeDocId}_${ipHash}`)
+          const ipLimitSnap = await transaction.get(ipLimitRef)
+          let ipLimitData = ipLimitSnap.exists ? ipLimitSnap.data() : null
+
+          if (ipLimitData) {
+            const ipWindowStartMs = ipLimitData.windowStart?.toMillis?.() || 0
+            if (nowMs - ipWindowStartMs < 10 * 60 * 1000) {
+              if (ipLimitData.count >= 10) { // Slightly higher limit for IP (10 requests/10min)
+                fail('resource-exhausted', 'Limite de pedidos excedido para esta rede. Por favor, aguarde alguns minutos.')
+              }
+              newIpCount = ipLimitData.count + 1
+              newIpWindowStart = ipLimitData.windowStart
+            }
+          }
+          hasIpLimit = true
+        }
+
         let couponResult = null
 
         if (couponCode) {
@@ -1193,6 +1421,20 @@ function createPublicOrderHandler({ db, admin, HttpsError, logger, maxOrderCents
           requiresManualCouponReview: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }
+
+        transaction.set(rateLimitRef, {
+          count: newCount,
+          windowStart: newWindowStart,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true })
+
+        if (hasIpLimit && ipLimitRef) {
+          transaction.set(ipLimitRef, {
+            count: newIpCount,
+            windowStart: newIpWindowStart,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true })
         }
 
         transaction.set(orderRef, orderPayload)

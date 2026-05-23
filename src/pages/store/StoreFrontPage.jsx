@@ -1489,7 +1489,7 @@ function HeaderIconButton({ icon: Icon, label, onClick, active = false }) {
 export default function StoreFrontPage() {
   const { slug } = useParams()
   const { user, userData, loading: authLoading, hasRole } = useAuth()
-  const { cartItems, cartTotal } = useCart()
+  const { cartItems, cartTotal, setStoreKey } = useCart()
 
   const [isFavorite, setIsFavorite] = useState(false)
   const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -1932,6 +1932,12 @@ const handleToggleFavorite = useCallback(() => {
       if (unsubscribe) unsubscribe()
     }
   }, [slug])
+
+  useEffect(() => {
+    if (setStoreKey) {
+      setStoreKey({ id: store?.id, slug })
+    }
+  }, [store?.id, slug, setStoreKey])
 
   useEffect(() => {
   if (!store || (isStoreUnavailable(store) && !canPreviewUnavailableStore)) {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 const CartContext = createContext(null)
 
@@ -76,23 +76,114 @@ function getItemTotal(item) {
 }
 
 export function CartProvider({ children }) {
-  const updateCartItem = (itemKey, patch) => {
-  setCartItems((currentItems) =>
-    currentItems.map((item) => {
-      if (getCartItemKey(item) !== itemKey) return item
+  const [storeKeyInfo, setStoreKeyInfo] = useState({ id: '', slug: '' })
+  const [cartItems, setCartItems] = useState([])
 
-      return {
-        ...item,
-        ...patch,
-      }
-    })
-  )
-}
-  const [cartItems, setCartItems] = useState(loadCart)
+  const setStoreKey = useCallback((keyOrObj) => {
+    if (typeof keyOrObj === 'object' && keyOrObj !== null) {
+      setStoreKeyInfo((prev) => {
+        if (prev.id === keyOrObj.id && prev.slug === keyOrObj.slug) return prev
+        return {
+          id: keyOrObj.id || prev.id,
+          slug: keyOrObj.slug || prev.slug,
+        }
+      })
+    } else if (typeof keyOrObj === 'string' && keyOrObj) {
+      const isId = keyOrObj.length === 20 && /^[a-zA-Z0-9]+$/.test(keyOrObj)
+      setStoreKeyInfo((prev) => {
+        if (isId && prev.id === keyOrObj) return prev
+        if (!isId && prev.slug === keyOrObj) return prev
+        return {
+          id: isId ? keyOrObj : prev.id,
+          slug: !isId ? keyOrObj : prev.slug,
+        }
+      })
+    }
+  }, [])
 
+  // Load cart when storeKeyInfo changes
   useEffect(() => {
-    saveCart(cartItems)
-  }, [cartItems])
+    const { id, slug } = storeKeyInfo
+    const active = id || slug
+    if (!active) {
+      setCartItems([])
+      return
+    }
+
+    const idKey = id ? `@PratoBy:cart:${id}` : null
+    const slugKey = slug ? `@PratoBy:cart:${slug}` : null
+    const legacyKey = '@PratoBy:cart'
+
+    let loadedItems = null
+
+    // 1. Try loading from preferred ID key
+    if (idKey) {
+      const stored = localStorage.getItem(idKey)
+      if (stored !== null) {
+        loadedItems = safeJsonParse(stored, [])
+      }
+    }
+
+    // 2. Try loading from fallback slug key
+    if (loadedItems === null && slugKey) {
+      const stored = localStorage.getItem(slugKey)
+      if (stored !== null) {
+        loadedItems = safeJsonParse(stored, [])
+        // If we have an ID now, migrate slug cart to ID cart
+        if (idKey) {
+          localStorage.setItem(idKey, JSON.stringify(loadedItems))
+          localStorage.removeItem(slugKey)
+        }
+      }
+    }
+
+    // 3. Try loading from legacy key
+    if (loadedItems === null) {
+      const stored = localStorage.getItem(legacyKey) || localStorage.getItem('@DeliveryApp:cart')
+      if (stored !== null) {
+        const legacyItems = safeJsonParse(stored, [])
+        let isCompatible = true
+
+        if (Array.isArray(legacyItems) && legacyItems.length > 0) {
+          for (const item of legacyItems) {
+            const itemStoreId = item?.storeId || item?.store?.id || item?.storeDocId
+            const itemStoreSlug = item?.storeSlug || item?.store?.slug
+
+            if (itemStoreId && id && itemStoreId !== id) {
+              isCompatible = false
+              break
+            }
+            if (itemStoreSlug && slug && itemStoreSlug !== slug) {
+              isCompatible = false
+              break
+            }
+          }
+        }
+
+        if (isCompatible) {
+          loadedItems = legacyItems
+          const targetKey = idKey || slugKey
+          if (targetKey) {
+            localStorage.setItem(targetKey, JSON.stringify(loadedItems))
+          }
+        }
+
+        localStorage.removeItem(legacyKey)
+        localStorage.removeItem('@DeliveryApp:cart')
+      }
+    }
+
+    setCartItems(loadedItems || [])
+  }, [storeKeyInfo])
+
+  const persistCart = (newItems, currentKeyInfo = storeKeyInfo) => {
+    const { id, slug } = currentKeyInfo
+    const active = id || slug
+    if (!active) return
+
+    const targetKey = id ? `@PratoBy:cart:${id}` : `@PratoBy:cart:${slug}`
+    localStorage.setItem(targetKey, JSON.stringify(newItems))
+  }
 
   const addToCart = (product) => {
     if (!product?.id && !product?.cartItemId) return
@@ -105,8 +196,9 @@ export function CartProvider({ children }) {
         (item) => getCartItemKey(item) === itemKey
       )
 
+      let nextItems
       if (existingItem) {
-        return currentItems.map((item) => {
+        nextItems = currentItems.map((item) => {
           if (getCartItemKey(item) !== itemKey) return item
 
           return {
@@ -114,16 +206,34 @@ export function CartProvider({ children }) {
             quantity: getQuantity(item) + productQuantity,
           }
         })
+      } else {
+        nextItems = [
+          ...currentItems,
+          {
+            ...product,
+            cartItemId: itemKey,
+            quantity: productQuantity,
+          },
+        ]
       }
 
-      return [
-        ...currentItems,
-        {
-          ...product,
-          cartItemId: itemKey,
-          quantity: productQuantity,
-        },
-      ]
+      persistCart(nextItems)
+      return nextItems
+    })
+  }
+
+  const updateCartItem = (itemKey, patch) => {
+    setCartItems((currentItems) => {
+      const nextItems = currentItems.map((item) => {
+        if (getCartItemKey(item) !== itemKey) return item
+
+        return {
+          ...item,
+          ...patch,
+        }
+      })
+      persistCart(nextItems)
+      return nextItems
     })
   }
 
@@ -131,29 +241,37 @@ export function CartProvider({ children }) {
     const nextQuantity = Number(quantity)
 
     setCartItems((currentItems) => {
+      let nextItems
       if (nextQuantity <= 0) {
-        return currentItems.filter((item) => getCartItemKey(item) !== itemKey)
+        nextItems = currentItems.filter((item) => getCartItemKey(item) !== itemKey)
+      } else {
+        nextItems = currentItems.map((item) => {
+          if (getCartItemKey(item) !== itemKey) return item
+
+          return {
+            ...item,
+            quantity: nextQuantity,
+          }
+        })
       }
-
-      return currentItems.map((item) => {
-        if (getCartItemKey(item) !== itemKey) return item
-
-        return {
-          ...item,
-          quantity: nextQuantity,
-        }
-      })
+      persistCart(nextItems)
+      return nextItems
     })
   }
 
   const removeFromCart = (itemKey) => {
-    setCartItems((currentItems) =>
-      currentItems.filter((item) => getCartItemKey(item) !== itemKey)
-    )
+    setCartItems((currentItems) => {
+      const nextItems = currentItems.filter((item) => getCartItemKey(item) !== itemKey)
+      persistCart(nextItems)
+      return nextItems
+    })
   }
 
   const clearCart = () => {
     setCartItems([])
+    const { id, slug } = storeKeyInfo
+    if (id) localStorage.removeItem(`@PratoBy:cart:${id}`)
+    if (slug) localStorage.removeItem(`@PratoBy:cart:${slug}`)
     localStorage.removeItem(CART_KEY)
     localStorage.removeItem(LEGACY_CART_KEY)
   }
@@ -177,6 +295,7 @@ export function CartProvider({ children }) {
     cartCount,
     getCartItemKey,
     getItemTotal,
+    setStoreKey,
   }
 
   return (

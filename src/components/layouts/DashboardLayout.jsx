@@ -71,6 +71,12 @@ const MAIN_ITEMS = [
     icon: FiSettings,
   },
   {
+    label: 'Assinatura',
+    description: 'Plano, teste e cobrança',
+    icon: FiCreditCard,
+    to: '/dashboard/billing',
+  },
+  {
     label: 'Perfil',
     description: 'Conta e segurança',
     to: '/dashboard/profile',
@@ -141,12 +147,6 @@ const FUTURE_SECTIONS = [
         description: 'Sino, fechamento e impressão',
         icon: FiZap,
         to: '/dashboard/automacoes',
-      },
-      {
-        label: 'Assinatura',
-        description: 'Mensalidade e status da loja',
-        icon: FiArchive,
-        to: '/dashboard/assinatura',
       },
     ],
   },

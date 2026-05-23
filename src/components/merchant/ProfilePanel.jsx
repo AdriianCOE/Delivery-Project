@@ -137,18 +137,23 @@ export function Toast({ toast, onClose }) {
   )
 }
 
-function Badge({ verified, labelTrue, labelFalse }) {
+function Badge({ verified, labelTrue, labelFalse, unregistered }) {
+  if (unregistered) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-gray-500 ring-1 ring-gray-200">
+        Não cadastrado
+      </span>
+    )
+  }
   if (verified) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-black text-green-700 ring-1 ring-green-100">
-        <FiCheckCircle size={11} />
+      <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100">
         {labelTrue}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-700 ring-1 ring-orange-100">
-      <FiXCircle size={11} />
+    <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100">
       {labelFalse}
     </span>
   )
@@ -477,15 +482,19 @@ function SecurityCard({ user, onSuccess, onError }) {
       <div className="mb-4 min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
           <div className="min-w-0">
-            <FieldLabel>E-mail atual</FieldLabel>
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <FiMail size={14} className="shrink-0 text-[#9ca3af]" />
-              <span className="min-w-0 truncate break-all text-sm font-bold text-[#111827]">{user?.email || '—'}</span>
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <span className="block text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+                E-mail atual
+              </span>
               <Badge
                 verified={auth.currentUser?.emailVerified}
                 labelTrue="Verificado"
                 labelFalse="Pendente"
               />
+            </div>
+            <div className="flex items-center gap-2 min-w-0">
+              <FiMail size={14} className="shrink-0 text-[#9ca3af]" />
+              <span className="min-w-0 truncate break-all text-sm font-bold text-[#111827]">{user?.email || '—'}</span>
             </div>
           </div>
           <div className="flex flex-col gap-1.5 sm:flex-row w-full sm:w-auto shrink-0">
@@ -673,14 +682,20 @@ function PhoneCard({ userData, onSuccess }) {
     <SectionCard icon={FiPhone} title="Telefone / WhatsApp" description="Verificação e contato">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
         <div className="min-w-0">
-          <FieldLabel>Número atual</FieldLabel>
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className="truncate text-sm font-bold text-[#111827]">{phone || 'Não cadastrado'}</span>
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <span className="block text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+              Número atual
+            </span>
             <Badge
               verified={verified}
-              labelTrue="WhatsApp confirmado"
+              labelTrue="Verificado"
               labelFalse="Pendente"
+              unregistered={!phone}
             />
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <FiPhone size={14} className="shrink-0 text-[#9ca3af]" />
+            <span className="truncate text-sm font-bold text-[#111827]">{phone || 'Não cadastrado'}</span>
           </div>
         </div>
         <button

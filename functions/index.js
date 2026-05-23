@@ -7,10 +7,16 @@ const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
 const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
+const { createAsaasFunctions } = require('./asaas')
 
 admin.initializeApp()
 
 const db = admin.firestore()
+const asaasFunctions = createAsaasFunctions({ db, admin, logger })
+
+exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
+exports.asaasWebhook = asaasFunctions.asaasWebhook
+
 exports.createPublicOrder = onCall(
   {
     region: 'southamerica-east1',
@@ -371,6 +377,8 @@ async function getProduct(productId, order) {
   return null
 }
 
+// Legacy guard for orders not created by createPublicOrder. Secure storefront
+// orders already carry pricingValidation.status='valid' from the backend.
 exports.validateOrderPricing = onDocumentCreated(
   {
     document: 'orders/{orderId}',
@@ -653,6 +661,7 @@ exports.auditOrderChanges = onDocumentUpdated(
     }
   )
 
+  // Legacy no-op. Coupon usage is now reserved transactionally by createPublicOrder.
   exports.reserveCouponUsage = onDocumentCreated(
     {
       document: 'orders/{orderId}',
@@ -665,121 +674,6 @@ exports.auditOrderChanges = onDocumentUpdated(
         orderId: event.params.orderId,
       })
       return
-
-      const orderId = event.params.orderId
-      const order = event.data?.data() || {}
-  
-      const couponId = String(order.couponId || order.coupon?.id || '').trim()
-      const couponCode = String(order.couponCode || order.coupon?.code || '').trim()
-  
-      if (!couponId && !couponCode) return
-  
-      const orderRef = db.collection('orders').doc(orderId)
-  
-      await db.runTransaction(async (transaction) => {
-        let couponRef = null
-        let couponSnap = null
-  
-        if (couponId) {
-          couponRef = db.collection('coupons').doc(couponId)
-          couponSnap = await transaction.get(couponRef)
-        }
-  
-        if ((!couponSnap || !couponSnap.exists) && couponCode) {
-          const storeId = String(order.storeId || order.storeSlug || '').trim()
-  
-          if (!storeId) {
-            transaction.update(orderRef, {
-              couponValidation: {
-                status: 'invalid',
-                reason: 'Pedido sem storeId para validar cupom.',
-                checkedAt: admin.firestore.FieldValue.serverTimestamp(),
-              },
-              requiresManualCouponReview: true,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            })
-            return
-          }
-  
-          const querySnap = await transaction.get(
-            db
-              .collection('coupons')
-              .where('storeId', '==', storeId)
-              .where('code', '==', couponCode.toUpperCase())
-              .limit(1)
-          )
-  
-          if (!querySnap.empty) {
-            couponSnap = querySnap.docs[0]
-            couponRef = couponSnap.ref
-          }
-        }
-  
-        if (!couponRef || !couponSnap || !couponSnap.exists) {
-          transaction.update(orderRef, {
-            couponValidation: {
-              status: 'invalid',
-              reason: 'Cupom não encontrado.',
-              checkedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            requiresManualCouponReview: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          })
-          return
-        }
-  
-        const coupon = couponSnap.data() || {}
-        const usageLimit = Number(coupon.usageLimit || 0)
-        const usedCount = Number(coupon.usedCount || 0)
-  
-        if (coupon.isDeleted === true || coupon.active === false) {
-          transaction.update(orderRef, {
-            couponValidation: {
-              status: 'invalid',
-              reason: 'Cupom inativo ou excluído.',
-              couponId: couponSnap.id,
-              checkedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            requiresManualCouponReview: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          })
-          return
-        }
-  
-        if (usageLimit > 0 && usedCount >= usageLimit) {
-          transaction.update(orderRef, {
-            couponValidation: {
-              status: 'invalid',
-              reason: 'Limite de uso do cupom atingido.',
-              couponId: couponSnap.id,
-              usageLimit,
-              usedCount,
-              checkedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            requiresManualCouponReview: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          })
-          return
-        }
-  
-        transaction.update(couponRef, {
-          usedCount,
-          lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
-  
-        transaction.update(orderRef, {
-          couponId: couponSnap.id,
-          couponValidation: {
-            status: 'reserved',
-            couponId: couponSnap.id,
-            usageLimit: usageLimit || null,
-            usedCountBefore: usedCount,
-            checkedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
-      })
     }
   )
 

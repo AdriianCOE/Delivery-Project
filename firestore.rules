@@ -419,6 +419,22 @@ match /auditLogs/{logId} {
       allow read, write: if false;
     }
 
+    match /rateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /billingLocks/{docId} {
+      allow read, write: if false;
+    }
+
+    match /billingRecovery/{docId} {
+      allow read, write: if false;
+    }
+
+    match /providerEvents/{docId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

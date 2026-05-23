@@ -473,8 +473,8 @@ export default function OnboardingPage() {
         await auth.refreshUserData()
       }
       
-      // Navigate to dashboard after refresh
-      navigate('/dashboard', { replace: true })
+      // Navigate to billing page after onboarding
+      navigate('/dashboard/billing', { replace: true })
     } catch (error) {
       const code = getCallableErrorCode(error)
       let msg = 'Não foi possível iniciar o teste grátis no momento.'

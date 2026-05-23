@@ -893,6 +893,8 @@ export default function MerchantDashboard() {
   const [toast, setToast] = useState(null)
   const [loadingStores, setLoadingStores] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
+  const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [hasCatalog, setHasCatalog] = useState(true)
   const [loadingCatalog, setLoadingCatalog] = useState(true)
   const [storeActionLoading, setStoreActionLoading] = useState(false)
@@ -1199,6 +1201,8 @@ subscribeOrders(query(
   useEffect(() => {
     if (!selectedStore) {
       setHasCatalog(false)
+      setProducts([])
+      setCategories([])
       setLoadingCatalog(false)
       return undefined
     }
@@ -1214,13 +1218,16 @@ subscribeOrders(query(
 
     if (!orderStoreId) {
       setHasCatalog(false)
+      setProducts([])
+      setCategories([])
       setLoadingCatalog(false)
       return undefined
     }
 
-    const q = query(collection(db, 'products'), where('storeId', '==', orderStoreId))
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const qProducts = query(collection(db, 'products'), where('storeId', '==', orderStoreId))
+    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
+      const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setProducts(items)
       setHasCatalog(!snapshot.empty)
       setLoadingCatalog(false)
     }, (error) => {
@@ -1229,7 +1236,18 @@ subscribeOrders(query(
       setLoadingCatalog(false)
     })
 
-    return () => unsubscribe()
+    const qCategories = query(collection(db, 'categories'), where('storeId', '==', orderStoreId))
+    const unsubCategories = onSnapshot(qCategories, (snapshot) => {
+      const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setCategories(items)
+    }, (error) => {
+      console.error('Erro ao carregar categorias:', error)
+    })
+
+    return () => {
+      unsubProducts()
+      unsubCategories()
+    }
   }, [selectedStore])
 
   const dashboardData = useMemo(() => {
@@ -1319,27 +1337,49 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
       return b.revenue - a.revenue
     })
 
+    const neighborhoodMap = new Map()
+    validOrders.forEach((order) => {
+      const neighborhood =
+        order?.deliveryAddress?.neighborhood ||
+        order?.deliveryAddress?.bairro ||
+        order?.address?.neighborhood ||
+        order?.address?.bairro ||
+        order?.customer?.neighborhood ||
+        order?.customer?.bairro ||
+        ''
+      const name = String(neighborhood).trim()
+      if (name) {
+        neighborhoodMap.set(name, (neighborhoodMap.get(name) || 0) + 1)
+      }
+    })
+
+    const topNeighborhoods = [...neighborhoodMap.entries()].sort((a, b) => b[1] - a[1])
+    const topNeighborhood = topNeighborhoods[0]?.[0] || null
+
     return {
-periodOrders,
-validOrders,
-activeOrders,
-urgentOrders,
-topProducts,
-revenue,
-subtotal,
-promotionSavings,
-couponDiscounts,
-averageTicket,
-uniqueCustomers,
-completionRate,
-oldestPendingMinutes,
-previousRevenue,
-revenueDelta,
-ordersDelta,
-peakHours,
-maxPeakHour,
-priceReviewOrders,
-bestHourLabel,
+      periodOrders,
+      validOrders,
+      activeOrders,
+      urgentOrders,
+      topProducts,
+      revenue,
+      subtotal,
+      promotionSavings,
+      couponDiscounts,
+      averageTicket,
+      uniqueCustomers,
+      completionRate,
+      oldestPendingMinutes,
+      previousRevenue,
+      revenueDelta,
+      ordersDelta,
+      peakHours,
+      maxPeakHour,
+      priceReviewOrders,
+      bestHourLabel,
+      topProductName: topProducts[0]?.name || null,
+      topNeighborhood: topNeighborhood,
+      peakHourLabel: bestHour >= 0 ? bestHourLabel : null,
       pendingCount: orders.filter((o) => normalizeStatus(o.status) === 'pendente').length,
       preparingCount: orders.filter((o) => normalizeStatus(o.status) === 'preparando').length,
       routeCount: orders.filter((o) => normalizeStatus(o.status) === 'entregando').length,
@@ -1348,6 +1388,91 @@ bestHourLabel,
   }, [orders, period.days])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
+
+  const recommendedAction = useMemo(() => {
+    const totalProducts = Array.isArray(products) ? products.length : 0
+    const totalCategories = Array.isArray(categories) ? categories.length : 0
+    const deliveryFeesCount = Object.keys(selectedStore?.deliveryFees || {}).length
+
+    if (totalCategories === 0) {
+      return {
+        title: 'Crie sua primeira categoria',
+        description: 'Organize melhor seu cardápio para começar com estrutura.',
+        cta: 'Ir para cardápio',
+        href: '/dashboard/menu',
+        tone: 'orange',
+      }
+    }
+
+    if (totalProducts === 0) {
+      return {
+        title: 'Cadastre seu primeiro produto',
+        description: 'Adicione itens ao cardápio para começar a vender.',
+        cta: 'Adicionar produto',
+        href: '/dashboard/menu',
+        tone: 'orange',
+      }
+    }
+
+    if (deliveryFeesCount === 0) {
+      return {
+        title: 'Configure a entrega por bairro',
+        description: 'Defina as taxas de entrega para melhorar a conversão.',
+        cta: 'Configurar entrega',
+        href: '/dashboard/menu?tab=entrega',
+        tone: 'blue',
+      }
+    }
+
+    if (!isStoreOpen(selectedStore)) {
+      return {
+        title: 'Abra sua loja',
+        description: 'Sua loja está pronta para receber pedidos.',
+        cta: 'Abrir agora',
+        action: 'open-store',
+        tone: 'green',
+      }
+    }
+
+    if ((dashboardData?.pendingCount || 0) > 0) {
+      return {
+        title: 'Você tem pedidos aguardando',
+        description: 'Responda rápido para manter uma boa experiência.',
+        cta: 'Ver pedidos',
+        href: '/dashboard/orders',
+        tone: 'red',
+      }
+    }
+
+    return {
+      title: 'Sua operação está saudável',
+      description: 'Agora vale acompanhar desempenho e aumentar as vendas.',
+      cta: 'Ver estatísticas',
+      href: '/dashboard/statistics',
+      tone: 'emerald',
+    }
+  }, [products, categories, selectedStore, dashboardData])
+
+  const onboardingChecklist = useMemo(() => {
+    const totalProducts = Array.isArray(products) ? products.length : 0
+    const totalCategories = Array.isArray(categories) ? categories.length : 0
+    const hasLogo = Boolean(selectedStore?.logoUrl || selectedStore?.imageUrl)
+    const hasDeliveryFees = Object.keys(selectedStore?.deliveryFees || {}).length > 0
+    const isOpenNow = isStoreOpen(selectedStore)
+
+    const steps = [
+      { label: 'Adicionar logo da loja', done: hasLogo },
+      { label: 'Criar categoria', done: totalCategories > 0 },
+      { label: 'Cadastrar produto', done: totalProducts > 0 },
+      { label: 'Configurar entrega', done: hasDeliveryFees },
+      { label: 'Abrir loja', done: isOpenNow },
+    ]
+
+    const completed = steps.filter((step) => step.done).length
+    const percent = Math.round((completed / steps.length) * 100)
+
+    return { steps, completed, total: steps.length, percent }
+  }, [products, categories, selectedStore])
 
   const rawTrialEndsAt = selectedStore?.trialEndsAt || userData?.trialEndsAt
   const trialEndsAt = toDate(rawTrialEndsAt)
@@ -1372,7 +1497,7 @@ bestHourLabel,
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#f97316]/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
       
-          <div className="relative px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <div className="relative px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1419,7 +1544,7 @@ bestHourLabel,
                   )}
                 </div>
       
-                <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
                   <StoreLogo
                     store={selectedStore}
                     className="h-16 w-16 shrink-0 shadow-lg shadow-orange-100"
@@ -1459,7 +1584,7 @@ bestHourLabel,
               </div>
       
               <div className="flex flex-col gap-3 xl:w-[360px] xl:items-end xl:justify-between">
-                <div className="flex flex-wrap gap-2 xl:justify-end">
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                   <button
                     type="button"
                     onClick={handleToggleStoreOpen}
@@ -1487,7 +1612,7 @@ bestHourLabel,
                       </>
                     )}
                   </button>
-      
+
                   <a
                     href={storePublicUrl}
                     target="_blank"
@@ -1497,7 +1622,7 @@ bestHourLabel,
                     <FiExternalLink size={16} />
                     Ver loja
                   </a>
-      
+
                   <button
                     type="button"
                     onClick={handleCopyStoreLink}
@@ -1508,18 +1633,18 @@ bestHourLabel,
                     <span className="sm:hidden">Copiar link</span>
                   </button>
                 </div>
-      
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 xl:w-full">
+
+                <div className="mt-4 grid grid-cols-3 gap-2 xl:w-full">
                   <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Pendentes</p>
                     <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.pendingCount}</p>
                   </div>
-      
+
                   <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Preparo</p>
                     <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.preparingCount}</p>
                   </div>
-      
+
                   <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Em rota</p>
                     <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.routeCount}</p>
@@ -1557,7 +1682,7 @@ bestHourLabel,
         </section>
       ) : null}
       
-      <div className="px-4 py-5 sm:px-6 lg:px-8">
+      <div className="px-4 py-4 pb-8 sm:px-6 lg:px-8">
         {loadingStores ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((item) => (
@@ -1646,6 +1771,80 @@ bestHourLabel,
           </div>
         ) : (
           <>
+            {/* PRÓXIMA AÇÃO RECOMENDADA */}
+            <div className="mb-4 rounded-3xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#f97316]">
+                    Próxima ação recomendada
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-[#111827]">
+                    {recommendedAction.title}
+                  </h3>
+                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                    {recommendedAction.description}
+                  </p>
+                </div>
+
+                {recommendedAction.action === 'open-store' ? (
+                  <button
+                    type="button"
+                    onClick={handleToggleStoreOpen}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-emerald-600"
+                  >
+                    {recommendedAction.cta}
+                  </button>
+                ) : (
+                  <a
+                    href={recommendedAction.href}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#f97316] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+                  >
+                    {recommendedAction.cta}
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* ATENÇÃO AGORA */}
+            <div className="mb-4 grid gap-3 lg:grid-cols-3">
+              <div className="rounded-3xl border border-amber-100 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                  Atenção agora
+                </p>
+                <p className="mt-2 text-2xl font-black text-[#111827]">
+                  {dashboardData?.urgentOrders?.length || 0}
+                </p>
+                <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  {dashboardData?.oldestPendingMinutes > 0
+                    ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
+                    : 'Nenhum pedido crítico no momento'}
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-red-100 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                  Revisão
+                </p>
+                <p className="mt-2 text-2xl font-black text-[#111827]">
+                  {dashboardData?.priceReviewOrders?.length || 0}
+                </p>
+                <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  Pedidos com alerta de preço
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                  Operação
+                </p>
+                <p className="mt-2 text-2xl font-black text-[#111827]">
+                  {(dashboardData?.activeOrders?.length || 0) > 0 ? dashboardData.activeOrders.length : 0}
+                </p>
+                <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  Pedidos em andamento agora
+                </p>
+              </div>
+            </div>
 
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div className="inline-flex rounded-2xl border border-gray-100 bg-white p-1 shadow-sm">
@@ -1701,7 +1900,66 @@ bestHourLabel,
   <StatCard icon={FiUsers} label="Clientes" value={loading ? '...' : dashboardData.uniqueCustomers} sub="clientes únicos" tone="purple" />
   <StatCard icon={FiActivity} label="Conclusão" value={loading ? '...' : `${dashboardData.completionRate}%`} sub="pedidos entregues" tone="green" />
   <StatCard icon={FiPercent} label="Economia" value={loading ? '...' : formatCurrency(dashboardData.promotionSavings + dashboardData.couponDiscounts)} sub="promoções + cupons" tone="red" />
-</div>
+            </div>
+
+            {/* INSIGHTS RÁPIDOS */}
+            <div className="mt-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                    Insights rápidos
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-[#111827]">
+                    Resumo do dia
+                  </h3>
+                </div>
+
+                <a
+                  href="/dashboard/statistics"
+                  className="text-sm font-black text-[#f97316] hover:text-[#ea580c]"
+                >
+                  Ver estatísticas
+                </a>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">
+                    Mais vendido
+                  </p>
+                  <p className="mt-2 text-base font-black text-[#111827]">
+                    {dashboardData?.topProductName || 'Ainda sem dados'}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                    Produto destaque do período
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">
+                    Bairro destaque
+                  </p>
+                  <p className="mt-2 text-base font-black text-[#111827]">
+                    {dashboardData?.topNeighborhood || 'Sem dados'}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                    Onde você mais vendeu
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">
+                    Horário de pico
+                  </p>
+                  <p className="mt-2 text-base font-black text-[#111827]">
+                    {dashboardData?.peakHourLabel || 'Sem dados'}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                    Faixa com mais pedidos
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
               <div className="min-w-0 rounded-[1.7rem] border border-gray-100 bg-white shadow-sm">
@@ -1755,6 +2013,90 @@ bestHourLabel,
                       <FiExternalLink />
                     </a>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CHECKLIST DA LOJA PRONTA */}
+            <div className="mt-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                    Loja pronta
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-[#111827]">
+                    {onboardingChecklist.completed} de {onboardingChecklist.total} etapas concluídas
+                  </h3>
+                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                    Complete os passos para deixar sua operação redonda.
+                  </p>
+                </div>
+
+                <div className="w-full max-w-[180px]">
+                  <div className="h-2 rounded-full bg-gray-100">
+                    <div
+                      className="h-2 rounded-full bg-[#f97316] transition-all"
+                      style={{ width: `${onboardingChecklist.percent}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-sm font-black text-[#111827]">
+                    {onboardingChecklist.percent}% concluído
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2">
+                {onboardingChecklist.steps.map((step) => (
+                  <div
+                    key={step.label}
+                    className="flex items-center justify-between rounded-2xl border border-gray-100 bg-[#fafafa] px-4 py-3"
+                  >
+                    <span className="text-sm font-semibold text-[#111827]">{step.label}</span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
+                        step.done
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {step.done ? 'Concluído' : 'Pendente'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* MINI FOOTER */}
+            <div className="mt-8 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-[#111827]">
+                    PratoBy · Painel do lojista
+                  </p>
+                  <p className="text-xs font-semibold text-[#9ca3af]">
+                    Acompanhe sua operação, evolua seu cardápio e venda mais.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href="/dashboard/menu"
+                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316]"
+                  >
+                    Cardápio
+                  </a>
+                  <a
+                    href="/dashboard/orders"
+                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316]"
+                  >
+                    Pedidos
+                  </a>
+                  <a
+                    href="/dashboard/statistics"
+                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316]"
+                  >
+                    Estatísticas
+                  </a>
                 </div>
               </div>
             </div>
