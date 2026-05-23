@@ -288,12 +288,19 @@ export default function OnboardingPage() {
       (Array.isArray(auth?.user?.storeIds) && auth.user.storeIds.length > 0)
 
     const isPending =
-      !hasMerchantStore ||
-      ['phone_pending'].includes(onboardingStatus) ||
+      (!hasMerchantStore &&
+       !['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus) &&
+       onboardingStatus !== 'completed') ||
+      ['phone_pending', 'pending'].includes(onboardingStatus) ||
       ['pending_checkout'].includes(subscriptionStatus)
 
-    if (!isPending) {
-      return <Navigate to="/dashboard" replace />
+    const shouldRedirectToBilling =
+      !isPending ||
+      subscriptionStatus === 'trialing' ||
+      onboardingStatus === 'completed'
+
+    if (shouldRedirectToBilling) {
+      return <Navigate to="/dashboard/billing" replace />
     }
   }
 

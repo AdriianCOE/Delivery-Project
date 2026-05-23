@@ -118,6 +118,17 @@ function getPasswordStrength(password) {
   return { level: 'strong', label: 'Senha forte', score }
 }
 
+function formatPhoneBR(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  const truncated = digits.slice(0, 11)
+
+  if (truncated.length === 0) return ''
+  if (truncated.length <= 2) return `(${truncated}`
+  if (truncated.length <= 6) return `(${truncated.slice(0, 2)}) ${truncated.slice(2)}`
+  if (truncated.length <= 10) return `(${truncated.slice(0, 2)}) ${truncated.slice(2, 6)}-${truncated.slice(6)}`
+  return `(${truncated.slice(0, 2)}) ${truncated.slice(2, 7)}-${truncated.slice(7)}`
+}
+
 // ─────────────────────────────────────────────────────────────
 // ANIMAÇÕES (espelhando LoginPage)
 // ─────────────────────────────────────────────────────────────
@@ -627,7 +638,11 @@ export default function SignupPage() {
   }, [form, selectedPlanId, billingCycle, refreshUserData])
 
   const handleField = useCallback((field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }))
+    let value = e.target.value
+    if (field === 'whatsapp') {
+      value = formatPhoneBR(value)
+    }
+    setForm((prev) => ({ ...prev, [field]: value }))
     setFormError('')
   }, [])
 
@@ -642,6 +657,10 @@ export default function SignupPage() {
   const handleGoogleSignup = useCallback(async () => {
     setFormError('')
     if (!form.whatsapp.trim()) return setFormError('Preencha seu WhatsApp primeiro.')
+    const phoneDigits = form.whatsapp.replace(/\D/g, '')
+    if (phoneDigits.length < 10) {
+      return setFormError('Informe um WhatsApp válido com DDD (10 ou 11 dígitos) antes de continuar.')
+    }
     if (!form.storeName.trim()) return setFormError('Preencha o nome da sua loja primeiro.')
 
     setIsLoading(true)
@@ -672,6 +691,10 @@ export default function SignupPage() {
       if (!form.email.trim()) return setFormError('Informe seu e-mail.')
       if (!/\S+@\S+\.\S+/.test(form.email)) return setFormError('Digite um e-mail válido.')
       if (!form.whatsapp.trim()) return setFormError('Informe seu WhatsApp.')
+      const phoneDigits = form.whatsapp.replace(/\D/g, '')
+      if (phoneDigits.length < 10) {
+        return setFormError('Informe um WhatsApp válido com DDD (10 ou 11 dígitos).')
+      }
       if (!form.storeName.trim()) return setFormError('Informe o nome da sua loja.')
       const strength = getPasswordStrength(form.password)
       if (strength.level === 'weak') {
@@ -1072,33 +1095,35 @@ export default function SignupPage() {
                     value={form.city}
                     onChange={handleField('city')}
                   />
-                  <InputField
-                    label="Senha *"
-                    icon={FiLock}
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    value={form.password}
-                    onChange={handleField('password')}
-                    required
-                  />
-                  {form.password && (
-                    <div className="mt-1 px-1">
-                      <div className="flex gap-1 h-1.5 w-full max-w-[200px] mb-1">
-                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 1 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
-                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 2 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
-                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 3 ? (getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
-                        <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 4 ? 'bg-green-500' : 'bg-gray-200'}`} />
+                  <div className="flex flex-col">
+                    <InputField
+                      label="Senha *"
+                      icon={FiLock}
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      value={form.password}
+                      onChange={handleField('password')}
+                      required
+                    />
+                    {form.password && (
+                      <div className="mt-2 px-1">
+                        <div className="flex gap-1 h-1.5 w-full max-w-[200px] mb-1">
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 1 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 2 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 3 ? (getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 4 ? 'bg-green-500' : 'bg-gray-200'}`} />
+                        </div>
+                        <p className={`text-[10px] font-bold ${getPasswordStrength(form.password).level === 'weak' ? 'text-red-600' : getPasswordStrength(form.password).level === 'medium' ? 'text-amber-600' : 'text-green-600'}`}>
+                          {getPasswordStrength(form.password).label}
+                        </p>
+                        <p className="text-[9px] font-semibold text-gray-500 mt-0.5">
+                          Use pelo menos 8 caracteres, misturando letras e números.
+                        </p>
                       </div>
-                      <p className={`text-[10px] font-bold ${getPasswordStrength(form.password).level === 'weak' ? 'text-red-600' : getPasswordStrength(form.password).level === 'medium' ? 'text-amber-600' : 'text-green-600'}`}>
-                        {getPasswordStrength(form.password).label}
-                      </p>
-                      <p className="text-[9px] font-semibold text-gray-500 mt-0.5">
-                        Use pelo menos 8 caracteres, misturando letras e números.
-                      </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                   <InputField
                     label="Confirmar senha *"
                     icon={FiLock}

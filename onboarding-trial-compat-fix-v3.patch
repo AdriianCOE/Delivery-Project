@@ -1,0 +1,167 @@
+diff --git a/functions/index.js b/functions/index.js
+index 31a95671..91f0cdf4 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -917,11 +917,14 @@ exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
+       claimedAt: now
+     }, { merge: true })
+ 
++    const currentOnboarding = userData.onboardingStatus || ''
++    const nextOnboarding = currentOnboarding === 'completed' ? 'completed' : 'phone_verified'
++
+     transaction.update(userRef, {
+       phoneVerified: true,
+       phone: vData.phoneDigits,
+       phoneE164: vData.phoneE164,
+-      onboardingStatus: 'checkout_pending',
++      onboardingStatus: nextOnboarding,
+       updatedAt: now
+     })
+ 
+@@ -934,7 +937,7 @@ exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
+     return {
+       ok: true,
+       verified: true,
+-      onboardingStatus: 'checkout_pending'
++      onboardingStatus: nextOnboarding
+     }
+   })
+ })
+@@ -950,15 +953,86 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
+     if (!userDoc.exists) throw new HttpsError('failed-precondition', 'Usuário não encontrado.')
+ 
+     const userData = userDoc.data()
++    const now = admin.firestore.Timestamp.now()
+ 
+     if (userData.role !== 'merchant') throw new HttpsError('permission-denied', 'Permissão negada.')
+-    if (userData.phoneVerified !== true) throw new HttpsError('failed-precondition', 'WhatsApp não confirmado.')
+-    if (userData.onboardingStatus !== 'checkout_pending') throw new HttpsError('failed-precondition', 'Status de onboarding inválido.')
+-    if (userData.storeId || (Array.isArray(userData.storeIds) && userData.storeIds.length > 0)) {
+-      throw new HttpsError('already-exists', 'Você já possui uma loja associada.')
++
++    // 1. Se phoneVerified !== true:
++    if (userData.phoneVerified !== true) {
++      logger.warn(`[startFreeTrial] Bloqueado: Telefone não confirmado para o usuário ${uid}.`)
++      throw new HttpsError('failed-precondition', 'Verifique seu telefone antes de ativar o teste grátis.')
++    }
++
++    // 4. Se o usuário já tem storeId/storeIds:
++    const existingStoreId = userData.storeId || (Array.isArray(userData.storeIds) && userData.storeIds[0])
++
++    // Fazer todas as leituras primeiro
++    let storeDoc = null
++    if (existingStoreId) {
++      storeDoc = await transaction.get(db.collection('stores').doc(existingStoreId))
++    }
++
++    if (existingStoreId) {
++      logger.info(`[startFreeTrial] Usuário ${uid} já possui loja ${existingStoreId}. Retornando loja existente.`)
++
++      if (!storeDoc || !storeDoc.exists) {
++        logger.error(`[startFreeTrial] Loja vinculada não foi encontrada para o usuário ${uid} (storeId: ${existingStoreId}).`)
++        throw new HttpsError('failed-precondition', 'Loja vinculada não foi encontrada. Entre em contato com o suporte.')
++      }
++
++      const storeData = storeDoc.data() || {}
++      const finalSlug = storeData.slug || storeData.storeSlug || 'loja'
++
++      // Decidir subscriptionStatus correto baseado na loja e dados legados
++      const finalStatus = storeData.subscriptionStatus || userData.subscriptionStatus || 'trialing'
++
++      // Atualizar somente onboardingStatus e subscriptionStatus se diferirem
++      const userUpdates = {
++        onboardingStatus: 'completed',
++        updatedAt: now
++      }
++      if (userData.subscriptionStatus !== finalStatus) {
++        userUpdates.subscriptionStatus = finalStatus
++      }
++
++      transaction.update(userRef, userUpdates)
++
++      const trialEndsAt = storeData.trialEndsAt
++        ? (storeData.trialEndsAt.toMillis ? storeData.trialEndsAt.toMillis() : new Date(storeData.trialEndsAt).getTime())
++        : now.toMillis() + 14 * 24 * 60 * 60 * 1000
++
++      return {
++        ok: true,
++        storeId: existingStoreId,
++        storeSlug: finalSlug,
++        trialEndsAt: trialEndsAt
++      }
++    }
++
++    // 2. Se phoneVerified === true, aceitar onboardingStatus:
++    const allowedStatus = [
++      'pending',
++      'phone_pending',
++      'phone_verified',
++      'profile_completed',
++      'store_pending',
++      'pending_checkout',
++      'checkout_pending',
++      'onboarding_pending',
++      'onboarding_completed',
++      'completed'
++    ]
++
++    const onboardingStatus = userData.onboardingStatus || ''
++    if (!allowedStatus.includes(onboardingStatus)) {
++      logger.error(`[startFreeTrial] Status de onboarding inválido para o usuário ${uid}: ${onboardingStatus}`)
++      throw new HttpsError('failed-precondition', 'Status de onboarding inválido.')
++    }
++
++    // 3. Se onboardingStatus estiver em pending ou phone_pending, mas phoneVerified === true:
++    if (onboardingStatus === 'pending' || onboardingStatus === 'phone_pending') {
++      logger.warn(`[startFreeTrial] Status inconsistente detectado para o usuário ${uid}: onboardingStatus="${onboardingStatus}", mas phoneVerified=true. Permitindo criação da loja.`)
+     }
+-    if (userData.subscriptionStatus !== 'pending_checkout') throw new HttpsError('failed-precondition', 'Assinatura em estado inválido.')
+-    if (userData.trialStartedAt || userData.trialEndsAt) throw new HttpsError('already-exists', 'Trial já foi iniciado anteriormente.')
+ 
+     const storeName = userData.signup?.storeName || 'Minha Loja'
+     const baseSlug = normalizeText(storeName).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'loja'
+@@ -984,7 +1058,6 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
+     const storeRef = db.collection('stores').doc()
+     const storeId = storeRef.id
+ 
+-    const now = admin.firestore.Timestamp.now()
+     const fourteenDaysLater = admin.firestore.Timestamp.fromMillis(now.toMillis() + 14 * 24 * 60 * 60 * 1000)
+ 
+     const newStoreData = {
+@@ -1036,6 +1109,8 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
+     transaction.set(storeRef, newStoreData)
+     transaction.update(userRef, newUserData)
+ 
++    logger.info(`[startFreeTrial] Loja ${storeId} criada com sucesso para o lojista ${uid} (onboardingStatus: received=${onboardingStatus}, phoneVerified=${userData.phoneVerified}).`)
++
+     return {
+       ok: true,
+       storeId: storeId,
+diff --git a/src/pages/auth/OnboardingPage.jsx b/src/pages/auth/OnboardingPage.jsx
+index 46764ffb..81d35191 100644
+--- a/src/pages/auth/OnboardingPage.jsx
++++ b/src/pages/auth/OnboardingPage.jsx
+@@ -288,12 +288,19 @@ export default function OnboardingPage() {
+       (Array.isArray(auth?.user?.storeIds) && auth.user.storeIds.length > 0)
+ 
+     const isPending =
+-      !hasMerchantStore ||
+-      ['phone_pending'].includes(onboardingStatus) ||
++      (!hasMerchantStore &&
++       !['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus) &&
++       onboardingStatus !== 'completed') ||
++      ['phone_pending', 'pending'].includes(onboardingStatus) ||
+       ['pending_checkout'].includes(subscriptionStatus)
+ 
+-    if (!isPending) {
+-      return <Navigate to="/dashboard" replace />
++    const shouldRedirectToBilling =
++      !isPending ||
++      subscriptionStatus === 'trialing' ||
++      onboardingStatus === 'completed'
++
++    if (shouldRedirectToBilling) {
++      return <Navigate to="/dashboard/billing" replace />
+     }
+   }
+ 

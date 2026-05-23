@@ -792,7 +792,7 @@ export default function LoginPage() {
                     </div>
                     <Link
                       to="/cadastro"
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl bg-[#111827] px-4 py-2.5 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-black active:scale-[0.98]"
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl bg-[#f97316] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-orange-600/15 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-lg hover:shadow-orange-600/20 active:scale-[0.98]"
                     >
                       Criar minha loja
                       <FiArrowRight size={13} />
