@@ -7,6 +7,8 @@ import { auth } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import ProfilePanel from '../merchant/ProfilePanel'
 import { DashboardPageSkeleton } from '../shared/Skeletons'
+import DashboardNotificationBell from '../notifications/DashboardNotificationBell'
+import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
 
 import {
   FiArchive,
@@ -15,6 +17,7 @@ import {
   FiClock,
   FiCreditCard,
   FiDollarSign,
+  FiExternalLink,
   FiGrid,
   FiHome,
   FiLayers,
@@ -311,7 +314,7 @@ function ComingSoonNavItem({ item, onNavigate }) {
           <FiLock
             className={cn(
               'shrink-0',
-              isActive ? 'text-[#f97316]' : 'text-gray-300 dark:text-zinc-650'
+              isActive ? 'text-[#f97316]' : 'text-gray-300 dark:text-zinc-600'
             )}
             size={15}
           />
@@ -356,18 +359,18 @@ function SoonToast({ feature, onClose }) {
   if (!feature) return null
 
   return (
-    <div className="fixed right-4 top-4 z-[90] w-[calc(100vw-2rem)] max-w-sm rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-2xl shadow-gray-900/10 ring-1 ring-white/70 backdrop-blur-xl">
+    <div className="fixed right-4 top-4 z-[90] w-[calc(100vw-2rem)] max-w-sm rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-2xl shadow-gray-900/10 ring-1 ring-white/70 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/95 dark:ring-zinc-800">
       <div className="flex items-start gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316]">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/25">
           <FiClock />
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-[#111827]">
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
             {feature.label} está no roadmap
           </p>
 
-          <p className="mt-1 text-xs leading-5 text-[#6b7280]">
+          <p className="mt-1 text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
             Esta área já ficou reservada no painel para crescer sem quebrar a navegação atual.
           </p>
         </div>
@@ -375,7 +378,7 @@ function SoonToast({ feature, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           aria-label="Fechar"
         >
           <FiX />
@@ -627,7 +630,7 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
         {/* Ícone de perfil */}
         <FiUser
           size={14}
-          className="shrink-0 text-gray-300 transition group-hover:text-[#f97316] dark:text-zinc-650"
+          className="shrink-0 text-gray-300 transition group-hover:text-[#f97316] dark:text-zinc-600"
         />
       </button>
     </div>
@@ -697,7 +700,7 @@ function MobileBottomNav({ onOpenMore, moreActive }) {
           type="button"
           onClick={onOpenMore}
           className={cn(
-            'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50 dark:active:bg-zinc-850',
+            'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50 dark:active:bg-zinc-800',
             moreActive
               ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
               : 'text-[#6b7280] dark:text-zinc-400'
@@ -722,6 +725,19 @@ export default function DashboardLayout() {
   const [soonFeature, setSoonFeature] = useState(null)
 
   const { user, userData, logout, loading } = authContext || {}
+  const storeName =
+    userData?.storeName ||
+    userData?.signup?.storeName ||
+    userData?.name ||
+    'Sua loja'
+  const storeSlug =
+    userData?.storeSlug ||
+    userData?.slug ||
+    (Array.isArray(userData?.storeKeys) ? userData.storeKeys.find(Boolean) : '') ||
+    ''
+  const publicStoreHref = storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : ''
+  const avatarUrl = userData?.photoURL || userData?.avatarUrl || user?.photoURL || ''
+  const avatarInitial = (userData?.displayName || userData?.name || user?.displayName || storeName || 'L')[0]?.toUpperCase() || 'L'
 
 
   const moreActive = useMemo(() => {
@@ -768,21 +784,93 @@ export default function DashboardLayout() {
         <Sidebar onLogout={handleLogout} user={user} userData={userData} onOpenProfileModal={() => setProfileModalOpen(true)} />
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-  <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={loading ? 'loading-skeleton' : location.pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-        className="min-h-full"
-      >
-        {loading ? <DashboardPageSkeleton /> : <Outlet />}
-      </motion.div>
-    </AnimatePresence>
-  </div>
-</section>
+          {/* Topbar/Header do Dashboard */}
+          <div className="relative z-40 flex h-[4.25rem] shrink-0 items-center justify-between gap-3 border-b border-gray-100 bg-white/90 px-4 shadow-sm shadow-gray-900/[0.03] backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-black/20 lg:px-8">
+            {/* Esquerda: Menu Mobile Toggle + Título da Loja */}
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50 hover:text-gray-700 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 lg:hidden"
+                aria-label="Abrir menu"
+              >
+                <FiMenu size={20} />
+              </button>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-950/20 dark:ring-orange-900/30 sm:grid">
+                  <FiHome size={17} />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black leading-5 text-[#111827] dark:text-zinc-100 sm:text-base">
+                    {storeName}
+                  </p>
+                  <p className="truncate text-[11px] font-bold leading-4 text-[#6b7280] dark:text-zinc-400">
+                    {storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : 'Painel do lojista'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Direita: Sino de notificações + Quick Profile */}
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              {publicStoreHref && (
+                <a
+                  href={publicStoreHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hidden h-10 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 text-xs font-black text-[#6b7280] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:text-[#f97316] active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-[#f97316] sm:inline-flex"
+                >
+                  <FiExternalLink size={14} />
+                  Ver loja
+                </a>
+              )}
+
+              <DashboardNotificationBell />
+
+              <button
+                type="button"
+                onClick={() => setProfileModalOpen(true)}
+                className="flex h-10 items-center gap-2 rounded-2xl border border-gray-100 bg-white px-1.5 pr-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                aria-label="Meu Perfil"
+              >
+                <div className="h-8 w-8 overflow-hidden rounded-xl bg-orange-50 ring-1 ring-orange-100 dark:bg-zinc-800 dark:ring-zinc-700">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#f97316]">
+                      {avatarInitial}
+                    </div>
+                  )}
+                </div>
+                <span className="hidden max-w-[7rem] truncate text-xs font-black text-[#111827] dark:text-zinc-100 md:block">
+                  Perfil
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
+            {/* Trial Banner Global */}
+            <DashboardTrialRibbon />
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={loading ? 'loading-skeleton' : location.pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                className="min-h-full"
+              >
+                {loading ? <DashboardPageSkeleton /> : <Outlet />}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </section>
 
         <MobileBottomNav
           moreActive={moreActive}

@@ -309,6 +309,13 @@ function publicOrderUpdateAllowed(orderId) {
     'storeIds',
     'storeKeys',
     'signup',
+    'termsAccepted',
+    'termsAcceptedAt',
+    'termsVersion',
+    'privacyVersion',
+    'marketingOptIn',
+    'marketingOptInAt',
+    'marketingOptInSource',
     'createdAt',
     'updatedAt'
   ])
@@ -328,6 +335,27 @@ function publicOrderUpdateAllowed(orderId) {
   && data.storeId == null
   && data.storeIds == []
   && data.storeKeys == []
+  && data.keys().hasAll([
+    'termsAccepted',
+    'termsAcceptedAt',
+    'termsVersion',
+    'privacyVersion',
+    'marketingOptIn'
+  ])
+  && data.termsAccepted == true
+  && data.termsAcceptedAt is timestamp
+  && data.termsVersion == '2026-05-24'
+  && data.privacyVersion == '2026-05-24'
+  && data.marketingOptIn is bool
+  && (
+    (data.marketingOptIn == false
+      && !data.keys().hasAny(['marketingOptInAt', 'marketingOptInSource']))
+    ||
+    (data.marketingOptIn == true
+      && data.keys().hasAll(['marketingOptInAt', 'marketingOptInSource'])
+      && data.marketingOptInAt is timestamp
+      && data.marketingOptInSource == 'signup')
+  )
   && data.plan in ['essential', 'professional', 'premium']
   && data.billingCycle in ['monthly', 'annual']
   && data.signup.source == 'signup_page'

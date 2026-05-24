@@ -13,6 +13,8 @@ admin.initializeApp()
 
 const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
+const TERMS_VERSION = '2026-05-24'
+const PRIVACY_VERSION = '2026-05-24'
 
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
 exports.asaasWebhook = asaasFunctions.asaasWebhook
@@ -1549,6 +1551,77 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
 })
 
 // ─── Callable: updateMyProfile ───────────────────────────────────────────────
+exports.acceptLatestTerms = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+    }
+
+    const allowedKeys = []
+    const dataKeys = Object.keys(request.data || {})
+    if (dataKeys.some((key) => !allowedKeys.includes(key))) {
+      throw new HttpsError('invalid-argument', 'Payload inválido.')
+    }
+
+    const userRef = db.collection('users').doc(request.auth.uid)
+    const userSnapshot = await userRef.get()
+    if (!userSnapshot.exists) {
+      throw new HttpsError('failed-precondition', 'Perfil do usuário não encontrado.')
+    }
+
+    await userRef.update({
+      termsAccepted: true,
+      termsAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      termsVersion: TERMS_VERSION,
+      privacyVersion: PRIVACY_VERSION,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    return {
+      ok: true,
+      termsVersion: TERMS_VERSION,
+      privacyVersion: PRIVACY_VERSION,
+    }
+  }
+)
+
+exports.updateBillingNotificationPreferences = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+    }
+
+    const data = request.data || {}
+    const allowedKeys = ['trialReminderEmailOptIn']
+    const dataKeys = Object.keys(data)
+    if (
+      dataKeys.some((key) => !allowedKeys.includes(key)) ||
+      typeof data.trialReminderEmailOptIn !== 'boolean'
+    ) {
+      throw new HttpsError('invalid-argument', 'Preferência inválida.')
+    }
+
+    const userRef = db.collection('users').doc(request.auth.uid)
+    const userSnapshot = await userRef.get()
+    if (!userSnapshot.exists) {
+      throw new HttpsError('failed-precondition', 'Perfil do usuário não encontrado.')
+    }
+
+    await userRef.update({
+      trialReminderEmailOptIn: data.trialReminderEmailOptIn,
+      trialReminderEmailUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    return {
+      ok: true,
+      trialReminderEmailOptIn: data.trialReminderEmailOptIn,
+    }
+  }
+)
+
 exports.updateMyProfile = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
@@ -1562,6 +1635,9 @@ exports.updateMyProfile = onCall(
       'role', 'storeId', 'storeIds', 'storeKeys', 'phoneVerified',
       'subscriptionStatus', 'onboardingStatus', 'plan', 'billingCycle',
       'trialStartedAt', 'trialEndsAt', 'createdAt', 'createdBy',
+      'termsAccepted', 'termsAcceptedAt', 'termsVersion', 'privacyVersion',
+      'marketingOptIn', 'marketingOptInAt', 'marketingOptInSource',
+      'trialReminderEmailOptIn', 'trialReminderEmailUpdatedAt',
     ]
 
     for (const field of FORBIDDEN) {

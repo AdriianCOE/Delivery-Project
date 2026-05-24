@@ -3,86 +3,18 @@ import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
 import SEO from '../components/seo/SEO'
+import { PLAN_OPTIONS } from '../utils/planCatalog'
 import {
   FiArrowRight,
-  FiAward,
   FiCheck,
   FiClock,
   FiLink,
   FiMessageCircle,
   FiMonitor,
   FiShield,
-  FiStar,
-  FiZap,
 } from 'react-icons/fi'
 
-const plans = [
-  {
-    id: 'essential',
-    name: 'Essencial',
-    subtitle: 'Para começar a vender online',
-    price: 59,
-    priceAnnual: 590,
-    equivalentMonthly: 49,
-    commission: '+ 0% de comissão por venda',
-    icon: FiZap,
-    highlight: false,
-    cta: 'Começar agora',
-    features: [
-      '14 dias grátis inclusos',
-      'Cardápio digital ilimitado',
-      'Pedidos em tempo real',
-      'Link próprio da loja',
-      'Sem taxa por pedido',
-      'Painel de controle',
-      'Horários automáticos',
-    ],
-  },
-  {
-    id: 'professional',
-    name: 'Profissional',
-    subtitle: 'Mais escolhido pelos lojistas',
-    price: 89,
-    priceAnnual: 890,
-    equivalentMonthly: 74,
-    commission: '+ 0% de comissão por venda',
-    icon: FiStar,
-    highlight: true,
-    badge: 'Mais popular',
-    cta: 'Começar agora',
-    features: [
-      '14 dias grátis inclusos',
-      'Tudo do Essencial',
-      'Cupons de desconto',
-      'Taxa por bairro',
-      'Campos personalizados',
-      'Relatórios avançados',
-      'WhatsApp integrado',
-      'Suporte prioritário',
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    subtitle: 'Para quem quer vender mais',
-    price: 159,
-    priceAnnual: 1590,
-    equivalentMonthly: 133,
-    commission: '+ 0% de comissão por venda',
-    icon: FiAward,
-    highlight: false,
-    cta: 'Começar agora',
-    features: [
-      '14 dias grátis inclusos',
-      'Tudo do Profissional',
-      'Multi-loja até 3 unidades',
-      'API de integração',
-      'Domínio personalizado',
-      'Marca branca',
-      'Gerente de conta dedicado',
-    ],
-  },
-]
+const plans = PLAN_OPTIONS
 
 const benefits = [
   {
@@ -102,7 +34,7 @@ const benefits = [
 function PlanCard({ plan, index, cycle }) {
   const Icon = plan.icon
   const isAnnual = cycle === 'annual'
-  const displayPrice = isAnnual ? plan.equivalentMonthly : plan.price
+  const displayPrice = isAnnual ? plan.equivalentMonthly : plan.priceMonthly
 
   return (
     <motion.article

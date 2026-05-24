@@ -8,7 +8,7 @@ export function SkeletonBlock({ className = '' }) {
 
 export function SkeletonCard({ className = '', children }) {
   return (
-    <div className={`animate-pulse rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-850 dark:bg-zinc-900 ${className}`}>
+    <div className={`animate-pulse rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${className}`}>
       {children || (
         <div className="space-y-3">
           <SkeletonBlock className="h-4 w-1/3" />

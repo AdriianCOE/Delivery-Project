@@ -110,7 +110,13 @@ export default function ProtectedRoute({
       location.pathname === '/dashboard/assinatura'
 
     if (isBillingPending && isDashboardRoute && !isBillingRoute) {
-      return <Navigate to="/dashboard/billing" replace />
+      return (
+        <Navigate
+          to="/dashboard/billing?reason=billing_required"
+          replace
+          state={{ reason: 'billing_required', from: location.pathname }}
+        />
+      )
     }
 
     const isPendingMerchant =

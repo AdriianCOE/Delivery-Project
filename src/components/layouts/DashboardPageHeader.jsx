@@ -70,7 +70,7 @@ export default function DashboardPageHeader({
   children,
   maxWidth  = 'max-w-7xl',
   border    = true,
-  sticky    = true,
+  sticky    = false,
   className = '',
 }) {
   const headerClasses = [
@@ -112,7 +112,7 @@ export default function DashboardPageHeader({
 
               {/* Título + badge */}
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight text-[#111827] dark:text-white">
+                <h1 className="text-xl font-black tracking-tight text-[#111827] dark:text-white sm:text-2xl">
                   {title}
                 </h1>
                 {badge != null && <StatusBadge badge={badge} />}

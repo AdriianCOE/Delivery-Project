@@ -2,15 +2,18 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
+  getAdditionalUserInfo,
   signInWithPopup,
   updateProfile,
   signOut,
-  deleteUser,
   sendEmailVerification,
 } from 'firebase/auth'
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { auth, db, googleProvider } from '../../services/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { auth, db, functions, googleProvider } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FiArrowLeft,
@@ -34,57 +37,13 @@ import {
 // DADOS DOS PLANOS
 // ─────────────────────────────────────────────────────────────
 
-const PLANS = [
-  {
-    id: 'essential',
-    name: 'Essencial',
-    description: 'Para começar a vender online',
-    price: 59,
-    priceAnnual: 49,
-    features: [
-      'Cardápio digital ilimitado',
-      'Pedidos em tempo real',
-      'Link próprio da loja',
-      'Sem taxa por pedido',
-      'Painel de controle',
-      'Horários automáticos',
-    ],
-    popular: false,
-  },
-  {
-    id: 'professional',
-    name: 'Profissional',
-    description: 'Mais popular entre os lojistas',
-    price: 89,
-    priceAnnual: 74,
-    features: [
-      'Tudo do Essencial',
-      'Cupons de desconto',
-      'Taxa por bairro',
-      'Campos personalizados',
-      'Relatórios avançados',
-      'WhatsApp integrado',
-      'Suporte prioritário',
-    ],
-    popular: true,
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    description: 'Para quem quer vender mais',
-    price: 159,
-    priceAnnual: 133,
-    features: [
-      'Tudo do Profissional',
-      'Multi-loja até 3',
-      'API de integração',
-      'Domínio personalizado',
-      'Marca branca',
-      'Gerente de conta dedicado',
-    ],
-    popular: false,
-  },
-]
+const PLANS = PLAN_OPTIONS.map((plan) => ({
+  ...plan,
+  price: plan.priceMonthly,
+  priceAnnual: plan.equivalentMonthly,
+  popular: Boolean(plan.popular || plan.highlight),
+  features: plan.features.filter((feature) => feature !== '14 dias grátis inclusos'),
+}))
 
 const SEGMENTS = [
   'Hamburgueria',
@@ -98,6 +57,10 @@ const SEGMENTS = [
   'Bar / Petiscos',
   'Outro',
 ]
+
+const TERMS_VERSION = '2026-05-24'
+const PRIVACY_VERSION = '2026-05-24'
+const TERMS_REQUIRED_MESSAGE = 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para continuar.'
 
 // ─────────────────────────────────────────────────────────────
 // FUNÇÕES AUXILIARES
@@ -485,7 +448,7 @@ function SummaryCard({ plan, cycle }) {
               {[
                 { icon: FiCheckCircle, text: '14 dias grátis inclusos' },
                 { icon: FiCheckCircle, text: '0% de comissão por pedido' },
-                { icon: FiCheckCircle, text: 'Cancelamento a qualquer hora' },
+                { icon: FiCheckCircle, text: 'Pagamento seguro via Asaas' },
               ].map(({ icon: Icon, text }, index) => (
                 <motion.div
                   key={text}
@@ -583,6 +546,10 @@ export default function SignupPage() {
   })
   const [formError, setFormError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [marketingOptIn, setMarketingOptIn] = useState(false)
+  const [termsModalOpen, setTermsModalOpen] = useState(false)
+  const [termsModalSubmitting, setTermsModalSubmitting] = useState(false)
 
   // ── Derivados ──────────────────────────────
   const selectedPlan = useMemo(
@@ -619,6 +586,8 @@ export default function SignupPage() {
     if (code === 'auth/network-request-failed') return 'Falha de conexão. Verifique sua internet.'
     if (error?.message?.includes('signup/existing-account'))
       return 'Esta conta já possui um cadastro pendente. Use o login para continuar.'
+    if (error?.message?.includes('signup/terms-required'))
+      return TERMS_REQUIRED_MESSAGE
     if (error?.message?.includes('signup/account-already-has-store'))
       return 'Esta conta já possui uma loja. Entre pelo login.'
     if (error?.message?.includes('permission-denied'))
@@ -626,7 +595,28 @@ export default function SignupPage() {
     return 'Ocorreu um erro ao criar a conta. Tente novamente.'
   }
 
+  const buildComplianceFields = useCallback(() => {
+    const fields = {
+      termsAccepted: true,
+      termsAcceptedAt: serverTimestamp(),
+      termsVersion: TERMS_VERSION,
+      privacyVersion: PRIVACY_VERSION,
+      marketingOptIn: Boolean(marketingOptIn),
+    }
+
+    if (marketingOptIn) {
+      fields.marketingOptInAt = serverTimestamp()
+      fields.marketingOptInSource = 'signup'
+    }
+
+    return fields
+  }, [marketingOptIn])
+
   const saveUserDocument = useCallback(async (user, authProvider, displayNameOverride) => {
+    if (!termsAccepted) {
+      throw new Error('signup/terms-required')
+    }
+
     const userRef = doc(db, 'users', user.uid);
     const snapshot = await getDoc(userRef);
     if (snapshot.exists()) {
@@ -655,6 +645,7 @@ export default function SignupPage() {
         source: 'signup_page',
         authProvider,
       },
+      ...buildComplianceFields(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }, { merge: true });
@@ -662,7 +653,7 @@ export default function SignupPage() {
     if (refreshUserData) {
       await refreshUserData()
     }
-  }, [form, selectedPlanId, billingCycle, refreshUserData])
+  }, [billingCycle, buildComplianceFields, form, marketingOptIn, refreshUserData, selectedPlanId, termsAccepted])
 
   const handleField = useCallback((field) => (e) => {
     let value = e.target.value
@@ -681,18 +672,87 @@ export default function SignupPage() {
     setBillingCycle(cycle)
   }, [])
 
+  const handleAcceptLatestTerms = useCallback(async () => {
+    if (termsModalSubmitting) return
+
+    setTermsModalSubmitting(true)
+    setFormError('')
+    try {
+      const acceptLatestTerms = httpsCallable(functions, 'acceptLatestTerms')
+      await acceptLatestTerms()
+      if (refreshUserData) {
+        await refreshUserData()
+      }
+      setTermsModalOpen(false)
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      console.error(error)
+      setFormError('Não foi possível registrar o aceite agora. Tente novamente.')
+    } finally {
+      setTermsModalSubmitting(false)
+    }
+  }, [navigate, refreshUserData, termsModalSubmitting])
+
+  const handleCloseTermsModal = useCallback(async () => {
+    if (termsModalSubmitting) return
+    setTermsModalOpen(false)
+    try {
+      await signOut(auth)
+    } catch (error) {
+      console.warn('[Signup] Não foi possível encerrar a sessão após recusar termos.', error)
+    }
+    setFormError(TERMS_REQUIRED_MESSAGE)
+  }, [termsModalSubmitting])
+
+  const validateGoogleProfileFields = useCallback(() => {
+    if (!termsAccepted) return TERMS_REQUIRED_MESSAGE
+    if (!form.whatsapp.trim()) return 'Preencha seu WhatsApp primeiro.'
+    if (!isValidBrazilianMobilePhone(form.whatsapp)) {
+      return 'Informe um celular válido com DDD e 9 dígitos antes de continuar.'
+    }
+    if (!form.storeName.trim()) return 'Preencha o nome da sua loja primeiro.'
+    return ''
+  }, [form.storeName, form.whatsapp, termsAccepted])
+
   const handleGoogleSignup = useCallback(async () => {
     setFormError('')
-    if (!form.whatsapp.trim()) return setFormError('Preencha seu WhatsApp primeiro.')
-    if (!isValidBrazilianMobilePhone(form.whatsapp)) {
-      return setFormError('Informe um celular válido com DDD e 9 dígitos antes de continuar.')
-    }
-    if (!form.storeName.trim()) return setFormError('Preencha o nome da sua loja primeiro.')
 
     setIsLoading(true)
     try {
       const result = await signInWithPopup(auth, googleProvider)
       const user = result.user
+      const isNewUser = Boolean(getAdditionalUserInfo(result)?.isNewUser)
+      const userRef = doc(db, 'users', user.uid)
+      const existingProfile = await getDoc(userRef)
+
+      if (existingProfile.exists()) {
+        const profile = existingProfile.data() || {}
+        if (
+          profile.termsAccepted === true &&
+          profile.termsVersion === TERMS_VERSION &&
+          profile.privacyVersion === PRIVACY_VERSION
+        ) {
+          if (refreshUserData) {
+            await refreshUserData()
+          }
+          navigate('/dashboard', { replace: true })
+          return
+        }
+
+        setTermsModalOpen(true)
+        return
+      }
+
+      const validationError = validateGoogleProfileFields()
+      if (validationError) {
+        if (isNewUser) {
+          await deleteUser(user).catch(() => {})
+        }
+        await signOut(auth)
+        setFormError(validationError)
+        return
+      }
+
       try {
         await saveUserDocument(user, 'google', user.displayName)
         navigate('/onboarding', {
@@ -701,6 +761,9 @@ export default function SignupPage() {
         })
       } catch (docError) {
         // Roll back created Google account if doc creation fails
+        if (isNewUser) {
+          await deleteUser(user).catch(() => {})
+        }
         await signOut(auth);
         setFormError(getFriendlyError(docError));
       }
@@ -711,7 +774,7 @@ export default function SignupPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [form.whatsapp, form.storeName, navigate, saveUserDocument])
+  }, [navigate, refreshUserData, saveUserDocument, validateGoogleProfileFields])
 
   const handleContinue = useCallback(
     async (e) => {
@@ -729,6 +792,7 @@ export default function SignupPage() {
         return setFormError('Use uma senha mais forte, com pelo menos 8 caracteres, letras e números.')
       }
       if (form.password !== form.confirmPassword) return setFormError('As senhas não coincidem.')
+      if (!termsAccepted) return setFormError(TERMS_REQUIRED_MESSAGE)
 
       setIsLoading(true)
       try {
@@ -762,7 +826,7 @@ export default function SignupPage() {
         setIsLoading(false)
       }
     },
-    [form, selectedPlanId, billingCycle, navigate, saveUserDocument]
+    [form, selectedPlanId, billingCycle, navigate, saveUserDocument, termsAccepted]
   )
 
   // ─────────────────────────────────────────────────────────
@@ -819,7 +883,7 @@ export default function SignupPage() {
           <div className="relative z-10 py-12">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur">
               <FiShield className="text-[#f97316]" />
-              Comece em minutos, cancele quando quiser
+              Comece em minutos, sem comissão por pedido
             </span>
 
             <h1 className="mt-8 text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl">
@@ -994,8 +1058,9 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={handleGoogleSignup}
+                  disabled={isLoading}
                   aria-label="Continuar com Google"
-                  className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.98]"
+                  className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   <GoogleIcon size={18} />
                   Continuar com Google
@@ -1128,6 +1193,43 @@ export default function SignupPage() {
                   <SummaryCard plan={selectedPlan} cycle={billingCycle} />
                 </div>
 
+                <div className="mt-5 space-y-3">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-orange-200 hover:bg-orange-50/30">
+                    <input
+                      type="checkbox"
+                      checked={termsAccepted}
+                      onChange={(event) => {
+                        setTermsAccepted(event.target.checked)
+                        setFormError('')
+                      }}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-[#f97316] focus:ring-[#f97316]"
+                    />
+                    <span className="text-xs font-semibold leading-5 text-[#4b5563]">
+                      <span className="font-black text-[#111827]">Li e aceito</span> os{' '}
+                      <Link to="/termos" className="font-black text-[#f97316] underline underline-offset-2 hover:text-[#ea580c]">
+                        Termos de Uso
+                      </Link>{' '}
+                      e a{' '}
+                      <Link to="/privacidade" className="font-black text-[#f97316] underline underline-offset-2 hover:text-[#ea580c]">
+                        Política de Privacidade
+                      </Link>
+                      .
+                    </span>
+                  </label>
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50/80 px-4 py-3 text-left transition hover:border-gray-200 hover:bg-white">
+                    <input
+                      type="checkbox"
+                      checked={marketingOptIn}
+                      onChange={(event) => setMarketingOptIn(event.target.checked)}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-[#f97316] focus:ring-[#f97316]"
+                    />
+                    <span className="text-xs font-semibold leading-5 text-[#6b7280]">
+                      Quero receber novidades, atualizações do produto e dicas para vender mais com o PratoBy.
+                    </span>
+                  </label>
+                </div>
+
                 {/* CTA principal */}
                 <button
                   type="submit"
@@ -1151,15 +1253,7 @@ export default function SignupPage() {
                 </button>
 
                 <p className="mt-4 text-center text-xs font-semibold text-[#9ca3af]">
-                  Ao continuar, você concorda com os{' '}
-                  <Link to="/termos" className="font-black text-[#6b7280] underline underline-offset-2 hover:text-[#111827]">
-                    Termos de Uso
-                  </Link>{' '}
-                  e a{' '}
-                  <Link to="/privacidade" className="font-black text-[#6b7280] underline underline-offset-2 hover:text-[#111827]">
-                    Política de Privacidade
-                  </Link>
-                  .
+                  Seus dados são usados para criar sua conta e proteger o acesso ao painel.
                 </p>
               </motion.form>
 
@@ -1178,6 +1272,55 @@ export default function SignupPage() {
           </div>
         </section>
       </div>
+
+      <AnimatePresence>
+        {termsModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              className="w-full max-w-md rounded-[1.5rem] border border-orange-100 bg-white p-5 shadow-2xl"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+                  <FiShield size={20} />
+                </span>
+                <div>
+                  <h2 className="text-lg font-black text-[#111827]">Aceite os termos atualizados</h2>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-[#6b7280]">
+                    Para continuar usando o PratoBy, confirme que leu e aceita os Termos de Uso e a Política de Privacidade.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-orange-50/70 p-4 text-xs font-semibold leading-5 text-[#9a3412]">
+                Versões vigentes: Termos {TERMS_VERSION} e Privacidade {PRIVACY_VERSION}.
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleAcceptLatestTerms}
+                  disabled={termsModalSubmitting}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {termsModalSubmitting ? <FiLoader className="animate-spin" /> : <FiCheckCircle />}
+                  Aceitar e continuar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseTermsModal}
+                  disabled={termsModalSubmitting}
+                  className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Agora não
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </main>
   )
 }

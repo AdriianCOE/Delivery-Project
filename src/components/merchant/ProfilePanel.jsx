@@ -144,20 +144,20 @@ export function Toast({ toast, onClose }) {
 function Badge({ verified, labelTrue, labelFalse, unregistered }) {
   if (unregistered) {
     return (
-      <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-gray-500 ring-1 ring-gray-200">
+      <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-gray-500 ring-1 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700">
         Não cadastrado
       </span>
     )
   }
   if (verified) {
     return (
-      <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100">
+      <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100 dark:bg-emerald-950/25 dark:text-emerald-400 dark:ring-emerald-900/40">
         {labelTrue}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100">
+    <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-950/25 dark:text-orange-400 dark:ring-orange-900/40">
       {labelFalse}
     </span>
   )
@@ -165,7 +165,7 @@ function Badge({ verified, labelTrue, labelFalse, unregistered }) {
 
 function SectionCard({ icon: Icon, title, description, children, className = '' }) {
   return (
-    <div className={`rounded-[1.75rem] border border-gray-100 bg-white shadow-sm min-w-0 overflow-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_4px_25px_rgba(0,0,0,0.15)] ${className}`}>
+    <div className={`min-w-0 overflow-hidden rounded-[1.75rem] border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-orange-100/40 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_4px_25px_rgba(0,0,0,0.15)] dark:hover:shadow-none ${className}`}>
       <div className="flex items-center gap-3 border-b border-gray-100 dark:border-zinc-800 px-5 py-4">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/20 dark:text-[#f97316]">
           <Icon size={17} />
@@ -881,7 +881,6 @@ export default function ProfilePanel({ onLogout }) {
               onError={handleError}
             />
             <SubscriptionCard userData={userData} />
-            <ThemeCard />
           </div>
 
           {/* Right column */}
@@ -896,6 +895,7 @@ export default function ProfilePanel({ onLogout }) {
               userData={userData}
               onSuccess={handleSuccess}
             />
+            <ThemeCard />
           </div>
         </div>
       </div>

@@ -1549,12 +1549,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
           </div>
         </div>
       ) : selectedStore ? (
-        <section className="relative overflow-hidden border-b border-orange-100/70 dark:border-zinc-800 bg-gradient-to-br from-orange-50 via-white to-white dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-950">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#f97316]/10 blur-3xl dark:bg-[#f97316]/5" />
-          <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
+        <section className="relative overflow-hidden border-b border-orange-100/70 bg-white/85 shadow-sm shadow-orange-100/40 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none">
+          <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-[#f97316]/10 blur-3xl dark:bg-[#f97316]/5" />
+          <div className="pointer-events-none absolute -bottom-32 left-10 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl dark:bg-emerald-500/5" />
 
-          <div className="relative px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
+          <div className="relative px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch xl:justify-between">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-zinc-900 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#f97316] shadow-sm ring-1 ring-orange-100 dark:ring-zinc-800">
@@ -1586,24 +1586,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                       : 'Sem visitantes agora'}
                   </span>
 
-                  {(isTrialActive || trialDaysRemaining !== null) && (
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
-                        trialDaysRemaining > 0
-                          ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:ring-indigo-900/50'
-                          : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
-                      }`}
-                    >
-                      <FiClock size={12} />
-                      {trialDaysRemaining > 0 ? `${trialDaysRemaining} dias de teste` : 'Teste expirado'}
-                    </span>
-                  )}
                 </div>
 
-                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                   <StoreLogo
                     store={selectedStore}
-                    className="h-16 w-16 shrink-0 shadow-lg shadow-orange-100"
+                    className="h-14 w-14 shrink-0 shadow-lg shadow-orange-100 dark:shadow-none sm:h-16 sm:w-16"
                     rounded="rounded-[1.35rem]"
                     fallbackClassName="bg-orange-50 text-[#f97316] ring-orange-100"
                   />
@@ -1613,7 +1601,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                       Olá, {merchantName}
                     </p>
 
-                    <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-[#111827] dark:text-zinc-100 sm:text-4xl">
+                    <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-[#111827] dark:text-zinc-100 sm:text-3xl">
                       {selectedStore.name || 'Sua loja'}
                     </h1>
 
@@ -1640,7 +1628,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               </div>
 
               <div className="flex flex-col gap-3 xl:w-[360px] xl:items-end xl:justify-between">
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap xl:justify-end">
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                   <button
                     type="button"
                     onClick={handleToggleStoreOpen}
@@ -1691,17 +1679,17 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 xl:w-full">
-                  <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                  <div className="rounded-2xl border border-gray-100 bg-white/90 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Pendentes</p>
                     <p className="mt-1 text-2xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.pendingCount}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                  <div className="rounded-2xl border border-gray-100 bg-white/90 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Preparo</p>
                     <p className="mt-1 text-2xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.preparingCount}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                  <div className="rounded-2xl border border-gray-100 bg-white/90 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Em rota</p>
                     <p className="mt-1 text-2xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.routeCount}</p>
                   </div>
@@ -1828,16 +1816,16 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
         ) : (
           <>
             {/* PRÓXIMA AÇÃO RECOMENDADA */}
-            <div className="mb-4 rounded-3xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4 rounded-3xl border border-orange-100 bg-white p-4 shadow-sm dark:border-orange-900/40 dark:bg-zinc-900 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#f97316]">
                     Próxima ação recomendada
                   </p>
-                  <h3 className="mt-1 text-lg font-black text-[#111827]">
+                  <h3 className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100">
                     {recommendedAction.title}
                   </h3>
-                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                     {recommendedAction.description}
                   </p>
                 </div>
@@ -1863,47 +1851,47 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
 
             {/* ATENÇÃO AGORA */}
             <div className="mb-4 grid gap-3 lg:grid-cols-3">
-              <div className="rounded-3xl border border-amber-100 bg-white p-4 shadow-sm">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+              <div className="rounded-3xl border border-amber-100 bg-white p-4 shadow-sm dark:border-amber-900/40 dark:bg-zinc-900">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
                   Atenção agora
                 </p>
-                <p className="mt-2 text-2xl font-black text-[#111827]">
+                <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
                   {dashboardData?.urgentOrders?.length || 0}
                 </p>
-                <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                   {dashboardData?.oldestPendingMinutes > 0
                     ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
                     : 'Nenhum pedido crítico no momento'}
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-red-100 bg-white p-4 shadow-sm">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+              <div className="rounded-3xl border border-red-100 bg-white p-4 shadow-sm dark:border-red-900/40 dark:bg-zinc-900">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
                   Revisão
                 </p>
-                <p className="mt-2 text-2xl font-black text-[#111827]">
+                <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
                   {dashboardData?.priceReviewOrders?.length || 0}
                 </p>
-                <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                   Pedidos com alerta de preço
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+              <div className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm dark:border-emerald-900/40 dark:bg-zinc-900">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
                   Operação
                 </p>
-                <p className="mt-2 text-2xl font-black text-[#111827]">
+                <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
                   {(dashboardData?.activeOrders?.length || 0) > 0 ? dashboardData.activeOrders.length : 0}
                 </p>
-                <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                   Pedidos em andamento agora
                 </p>
               </div>
             </div>
 
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-2xl border border-gray-100 bg-white p-1 shadow-sm">
+              <div className="inline-flex rounded-2xl border border-gray-100 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 {PERIOD_OPTIONS.map((option, index) => (
                   <button
                     key={option.label}
@@ -1912,7 +1900,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     className={`rounded-xl px-4 py-2 text-sm font-black transition ${
                       periodIdx === index
                         ? 'bg-[#f97316] text-white shadow-sm'
-                        : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827]'
+                        : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
                     }`}
                   >
                     {option.label}
@@ -1922,7 +1910,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               <button
                 type="button"
                 onClick={() => showToast('success', 'Os dados já estão sincronizados em tempo real.')}
-                className="inline-flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-2.5 text-sm font-black text-[#6b7280] shadow-sm transition hover:text-[#f97316]"
+                className="inline-flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-2.5 text-sm font-black text-[#6b7280] shadow-sm transition hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
               >
                 <FiRefreshCw />
                 Tempo real ativo
@@ -2018,11 +2006,11 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
-              <div className="min-w-0 rounded-[1.7rem] border border-gray-100 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-gray-100 p-5">
+              <div className="min-w-0 rounded-[1.7rem] border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-zinc-800">
                   <div>
-                    <p className="text-sm font-black text-[#111827]">Pedidos recentes</p>
-                    <p className="mt-1 text-xs text-[#6b7280]">Últimos pedidos recebidos pela loja</p>
+                    <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Pedidos recentes</p>
+                    <p className="mt-1 text-xs text-[#6b7280] dark:text-zinc-400">Últimos pedidos recebidos pela loja</p>
                   </div>
                   <Link to="/dashboard/orders" className="inline-flex items-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-black text-white transition hover:bg-[#ea580c]">
                     Ver todos <FiArrowUpRight />
@@ -2031,7 +2019,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
 
                 {loading ? (
                   <div className="space-y-3 p-5">
-                    {[1, 2, 3, 4].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-gray-50" />)}
+                    {[1, 2, 3, 4].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-gray-50 dark:bg-zinc-950" />)}
                   </div>
                 ) : recentOrders.length > 0 ? (
                   <div>
@@ -2053,18 +2041,18 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
   bestHourLabel={dashboardData.bestHourLabel}
 />
 
-                <div className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm">
-                  <p className="text-sm font-black text-[#111827]">Ações rápidas</p>
+                <div className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Ações rápidas</p>
                   <div className="mt-4 grid gap-3">
-                    <Link to="/dashboard/orders" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]">
+                    <Link to="/dashboard/orders" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-800 dark:text-zinc-100 dark:hover:bg-orange-950/20">
                       <span className="flex items-center gap-3"><FiShoppingBag /> Gerenciar pedidos</span>
                       <FiChevronRight />
                     </Link>
-                    <Link to="/dashboard/stats" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]">
+                    <Link to="/dashboard/stats" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-800 dark:text-zinc-100 dark:hover:bg-orange-950/20">
                       <span className="flex items-center gap-3"><FiBarChart2 /> Ver estatísticas</span>
                       <FiChevronRight />
                     </Link>
-                    <a href={storePublicUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]">
+                    <a href={storePublicUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-800 dark:text-zinc-100 dark:hover:bg-orange-950/20">
                       <span className="flex items-center gap-3"><FiLayout /> Abrir cardápio público</span>
                       <FiExternalLink />
                     </a>
@@ -2123,13 +2111,13 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             {/* MINI FOOTER */}
-            <div className="mt-8 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
+            <div className="mt-8 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-black text-[#111827]">
+                  <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
                     PratoBy · Painel do lojista
                   </p>
-                  <p className="text-xs font-semibold text-[#9ca3af]">
+                  <p className="text-xs font-semibold text-[#9ca3af] dark:text-zinc-500">
                     Acompanhe sua operação, evolua seu cardápio e venda mais.
                   </p>
                 </div>
@@ -2137,19 +2125,19 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 <div className="flex flex-wrap gap-2">
                   <a
                     href="/dashboard/menu"
-                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316]"
+                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Cardápio
                   </a>
                   <a
                     href="/dashboard/orders"
-                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316]"
+                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Pedidos
                   </a>
                   <a
                     href="/dashboard/statistics"
-                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316]"
+                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Estatísticas
                   </a>
