@@ -11,10 +11,11 @@ const START_ASAAS_LOCK_TTL_MS = 5 * 60 * 1000
 const BILLING_PROVIDER = 'asaas'
 const DEFAULT_ASAAS_BASE_URL = 'https://api-sandbox.asaas.com/v3'
 
-const CHECKOUT_STATUSES = new Set(['checkout_pending', 'pending_checkout'])
+const CHECKOUT_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
 const START_ASAAS_ALLOWED_STATUSES = new Set([
   'checkout_pending',
   'pending_checkout',
+  'billing_pending',
   'trialing',
   'active',
   'past_due',
@@ -328,11 +329,21 @@ function getCustomerPayload(uid, userData, billingData) {
     throw new HttpsError('invalid-argument', 'Nome do pagador e obrigatorio.')
   }
 
+  const email = String(billingData.email || userData.email || '').trim().toLowerCase()
+  if (!email || !/\S+@\S+\.\S+/.test(email)) {
+    throw new HttpsError('invalid-argument', 'E-mail de cobranca invalido.')
+  }
+
+  const mobilePhone = normalizePhoneDigits(billingData.phone || userData.phoneE164 || userData.phone)
+  if (!mobilePhone) {
+    throw new HttpsError('invalid-argument', 'WhatsApp ou celular do pagador e obrigatorio.')
+  }
+
   const payload = {
     name,
     cpfCnpj,
-    email: String(billingData.email || userData.email || '').trim().toLowerCase() || undefined,
-    mobilePhone: normalizePhoneDigits(billingData.phone || userData.phoneE164 || userData.phone),
+    email,
+    mobilePhone,
     externalReference: `pratoby:user:${uid}`,
     notificationDisabled: billingData.notificationDisabled === true,
     groupName: 'PratoBy',
@@ -1239,6 +1250,11 @@ function createAsaasFunctions({ db, admin, logger }) {
           }
 
           const amountCents = getPlanAmountCents(plan, billingCycle)
+          const initialPaymentId = asaasSubscription.payment?.id || asaasSubscription.lastPaymentId || null
+          const initialPaymentStatus =
+            asaasSubscription.payment?.status ||
+            asaasSubscription.lastPaymentStatus ||
+            'PENDING'
           const subscriptionData = {
             id: localSubscriptionId,
             uid,
@@ -1255,8 +1271,8 @@ function createAsaasFunctions({ db, admin, logger }) {
             trialStartedAt,
             trialEndsAt,
             currentPeriodEnd: trialEndsAt,
-            lastPaymentId: null,
-            lastPaymentStatus: null,
+            lastPaymentId: initialPaymentId,
+            lastPaymentStatus: initialPaymentStatus,
             createdAt: now,
             updatedAt: now,
           }
@@ -1273,6 +1289,8 @@ function createAsaasFunctions({ db, admin, logger }) {
             asaasCustomerId,
             asaasSubscriptionId,
             localSubscriptionId,
+            lastPaymentId: initialPaymentId,
+            lastPaymentStatus: initialPaymentStatus,
             now,
           })
 

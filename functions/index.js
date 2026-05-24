@@ -690,6 +690,101 @@ function normalizeBrazilianPhone(phone) {
   return { phoneDigits: digits, phoneE164: '+' + digits }
 }
 
+function validateBrazilianMobilePhone(phone) {
+  const rawDigits = String(phone || '').replace(/\D/g, '')
+  let nationalDigits = ''
+
+  if (rawDigits.length === 13 && rawDigits.startsWith('55')) {
+    nationalDigits = rawDigits.slice(2)
+  } else if (rawDigits.length === 11) {
+    nationalDigits = rawDigits
+  } else {
+    return { ok: false }
+  }
+
+  const ddd = nationalDigits.slice(0, 2)
+  const localNumber = nationalDigits.slice(2)
+  const localTail = localNumber.slice(1)
+
+  if (ddd.startsWith('0') || localNumber.length !== 9 || localNumber[0] !== '9') {
+    return { ok: false }
+  }
+
+  const repeatedRun = /(\d)\1{4,}/
+  const obviousLocalNumbers = new Set([
+    '999999999',
+    '999111111',
+    '900000000',
+    '911111111',
+  ])
+
+  if (
+    /^(\d)\1+$/.test(nationalDigits) ||
+    /(\d)\1{3}$/.test(localNumber) ||
+    repeatedRun.test(localNumber) ||
+    obviousLocalNumbers.has(localNumber) ||
+    ['12345678', '87654321', '11111111', '00000000'].some((pattern) => localTail.includes(pattern))
+  ) {
+    return { ok: false }
+  }
+
+  return {
+    ok: true,
+    phoneDigits: `55${nationalDigits}`,
+    phoneE164: `+55${nationalDigits}`,
+  }
+}
+
+function hashPhoneE164(phoneE164) {
+  return crypto.createHash('sha256').update(String(phoneE164 || '')).digest('hex')
+}
+
+const PHONE_CALLABLE_OPTIONS = { region: 'southamerica-east1', cors: true }
+const PHONE_PRECHECK_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
+const PHONE_PRECHECK_RATE_LIMIT_MAX = 5
+
+async function assertFirebasePhonePrecheckRateLimit(uid, phoneHash) {
+  const now = admin.firestore.Timestamp.now()
+  const nowMs = now.toMillis()
+  const rateLimitRef = db.collection('rateLimits').doc(`precheckFirebasePhoneClaim_${uid}_${phoneHash}`)
+
+  await db.runTransaction(async (transaction) => {
+    const rateLimitDoc = await transaction.get(rateLimitRef)
+    const data = rateLimitDoc.exists ? rateLimitDoc.data() || {} : {}
+    const windowStartMs = data.windowStart?.toMillis ? data.windowStart.toMillis() : 0
+    const shouldReset = !windowStartMs || nowMs - windowStartMs >= PHONE_PRECHECK_RATE_LIMIT_WINDOW_MS
+    const count = shouldReset ? 0 : Number(data.count || 0)
+
+    if (count >= PHONE_PRECHECK_RATE_LIMIT_MAX) {
+      throw new HttpsError('resource-exhausted', 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.')
+    }
+
+    transaction.set(rateLimitRef, {
+      provider: 'firebase_phone_auth',
+      type: 'phone_precheck',
+      uid,
+      phoneHash,
+      count: count + 1,
+      limit: PHONE_PRECHECK_RATE_LIMIT_MAX,
+      windowStart: shouldReset ? now : data.windowStart || now,
+      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + PHONE_PRECHECK_RATE_LIMIT_WINDOW_MS),
+      updatedAt: now,
+    }, { merge: true })
+  })
+}
+
+function getNextPhoneVerifiedOnboardingStatus(userData) {
+  const currentOnboarding = userData?.onboardingStatus || ''
+  const subscriptionStatus = userData?.subscriptionStatus || ''
+  const preserveStatuses = new Set(['completed', 'billing_pending', 'trialing', 'active'])
+
+  if (preserveStatuses.has(currentOnboarding) || preserveStatuses.has(subscriptionStatus)) {
+    return currentOnboarding || 'completed'
+  }
+
+  return 'phone_verified'
+}
+
 function getIsMockOtpAllowed() {
   return process.env.FUNCTIONS_EMULATOR === 'true'
 }
@@ -711,6 +806,118 @@ function hashOtpCode(uid, phoneE164, code) {
   return crypto.createHmac('sha256', useSecret).update(`${uid}:${phoneE164}:${code}`).digest('hex')
 }
 
+// Firebase callable only. The frontend must use httpsCallable so Firebase handles auth and CORS.
+exports.precheckFirebasePhoneClaim = onCall(PHONE_CALLABLE_OPTIONS, async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
+
+  const validatedPhone = validateBrazilianMobilePhone(request.data?.phoneE164 || '')
+  if (!validatedPhone.ok) {
+    throw new HttpsError('invalid-argument', 'Informe um celular valido para receber o codigo por SMS.')
+  }
+
+  const { phoneE164 } = validatedPhone
+  const phoneHash = hashPhoneE164(phoneE164)
+  const claimRef = db.collection('phoneClaims').doc(phoneHash)
+  const legacyClaimRef = db.collection('phoneClaims').doc(phoneE164)
+
+  const [claimDoc, legacyClaimDoc] = await Promise.all([
+    claimRef.get(),
+    legacyClaimRef.get(),
+  ])
+
+  const claimUid = claimDoc.exists
+    ? (claimDoc.data().uid || claimDoc.data().ownerUid || '')
+    : ''
+  const legacyClaimUid = legacyClaimDoc.exists
+    ? (legacyClaimDoc.data().uid || legacyClaimDoc.data().ownerUid || '')
+    : ''
+
+  if ((claimUid && claimUid !== uid) || (legacyClaimUid && legacyClaimUid !== uid)) {
+    throw new HttpsError('already-exists', 'Este telefone já está vinculado a outra conta.')
+  }
+
+  await assertFirebasePhonePrecheckRateLimit(uid, phoneHash)
+
+  return { ok: true, phoneE164 }
+})
+
+exports.confirmFirebasePhoneVerified = onCall(PHONE_CALLABLE_OPTIONS, async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
+
+  const userRecord = await admin.auth().getUser(uid)
+  const normalized = normalizeBrazilianPhone(userRecord.phoneNumber || '')
+  if (!normalized) {
+    throw new HttpsError('failed-precondition', 'Telefone verificado nao encontrado na conta Firebase.')
+  }
+
+  const { phoneDigits, phoneE164 } = normalized
+  const phoneHash = hashPhoneE164(phoneE164)
+  const userRef = db.collection('users').doc(uid)
+  const claimRef = db.collection('phoneClaims').doc(phoneHash)
+  const legacyClaimRef = db.collection('phoneClaims').doc(phoneE164)
+
+  return await db.runTransaction(async (transaction) => {
+    const userDoc = await transaction.get(userRef)
+    const claimDoc = await transaction.get(claimRef)
+    const legacyClaimDoc = await transaction.get(legacyClaimRef)
+
+    if (!userDoc.exists) {
+      throw new HttpsError('failed-precondition', 'Perfil nao encontrado.')
+    }
+
+    const userData = userDoc.data() || {}
+    if (userData.role !== 'merchant') {
+      throw new HttpsError('permission-denied', 'Permissao negada.')
+    }
+
+    const existingClaimUid = claimDoc.exists
+      ? (claimDoc.data().uid || claimDoc.data().ownerUid || '')
+      : ''
+    if (existingClaimUid && existingClaimUid !== uid) {
+      throw new HttpsError('already-exists', 'Este telefone ja esta vinculado a outra conta.')
+    }
+
+    const existingLegacyClaimUid = legacyClaimDoc.exists
+      ? (legacyClaimDoc.data().uid || legacyClaimDoc.data().ownerUid || '')
+      : ''
+    if (existingLegacyClaimUid && existingLegacyClaimUid !== uid) {
+      throw new HttpsError('already-exists', 'Este telefone ja esta vinculado a outra conta.')
+    }
+
+    const now = admin.firestore.Timestamp.now()
+    const nextOnboarding = getNextPhoneVerifiedOnboardingStatus(userData)
+
+    transaction.set(claimRef, {
+      uid,
+      ownerUid: uid,
+      phoneHash,
+      provider: 'firebase_phone_auth',
+      createdAt: claimDoc.exists ? claimDoc.data().createdAt || now : now,
+      updatedAt: now,
+    }, { merge: true })
+
+    transaction.update(userRef, {
+      phone: phoneDigits,
+      phoneE164,
+      phoneVerified: true,
+      phoneVerifiedSource: 'firebase_phone_auth',
+      phoneVerifiedAt: now,
+      onboardingStatus: nextOnboarding,
+      updatedAt: now,
+    })
+
+    return {
+      ok: true,
+      verified: true,
+      phoneE164,
+      onboardingStatus: nextOnboarding,
+    }
+  })
+})
+
+// Legacy verification flow. Firebase Phone Auth is the active onboarding verification path.
 exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
@@ -740,8 +947,14 @@ exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
   }
 
   const claimRef = db.collection('phoneClaims').doc(phoneE164)
+  const hashedClaimRef = db.collection('phoneClaims').doc(hashPhoneE164(phoneE164))
   const claimDoc = await claimRef.get()
-  if (claimDoc.exists && claimDoc.data().ownerUid !== uid) {
+  const hashedClaimDoc = await hashedClaimRef.get()
+  const claimUid = claimDoc.exists ? (claimDoc.data().ownerUid || claimDoc.data().uid || '') : ''
+  const hashedClaimUid = hashedClaimDoc.exists
+    ? (hashedClaimDoc.data().ownerUid || hashedClaimDoc.data().uid || '')
+    : ''
+  if ((claimUid && claimUid !== uid) || (hashedClaimUid && hashedClaimUid !== uid)) {
     throw new HttpsError('already-exists', 'Este WhatsApp já está vinculado a outra conta.')
   }
 
@@ -836,6 +1049,7 @@ exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
   return response
 })
 
+// Legacy verification flow. Firebase Phone Auth is the active onboarding verification path.
 exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
@@ -906,15 +1120,30 @@ exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
     }
 
     const claimRef = db.collection('phoneClaims').doc(vData.phoneE164)
+    const hashedClaimRef = db.collection('phoneClaims').doc(hashPhoneE164(vData.phoneE164))
     const claimDoc = await transaction.get(claimRef)
+    const hashedClaimDoc = await transaction.get(hashedClaimRef)
 
-    if (claimDoc.exists && claimDoc.data().ownerUid !== uid) {
+    const claimUid = claimDoc.exists ? (claimDoc.data().ownerUid || claimDoc.data().uid || '') : ''
+    const hashedClaimUid = hashedClaimDoc.exists
+      ? (hashedClaimDoc.data().ownerUid || hashedClaimDoc.data().uid || '')
+      : ''
+
+    if ((claimUid && claimUid !== uid) || (hashedClaimUid && hashedClaimUid !== uid)) {
       throw new HttpsError('already-exists', 'Este WhatsApp já está vinculado a outra conta.')
     }
 
     transaction.set(claimRef, {
       ownerUid: uid,
       claimedAt: now
+    }, { merge: true })
+    transaction.set(hashedClaimRef, {
+      uid,
+      ownerUid: uid,
+      phoneHash: hashPhoneE164(vData.phoneE164),
+      provider: 'legacy_otp',
+      createdAt: hashedClaimDoc.exists ? hashedClaimDoc.data().createdAt || now : now,
+      updatedAt: now,
     }, { merge: true })
 
     const currentOnboarding = userData.onboardingStatus || ''
@@ -942,6 +1171,8 @@ exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
   })
 })
 
+// Legacy name kept for frontend compatibility. This function now only prepares
+// a billing-pending store; the real trial is activated by startAsaasSubscription.
 exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
@@ -982,30 +1213,31 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
 
       const storeData = storeDoc.data() || {}
       const finalSlug = storeData.slug || storeData.storeSlug || 'loja'
+      const existingStoreIds = Array.isArray(userData.storeIds) ? userData.storeIds : []
+      const existingStoreKeys = Array.isArray(userData.storeKeys) ? userData.storeKeys : []
+      const userUpdates = { updatedAt: now }
 
-      // Decidir subscriptionStatus correto baseado na loja e dados legados
-      const finalStatus = storeData.subscriptionStatus || userData.subscriptionStatus || 'trialing'
-
-      // Atualizar somente onboardingStatus e subscriptionStatus se diferirem
-      const userUpdates = {
-        onboardingStatus: 'completed',
-        updatedAt: now
+      if (userData.storeId !== existingStoreId) {
+        userUpdates.storeId = existingStoreId
       }
-      if (userData.subscriptionStatus !== finalStatus) {
-        userUpdates.subscriptionStatus = finalStatus
+
+      const nextStoreIds = Array.from(new Set([...existingStoreIds, existingStoreId].filter(Boolean)))
+      if (nextStoreIds.length !== existingStoreIds.length) {
+        userUpdates.storeIds = nextStoreIds
+      }
+
+      const nextStoreKeys = Array.from(new Set([...existingStoreKeys, existingStoreId, finalSlug].filter(Boolean)))
+      if (nextStoreKeys.length !== existingStoreKeys.length) {
+        userUpdates.storeKeys = nextStoreKeys
       }
 
       transaction.update(userRef, userUpdates)
-
-      const trialEndsAt = storeData.trialEndsAt
-        ? (storeData.trialEndsAt.toMillis ? storeData.trialEndsAt.toMillis() : new Date(storeData.trialEndsAt).getTime())
-        : now.toMillis() + 14 * 24 * 60 * 60 * 1000
 
       return {
         ok: true,
         storeId: existingStoreId,
         storeSlug: finalSlug,
-        trialEndsAt: trialEndsAt
+        nextPath: '/dashboard/billing'
       }
     }
 
@@ -1016,6 +1248,7 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
       'phone_verified',
       'profile_completed',
       'store_pending',
+      'billing_pending',
       'pending_checkout',
       'checkout_pending',
       'onboarding_pending',
@@ -1057,14 +1290,17 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
 
     const storeRef = db.collection('stores').doc()
     const storeId = storeRef.id
-
-    const fourteenDaysLater = admin.firestore.Timestamp.fromMillis(now.toMillis() + 14 * 24 * 60 * 60 * 1000)
+    const plan = userData.plan || 'essential'
+    const billingCycle = userData.billingCycle || 'monthly'
 
     const newStoreData = {
       name: storeName,
       storeName: storeName,
+      storeId: storeId,
+      storeDocId: storeId,
       slug: finalSlug,
       storeSlug: finalSlug,
+      storeKeys: [storeId, finalSlug],
       ownerId: uid,
       ownerUid: uid,
       ownerEmail: userData.email || '',
@@ -1075,26 +1311,24 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
       isOpen: false,
       isBlocked: false,
       isDeleted: false,
-      subscriptionStatus: 'trialing',
-      onboardingStatus: 'completed',
-      plan: userData.plan || 'essential',
-      billingCycle: userData.billingCycle || 'monthly',
-      trialStartedAt: now,
-      trialEndsAt: fourteenDaysLater,
+      subscriptionStatus: 'checkout_pending',
+      onboardingStatus: 'billing_pending',
+      plan,
+      billingCycle,
       createdAt: now,
       updatedAt: now,
       createdBy: uid,
-      source: 'self_signup_trial'
+      source: 'self_signup_billing_pending'
     }
 
     const newUserData = {
       storeId: storeId,
       storeIds: [storeId],
       storeKeys: [storeId, finalSlug],
-      subscriptionStatus: 'trialing',
-      onboardingStatus: 'completed',
-      trialStartedAt: now,
-      trialEndsAt: fourteenDaysLater,
+      subscriptionStatus: 'checkout_pending',
+      onboardingStatus: 'billing_pending',
+      plan,
+      billingCycle,
       updatedAt: now
     }
 
@@ -1109,13 +1343,13 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
     transaction.set(storeRef, newStoreData)
     transaction.update(userRef, newUserData)
 
-    logger.info(`[startFreeTrial] Loja ${storeId} criada com sucesso para o lojista ${uid} (onboardingStatus: received=${onboardingStatus}, phoneVerified=${userData.phoneVerified}).`)
+    logger.info(`[startFreeTrial] Loja ${storeId} criada como pendente de billing para o lojista ${uid} (onboardingStatus: received=${onboardingStatus}, phoneVerified=${userData.phoneVerified}).`)
 
     return {
       ok: true,
       storeId: storeId,
       storeSlug: finalSlug,
-      trialEndsAt: fourteenDaysLater.toMillis()
+      nextPath: '/dashboard/billing'
     }
   })
 })

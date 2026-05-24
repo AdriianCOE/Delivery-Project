@@ -50,6 +50,42 @@ import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
+const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
+
+function normalizeBillingStatus(status) {
+  const value = String(status || '').trim()
+  return value === 'pending_checkout' ? 'checkout_pending' : value
+}
+
+function normalizeAccessRole(role) {
+  const value = String(role || '').trim().toLowerCase()
+  if (value === 'lojista') return 'merchant'
+  if (value === 'dev') return 'developer'
+  return value
+}
+
+function canLoadOperationalOrders({ role, selectedStore, userData }) {
+  if (!selectedStore) return false
+
+  const normalizedRole = normalizeAccessRole(role || userData?.role)
+  if (!['merchant', 'admin', 'developer'].includes(normalizedRole)) return false
+
+  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
+  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
+
+  if (
+    selectedStore?.isBillingBlocked === true ||
+    BILLING_PENDING_STATUSES.has(storeStatus) ||
+    BILLING_PENDING_STATUSES.has(userStatus) ||
+    userData?.onboardingStatus === 'billing_pending'
+  ) {
+    return false
+  }
+
+  const effectiveStatus = storeStatus || userStatus
+  return OPERATIONAL_STATUSES.has(effectiveStatus) || !effectiveStatus
+}
 
 const STATUS_META = {
   pendente: {
@@ -2467,7 +2503,7 @@ function OrderModal({
 }
 
 export default function OrdersPage() {
-  const { user, userData } = useAuth()
+  const { user, userData, role, loading: authLoading } = useAuth()
 
   const [stores, setStores] = useState([])
   const [orders, setOrders] = useState([])
@@ -2496,6 +2532,7 @@ export default function OrdersPage() {
   }, [orders, selectedOrderId])
 
   const loading = loadingStores || loadingOrders
+  const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -3052,10 +3089,22 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   }, [stores])
 
   useEffect(() => {
+    if (authLoading) {
+      setOrders([])
+      setLoadingOrders(true)
+      return undefined
+    }
+
     if (!selectedStore) {
       setOrders([])
       setLoadingOrders(false)
       return
+    }
+
+    if (!canReadOrders) {
+      setOrders([])
+      setLoadingOrders(false)
+      return undefined
     }
 
     const storeKeys = getStoreKeys(selectedStore)
@@ -3149,7 +3198,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [selectedStore, showToast])
+  }, [authLoading, canReadOrders, selectedStore, showToast])
 
   const statusCounts = useMemo(() => {
     const counts = {
@@ -3312,6 +3361,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             icon={FiHome}
             title="Nenhuma loja encontrada"
             description="Seu usuário ainda não possui uma loja vinculada. Peça ao administrador para criar ou vincular uma loja ao seu acesso."
+          />
+        ) : !canReadOrders ? (
+          <EmptyState
+            icon={FiCreditCard}
+            title="Configure a cobrança para acessar pedidos"
+            description="Conclua a configuração de faturamento para liberar a operação da loja."
           />
         ) : (
           <>

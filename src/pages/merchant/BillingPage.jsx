@@ -96,7 +96,7 @@ function formatCurrency(value) {
 }
 
 function normalizeStatus(status) {
-  return status === 'pending_checkout' ? 'checkout_pending' : status || 'checkout_pending'
+  return status === 'pending_checkout' || status === 'billing_pending' ? 'checkout_pending' : status || 'checkout_pending'
 }
 
 function normalizeCycleId(cycle) {
@@ -106,12 +106,14 @@ function normalizeCycleId(cycle) {
 
 function getStatusCopy(status) {
   const map = {
-    checkout_pending: 'Checkout pendente',
-    trialing: 'Teste gratis ativo',
+    checkout_pending: 'Configure sua cobrança para ativar o teste grátis',
+    pending_checkout: 'Configure sua cobrança para ativar o teste grátis',
+    billing_pending: 'Configure sua cobrança para ativar o teste grátis',
+    trialing: 'Teste grátis ativo',
     active: 'Assinatura ativa',
     past_due: 'Pagamento pendente',
-    blocked: 'Assinatura bloqueada',
-    canceled: 'Assinatura cancelada',
+    blocked: 'Assinatura bloqueada/cancelada',
+    canceled: 'Assinatura bloqueada/cancelada',
   }
   return map[status] || 'Checkout pendente'
 }
@@ -126,8 +128,8 @@ function getHeroTone(status, hasAsaasSubscription) {
 function getPrimaryAction({ status, hasAsaasSubscription }) {
   if (status === 'checkout_pending') {
     return {
-      label: 'Ativar 14 dias gratis',
-      support: 'A cobranca comeca somente apos o periodo de teste.',
+      label: 'Configurar cobrança Asaas',
+      support: 'Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis.',
       needsBillingData: true,
       tone: 'orange',
     }
@@ -135,8 +137,8 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
 
   if (status === 'trialing' && !hasAsaasSubscription) {
     return {
-      label: 'Configurar cobranca Asaas',
-      support: 'Voce nao sera cobrado agora. A primeira cobranca sera apenas no fim do teste.',
+      label: 'Configurar cobrança Asaas',
+      support: 'Você não será cobrado agora. A primeira cobrança será apenas no fim do teste.',
       needsBillingData: true,
       tone: 'orange',
     }
@@ -146,8 +148,8 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
     return {
       label: 'Regularizar pagamento',
       support: hasAsaasSubscription
-        ? 'Confira os dados da assinatura Asaas para regularizar a pendencia.'
-        : 'Configure a cobranca para regularizar a assinatura.',
+        ? 'Confira os dados da assinatura Asaas para regularizar a pendência.'
+        : 'Configure a cobrança para regularizar a assinatura.',
       needsBillingData: !hasAsaasSubscription,
       tone: 'red',
     }
@@ -157,7 +159,7 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
     return {
       label: 'Reativar assinatura',
       support: hasAsaasSubscription
-        ? 'Confira a assinatura Asaas e regularize a situacao para reativar a loja.'
+        ? 'Confira a assinatura Asaas e regularize a situação para reativar a loja.'
         : 'Informe os dados de faturamento para reativar sua assinatura.',
       needsBillingData: !hasAsaasSubscription,
       tone: 'red',
@@ -166,7 +168,7 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
 
   return {
     label: 'Ver detalhes da assinatura',
-    support: 'Cobranca Asaas configurada para este plano.',
+    support: 'Cobrança Asaas configurada para este plano.',
     needsBillingData: false,
     tone: 'neutral',
   }
@@ -232,7 +234,8 @@ function InfoList({ title, items, tone = 'orange' }) {
 }
 
 export default function BillingPage() {
-  const { user, userData, storeId, storeIds = [] } = useAuth()
+  const auth = useAuth()
+  const { user, userData, storeId, storeIds = [] } = auth
   const [store, setStore] = useState(null)
   const [loadingStore, setLoadingStore] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -400,23 +403,23 @@ export default function BillingPage() {
   const nextBillingInfo = useMemo(() => {
     if (!hasAsaasSubscription) {
       return {
-        label: 'Cobranca Asaas',
-        value: 'Pendente de configuracao',
-        helper: 'Configure a cobranca para manter sua loja ativa apos o teste.',
+        label: 'Cobrança Asaas',
+        value: 'Pendente de configuração',
+        helper: 'Configure a cobrança para ativar seu teste grátis.',
       }
     }
 
     if (isTrial && trialIsFuture) {
       return {
-        label: 'Primeira cobranca prevista',
+        label: 'Primeira cobrança prevista',
         value: formatBillingDate(trialEndsAt),
-        helper: 'A cobranca comeca somente apos o periodo de teste.',
+        helper: 'A cobrança começa somente após o período de teste.',
       }
     }
 
     if (isActive && currentPeriodEndDate) {
       return {
-        label: 'Proxima cobranca',
+        label: 'Próxima cobrança',
         value: formatBillingDate(currentPeriodEnd),
         helper: 'Sem taxas por pedido no plano atual.',
       }
@@ -431,7 +434,7 @@ export default function BillingPage() {
     }
 
     return {
-      label: 'Proxima cobranca',
+      label: 'Próxima cobrança',
       value: formatBillingDate(currentPeriodEnd || trialEndsAt),
       helper: 'Dados atualizados pelo webhook do Asaas.',
     }
@@ -454,60 +457,60 @@ export default function BillingPage() {
   const whatNowItems = useMemo(() => {
     if (isTrialNoAsaas) {
       return [
-        'Seu teste gratis esta ativo.',
-        'Voce ainda precisa configurar a cobranca Asaas.',
-        'A primeira cobranca so acontece apos o fim do teste.',
-        'Se nao configurar, a loja podera ser bloqueada ao final do periodo.',
+        'Seu teste grátis está ativo.',
+        'Você ainda precisa configurar a cobrança Asaas.',
+        'A primeira cobrança só acontece após o fim do teste.',
+        'Se não configurar, a loja poderá ser bloqueada ao final do período.',
       ]
     }
 
     if (isActive) {
       return [
-        'Sua assinatura esta ativa.',
-        'Voce continuara sem taxas por pedido.',
-        `A proxima cobranca acontecera em ${formatBillingDate(currentPeriodEnd)}.`,
+        'Sua assinatura está ativa.',
+        'Você continuará sem taxas por pedido.',
+        `A próxima cobrança acontecerá em ${formatBillingDate(currentPeriodEnd)}.`,
       ]
     }
 
     if (isPastDue || isBlocked || isCanceled) {
       return [
         'Regularize para manter a loja ativa.',
-        'Seu painel continuara acessivel para resolver a pendencia.',
-        'Novas liberacoes dependem da confirmacao pelo Asaas.',
+        'Seu painel continuará acessível para resolver a pendência.',
+        'Novas liberações dependem da confirmação pelo Asaas.',
       ]
     }
 
     return [
-      'Escolha um plano e ative os 14 dias gratis.',
-      'Voce nao sera cobrado agora durante o teste.',
-      'A cobranca comeca somente apos o periodo de teste.',
+      'Configure a cobrança para ativar seu teste.',
+      'Você não será cobrado agora.',
+      'A primeira cobrança acontece somente após o período de teste.',
     ]
   }, [currentPeriodEnd, isActive, isBlocked, isCanceled, isPastDue, isTrialNoAsaas])
 
   const timelineSteps = useMemo(() => {
     const trialDescription = trialEndsAt
-      ? `Ativo ate ${formatBillingDate(trialEndsAt)}`
-      : '14 dias gratis apos ativacao'
+      ? `Ativo até ${formatBillingDate(trialEndsAt)}`
+      : '14 dias grátis após ativação'
     const chargeDate = trialEndsAt || currentPeriodEnd
 
     return [
       {
         title: 'Conta criada',
-        description: 'Cadastro do lojista concluido',
-        meta: store?.createdAt ? formatBillingDate(store.createdAt) : 'Concluido',
+        description: 'Cadastro do lojista concluído',
+        meta: store?.createdAt ? formatBillingDate(store.createdAt) : 'Concluído',
         done: true,
       },
       {
-        title: 'Teste gratis',
-        description: isPending ? 'Aguardando ativacao' : trialDescription,
+        title: 'Teste grátis',
+        description: isPending ? 'Aguardando ativação' : trialDescription,
         meta: isTrial ? 'Etapa atual' : null,
         done: !isPending && !isTrial,
         active: isTrial || isPending,
       },
       {
-        title: 'Primeira cobranca',
-        description: hasAsaasSubscription ? 'Cobranca Asaas configurada' : 'Cobranca Asaas pendente',
-        meta: chargeDate ? `Prevista para ${formatBillingDate(chargeDate)}` : 'Configure a cobranca Asaas',
+        title: 'Primeira cobrança',
+        description: hasAsaasSubscription ? 'Cobrança Asaas configurada' : 'Cobrança Asaas pendente',
+        meta: chargeDate ? `Prevista para ${formatBillingDate(chargeDate)}` : 'Configure a cobrança Asaas',
         done: hasAsaasSubscription && isActive,
         active: !hasAsaasSubscription || isPastDue,
       },
@@ -541,28 +544,28 @@ export default function BillingPage() {
     setShowTechnical(true)
     setToast({
       type: 'info',
-      message: 'Detalhes da assinatura exibidos na secao tecnica abaixo.',
+      message: 'Detalhes da assinatura exibidos na seção técnica abaixo.',
     })
   }
 
   function validateBillingForm() {
     const errors = {}
-    if (!billingName.trim()) errors.name = 'Nome ou Razao Social e obrigatorio'
+    if (!billingName.trim()) errors.name = 'Nome ou Razão Social é obrigatório'
 
     const cleanCpfCnpj = billingCpfCnpj.replace(/\D/g, '')
     if (!billingCpfCnpj.trim()) {
-      errors.cpfCnpj = 'CPF ou CNPJ e obrigatorio'
+      errors.cpfCnpj = 'CPF ou CNPJ é obrigatório'
     } else if (cleanCpfCnpj.length !== 11 && cleanCpfCnpj.length !== 14) {
-      errors.cpfCnpj = 'CPF deve ter 11 digitos e CNPJ deve ter 14 digitos'
+      errors.cpfCnpj = 'CPF deve ter 11 dígitos e CNPJ deve ter 14 dígitos'
     }
 
     if (!billingEmail.trim()) {
-      errors.email = 'E-mail e obrigatorio'
+      errors.email = 'E-mail é obrigatório'
     } else if (!/\S+@\S+\.\S+/.test(billingEmail)) {
-      errors.email = 'E-mail invalido'
+      errors.email = 'E-mail inválido'
     }
 
-    if (!billingPhone.trim()) errors.phone = 'WhatsApp ou celular e obrigatorio'
+    if (!billingPhone.trim()) errors.phone = 'WhatsApp ou celular é obrigatório'
 
     setBillingErrors(errors)
     return Object.keys(errors).length === 0
@@ -593,11 +596,14 @@ export default function BillingPage() {
 
       setToast({
         type: 'success',
-        message: 'Cobranca Asaas configurada. O status sera atualizado pelos webhooks de pagamento.',
+        message: 'Cobranca Asaas configurada. Seu teste gratis foi ativado.',
       })
       setShowBillingModal(false)
       setPendingPlan(null)
       setPendingCycle(null)
+      if (auth.refreshUserData) {
+        await auth.refreshUserData()
+      }
     } catch (error) {
       console.error('[BillingPage] error starting subscription:', error)
       setToast({
@@ -638,7 +644,7 @@ export default function BillingPage() {
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-8">
       <DashboardPageHeader
         title="Faturamento"
-        description="Acompanhe teste gratis, plano atual, cobranca Asaas e proximas datas da sua loja."
+        description="Acompanhe teste grátis, plano atual, cobrança Asaas e próximas datas da sua loja."
       />
 
       <section className={`mt-6 overflow-hidden rounded-lg border p-5 shadow-sm sm:p-6 ${getHeroTone(subscriptionStatus, hasAsaasSubscription)}`}>
@@ -653,7 +659,7 @@ export default function BillingPage() {
                     : 'bg-orange-50 text-[#f97316] ring-orange-600/10'
                 }`}
               >
-                {hasAsaasSubscription ? 'Cobranca Asaas configurada' : 'Cobranca Asaas pendente'}
+                {hasAsaasSubscription ? 'Cobrança Asaas configurada' : 'Cobrança Asaas pendente'}
               </span>
             </div>
 
@@ -662,15 +668,19 @@ export default function BillingPage() {
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-[#4b5563]">
               {hasAsaasSubscription
-                ? 'Sua assinatura esta conectada ao Asaas. As liberacoes financeiras continuam dependendo dos webhooks de cobranca e pagamento.'
-                : 'Configure a cobranca Asaas para manter sua loja ativa apos o teste. Voce nao sera cobrado agora durante o periodo gratis.'}
+                ? 'Sua assinatura está conectada ao Asaas. As liberações financeiras continuam dependendo dos webhooks de cobrança e pagamento.'
+                : isPending
+                ? 'Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis.'
+                : isTrialNoAsaas
+                ? 'Cobrança Asaas pendente'
+                : 'Configure a cobrança Asaas para manter sua loja ativa após o teste. Você não será cobrado agora durante o período grátis.'}
             </p>
 
             {isTrial && trialEndsAt && (
               <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm font-black text-[#111827] ring-1 ring-orange-100">
                 <FiCalendar className="shrink-0 text-[#f97316]" />
                 <span className="truncate">
-                  {trialDaysLeft !== null ? `Termina em ${trialDaysLeft} dias` : 'Teste gratis ativo'} · Fim do teste gratis: {formatBillingDate(trialEndsAt)}
+                  {trialDaysLeft !== null ? `Termina em ${trialDaysLeft} dias` : 'Teste grátis ativo'} · Fim do teste grátis: {formatBillingDate(trialEndsAt)}
                 </span>
               </div>
             )}
@@ -699,7 +709,7 @@ export default function BillingPage() {
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryItem label="Plano" value={formatPlanName(plan)} helper={hasAsaasSubscription ? 'Plano atual' : 'Plano selecionado'} />
           <SummaryItem label="Ciclo" value={normalizeBillingCycle(billingCycle)} helper="Sem taxas por pedido" />
-          <SummaryItem label="Fim do teste gratis" value={formatBillingDate(trialEndsAt)} helper={isTrial ? 'Periodo de 14 dias gratis' : 'Data de referencia'} />
+          <SummaryItem label="Fim do teste grátis" value={formatBillingDate(trialEndsAt)} helper={isTrial ? 'Período de 14 dias grátis' : 'Data de referência'} />
           <SummaryItem label={nextBillingInfo.label} value={nextBillingInfo.value} helper={nextBillingInfo.helper} />
         </div>
       </section>
@@ -712,7 +722,7 @@ export default function BillingPage() {
             </span>
             <div>
               <h2 className="text-base font-black text-[#111827]">Linha do tempo</h2>
-              <p className="text-xs font-semibold text-[#6b7280]">Da criacao da conta ate a primeira cobranca.</p>
+              <p className="text-xs font-semibold text-[#6b7280]">Da criação da conta até a primeira cobrança.</p>
             </div>
           </div>
 
@@ -735,7 +745,7 @@ export default function BillingPage() {
           <div>
             <h2 className="text-xl font-black tracking-tight text-[#111827]">Planos do PratoBy</h2>
             <p className="mt-1 text-sm font-semibold text-[#6b7280]">
-              O plano atual nao altera o status financeiro. A liberacao continua vindo do backend e dos webhooks Asaas.
+              O plano atual não altera o status financeiro. A liberação continua vindo do backend e dos webhooks Asaas.
             </p>
           </div>
 
@@ -765,7 +775,7 @@ export default function BillingPage() {
           {PLAN_OPTIONS.map((option) => {
             const isCurrent = plan === option.id
             const price = selectedPlanCycle === 'annual' ? option.priceAnnual : option.priceMonthly
-            const suffix = selectedPlanCycle === 'annual' ? '/ano' : '/mes'
+            const suffix = selectedPlanCycle === 'annual' ? '/ano' : '/mês'
             const currentBadge = isTrialNoAsaas
               ? 'Plano selecionado'
               : hasAsaasSubscription || isActive
@@ -880,7 +890,7 @@ export default function BillingPage() {
           className="inline-flex items-center gap-2 text-xs font-black text-gray-400 transition hover:text-gray-600"
         >
           <FiCode />
-          <span>Detalhes tecnicos da integracao</span>
+          <span>Detalhes técnicos da integração</span>
           {showTechnical ? <FiChevronUp /> : <FiChevronDown />}
         </button>
 
@@ -914,9 +924,9 @@ export default function BillingPage() {
                   <FiShield />
                 </span>
                 <div>
-                  <h3 className="text-lg font-black text-[#111827]">Dados para ativar a cobranca</h3>
+                  <h3 className="text-lg font-black text-[#111827]">Dados para ativar a cobrança</h3>
                   <p className="mt-1 text-sm font-semibold leading-relaxed text-[#6b7280]">
-                    Essas informacoes serao usadas para criar sua assinatura no Asaas. Voce nao sera cobrado agora durante o teste gratis.
+                    Essas informações serão usadas para criar sua assinatura no Asaas. Você não será cobrado agora durante o teste grátis.
                   </p>
                 </div>
               </div>
@@ -926,14 +936,14 @@ export default function BillingPage() {
               <div className="space-y-4">
                 <div>
                   <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
-                    Nome / Razao social
+                    Nome / Razão social
                   </label>
                   <input
                     type="text"
                     value={billingName}
                     onChange={(e) => setBillingName(e.target.value)}
                     disabled={submitting}
-                    placeholder="Nome completo ou Razao Social"
+                    placeholder="Nome completo ou Razão Social"
                     className={`h-11 w-full rounded-lg border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
                       billingErrors.name ? 'border-red-300 bg-red-50/30' : 'border-gray-200 focus:border-orange-300'
                     }`}
@@ -951,7 +961,7 @@ export default function BillingPage() {
                     value={billingCpfCnpj}
                     onChange={(e) => setBillingCpfCnpj(e.target.value)}
                     disabled={submitting}
-                    placeholder="Apenas numeros"
+                    placeholder="Apenas números"
                     className={`h-11 w-full rounded-lg border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
                       billingErrors.cpfCnpj ? 'border-red-300 bg-red-50/30' : 'border-gray-200 focus:border-orange-300'
                     }`}
@@ -961,7 +971,7 @@ export default function BillingPage() {
 
                 <div>
                   <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
-                    E-mail de cobranca
+                    E-mail de cobrança
                   </label>
                   <input
                     type="email"
@@ -996,7 +1006,7 @@ export default function BillingPage() {
 
               {submitting && (
                 <div className="mt-4 rounded-lg border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-relaxed text-[#9a3412]">
-                  Estamos criando sua assinatura no Asaas. Mantenha esta janela aberta ate a conclusao.
+                  Estamos criando sua assinatura no Asaas. Mantenha esta janela aberta até a conclusão.
                 </div>
               )}
 
@@ -1015,7 +1025,7 @@ export default function BillingPage() {
                   className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {submitting ? <FiLoader className="animate-spin" /> : <FiCreditCard />}
-                  {submitting ? 'Processando...' : 'Ativar cobranca Asaas'}
+                  {submitting ? 'Processando...' : 'Ativar cobrança Asaas'}
                 </button>
               </div>
             </form>
@@ -1039,7 +1049,7 @@ export default function BillingPage() {
             </div>
             <div>
               <p className="text-sm font-black text-[#111827]">
-                {toast.type === 'success' ? 'Sucesso' : toast.type === 'info' ? 'Status' : 'Atencao'}
+                {toast.type === 'success' ? 'Sucesso' : toast.type === 'info' ? 'Status' : 'Atenção'}
               </p>
               <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#6b7280]">{toast.message}</p>
             </div>

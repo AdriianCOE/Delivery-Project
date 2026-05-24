@@ -24,12 +24,14 @@ export function formatBillingDate(value) {
 
 export function formatBillingStatus(status) {
   const map = {
-    checkout_pending: 'Checkout pendente',
-    trialing: 'Teste gratis ativo',
+    checkout_pending: 'Cobrança Asaas pendente',
+    pending_checkout: 'Cobrança Asaas pendente',
+    billing_pending: 'Cobrança Asaas pendente',
+    trialing: 'Teste grátis ativo',
     active: 'Assinatura ativa',
     past_due: 'Pagamento pendente',
-    canceled: 'Cancelada',
-    blocked: 'Bloqueada',
+    canceled: 'Assinatura bloqueada/cancelada',
+    blocked: 'Assinatura bloqueada/cancelada',
   }
   return map[status] || status || 'Pendente'
 }
@@ -37,6 +39,8 @@ export function formatBillingStatus(status) {
 export function getBillingStatusTone(status) {
   const map = {
     checkout_pending: 'orange',
+    pending_checkout: 'orange',
+    billing_pending: 'orange',
     trialing: 'orange',
     active: 'green',
     past_due: 'red',

@@ -720,7 +720,7 @@ function PhoneCard({ userData, onSuccess }) {
           />
           <div className="mt-3 flex gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-xs font-bold text-blue-700">
             <FiInfo size={13} className="mt-0.5 shrink-0" />
-            A confirmação por código será ativada em breve. Para alterar agora, entre em contato com o suporte.
+            A troca de telefone pelo painel será liberada em uma próxima etapa. Para alterar agora, entre em contato com o suporte.
           </div>
           {/* TODO: chamar requestPhoneVerification({ phone: newPhone }) quando Cloud Function estiver disponível */}
         </div>

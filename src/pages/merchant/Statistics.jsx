@@ -32,11 +32,47 @@ import {
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 
+const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
 const PERIOD_OPTIONS = [
   { label: 'Hoje', days: 0 },
   { label: 'Últimos 7 dias', days: 7 },
   { label: 'Últimos 30 dias', days: 30 },
 ]
+
+function normalizeBillingStatus(status) {
+  const value = String(status || '').trim()
+  return value === 'pending_checkout' ? 'checkout_pending' : value
+}
+
+function normalizeAccessRole(role) {
+  const value = String(role || '').trim().toLowerCase()
+  if (value === 'lojista') return 'merchant'
+  if (value === 'dev') return 'developer'
+  return value
+}
+
+function canLoadOperationalOrders({ role, selectedStore, userData }) {
+  if (!selectedStore) return false
+
+  const normalizedRole = normalizeAccessRole(role || userData?.role)
+  if (!['merchant', 'admin', 'developer'].includes(normalizedRole)) return false
+
+  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
+  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
+
+  if (
+    selectedStore?.isBillingBlocked === true ||
+    BILLING_PENDING_STATUSES.has(storeStatus) ||
+    BILLING_PENDING_STATUSES.has(userStatus) ||
+    userData?.onboardingStatus === 'billing_pending'
+  ) {
+    return false
+  }
+
+  const effectiveStatus = storeStatus || userStatus
+  return OPERATIONAL_STATUSES.has(effectiveStatus) || !effectiveStatus
+}
 
 // --- UTILIDADES ---
 function normalizeStatus(status) {
@@ -254,7 +290,7 @@ function getStoreKeys(store) {
 }
 
 export default function Statistics() {
-  const { user } = useAuth()
+  const { user, userData, role, loading: authLoading } = useAuth()
   const [orders, setOrders] = useState([])
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -273,6 +309,7 @@ export default function Statistics() {
       null
     )
   }, [selectedStoreId, stores])
+  const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
 
   useEffect(() => {
     if (!user?.uid) {
@@ -351,7 +388,19 @@ export default function Statistics() {
   }, [stores])
 
   useEffect(() => {
+    if (authLoading) {
+      setOrders([])
+      setLoading(true)
+      return undefined
+    }
+
     if (!selectedStore) {
+      setOrders([])
+      setLoading(false)
+      return undefined
+    }
+
+    if (!canReadOrders) {
       setOrders([])
       setLoading(false)
       return undefined
@@ -401,7 +450,11 @@ export default function Statistics() {
         publishOrders()
       },
       (error) => {
-        console.error('Erro ao carregar pedidos por storeId:', error)
+        if (error?.code === 'permission-denied') {
+          console.warn('Query de pedidos por storeId ignorada por permissao insuficiente.')
+        } else {
+          console.error('Erro ao carregar pedidos por storeId:', error)
+        }
         publishOrders()
       }
     )
@@ -430,8 +483,9 @@ export default function Statistics() {
           publishOrders()
         },
         (error) => {
-          // Ignora silenciosamente erros de índice ausente ou permissão na query de slug
-          console.warn('Query opcional por storeSlug ignorada (pode requerer índice/permissão):', error.message)
+          if (error?.code !== 'permission-denied') {
+            console.warn('Query opcional por storeSlug ignorada (pode requerer indice/permissao):', error.message)
+          }
         }
       )
       unsubscribers.push(unsubSlug)
@@ -442,7 +496,7 @@ export default function Statistics() {
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [selectedStore])
+  }, [authLoading, canReadOrders, selectedStore])
 
   const dashboardData = useMemo(() => {
     const now = Date.now()
@@ -729,6 +783,30 @@ export default function Statistics() {
               ))}
             </div>
             <div className="h-[400px] animate-pulse rounded-[2rem] border border-gray-100 bg-white shadow-sm" />
+          </div>
+        ) : !selectedStore ? (
+          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-gray-50 text-gray-400">
+              <FiShoppingBag size={30} />
+            </div>
+            <h3 className="mt-5 text-xl font-black text-[#111827]">
+              Nenhuma loja encontrada.
+            </h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[#6b7280]">
+              Vincule uma loja ao seu usuário para visualizar estatísticas.
+            </p>
+          </div>
+        ) : !canReadOrders ? (
+          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-orange-50 text-[#f97316]">
+              <FiCreditCard size={30} />
+            </div>
+            <h3 className="mt-5 text-xl font-black text-[#111827]">
+              Configure a cobrança para acessar estatísticas.
+            </h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[#6b7280]">
+              Os relatórios de pedidos ficam disponíveis depois que a operação da loja é liberada.
+            </p>
           </div>
         ) : dashboardData.periodOrders.length === 0 ? (
           <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-8 text-center">

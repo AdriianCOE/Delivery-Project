@@ -68,6 +68,8 @@ function PricingValidationBadge({ order }) {
 }
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
+const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
 const PUBLIC_STORE_BASE_URL =
   import.meta.env.VITE_PUBLIC_STORE_BASE_URL ||
   (typeof window !== 'undefined' ? window.location.origin : '')
@@ -81,6 +83,40 @@ const DASHBOARD_DAYS = [
   { id: 'fri', short: 'Sex', label: 'Sexta' },
   { id: 'sat', short: 'Sáb', label: 'Sábado' },
 ]
+
+function normalizeBillingStatus(status) {
+  const value = String(status || '').trim()
+  return value === 'pending_checkout' ? 'checkout_pending' : value
+}
+
+function normalizeAccessRole(role) {
+  const value = String(role || '').trim().toLowerCase()
+  if (value === 'lojista') return 'merchant'
+  if (value === 'dev') return 'developer'
+  return value
+}
+
+function canLoadOperationalOrders({ role, selectedStore, userData }) {
+  if (!selectedStore) return false
+
+  const normalizedRole = normalizeAccessRole(role || userData?.role)
+  if (!['merchant', 'admin', 'developer'].includes(normalizedRole)) return false
+
+  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
+  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
+
+  if (
+    selectedStore?.isBillingBlocked === true ||
+    BILLING_PENDING_STATUSES.has(storeStatus) ||
+    BILLING_PENDING_STATUSES.has(userStatus) ||
+    userData?.onboardingStatus === 'billing_pending'
+  ) {
+    return false
+  }
+
+  const effectiveStatus = storeStatus || userStatus
+  return OPERATIONAL_STATUSES.has(effectiveStatus) || !effectiveStatus
+}
 
 function getTodayOpeningHoursLabel(store) {
   const today = DASHBOARD_DAYS[new Date().getDay()]
@@ -884,7 +920,14 @@ function PeakHoursCard({ peakHours, maxPeakHour, bestHourLabel }) {
 }
 
 export default function MerchantDashboard() {
-  const { user, userData, storeId: authStoreId, storeIds: authStoreIds = [] } = useAuth()
+  const {
+    user,
+    userData,
+    role,
+    loading: authLoading,
+    storeId: authStoreId,
+    storeIds: authStoreIds = [],
+  } = useAuth()
 
   const [stores, setStores] = useState([])
   const [orders, setOrders] = useState([])
@@ -939,6 +982,7 @@ const merchantName =
   'Lojista'
 
 const loading = loadingStores || loadingOrders
+const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
 
 const activeUsers = usePresence(selectedStore?.id || selectedStore?.storeId)
 const menuPeopleCount = Number(activeUsers || 0)
@@ -1115,7 +1159,19 @@ const showToast = useCallback(
   }, [stores])
 
   useEffect(() => {
+    if (authLoading) {
+      setOrders([])
+      setLoadingOrders(true)
+      return undefined
+    }
+
     if (!selectedStore) {
+      setOrders([])
+      setLoadingOrders(false)
+      return undefined
+    }
+
+    if (!canReadOrders) {
       setOrders([])
       setLoadingOrders(false)
       return undefined
@@ -1196,7 +1252,7 @@ subscribeOrders(query(
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [selectedStore, showToast])
+  }, [authLoading, canReadOrders, selectedStore, showToast])
 
   useEffect(() => {
     if (!selectedStore) {

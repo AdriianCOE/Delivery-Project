@@ -215,7 +215,7 @@ function getBillingGraceEndsAt(store) {
 
 function getStoreSubscriptionStatus(store) {
   const status = String(store?.subscriptionStatus || store?.subscription?.status || '').trim()
-  return status === 'pending_checkout' ? 'checkout_pending' : status
+  return status === 'pending_checkout' || status === 'billing_pending' ? 'checkout_pending' : status
 }
 
 function isFutureDate(value) {

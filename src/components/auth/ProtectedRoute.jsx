@@ -86,10 +86,12 @@ export default function ProtectedRoute({
       auth?.user?.onboardingStatus ||
       ''
 
-    const subscriptionStatus =
+    const rawSubscriptionStatus =
       auth?.userData?.subscriptionStatus ||
       auth?.user?.subscriptionStatus ||
       ''
+    const subscriptionStatus =
+      rawSubscriptionStatus === 'pending_checkout' ? 'checkout_pending' : rawSubscriptionStatus
 
     const hasMerchantStore =
       Boolean(auth?.storeId || auth?.userData?.storeId || auth?.user?.storeId) ||
@@ -97,12 +99,27 @@ export default function ProtectedRoute({
       (Array.isArray(auth?.userData?.storeIds) && auth.userData.storeIds.length > 0) ||
       (Array.isArray(auth?.user?.storeIds) && auth.user.storeIds.length > 0)
 
-      const isPendingMerchant =
+    const billingPendingStatuses = ['checkout_pending', 'billing_pending']
+    const isBillingPending =
+      billingPendingStatuses.includes(subscriptionStatus) ||
+      onboardingStatus === 'billing_pending'
+
+    const isDashboardRoute = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/')
+    const isBillingRoute =
+      location.pathname === '/dashboard/billing' ||
+      location.pathname === '/dashboard/assinatura'
+
+    if (isBillingPending && isDashboardRoute && !isBillingRoute) {
+      return <Navigate to="/dashboard/billing" replace />
+    }
+
+    const isPendingMerchant =
       (!hasMerchantStore &&
        !['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus) &&
-       onboardingStatus !== 'completed') ||
-      ['phone_pending', 'pending'].includes(onboardingStatus) ||
-      ['pending_checkout'].includes(subscriptionStatus)
+       onboardingStatus !== 'completed' &&
+       onboardingStatus !== 'billing_pending' &&
+       !isBillingPending) ||
+      ['phone_pending', 'pending'].includes(onboardingStatus)
 
     if (isPendingMerchant && location.pathname !== '/onboarding') {
       return <Navigate to="/onboarding" replace />
