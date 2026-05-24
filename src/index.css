@@ -176,10 +176,575 @@
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translate3d(0, 15px, 0); 
+    transform: translate3d(0, 15px, 0);
   }
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   GLOBAL DASHBOARD DARK MODE OVERRIDES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.dark .dashboard-shell {
+  background-color: #09090b !important; /* Zinc-950 */
+}
+
+/* Auto-styling standard panel cards */
+.dark .dashboard-shell .bg-white {
+  background-color: #18181b !important; /* Zinc-900 */
+}
+
+.dark .dashboard-shell .border-gray-100 {
+  border-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell .border-gray-200 {
+  border-color: #27272a !important; /* Zinc-800 */
+}
+
+/* Text readability scaling */
+.dark .dashboard-shell .text-\[\#111827\] {
+  color: #f4f4f5 !important; /* Zinc-100 */
+}
+
+.dark .dashboard-shell .text-\[\#6b7280\] {
+  color: #a1a1aa !important; /* Zinc-400 */
+}
+
+.dark .dashboard-shell .bg-gray-50 {
+  background-color: #09090b !important; /* Zinc-950 */
+}
+
+.dark .dashboard-shell .bg-\[\#f9fafb\] {
+  background-color: #09090b !important; /* Zinc-950 */
+}
+
+.dark .dashboard-shell .hover\:bg-gray-50:hover {
+  background-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell .hover\:bg-orange-50\/40:hover {
+  background-color: rgba(249, 115, 22, 0.04) !important;
+}
+
+.dark .dashboard-shell .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #27272a !important; /* Zinc-800 */
+}
+
+/* Dashboard selectors and inputs */
+.dark .dashboard-shell select {
+  background-color: #18181b !important; /* Zinc-900 */
+  border-color: #27272a !important; /* Zinc-800 */
+  color: #f4f4f5 !important;
+}
+
+.dark .dashboard-shell option {
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DASHBOARD FOOTER OVERRIDES (DARK MODE)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.dark .dashboard-shell footer {
+  background-color: #09090b !important; /* Zinc-950 */
+  border-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell footer .bg-white\/90 {
+  background-color: rgba(24, 24, 27, 0.9) !important; /* Zinc-900/90 */
+  border-color: #27272a !important; /* Zinc-800 */
+  --tw-ring-color: rgba(39, 39, 42, 0.8) !important;
+}
+
+.dark .dashboard-shell footer .bg-white {
+  background-color: #18181b !important;
+  border-color: #27272a !important;
+}
+
+.dark .dashboard-shell footer .border-gray-100 {
+  border-color: #27272a !important;
+}
+
+.dark .dashboard-shell footer .border-gray-200 {
+  border-color: #27272a !important;
+}
+
+.dark .dashboard-shell footer .bg-gray-50 {
+  background-color: #18181b !important;
+  --tw-ring-color: #27272a !important;
+}
+
+.dark .dashboard-shell footer .bg-green-50 {
+  background-color: rgba(20, 83, 45, 0.3) !important; /* bg-emerald-950/30 */
+  color: #4ade80 !important; /* text-emerald-400 */
+  --tw-ring-color: rgba(20, 83, 45, 0.5) !important;
+}
+
+.dark .dashboard-shell footer .bg-red-50 {
+  background-color: rgba(153, 27, 27, 0.3) !important; /* bg-red-950/30 */
+  color: #f87171 !important; /* text-red-400 */
+  --tw-ring-color: rgba(153, 27, 27, 0.5) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PREMIUM ALERTS, BADGES & LIGHT BG CONVERSIONS (DARK MODE)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.dark .dashboard-shell .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.08) !important;
+  border-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-orange-50\/80 {
+  background-color: rgba(249, 115, 22, 0.08) !important;
+  border-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-orange-50\/50 {
+  background-color: rgba(249, 115, 22, 0.05) !important;
+}
+
+.dark .dashboard-shell .bg-orange-100 {
+  background-color: rgba(249, 115, 22, 0.12) !important;
+  border-color: rgba(249, 115, 22, 0.25) !important;
+}
+
+.dark .dashboard-shell .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-emerald-50\/60 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.dark .dashboard-shell .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-red-50\/30 {
+  background-color: rgba(239, 68, 68, 0.04) !important;
+}
+
+.dark .dashboard-shell .bg-red-50\/70 {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-red-50\/80 {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.dark .dashboard-shell .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+
+.dark .dashboard-shell .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+  border-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-blue-50\/50 {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+.dark .dashboard-shell .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+.dark .dashboard-shell .bg-purple-50 {
+  background-color: rgba(168, 85, 247, 0.08) !important;
+  border-color: rgba(168, 85, 247, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.12) !important;
+  border-color: rgba(168, 85, 247, 0.25) !important;
+}
+
+.dark .dashboard-shell .bg-yellow-50 {
+  background-color: rgba(234, 179, 8, 0.08) !important;
+  border-color: rgba(234, 179, 8, 0.2) !important;
+}
+
+.dark .dashboard-shell .bg-yellow-100 {
+  background-color: rgba(234, 179, 8, 0.12) !important;
+  border-color: rgba(234, 179, 8, 0.25) !important;
+}
+
+.dark .dashboard-shell .bg-gray-100 {
+  background-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell .bg-gray-200 {
+  background-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell .border-orange-100 {
+  border-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-orange-200 {
+  border-color: rgba(249, 115, 22, 0.3) !important;
+}
+
+.dark .dashboard-shell .border-emerald-100 {
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.dark .dashboard-shell .border-red-100 {
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.dark .dashboard-shell .border-red-300 {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.dark .dashboard-shell .border-blue-100 {
+  border-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-purple-100 {
+  border-color: rgba(168, 85, 247, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-purple-200 {
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+.dark .dashboard-shell .border-yellow-100 {
+  border-color: rgba(234, 179, 8, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-yellow-200 {
+  border-color: rgba(234, 179, 8, 0.3) !important;
+}
+
+.dark .dashboard-shell .border-amber-100 {
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+.dark .dashboard-shell .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+/* Light text conversion inside warning/trial cards */
+.dark .dashboard-shell .text-\[\#9a3412\] {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .text-emerald-700 {
+  color: #34d399 !important; /* Emerald-400 */
+}
+
+.dark .dashboard-shell .text-red-700 {
+  color: #f87171 !important; /* Red-400 */
+}
+
+.dark .dashboard-shell .text-amber-700 {
+  color: #fbbf24 !important; /* Amber-400 */
+}
+
+.dark .dashboard-shell .text-blue-600 {
+  color: #60a5fa !important; /* Blue-400 */
+}
+
+.dark .dashboard-shell .text-blue-700 {
+  color: #60a5fa !important; /* Blue-400 */
+}
+
+.dark .dashboard-shell .text-blue-900 {
+  color: #93c5fd !important; /* Blue-300 */
+}
+
+.dark .dashboard-shell .text-purple-600 {
+  color: #c084fc !important; /* Purple-400 */
+}
+
+.dark .dashboard-shell .text-purple-700 {
+  color: #c084fc !important; /* Purple-400 */
+}
+
+.dark .dashboard-shell .text-purple-900 {
+  color: #d8b4fe !important; /* Purple-300 */
+}
+
+.dark .dashboard-shell .text-yellow-600 {
+  color: #facc15 !important; /* Yellow-400 */
+}
+
+.dark .dashboard-shell .text-yellow-700 {
+  color: #facc15 !important; /* Yellow-400 */
+}
+
+.dark .dashboard-shell .text-yellow-900 {
+  color: #fef08a !important; /* Yellow-200 */
+}
+
+.dark .dashboard-shell .text-amber-600 {
+  color: #fbbf24 !important; /* Amber-400 */
+}
+
+.dark .dashboard-shell .text-amber-800 {
+  color: #fde047 !important; /* Amber-300 */
+}
+
+.dark .dashboard-shell .text-amber-900 {
+  color: #fef3c7 !important; /* Amber-200 */
+}
+
+.dark .dashboard-shell .text-orange-600 {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .text-\[\#f97316\] {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .text-\[\#ea580c\] {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .text-emerald-600 {
+  color: #34d399 !important; /* Emerald-400 */
+}
+
+.dark .dashboard-shell .text-emerald-800 {
+  color: #6ee7b7 !important; /* Emerald-300 */
+}
+
+.dark .dashboard-shell .text-green-600 {
+  color: #4ade80 !important; /* Green-400 */
+}
+
+.dark .dashboard-shell .text-green-700 {
+  color: #4ade80 !important; /* Green-400 */
+}
+
+.dark .dashboard-shell .text-red-600 {
+  color: #f87171 !important; /* Red-400 */
+}
+
+.dark .dashboard-shell .text-red-800 {
+  color: #fca5a5 !important; /* Red-300 */
+}
+
+.dark .dashboard-shell .text-gray-400 {
+  color: #71717a !important; /* Zinc-500 */
+}
+
+.dark .dashboard-shell .text-gray-500 {
+  color: #a1a1aa !important; /* Zinc-400 */
+}
+
+.dark .dashboard-shell .text-gray-600 {
+  color: #a1a1aa !important; /* Zinc-400 */
+}
+
+.dark .dashboard-shell .text-gray-700 {
+  color: #d4d4d8 !important; /* Zinc-300 */
+}
+
+/* Pricing popular card and rings for dark mode */
+.dark .dashboard-shell .ring-4.ring-orange-50 {
+  --tw-ring-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+.dark .dashboard-shell .border-orange-300 {
+  border-color: rgba(249, 115, 22, 0.4) !important;
+}
+
+.dark .dashboard-shell .shadow-orange-100\/70 {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-orange-200 {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-orange-500\/20 {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-emerald-200 {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-red-200 {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-md {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-sm {
+  box-shadow: none !important;
+}
+
+.dark .dashboard-shell .shadow-lg {
+  box-shadow: none !important;
+}
+
+/* Dashboard input elements in dark mode */
+.dark .dashboard-shell input {
+  background-color: #18181b !important; /* Zinc-900 */
+  border-color: #27272a !important; /* Zinc-800 */
+  color: #f4f4f5 !important; /* Zinc-100 */
+}
+
+.dark .dashboard-shell input::placeholder {
+  color: #71717a !important; /* Zinc-500 */
+}
+
+.dark .dashboard-shell input:disabled {
+  background-color: #27272a !important; /* Zinc-800 */
+  color: #a1a1aa !important; /* Zinc-400 */
+}
+
+/* Premium interactive hover states in dark mode */
+.dark .dashboard-shell .hover\:bg-gray-50:hover {
+  background-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell .hover\:bg-gray-100:hover {
+  background-color: #27272a !important; /* Zinc-800 */
+}
+
+.dark .dashboard-shell .hover\:bg-gray-200:hover {
+  background-color: #3f3f46 !important; /* Zinc-700 */
+}
+
+.dark .dashboard-shell .hover\:bg-white:hover {
+  background-color: #18181b !important; /* Zinc-900 */
+}
+
+.dark .dashboard-shell .hover\:bg-orange-50:hover {
+  background-color: rgba(249, 115, 22, 0.08) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-orange-50\/50:hover {
+  background-color: rgba(249, 115, 22, 0.05) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-orange-100:hover {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-blue-50:hover {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-blue-100:hover {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-emerald-50:hover {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-emerald-100:hover {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-red-50:hover {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-red-100:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-purple-50:hover {
+  background-color: rgba(168, 85, 247, 0.08) !important;
+}
+
+.dark .dashboard-shell .hover\:bg-purple-100:hover {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+}
+
+.dark .dashboard-shell .hover\:border-orange-100:hover {
+  border-color: rgba(249, 115, 22, 0.3) !important;
+}
+
+.dark .dashboard-shell .hover\:border-orange-200:hover {
+  border-color: rgba(249, 115, 22, 0.4) !important;
+}
+
+.dark .dashboard-shell .hover\:border-gray-300:hover {
+  border-color: #3f3f46 !important; /* Zinc-700 */
+}
+
+.dark .dashboard-shell .hover\:text-gray-700:hover {
+  color: #d4d4d8 !important; /* Zinc-300 */
+}
+
+.dark .dashboard-shell .hover\:text-gray-900:hover {
+  color: #f4f4f5 !important; /* Zinc-100 */
+}
+
+.dark .dashboard-shell .hover\:text-orange-500:hover {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .hover\:text-\[\#f97316\]:hover {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .hover\:text-\[\#ea580c\]:hover {
+  color: #fb923c !important; /* Orange-400 */
+}
+
+.dark .dashboard-shell .hover\:text-emerald-700:hover {
+  color: #34d399 !important; /* Emerald-400 */
+}
+
+.dark .dashboard-shell .hover\:text-red-700:hover {
+  color: #f87171 !important; /* Red-400 */
+}
+
+.dark .dashboard-shell .hover\:text-blue-700:hover {
+  color: #60a5fa !important; /* Blue-400 */
+}
+
+.dark .dashboard-shell .hover\:text-purple-700:hover {
+  color: #c084fc !important; /* Purple-400 */
 }

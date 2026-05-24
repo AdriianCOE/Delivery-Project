@@ -50,7 +50,7 @@ import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
-const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'])
 const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
 
 function normalizeBillingStatus(status) {

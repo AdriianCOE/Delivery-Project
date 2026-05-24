@@ -427,6 +427,10 @@ match /auditLogs/{logId} {
       allow read, write: if false;
     }
 
+    match /billingCheckouts/{docId} {
+      allow read, write: if false;
+    }
+
     match /billingRecovery/{docId} {
       allow read, write: if false;
     }

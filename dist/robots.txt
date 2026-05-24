@@ -1,4 +1,13 @@
 User-agent: *
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /login
+Disallow: /cadastro
+Disallow: /onboarding
+Disallow: /auth/action
+Disallow: /pedido/
+Disallow: /order/
+Disallow: /tracking/
 
 Sitemap: https://pratoby.com/sitemap.xml

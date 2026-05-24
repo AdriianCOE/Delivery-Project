@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import {
   linkWithCredential,
@@ -71,6 +71,10 @@ const STEPS = [
   },
 ]
 
+const BRAZILIAN_MOBILE_PHONE_NATIONAL_DIGITS = 11
+const BRAZILIAN_MOBILE_PHONE_FORMATTED_MAX_LENGTH = 15
+const PHONE_SEND_SESSION_KEY = '@PratoBy:onboardingPhoneSendState'
+
 // ─────────────────────────────────────────────────────────────
 // ANIMAÇÕES
 // ─────────────────────────────────────────────────────────────
@@ -133,7 +137,6 @@ function validateBrazilianMobilePhone(value) {
 
   if (
     /^(\d)\1+$/.test(nationalDigits) ||
-    /(\d)\1{3}$/.test(localNumber) ||
     repeatedRun.test(localNumber) ||
     obviousLocalNumbers.has(localNumber) ||
     ['12345678', '87654321', '11111111', '00000000'].some((pattern) => localTail.includes(pattern))
@@ -148,6 +151,28 @@ function validateBrazilianMobilePhone(value) {
   }
 }
 
+function getBrazilianPhoneInputDigits(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+
+  if (
+    digits.length > BRAZILIAN_MOBILE_PHONE_NATIONAL_DIGITS &&
+    digits.startsWith('55')
+  ) {
+    return digits.slice(2, 2 + BRAZILIAN_MOBILE_PHONE_NATIONAL_DIGITS)
+  }
+
+  return digits.slice(0, BRAZILIAN_MOBILE_PHONE_NATIONAL_DIGITS)
+}
+
+function formatBrazilianPhoneInput(value) {
+  const digits = getBrazilianPhoneInputDigits(value)
+
+  if (!digits) return ''
+  if (digits.length <= 2) return `(${digits}`
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+}
+
 function normalizeBrazilianPhoneE164(value) {
   const validatedPhone = validateBrazilianMobilePhone(value)
   return validatedPhone.ok ? validatedPhone.phoneE164 : null
@@ -155,8 +180,8 @@ function normalizeBrazilianPhoneE164(value) {
 
 function toBrazilianPhoneInput(value) {
   const normalized = normalizeBrazilianPhoneE164(value)
-  if (!normalized) return String(value || '').replace(/\D/g, '')
-  return normalized.replace(/^\+55/, '')
+  if (!normalized) return formatBrazilianPhoneInput(value)
+  return formatBrazilianPhoneInput(normalized.replace(/^\+55/, ''))
 }
 
 function formatBrazilianPhone(value) {
@@ -185,6 +210,31 @@ function shouldUnlinkPhoneAfterBackendFailure(error) {
 
 function getLinkedPhoneMismatchMessage() {
   return 'Sua conta já possui outro telefone vinculado. Para alterar, use a área de perfil ou suporte.'
+}
+
+function getSmsCooldownSeconds(sendCount) {
+  if (sendCount <= 3) return 60
+  return 60 * (2 ** (sendCount - 3))
+}
+
+function formatCooldownSeconds(seconds) {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.ceil(seconds / 60)
+  return `${minutes} min`
+}
+
+function readPhoneSendSessionState() {
+  if (typeof window === 'undefined') return { count: 0, cooldownUntil: 0 }
+
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(PHONE_SEND_SESSION_KEY) || '{}')
+    return {
+      count: Math.max(0, Number(parsed.count || 0)),
+      cooldownUntil: Math.max(0, Number(parsed.cooldownUntil || 0)),
+    }
+  } catch {
+    return { count: 0, cooldownUntil: 0 }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -313,7 +363,9 @@ function StepItem({ step, index, isLast }) {
 
 export default function OnboardingPage() {
   const auth = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
+  const initialPhoneSendStateRef = useRef(readPhoneSendSessionState())
 
   // — e-mail —
   const [resendStatus, setResendStatus] = useState({ type: '', message: '' })
@@ -328,13 +380,16 @@ export default function OnboardingPage() {
   const [isRequestingPhone, setIsRequestingPhone] = useState(false)
   const [isConfirmingPhone, setIsConfirmingPhone] = useState(false)
   const [isEditingPhone, setIsEditingPhone] = useState(false)
-  const [phoneSendCount, setPhoneSendCount] = useState(0)
-  const [phoneCooldownUntil, setPhoneCooldownUntil] = useState(0)
+  const [phoneSendCount, setPhoneSendCount] = useState(initialPhoneSendStateRef.current.count)
+  const [phoneCooldownUntil, setPhoneCooldownUntil] = useState(initialPhoneSendStateRef.current.cooldownUntil)
   const [phoneCooldownNow, setPhoneCooldownNow] = useState(() => Date.now())
   const recaptchaVerifierRef = useRef(null)
   const phoneVerificationIdRef = useRef('')
   const phoneSeededRef = useRef(false)
   const phoneCodeInputRef = useRef(null)
+  const [showAccountCreatedModal, setShowAccountCreatedModal] = useState(
+    Boolean(location.state?.accountCreated)
+  )
 
   // — trial —
   const [isStartingTrial, setIsStartingTrial] = useState(false)
@@ -396,6 +451,18 @@ export default function OnboardingPage() {
     return () => window.clearInterval(intervalId)
   }, [phoneCooldownNow, phoneCooldownUntil])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    window.sessionStorage.setItem(
+      PHONE_SEND_SESSION_KEY,
+      JSON.stringify({
+        count: phoneSendCount,
+        cooldownUntil: phoneCooldownUntil,
+      })
+    )
+  }, [phoneCooldownUntil, phoneSendCount])
+
   // seed do número vindo do signup
   const existingSignupPhoneE164 = pickExistingPhone(
     auth?.userData?.phoneE164,
@@ -439,17 +506,13 @@ export default function OnboardingPage() {
   const currentPhoneDisplay = currentPhoneE164 ? formatBrazilianPhone(currentPhoneE164) : ''
   const phoneCooldownSeconds = Math.max(0, Math.ceil((phoneCooldownUntil - phoneCooldownNow) / 1000))
   const isPhoneSendCoolingDown = phoneCooldownSeconds > 0
-  const isPhoneSendLimitReached = phoneSendCount >= 3
+  const isPhoneBackoffActive = phoneSendCount >= 3
 
-  const phoneSendButtonLabel = isPhoneSendLimitReached
-    ? 'Aguarde alguns minutos'
-    : isPhoneSendCoolingDown
+  const phoneSendButtonLabel = isPhoneSendCoolingDown
     ? `Reenviar código em ${phoneCooldownSeconds}s`
     : 'Enviar código por SMS'
 
-  const phoneResendButtonLabel = isPhoneSendLimitReached
-    ? 'Aguarde alguns minutos'
-    : isPhoneSendCoolingDown
+  const phoneResendButtonLabel = isPhoneSendCoolingDown
     ? `Reenviar em ${phoneCooldownSeconds}s`
     : 'Reenviar código'
 
@@ -479,6 +542,11 @@ export default function OnboardingPage() {
     }
   }, [auth, navigate])
 
+  const handleCloseAccountCreatedModal = useCallback(() => {
+    setShowAccountCreatedModal(false)
+    navigate('/onboarding', { replace: true, state: {} })
+  }, [navigate])
+
   // ── early returns ─────────────────────────────────────────
 
   if (!isLoading && !auth?.user) {
@@ -506,7 +574,7 @@ export default function OnboardingPage() {
     const normalizedSubscriptionStatus =
       subscriptionStatus === 'pending_checkout' ? 'checkout_pending' : subscriptionStatus
     const isBillingPending =
-      ['checkout_pending', 'billing_pending'].includes(normalizedSubscriptionStatus) ||
+      ['checkout_pending', 'billing_pending', 'billing_pending_payment_method'].includes(normalizedSubscriptionStatus) ||
       onboardingStatus === 'billing_pending'
 
     const hasMerchantStore =
@@ -517,7 +585,7 @@ export default function OnboardingPage() {
 
     const isPending =
       (!hasMerchantStore &&
-       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'checkout_pending', 'billing_pending'].includes(normalizedSubscriptionStatus) &&
+       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'checkout_pending', 'billing_pending', 'billing_pending_payment_method'].includes(normalizedSubscriptionStatus) &&
        onboardingStatus !== 'completed' &&
        onboardingStatus !== 'billing_pending') ||
       ['phone_pending', 'pending'].includes(onboardingStatus)
@@ -562,6 +630,7 @@ export default function OnboardingPage() {
     auth?.userData?.ownerName ||
     auth?.user?.email?.split('@')[0] ||
     ''
+  const accountCreatedName = location.state?.displayName || displayName
 
   const email = firebaseAuth.currentUser?.email || auth?.user?.email || ''
   const emailVerified = firebaseAuth.currentUser?.emailVerified || auth?.user?.emailVerified || false
@@ -641,13 +710,13 @@ export default function OnboardingPage() {
 
     if (isRequestingPhone) return
 
-    if (isPhoneSendLimitReached) {
-      setPhoneStatus({ type: 'error', message: 'Muitas tentativas. Aguarde alguns minutos.' })
-      return
-    }
-
     if (isPhoneSendCoolingDown) {
-      setPhoneStatus({ type: 'error', message: `Reenviar código em ${phoneCooldownSeconds}s.` })
+      setPhoneStatus({
+        type: 'error',
+        message: isPhoneBackoffActive
+          ? `Muitas tentativas. Aguarde ${formatCooldownSeconds(phoneCooldownSeconds)} para tentar novamente.`
+          : `Reenviar código em ${phoneCooldownSeconds}s.`,
+      })
       return
     }
 
@@ -699,9 +768,11 @@ export default function OnboardingPage() {
       setShowPhoneCode(true)
       setPhoneCode('')
       setIsEditingPhone(false)
-      setPhoneSendCount((count) => count + 1)
-      setPhoneCooldownUntil(Date.now() + 60 * 1000)
-      setPhoneCooldownNow(Date.now())
+      const nextPhoneSendCount = phoneSendCount + 1
+      const now = Date.now()
+      setPhoneSendCount(nextPhoneSendCount)
+      setPhoneCooldownUntil(now + getSmsCooldownSeconds(nextPhoneSendCount) * 1000)
+      setPhoneCooldownNow(now)
       setPhoneStatus({ type: 'success', message: 'SMS enviado! Verifique seu celular.' })
     } catch (error) {
       console.error('[Onboarding] Firebase Phone Auth request failed:', error)
@@ -1168,23 +1239,28 @@ export default function OnboardingPage() {
                             type="tel"
                             inputMode="numeric"
                             autoComplete="tel"
-                            placeholder="Ex: 79 99978-6984"
+                            placeholder="Ex: (79) 99999-9999"
+                            maxLength={BRAZILIAN_MOBILE_PHONE_FORMATTED_MAX_LENGTH}
                             value={phone}
-                            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                            onChange={(e) => setPhone(formatBrazilianPhoneInput(e.target.value))}
+                            onPaste={(e) => {
+                              e.preventDefault()
+                              setPhone(formatBrazilianPhoneInput(e.clipboardData.getData('text')))
+                            }}
                             onKeyDown={(e) => { if (e.key === 'Enter') handleRequestPhoneCode(e) }}
                             disabled={isRequestingPhone}
                             className="h-12 w-full rounded-2xl border border-gray-200 bg-[#f9fafb] px-4 text-sm font-bold text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 disabled:opacity-60"
                             autoFocus={isEditingPhone}
                           />
                           <p className="mt-1.5 text-[11px] text-[#9ca3af]">
-                            DDD + número celular · ex: 11 9 1234-5678
+                            Digite 11 dígitos: DDD + celular
                           </p>
                         </div>
 
                         <button
                           type="button"
                           onClick={handleRequestPhoneCode}
-                          disabled={isRequestingPhone || isPhoneSendCoolingDown || isPhoneSendLimitReached || !phone.trim()}
+                          disabled={isRequestingPhone || isPhoneSendCoolingDown || !phone.trim()}
                           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] text-sm font-black text-white shadow-lg shadow-orange-600/15 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-xl hover:shadow-orange-600/20 active:translate-y-0 disabled:translate-y-0 disabled:opacity-50"
                         >
                           {isRequestingPhone
@@ -1269,7 +1345,7 @@ export default function OnboardingPage() {
                           <button
                             type="button"
                             onClick={handleRequestPhoneCode}
-                            disabled={isRequestingPhone || isConfirmingPhone || isPhoneSendCoolingDown || isPhoneSendLimitReached}
+                            disabled={isRequestingPhone || isConfirmingPhone || isPhoneSendCoolingDown}
                             className="flex h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl border border-orange-100 bg-orange-50 text-xs font-black text-[#f97316] transition hover:bg-orange-100 disabled:opacity-50"
                           >
                             {isRequestingPhone
@@ -1324,7 +1400,7 @@ export default function OnboardingPage() {
                         <button
                           type="button"
                           onClick={handleRequestPhoneCode}
-                          disabled={isRequestingPhone || isPhoneSendCoolingDown || isPhoneSendLimitReached || !currentPhoneE164}
+                          disabled={isRequestingPhone || isPhoneSendCoolingDown || !currentPhoneE164}
                           className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] text-sm font-black text-white shadow-lg shadow-orange-600/15 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-xl hover:shadow-orange-600/20 active:translate-y-0 disabled:translate-y-0 disabled:opacity-50"
                         >
                           {isRequestingPhone
@@ -1445,6 +1521,41 @@ export default function OnboardingPage() {
 
         </div>
       </div>
+
+      {showAccountCreatedModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#111827]/45 p-4 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-sm rounded-[2rem] border border-orange-100 bg-white p-6 text-center shadow-2xl shadow-orange-950/20 sm:p-7"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-created-title"
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-orange-50 text-[#f97316] ring-1 ring-orange-100">
+              <FiCheckCircle size={30} />
+            </div>
+
+            <h2 id="account-created-title" className="mt-5 text-2xl font-black tracking-tight text-[#111827]">
+              Conta criada com sucesso
+            </h2>
+
+            <p className="mt-3 text-sm font-semibold leading-6 text-[#6b7280]">
+              Bem-vindo{accountCreatedName ? `, ${accountCreatedName.split(' ')[0]}` : ''}. Vamos confirmar seu telefone e preparar sua loja.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleCloseAccountCreatedModal}
+              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:bg-[#ea580c] active:scale-[0.98]"
+            >
+              Começar configuração
+              <FiArrowRight size={15} />
+            </button>
+          </motion.div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════
           MODAL REMOVIDO — o input de código agora é inline

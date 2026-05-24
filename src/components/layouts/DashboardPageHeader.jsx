@@ -26,12 +26,12 @@ import { isValidElement } from 'react'
 // ── Paleta de cores para badges ───────────────────────────────────────────────
 
 const BADGE_PALETTES = {
-  green:  { wrap: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot: 'bg-emerald-500' },
-  red:    { wrap: 'bg-red-50 text-red-700 ring-1 ring-red-200',             dot: 'bg-red-500'     },
-  amber:  { wrap: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',       dot: 'bg-amber-500'   },
-  orange: { wrap: 'bg-orange-50 text-[#f97316] ring-1 ring-orange-200',     dot: 'bg-[#f97316]'   },
-  blue:   { wrap: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',          dot: 'bg-blue-500'    },
-  gray:   { wrap: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',         dot: 'bg-gray-400'    },
+  green:  { wrap: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/25', dot: 'bg-emerald-500' },
+  red:    { wrap: 'bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/25',             dot: 'bg-red-500'     },
+  amber:  { wrap: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/25',       dot: 'bg-amber-500'   },
+  orange: { wrap: 'bg-orange-50 text-[#f97316] ring-1 ring-orange-200 dark:bg-orange-500/10 dark:text-[#f97316] dark:ring-orange-500/25',     dot: 'bg-[#f97316]'   },
+  blue:   { wrap: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/25',          dot: 'bg-blue-500'    },
+  gray:   { wrap: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700',         dot: 'bg-gray-400'    },
 }
 
 // ── Sub-componente de badge ───────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export default function DashboardPageHeader({
   description,
   eyebrow,
   icon: Icon,
-  iconBg    = 'bg-orange-50 text-[#f97316]',
+  iconBg    = 'bg-orange-50 text-[#f97316] dark:bg-orange-950/30 dark:text-[#f97316]',
   badge,
   actions,
   children,
@@ -75,8 +75,8 @@ export default function DashboardPageHeader({
 }) {
   const headerClasses = [
     sticky ? 'sticky top-0 z-30' : '',
-    border ? 'border-b border-gray-100' : '',
-    'bg-[#f9fafb]/95 backdrop-blur-xl',
+    border ? 'border-b border-gray-100 dark:border-zinc-800' : '',
+    'bg-[#f9fafb]/95 dark:bg-zinc-950/95 backdrop-blur-xl',
     className,
   ]
     .filter(Boolean)
@@ -112,7 +112,7 @@ export default function DashboardPageHeader({
 
               {/* Título + badge */}
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight text-[#111827]">
+                <h1 className="text-2xl font-black tracking-tight text-[#111827] dark:text-white">
                   {title}
                 </h1>
                 {badge != null && <StatusBadge badge={badge} />}
@@ -120,7 +120,7 @@ export default function DashboardPageHeader({
 
               {/* Descrição */}
               {description && (
-                <p className="mt-0.5 text-sm font-medium leading-6 text-[#6b7280]">
+                <p className="mt-0.5 text-sm font-medium leading-6 text-[#6b7280] dark:text-zinc-400">
                   {description}
                 </p>
               )}
@@ -137,7 +137,7 @@ export default function DashboardPageHeader({
 
         {/* ── Linha extra (tabs, filtros rápidos, seletor de loja) ── */}
         {children != null && (
-          <div className="mt-4 border-t border-gray-100 pt-4">
+          <div className="mt-4 border-t border-gray-100 dark:border-zinc-800 pt-4">
             {children}
           </div>
         )}

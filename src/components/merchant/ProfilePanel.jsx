@@ -28,12 +28,16 @@ import {
   FiShield,
   FiUser,
   FiX,
+  FiMonitor,
   FiXCircle,
   FiLogOut,
+  FiSun,
+  FiMoon,
 } from 'react-icons/fi'
 
 import app, { auth } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
 import {
   getCloudinaryOptimizedUrl,
   uploadImageToCloudinary,
@@ -114,8 +118,8 @@ export function Toast({ toast, onClose }) {
       <div
         className={`flex items-start gap-3 rounded-[1.5rem] border px-4 py-3.5 shadow-2xl backdrop-blur-xl ${
           isError
-            ? 'border-red-100 bg-white text-red-700'
-            : 'border-orange-100 bg-white text-[#111827]'
+            ? 'border-red-100 bg-white text-red-700 dark:bg-zinc-900 dark:border-red-900/30 dark:text-red-400'
+            : 'border-orange-100 bg-white text-[#111827] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200'
         }`}
       >
         {isError ? (
@@ -161,15 +165,15 @@ function Badge({ verified, labelTrue, labelFalse, unregistered }) {
 
 function SectionCard({ icon: Icon, title, description, children, className = '' }) {
   return (
-    <div className={`rounded-[1.75rem] border border-gray-100 bg-white shadow-sm min-w-0 overflow-hidden ${className}`}>
-      <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316]">
+    <div className={`rounded-[1.75rem] border border-gray-100 bg-white shadow-sm min-w-0 overflow-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_4px_25px_rgba(0,0,0,0.15)] ${className}`}>
+      <div className="flex items-center gap-3 border-b border-gray-100 dark:border-zinc-800 px-5 py-4">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/20 dark:text-[#f97316]">
           <Icon size={17} />
         </span>
         <div>
-          <p className="text-sm font-black text-[#111827]">{title}</p>
+          <p className="text-sm font-black text-[#111827] dark:text-white">{title}</p>
           {description && (
-            <p className="text-[11px] font-semibold text-[#9ca3af]">{description}</p>
+            <p className="text-[11px] font-semibold text-[#9ca3af] dark:text-zinc-500">{description}</p>
           )}
         </div>
       </div>
@@ -180,7 +184,7 @@ function SectionCard({ icon: Icon, title, description, children, className = '' 
 
 function FieldLabel({ children }) {
   return (
-    <span className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+    <span className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-400">
       {children}
     </span>
   )
@@ -191,13 +195,13 @@ function TextInput({ icon: Icon, rightEl, className = '', ...props }) {
     <div className={`relative ${className}`}>
       {Icon && (
         <Icon
-          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500"
           size={16}
         />
       )}
       <input
         {...props}
-        className={`h-11 w-full rounded-2xl border border-gray-200 bg-white px-3.5 text-sm font-bold text-[#111827] shadow-sm outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60 ${
+        className={`h-11 w-full rounded-2xl border border-gray-200 bg-white px-3.5 text-sm font-bold text-[#111827] shadow-sm outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60 dark:bg-zinc-950 dark:border-zinc-800 dark:text-white dark:focus:border-orange-500 dark:focus:ring-orange-950/20 dark:disabled:bg-zinc-900 ${
           Icon ? 'pl-10' : ''
         } ${rightEl ? 'pr-11' : ''}`}
       />
@@ -763,9 +767,9 @@ function SubscriptionCard({ userData }) {
     >
       <div className="space-y-2">
         {rows.map(row => (
-          <div key={row.label} className="flex items-center justify-between gap-2 rounded-2xl bg-gray-50 px-4 py-2.5">
-            <span className="text-xs font-black uppercase tracking-wide text-[#9ca3af]">{row.label}</span>
-            <span className="text-sm font-black text-[#111827]">{row.value}</span>
+          <div key={row.label} className="flex items-center justify-between gap-2 rounded-2xl bg-gray-50 px-4 py-2.5 dark:bg-zinc-950">
+            <span className="text-xs font-black uppercase tracking-wide text-[#9ca3af] dark:text-zinc-500">{row.label}</span>
+            <span className="text-sm font-black text-[#111827] dark:text-white">{row.value}</span>
           </div>
         ))}
       </div>
@@ -773,6 +777,48 @@ function SubscriptionCard({ userData }) {
         <FiInfo size={11} />
         Para alterar plano ou assinatura, acesse a área de suporte.
       </p>
+    </SectionCard>
+  )
+}
+
+
+function ThemeCard() {
+  const { theme, setTheme } = useDashboardTheme()
+
+  const options = [
+    { id: 'light', label: 'Claro', icon: FiSun },
+    { id: 'dark', label: 'Escuro', icon: FiMoon },
+    { id: 'system', label: 'Sistema', icon: FiMonitor },
+  ]
+
+  return (
+    <SectionCard
+      icon={FiSettings}
+      title="Aparência do painel"
+      description="Personalize o tema visual"
+    >
+      <div className="grid grid-cols-3 gap-2">
+        {options.map((opt) => {
+          const Icon = opt.icon
+          const active = theme === opt.id
+
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setTheme(opt.id)}
+              className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-3.5 text-xs font-black transition active:scale-95 cursor-pointer ${
+                active
+                  ? 'border-[#f97316] bg-orange-50/50 text-[#f97316] dark:bg-orange-950/20 dark:border-[#f97316] dark:text-[#f97316]'
+                  : 'border-gray-100 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white'
+              }`}
+            >
+              <Icon size={18} />
+              <span>{opt.label}</span>
+            </button>
+          )
+        })}
+      </div>
     </SectionCard>
   )
 }
@@ -835,6 +881,7 @@ export default function ProfilePanel({ onLogout }) {
               onError={handleError}
             />
             <SubscriptionCard userData={userData} />
+            <ThemeCard />
           </div>
 
           {/* Right column */}

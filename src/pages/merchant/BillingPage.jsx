@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../../services/firebase'
@@ -96,7 +97,9 @@ function formatCurrency(value) {
 }
 
 function normalizeStatus(status) {
-  return status === 'pending_checkout' || status === 'billing_pending' ? 'checkout_pending' : status || 'checkout_pending'
+  return ['pending_checkout', 'billing_pending', 'billing_pending_payment_method'].includes(status)
+    ? 'checkout_pending'
+    : status || 'checkout_pending'
 }
 
 function normalizeCycleId(cycle) {
@@ -106,9 +109,10 @@ function normalizeCycleId(cycle) {
 
 function getStatusCopy(status) {
   const map = {
-    checkout_pending: 'Configure sua cobrança para ativar o teste grátis',
-    pending_checkout: 'Configure sua cobrança para ativar o teste grátis',
-    billing_pending: 'Configure sua cobrança para ativar o teste grátis',
+    checkout_pending: 'Cadastre a forma de pagamento para ativar o teste grátis',
+    pending_checkout: 'Cadastre a forma de pagamento para ativar o teste grátis',
+    billing_pending: 'Cadastre a forma de pagamento para ativar o teste grátis',
+    billing_pending_payment_method: 'Cadastre a forma de pagamento para ativar o teste grátis',
     trialing: 'Teste grátis ativo',
     active: 'Assinatura ativa',
     past_due: 'Pagamento pendente',
@@ -128,7 +132,7 @@ function getHeroTone(status, hasAsaasSubscription) {
 function getPrimaryAction({ status, hasAsaasSubscription }) {
   if (status === 'checkout_pending') {
     return {
-      label: 'Configurar cobrança Asaas',
+      label: 'Cadastrar forma de pagamento',
       support: 'Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis.',
       needsBillingData: true,
       tone: 'orange',
@@ -137,7 +141,7 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
 
   if (status === 'trialing' && !hasAsaasSubscription) {
     return {
-      label: 'Configurar cobrança Asaas',
+      label: 'Cadastrar forma de pagamento',
       support: 'Você não será cobrado agora. A primeira cobrança será apenas no fim do teste.',
       needsBillingData: true,
       tone: 'orange',
@@ -189,17 +193,17 @@ function TimelineStep({ done, active, title, description, meta }) {
     <div className="relative flex gap-3 md:block">
       <div className="flex flex-col items-center md:flex-row">
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-white ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-white dark:ring-zinc-900 ${
             done
               ? 'bg-emerald-500 text-white'
               : active
               ? 'bg-[#f97316] text-white'
-              : 'bg-gray-100 text-gray-400'
+              : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500'
           }`}
         >
           {done ? <FiCheck size={15} /> : active ? <FiClock size={15} /> : <FiCalendar size={15} />}
         </span>
-        <span className="mt-2 h-full w-px bg-gray-100 md:ml-3 md:mt-0 md:h-px md:flex-1" />
+        <span className="mt-2 h-full w-px bg-gray-100 dark:bg-zinc-800 md:ml-3 md:mt-0 md:h-px md:flex-1" />
       </div>
       <div className="min-w-0 pb-5 md:mt-3 md:pb-0">
         <p className="text-sm font-black text-[#111827]">{title}</p>
@@ -235,13 +239,17 @@ function InfoList({ title, items, tone = 'orange' }) {
 
 export default function BillingPage() {
   const auth = useAuth()
+  const [searchParams] = useSearchParams()
   const { user, userData, storeId, storeIds = [] } = auth
   const [store, setStore] = useState(null)
   const [loadingStore, setLoadingStore] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [isCheckingBillingStatus, setIsCheckingBillingStatus] = useState(false)
   const [toast, setToast] = useState(null)
   const [showTechnical, setShowTechnical] = useState(false)
   const [selectedPlanCycle, setSelectedPlanCycle] = useState('monthly')
+  const [lastCheckoutUrl, setLastCheckoutUrl] = useState('')
+  const [storeRefreshNonce, setStoreRefreshNonce] = useState(0)
 
   const [showBillingModal, setShowBillingModal] = useState(false)
   const [pendingPlan, setPendingPlan] = useState(null)
@@ -250,6 +258,11 @@ export default function BillingPage() {
   const [billingCpfCnpj, setBillingCpfCnpj] = useState('')
   const [billingEmail, setBillingEmail] = useState('')
   const [billingPhone, setBillingPhone] = useState('')
+  const [billingPostalCode, setBillingPostalCode] = useState('')
+  const [billingAddress, setBillingAddress] = useState('')
+  const [billingAddressNumber, setBillingAddressNumber] = useState('')
+  const [billingProvince, setBillingProvince] = useState('')
+  const [billingComplement, setBillingComplement] = useState('')
   const [billingErrors, setBillingErrors] = useState({})
 
   useEffect(() => {
@@ -356,7 +369,7 @@ export default function BillingPage() {
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [user, storeId, storeIds, userData])
+  }, [user, storeId, storeIds, userData, storeRefreshNonce])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -364,12 +377,31 @@ export default function BillingPage() {
     return () => clearTimeout(timer)
   }, [toast])
 
+  // Format CEP with mask: 00000-000
+  function formatCep(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 8)
+    if (digits.length <= 5) return digits
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`
+  }
+
   useEffect(() => {
     if (!store) return
+    const addr = typeof store.address === 'object' ? store.address : {}
+    const street = typeof store.address === 'string' ? store.address : (addr?.street || addr?.rua || store.street || store.logradouro || '')
+    const number = addr?.number || addr?.numero || store.addressNumber || store.number || store.numero || ''
+    const neighborhood = addr?.neighborhood || addr?.bairro || store.province || store.neighborhood || store.bairro || ''
+    const complement = addr?.complement || addr?.complemento || store.complement || store.complemento || ''
+    const cep = addr?.cep || store.postalCode || store.cep || store.zipCode || ''
+
     setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
     setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
-    setBillingPhone(store.whatsapp || store.whatsapp1 || store.phone || user?.phoneNumber || '')
+    setBillingPhone(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || '')
     setBillingCpfCnpj(store.cnpj || store.cpf || '')
+    setBillingPostalCode(formatCep(cep))
+    setBillingAddress(street)
+    setBillingAddressNumber(number)
+    setBillingProvince(neighborhood)
+    setBillingComplement(complement)
   }, [store, user, userData])
 
   const subscriptionStatus = normalizeStatus(store?.subscriptionStatus || userData?.subscriptionStatus)
@@ -381,7 +413,13 @@ export default function BillingPage() {
   const billingProvider = store?.billingProvider || userData?.billingProvider || ''
   const asaasCustomerId = store?.asaasCustomerId || userData?.asaasCustomerId || ''
   const asaasSubscriptionId = store?.asaasSubscriptionId || userData?.asaasSubscriptionId || ''
+  const asaasCheckoutUrl = store?.asaasCheckoutUrl || userData?.asaasCheckoutUrl || ''
+  const billingMethodConfigured = Boolean(store?.billingMethodConfigured || userData?.billingMethodConfigured)
   const hasAsaasSubscription = Boolean(asaasSubscriptionId)
+  const hasAsaasBillingSetup = hasAsaasSubscription || billingMethodConfigured
+  const checkoutUrlToOpen = lastCheckoutUrl || asaasCheckoutUrl
+  const showCheckoutSuccessBanner =
+    searchParams.get('asaasCheckout') === 'success' && !hasAsaasBillingSetup
 
   useEffect(() => {
     setSelectedPlanCycle(billingCycle)
@@ -397,15 +435,15 @@ export default function BillingPage() {
   const isCanceled = subscriptionStatus === 'canceled'
   const isActive = subscriptionStatus === 'active'
   const isPending = subscriptionStatus === 'checkout_pending'
-  const isTrialNoAsaas = isTrial && !hasAsaasSubscription
+  const isTrialNoAsaas = isTrial && !hasAsaasBillingSetup
   const trialIsFuture = Boolean(trialEndsDate && trialEndsDate.getTime() > Date.now())
 
   const nextBillingInfo = useMemo(() => {
-    if (!hasAsaasSubscription) {
+    if (!hasAsaasBillingSetup) {
       return {
         label: 'Cobrança Asaas',
         value: 'Pendente de configuração',
-        helper: 'Configure a cobrança para ativar seu teste grátis.',
+        helper: 'Cadastre a forma de pagamento para ativar seu teste grátis.',
       }
     }
 
@@ -441,7 +479,7 @@ export default function BillingPage() {
   }, [
     currentPeriodEnd,
     currentPeriodEndDate,
-    hasAsaasSubscription,
+    hasAsaasBillingSetup,
     isActive,
     isPastDue,
     isTrial,
@@ -450,8 +488,8 @@ export default function BillingPage() {
   ])
 
   const primaryAction = useMemo(
-    () => getPrimaryAction({ status: subscriptionStatus, hasAsaasSubscription }),
-    [subscriptionStatus, hasAsaasSubscription]
+    () => getPrimaryAction({ status: subscriptionStatus, hasAsaasSubscription: hasAsaasBillingSetup }),
+    [subscriptionStatus, hasAsaasBillingSetup]
   )
 
   const whatNowItems = useMemo(() => {
@@ -482,7 +520,7 @@ export default function BillingPage() {
 
     return [
       'Configure a cobrança para ativar seu teste.',
-      'Você não será cobrado agora.',
+      'Você pode cancelar a qualquer momento.',
       'A primeira cobrança acontece somente após o período de teste.',
     ]
   }, [currentPeriodEnd, isActive, isBlocked, isCanceled, isPastDue, isTrialNoAsaas])
@@ -509,13 +547,13 @@ export default function BillingPage() {
       },
       {
         title: 'Primeira cobrança',
-        description: hasAsaasSubscription ? 'Cobrança Asaas configurada' : 'Cobrança Asaas pendente',
+        description: hasAsaasBillingSetup ? 'Forma de pagamento cadastrada no Asaas' : 'Forma de pagamento pendente',
         meta: chargeDate ? `Prevista para ${formatBillingDate(chargeDate)}` : 'Configure a cobrança Asaas',
-        done: hasAsaasSubscription && isActive,
-        active: !hasAsaasSubscription || isPastDue,
+        done: hasAsaasBillingSetup && isActive,
+        active: !hasAsaasBillingSetup || isPastDue,
       },
     ]
-  }, [currentPeriodEnd, hasAsaasSubscription, isActive, isPastDue, isPending, isTrial, store?.createdAt, trialEndsAt])
+  }, [currentPeriodEnd, hasAsaasBillingSetup, isActive, isPastDue, isPending, isTrial, store?.createdAt, trialEndsAt])
 
   function openBillingModal(targetPlan, targetCycle) {
     if (!store?.id) {
@@ -526,10 +564,22 @@ export default function BillingPage() {
     setPendingPlan(targetPlan)
     setPendingCycle(normalizeCycleId(targetCycle))
 
+    const addr = typeof store.address === 'object' ? store.address : {}
+    const street = typeof store.address === 'string' ? store.address : (addr?.street || addr?.rua || store.street || store.logradouro || '')
+    const number = addr?.number || addr?.numero || store.addressNumber || store.number || store.numero || ''
+    const neighborhood = addr?.neighborhood || addr?.bairro || store.province || store.neighborhood || store.bairro || ''
+    const complement = addr?.complement || addr?.complemento || store.complement || store.complemento || ''
+    const cep = addr?.cep || store.postalCode || store.cep || store.zipCode || ''
+
     if (!billingName) setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
     if (!billingEmail) setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
-    if (!billingPhone) setBillingPhone(store.whatsapp || store.whatsapp1 || store.phone || user?.phoneNumber || '')
+    if (!billingPhone) setBillingPhone(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || '')
     if (!billingCpfCnpj) setBillingCpfCnpj(store.cnpj || store.cpf || '')
+    if (!billingPostalCode) setBillingPostalCode(formatCep(cep))
+    if (!billingAddress) setBillingAddress(street)
+    if (!billingAddressNumber) setBillingAddressNumber(number)
+    if (!billingProvince) setBillingProvince(neighborhood)
+    if (!billingComplement) setBillingComplement(complement)
 
     setBillingErrors({})
     setShowBillingModal(true)
@@ -546,6 +596,31 @@ export default function BillingPage() {
       type: 'info',
       message: 'Detalhes da assinatura exibidos na seção técnica abaixo.',
     })
+  }
+
+  async function handleRefreshBillingStatus() {
+    if (isCheckingBillingStatus) return
+
+    setIsCheckingBillingStatus(true)
+    setLoadingStore(true)
+    try {
+      if (auth.refreshUserData) {
+        await auth.refreshUserData()
+      }
+      setStoreRefreshNonce((value) => value + 1)
+      setToast({
+        type: 'info',
+        message: 'Verificando status da assinatura. Se o Asaas confirmar o pagamento, esta página será atualizada.',
+      })
+    } catch (error) {
+      console.error('[BillingPage] error refreshing billing status:', error)
+      setToast({
+        type: 'error',
+        message: 'Não foi possível verificar o status agora. Tente novamente em alguns segundos.',
+      })
+    } finally {
+      setIsCheckingBillingStatus(false)
+    }
   }
 
   function validateBillingForm() {
@@ -567,6 +642,17 @@ export default function BillingPage() {
 
     if (!billingPhone.trim()) errors.phone = 'WhatsApp ou celular é obrigatório'
 
+    const cleanPostalCode = billingPostalCode.replace(/\D/g, '')
+    if (!cleanPostalCode) {
+      errors.postalCode = 'CEP é obrigatório'
+    } else if (cleanPostalCode.length !== 8) {
+      errors.postalCode = 'CEP deve ter 8 dígitos (ex: 49000-000)'
+    }
+
+    if (!billingAddress.trim()) errors.address = 'Endereço é obrigatório'
+    if (!billingAddressNumber.trim()) errors.addressNumber = 'Número é obrigatório'
+    if (!billingProvince.trim()) errors.province = 'Bairro é obrigatório'
+
     setBillingErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -587,17 +673,37 @@ export default function BillingPage() {
           cpfCnpj: billingCpfCnpj.replace(/\D/g, ''),
           email: billingEmail.trim().toLowerCase(),
           phone: billingPhone.trim(),
+          postalCode: billingPostalCode.replace(/\D/g, ''),
+          address: billingAddress.trim(),
+          addressNumber: billingAddressNumber.trim(),
+          province: billingProvince.trim(),
+          complement: billingComplement.trim() || undefined,
         },
       })
 
-      if (response?.data?.invoiceUrl) {
-        window.open(response.data.invoiceUrl, '_blank')
+      const checkoutUrl =
+        response?.data?.checkoutUrl ||
+        response?.data?.paymentUrl ||
+        response?.data?.invoiceUrl ||
+        response?.data?.bankSlipUrl ||
+        ''
+
+      if (checkoutUrl) {
+        setLastCheckoutUrl(checkoutUrl)
+        window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+        setToast({
+          type: 'info',
+          message: 'Redirecionando para o Asaas. Depois de cadastrar a forma de pagamento, volte para esta página.',
+        })
+      } else {
+        setToast({
+          type: 'success',
+          message: response?.data?.status === 'trialing'
+            ? 'Forma de pagamento confirmada. Seu teste grátis foi ativado.'
+            : 'Solicitação enviada ao Asaas. Aguarde a atualização do status.',
+        })
       }
 
-      setToast({
-        type: 'success',
-        message: 'Cobranca Asaas configurada. Seu teste gratis foi ativado.',
-      })
       setShowBillingModal(false)
       setPendingPlan(null)
       setPendingCycle(null)
@@ -647,19 +753,33 @@ export default function BillingPage() {
         description="Acompanhe teste grátis, plano atual, cobrança Asaas e próximas datas da sua loja."
       />
 
-      <section className={`mt-6 overflow-hidden rounded-lg border p-5 shadow-sm sm:p-6 ${getHeroTone(subscriptionStatus, hasAsaasSubscription)}`}>
+      {showCheckoutSuccessBanner && (
+        <section className="mt-6 rounded-lg border border-orange-100 bg-orange-50 p-4 text-sm font-bold leading-relaxed text-[#9a3412] shadow-sm">
+          <div className="flex items-start gap-3">
+            <FiClock className="mt-0.5 shrink-0" />
+            <div>
+              <p className="font-black text-[#111827]">Estamos confirmando sua forma de pagamento.</p>
+              <p className="mt-1 text-xs font-semibold text-[#9a3412]">
+                Isso pode levar alguns segundos. A liberação do teste grátis acontece somente após confirmação do webhook do Asaas.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className={`mt-6 overflow-hidden rounded-lg border p-5 shadow-sm sm:p-6 ${getHeroTone(subscriptionStatus, hasAsaasBillingSetup)}`}>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <SubscriptionStatusBadge status={subscriptionStatus} />
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ring-1 ring-inset ${
-                  hasAsaasSubscription
+                  hasAsaasBillingSetup
                     ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10'
                     : 'bg-orange-50 text-[#f97316] ring-orange-600/10'
                 }`}
               >
-                {hasAsaasSubscription ? 'Cobrança Asaas configurada' : 'Cobrança Asaas pendente'}
+                {hasAsaasBillingSetup ? 'Forma de pagamento cadastrada' : 'Forma de pagamento pendente'}
               </span>
             </div>
 
@@ -667,13 +787,13 @@ export default function BillingPage() {
               {getStatusCopy(subscriptionStatus)}
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-[#4b5563]">
-              {hasAsaasSubscription
-                ? 'Sua assinatura está conectada ao Asaas. As liberações financeiras continuam dependendo dos webhooks de cobrança e pagamento.'
+              {hasAsaasBillingSetup
+                ? 'Sua forma de pagamento está conectada ao Asaas. As liberações financeiras continuam dependendo dos webhooks de cobrança e pagamento.'
                 : isPending
-                ? 'Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis.'
+                ? 'Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis. Você pode cancelar a qualquer momento sem cobrança.'
                 : isTrialNoAsaas
-                ? 'Cobrança Asaas pendente'
-                : 'Configure a cobrança Asaas para manter sua loja ativa após o teste. Você não será cobrado agora durante o período grátis.'}
+                ? 'Forma de pagamento Asaas pendente'
+                : 'Cadastre a forma de pagamento no Asaas para manter sua loja ativa após o teste. Você não será cobrado agora durante o período grátis.'}
             </p>
 
             {isTrial && trialEndsAt && (
@@ -703,11 +823,32 @@ export default function BillingPage() {
               {primaryAction.label}
             </button>
             <p className="mt-2 text-xs font-semibold leading-relaxed text-[#6b7280]">{primaryAction.support}</p>
+            {checkoutUrlToOpen && !hasAsaasBillingSetup && (
+              <button
+                type="button"
+                onClick={() => window.open(checkoutUrlToOpen, '_blank', 'noopener,noreferrer')}
+                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-orange-200 bg-white px-4 text-xs font-black text-[#f97316] transition hover:bg-orange-50"
+              >
+                <FiArrowRight />
+                Abrir página de pagamento novamente
+              </button>
+            )}
+            {!hasAsaasBillingSetup && (
+              <button
+                type="button"
+                onClick={handleRefreshBillingStatus}
+                disabled={isCheckingBillingStatus}
+                className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCheckingBillingStatus ? <FiLoader className="animate-spin" /> : <FiClock />}
+                {isCheckingBillingStatus ? 'Verificando...' : 'Verificar status da assinatura'}
+              </button>
+            )}
           </div>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryItem label="Plano" value={formatPlanName(plan)} helper={hasAsaasSubscription ? 'Plano atual' : 'Plano selecionado'} />
+          <SummaryItem label="Plano" value={formatPlanName(plan)} helper={hasAsaasBillingSetup ? 'Plano atual' : 'Plano selecionado'} />
           <SummaryItem label="Ciclo" value={normalizeBillingCycle(billingCycle)} helper="Sem taxas por pedido" />
           <SummaryItem label="Fim do teste grátis" value={formatBillingDate(trialEndsAt)} helper={isTrial ? 'Período de 14 dias grátis' : 'Data de referência'} />
           <SummaryItem label={nextBillingInfo.label} value={nextBillingInfo.value} helper={nextBillingInfo.helper} />
@@ -778,13 +919,13 @@ export default function BillingPage() {
             const suffix = selectedPlanCycle === 'annual' ? '/ano' : '/mês'
             const currentBadge = isTrialNoAsaas
               ? 'Plano selecionado'
-              : hasAsaasSubscription || isActive
+              : hasAsaasBillingSetup || isActive
               ? 'Plano atual'
               : 'Selecionado'
             const buttonLabel = isCurrent
               ? isTrialNoAsaas
                 ? 'Atual no teste'
-                : hasAsaasSubscription || isActive
+                : hasAsaasBillingSetup || isActive
                 ? 'Plano atual'
                 : 'Selecionado'
               : 'Selecionar plano'
@@ -864,13 +1005,13 @@ export default function BillingPage() {
 
                 <button
                   type="button"
-                  disabled={submitting || (isCurrent && hasAsaasSubscription)}
+                  disabled={submitting || (isCurrent && hasAsaasBillingSetup)}
                   onClick={() => openBillingModal(option.id, selectedPlanCycle)}
                   className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[1.25rem] px-5 text-xs font-black transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 ${
                     isCurrent
                       ? 'border border-orange-200 bg-orange-50 text-[#f97316]'
                       : option.popular
-                      ? 'bg-[#f97316] text-white shadow-xl shadow-orange-600/25 hover:bg-[#ea580c]'
+                      ? 'border-2 border-orange-500/20 bg-white text-[#f97316] hover:bg-orange-50/50 hover:border-[#f97316] hover:text-[#ea580c] shadow-sm'
                       : 'border-2 border-orange-500/20 bg-white text-[#f97316] hover:bg-orange-50/50 hover:border-[#f97316] hover:text-[#ea580c] shadow-sm'
                   }`}
                 >
@@ -898,6 +1039,7 @@ export default function BillingPage() {
           <div className="mt-4 grid gap-2 rounded-lg border border-gray-100 bg-[#fafafa] p-4 text-xs text-gray-600 sm:grid-cols-2 lg:grid-cols-3">
             <SummaryItem label="asaasCustomerId" value={asaasCustomerId || '-'} />
             <SummaryItem label="asaasSubscriptionId" value={asaasSubscriptionId || '-'} />
+            <SummaryItem label="asaasCheckoutUrl" value={asaasCheckoutUrl ? 'Disponível' : '-'} />
             <SummaryItem label="billingProvider" value={billingProvider || '-'} />
             <SummaryItem label="lastPaymentStatus" value={lastPaymentStatus || '-'} />
             <SummaryItem label="currentPeriodEnd" value={formatBillingDate(currentPeriodEnd)} />
@@ -908,33 +1050,36 @@ export default function BillingPage() {
 
       {showBillingModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-          <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-2xl">
-            <div className="border-b border-gray-100 p-5">
+          <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-2xl">
+            {/* Header */}
+            <div className="shrink-0 border-b border-gray-100 dark:border-zinc-800 bg-[#fffaf5] dark:bg-zinc-950 px-5 pb-4 pt-5">
               <button
                 type="button"
                 onClick={() => !submitting && setShowBillingModal(false)}
                 disabled={submitting}
-                className="absolute right-4 top-4 rounded-lg p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="absolute right-4 top-4 rounded-xl p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Fechar"
               >
                 <FiX size={18} />
               </button>
               <div className="flex items-start gap-3 pr-10">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-[#f97316]">
-                  <FiShield />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-[#f97316]">
+                  <FiShield size={18} />
                 </span>
                 <div>
-                  <h3 className="text-lg font-black text-[#111827]">Dados para ativar a cobrança</h3>
-                  <p className="mt-1 text-sm font-semibold leading-relaxed text-[#6b7280]">
-                    Essas informações serão usadas para criar sua assinatura no Asaas. Você não será cobrado agora durante o teste grátis.
+                  <h3 className="text-base font-black text-[#111827]">Dados de faturamento</h3>
+                  <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#6b7280]">
+                    Essas informações são usadas pelo Asaas para criar sua assinatura com segurança. Você não será cobrado agora.
                   </p>
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleConfirmSubscription} className="overflow-y-auto p-5">
-              <div className="space-y-4">
-                <div>
+            <form onSubmit={handleConfirmSubscription} className="min-h-0 flex-1 overflow-y-auto">
+              <div className="space-y-0 divide-y divide-gray-50 px-5 py-4">
+
+                {/* Name */}
+                <div className="pb-4">
                   <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
                     Nome / Razão social
                   </label>
@@ -944,14 +1089,15 @@ export default function BillingPage() {
                     onChange={(e) => setBillingName(e.target.value)}
                     disabled={submitting}
                     placeholder="Nome completo ou Razão Social"
-                    className={`h-11 w-full rounded-lg border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
-                      billingErrors.name ? 'border-red-300 bg-red-50/30' : 'border-gray-200 focus:border-orange-300'
+                    className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                      billingErrors.name ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
                     }`}
                   />
                   {billingErrors.name && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.name}</p>}
                 </div>
 
-                <div>
+                {/* CPF/CNPJ */}
+                <div className="py-4">
                   <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
                     CPF ou CNPJ
                   </label>
@@ -962,14 +1108,15 @@ export default function BillingPage() {
                     onChange={(e) => setBillingCpfCnpj(e.target.value)}
                     disabled={submitting}
                     placeholder="Apenas números"
-                    className={`h-11 w-full rounded-lg border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
-                      billingErrors.cpfCnpj ? 'border-red-300 bg-red-50/30' : 'border-gray-200 focus:border-orange-300'
+                    className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                      billingErrors.cpfCnpj ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
                     }`}
                   />
                   {billingErrors.cpfCnpj && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.cpfCnpj}</p>}
                 </div>
 
-                <div>
+                {/* Email */}
+                <div className="py-4">
                   <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
                     E-mail de cobrança
                   </label>
@@ -979,53 +1126,151 @@ export default function BillingPage() {
                     onChange={(e) => setBillingEmail(e.target.value)}
                     disabled={submitting}
                     placeholder="financeiro@sualoja.com"
-                    className={`h-11 w-full rounded-lg border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
-                      billingErrors.email ? 'border-red-300 bg-red-50/30' : 'border-gray-200 focus:border-orange-300'
+                    className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                      billingErrors.email ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
                     }`}
                   />
                   {billingErrors.email && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.email}</p>}
                 </div>
 
-                <div>
+                {/* Phone */}
+                <div className="py-4">
                   <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
                     WhatsApp / Celular
                   </label>
                   <input
                     type="text"
+                    inputMode="tel"
                     value={billingPhone}
                     onChange={(e) => setBillingPhone(e.target.value)}
                     disabled={submitting}
                     placeholder="(00) 00000-0000"
-                    className={`h-11 w-full rounded-lg border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
-                      billingErrors.phone ? 'border-red-300 bg-red-50/30' : 'border-gray-200 focus:border-orange-300'
+                    className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                      billingErrors.phone ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
                     }`}
                   />
                   {billingErrors.phone && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.phone}</p>}
                 </div>
+
+                {/* Address section header */}
+                <div className="pt-4">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-[#f97316]">
+                    Endereço de cobrança
+                  </p>
+
+                  {/* CEP */}
+                  <div className="mb-3">
+                    <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
+                      CEP
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={billingPostalCode}
+                      onChange={(e) => setBillingPostalCode(formatCep(e.target.value))}
+                      disabled={submitting}
+                      placeholder="00000-000"
+                      maxLength={9}
+                      className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                        billingErrors.postalCode ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
+                      }`}
+                    />
+                    {billingErrors.postalCode && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.postalCode}</p>}
+                  </div>
+
+                  {/* Street + Number */}
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
+                        Endereço
+                      </label>
+                      <input
+                        type="text"
+                        value={billingAddress}
+                        onChange={(e) => setBillingAddress(e.target.value)}
+                        disabled={submitting}
+                        placeholder="Rua, Av., Travessa..."
+                        className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                          billingErrors.address ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
+                        }`}
+                      />
+                      {billingErrors.address && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.address}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
+                        Número
+                      </label>
+                      <input
+                        type="text"
+                        value={billingAddressNumber}
+                        onChange={(e) => setBillingAddressNumber(e.target.value)}
+                        disabled={submitting}
+                        placeholder="Ex: 100"
+                        className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                          billingErrors.addressNumber ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
+                        }`}
+                      />
+                      {billingErrors.addressNumber && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.addressNumber}</p>}
+                    </div>
+                  </div>
+
+                  {/* Neighborhood */}
+                  <div className="mb-3">
+                    <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
+                      Bairro
+                    </label>
+                    <input
+                      type="text"
+                      value={billingProvince}
+                      onChange={(e) => setBillingProvince(e.target.value)}
+                      disabled={submitting}
+                      placeholder="Nome do bairro"
+                      className={`h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50 ${
+                        billingErrors.province ? 'border-red-300 bg-red-50/30 focus:border-red-400' : 'border-gray-200 focus:border-[#f97316]'
+                      }`}
+                    />
+                    {billingErrors.province && <p className="mt-1 text-xs font-bold text-red-600">{billingErrors.province}</p>}
+                  </div>
+
+                  {/* Complement (optional) */}
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400">
+                      Complemento <span className="font-semibold normal-case text-gray-300">(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={billingComplement}
+                      onChange={(e) => setBillingComplement(e.target.value)}
+                      disabled={submitting}
+                      placeholder="Apto, Bloco, Sala..."
+                      className="h-11 w-full rounded-xl border border-gray-200 px-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-[#f97316] disabled:bg-gray-50"
+                    />
+                  </div>
+                </div>
               </div>
 
               {submitting && (
-                <div className="mt-4 rounded-lg border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-relaxed text-[#9a3412]">
-                  Estamos criando sua assinatura no Asaas. Mantenha esta janela aberta até a conclusão.
+                <div className="mx-5 mb-4 rounded-xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-relaxed text-[#9a3412]">
+                  Estamos preparando o checkout seguro do Asaas. Mantenha esta janela aberta até o redirecionamento.
                 </div>
               )}
 
-              <div className="mt-5 flex flex-col-reverse gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:justify-end">
+              <div className="flex flex-col-reverse gap-3 border-t border-gray-100 px-5 pb-5 pt-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => !submitting && setShowBillingModal(false)}
                   disabled={submitting}
-                  className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-gray-200 px-5 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-gray-200 px-5 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {submitting ? <FiLoader className="animate-spin" /> : <FiCreditCard />}
-                  {submitting ? 'Processando...' : 'Ativar cobrança Asaas'}
+                  {submitting ? 'Processando...' : 'Ir para o checkout'}
                 </button>
               </div>
             </form>

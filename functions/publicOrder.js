@@ -250,7 +250,7 @@ function assertStoreBillingAllowsPublicOrder(store, logger) {
 
   if (subscriptionStatus === 'active') return
 
-  if (subscriptionStatus === 'checkout_pending') {
+  if (subscriptionStatus === 'checkout_pending' || subscriptionStatus === 'billing_pending_payment_method') {
     logger.warn('createPublicOrder blocked by checkout pending billing', { storeId, subscriptionStatus })
     fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
   }

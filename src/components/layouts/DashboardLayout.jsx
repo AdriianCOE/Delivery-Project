@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { auth } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import ProfilePanel from '../merchant/ProfilePanel'
+import { DashboardPageSkeleton } from '../shared/Skeletons'
 
 import {
   FiArchive,
@@ -178,13 +179,13 @@ function PratoByMark({ compact = false }) {
         <p
           className={cn(
             compact ? 'text-base' : 'text-lg',
-            'truncate font-black tracking-tight text-[#111827]'
+            'truncate font-black tracking-tight text-[#111827] dark:text-white'
           )}
         >
           PratoBy
         </p>
 
-        <p className="truncate text-xs font-bold text-[#6b7280]">
+        <p className="truncate text-xs font-bold text-[#6b7280] dark:text-zinc-400">
           Painel do lojista
         </p>
       </div>
@@ -224,10 +225,10 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
       onClick={handleClick}
       className={({ isActive }) =>
         cn(
-          'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99]',
+          'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
           isActive
             ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/20'
-            : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
+            : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white'
         )
       }
     >
@@ -238,7 +239,7 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
               'grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition',
               isActive
                 ? 'bg-white/15 text-white'
-                : 'bg-gray-50 text-[#6b7280] group-hover:bg-white group-hover:text-[#f97316]'
+                : 'bg-gray-50 text-[#6b7280] group-hover:bg-white group-hover:text-[#f97316] dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:bg-zinc-700'
             )}
           >
             <Icon size={18} />
@@ -273,10 +274,10 @@ function ComingSoonNavItem({ item, onNavigate }) {
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-black transition active:scale-[0.99]',
+          'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-black transition active:scale-[0.99] cursor-pointer',
           isActive
-            ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100'
-            : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
+            ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-950/20 dark:ring-orange-900/30'
+            : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white'
         )
       }
     >
@@ -286,8 +287,8 @@ function ComingSoonNavItem({ item, onNavigate }) {
             className={cn(
               'grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition',
               isActive
-                ? 'bg-white text-[#f97316]'
-                : 'bg-gray-50 text-[#6b7280] group-hover:bg-white group-hover:text-[#f97316]'
+                ? 'bg-white text-[#f97316] dark:bg-zinc-800 dark:text-[#f97316]'
+                : 'bg-gray-50 text-[#6b7280] group-hover:bg-white group-hover:text-[#f97316] dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:bg-zinc-700'
             )}
           >
             <Icon size={18} />
@@ -297,12 +298,12 @@ function ComingSoonNavItem({ item, onNavigate }) {
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate">{item.label}</span>
 
-              <span className="shrink-0 rounded-full bg-[#111827] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+              <span className="shrink-0 rounded-full bg-[#111827] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white dark:bg-zinc-800 dark:text-zinc-300">
                 Em breve
               </span>
             </span>
 
-            <span className="mt-0.5 block truncate text-[11px] font-bold text-[#9ca3af]">
+            <span className="mt-0.5 block truncate text-[11px] font-bold text-[#9ca3af] dark:text-zinc-500">
               {item.description}
             </span>
           </span>
@@ -310,7 +311,7 @@ function ComingSoonNavItem({ item, onNavigate }) {
           <FiLock
             className={cn(
               'shrink-0',
-              isActive ? 'text-[#f97316]' : 'text-gray-300'
+              isActive ? 'text-[#f97316]' : 'text-gray-300 dark:text-zinc-650'
             )}
             size={15}
           />
@@ -331,8 +332,8 @@ function MobileNavItem({ item }) {
         cn(
           'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98]',
           isActive
-            ? 'bg-orange-50 text-[#f97316]'
-            : 'text-[#6b7280] active:bg-gray-50'
+            ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
+            : 'text-[#6b7280] active:bg-gray-50 dark:text-zinc-400 dark:active:bg-zinc-800/50'
         )
       }
     >
@@ -415,18 +416,18 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-        className="absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70"
+        className="absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 dark:bg-zinc-900 dark:ring-zinc-800"
       >
-        <div className="shrink-0 border-b border-orange-100/70 bg-[#fffaf5] px-4 pb-4 pt-4">
+        <div className="shrink-0 border-b border-orange-100/70 bg-[#fffaf5] px-4 pb-4 pt-4 dark:bg-zinc-950 dark:border-zinc-800/80">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#f97316] shadow-sm ring-1 ring-orange-100">
+              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#f97316] shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-zinc-800">
                 Painel do lojista
               </span>
-              <p className="mt-2 text-xl font-black leading-tight text-[#111827]">
+              <p className="mt-2 text-xl font-black leading-tight text-[#111827] dark:text-white">
                 Menu do painel
               </p>
-              <p className="mt-1 max-w-[17rem] text-xs font-semibold leading-5 text-[#6b7280]">
+              <p className="mt-1 max-w-[17rem] text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
                 Acesse sua conta, recursos e próximas áreas do PratoBy.
               </p>
             </div>
@@ -434,7 +435,7 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
             <button
               type="button"
               onClick={onClose}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-[#111827] shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-50 active:scale-[0.98]"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-[#111827] shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-50 active:scale-[0.98] dark:bg-zinc-800 dark:text-white dark:ring-zinc-700 dark:hover:bg-zinc-700"
               aria-label="Fechar menu"
             >
               <FiX />
@@ -449,9 +450,9 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
               onClose()
               onOpenProfileModal()
             }}
-            className="group flex w-full items-center gap-3 rounded-[1.25rem] border border-gray-100 bg-white p-3 text-left shadow-sm transition active:scale-[0.98] active:bg-orange-50"
+            className="group flex w-full items-center gap-3 rounded-[1.25rem] border border-gray-100 bg-white p-3 text-left shadow-sm transition active:scale-[0.98] active:bg-orange-50 dark:border-zinc-800 dark:bg-zinc-950 dark:active:bg-zinc-900"
           >
-            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[0.85rem] bg-orange-50 text-[#f97316]">
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[0.85rem] bg-orange-50 text-[#f97316] dark:bg-zinc-800 dark:text-zinc-400">
               {photoURL ? (
                 <img src={photoURL} alt={name} className="h-full w-full object-cover" />
               ) : (
@@ -461,8 +462,8 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-[#111827]">{name}</p>
-              {email && <p className="truncate text-xs font-semibold text-[#6b7280]">{email}</p>}
+              <p className="truncate text-sm font-black text-[#111827] dark:text-white">{name}</p>
+              {email && <p className="truncate text-xs font-semibold text-[#6b7280] dark:text-zinc-400">{email}</p>}
             </div>
             <FiChevronRight size={16} className="text-gray-300 transition group-hover:text-[#f97316]" />
           </button>
@@ -540,29 +541,29 @@ function ProfileModal({ open, onClose, onLogout, user, userData }) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-        className="relative flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5"
+        className="relative flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-zinc-800"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <div>
-            <p className="text-lg font-black text-[#111827]">Perfil da Conta</p>
-            <p className="text-xs font-bold text-[#6b7280]">Gerencie sua conta e segurança</p>
+            <p className="text-lg font-black text-[#111827] dark:text-white">Perfil da Conta</p>
+            <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400">Gerencie sua conta e segurança</p>
           </div>
           <button
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100"
+            className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
           >
             <FiX size={18} />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#f9fafb] p-4 sm:p-6 [scrollbar-width:thin]">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#f9fafb] p-4 sm:p-6 [scrollbar-width:thin] dark:bg-zinc-950">
           <ProfilePanel onLogout={null} />
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-100 bg-white p-4">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <button
             onClick={onClose}
-            className="rounded-2xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827]"
+            className="rounded-2xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white cursor-pointer"
           >
             Fechar
           </button>
@@ -571,7 +572,7 @@ function ProfileModal({ open, onClose, onLogout, user, userData }) {
               onClose()
               onLogout()
             }}
-            className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100"
+            className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 cursor-pointer"
           >
             <FiLogOut size={16} />
             Sair da conta
@@ -602,14 +603,14 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
       <button
         type="button"
         onClick={onOpenProfileModal}
-        className="group flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40"
+        className="group flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40 dark:hover:border-orange-500/30 cursor-pointer"
       >
         {/* Avatar */}
         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl">
           {photoURL ? (
             <img src={photoURL} alt={name} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-orange-50 text-sm font-black text-[#f97316]">
+            <div className="flex h-full w-full items-center justify-center bg-orange-50 text-sm font-black text-[#f97316] dark:bg-zinc-800 dark:text-zinc-400">
               {initial}
             </div>
           )}
@@ -617,16 +618,16 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
 
         {/* Texto */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black text-[#111827]">{name}</p>
+          <p className="truncate text-sm font-black text-[#111827] dark:text-white">{name}</p>
           {email && (
-            <p className="truncate text-[11px] font-semibold text-[#9ca3af]">{email}</p>
+            <p className="truncate text-[11px] font-semibold text-[#9ca3af] dark:text-zinc-500">{email}</p>
           )}
         </div>
 
         {/* Ícone de perfil */}
         <FiUser
           size={14}
-          className="shrink-0 text-gray-300 transition group-hover:text-[#f97316]"
+          className="shrink-0 text-gray-300 transition group-hover:text-[#f97316] dark:text-zinc-650"
         />
       </button>
     </div>
@@ -635,9 +636,9 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
 
 function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
   return (
-    <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block">
+    <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)]">
       <div className="flex h-full min-h-0 flex-col">
-        <div className="rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-3 shadow-sm ring-1 ring-white">
+        <div className="rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-3 shadow-sm ring-1 ring-white dark:from-zinc-800 dark:to-zinc-900 dark:border-zinc-700/50 dark:ring-zinc-800">
           <PratoByMark />
         </div>
 
@@ -667,12 +668,12 @@ function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
 
         {/* Rodapé — card de usuário */}
         <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} />
-        
+
         {/* Logout rápido no desktop */}
         <button
           type="button"
           onClick={onLogout}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
         >
           <FiLogOut size={13} className="shrink-0" />
           <span>Sair da conta</span>
@@ -686,7 +687,7 @@ function MobileBottomNav({ onOpenMore, moreActive }) {
   const mobileItems = MAIN_ITEMS.slice(0, 4)
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/95 px-2 pt-2 shadow-2xl shadow-gray-300/60 backdrop-blur-xl pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/95 px-2 pt-2 shadow-2xl shadow-gray-300/60 backdrop-blur-xl pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:hidden dark:bg-zinc-900/95 dark:border-zinc-800 dark:shadow-[0_-10px_50px_rgba(0,0,0,0.3)]">
       <div className="grid grid-cols-5 gap-1">
         {mobileItems.map((item) => (
           <MobileNavItem key={item.to} item={item} />
@@ -696,8 +697,10 @@ function MobileBottomNav({ onOpenMore, moreActive }) {
           type="button"
           onClick={onOpenMore}
           className={cn(
-            'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50',
-            moreActive ? 'bg-orange-50 text-[#f97316]' : 'text-[#6b7280]'
+            'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50 dark:active:bg-zinc-850',
+            moreActive
+              ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
+              : 'text-[#6b7280] dark:text-zinc-400'
           )}
         >
           <FiMenu size={19} />
@@ -718,7 +721,7 @@ export default function DashboardLayout() {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
 
-  const { user, userData, logout } = authContext || {}
+  const { user, userData, logout, loading } = authContext || {}
 
 
   const moreActive = useMemo(() => {
@@ -749,16 +752,16 @@ export default function DashboardLayout() {
   }, [location.pathname])
 
   return (
-    <main className="h-[100dvh] overflow-hidden bg-[#f9fafb] text-[#111827]">
+    <main className="dashboard-shell h-[100dvh] overflow-hidden bg-[#f9fafb] text-[#111827] dark:bg-zinc-950 dark:text-zinc-50 transition-colors">
       <SoonToast
         feature={soonFeature}
         onClose={() => setSoonFeature(null)}
       />
 
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100/55 blur-3xl" />
-        <div className="absolute right-[-7rem] top-1/3 h-80 w-80 rounded-full bg-gray-200/60 blur-3xl" />
-        <div className="absolute bottom-[-8rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-orange-50 blur-3xl" />
+        <div className="absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100/55 blur-3xl dark:bg-orange-900/10 pointer-events-none" />
+        <div className="absolute right-[-7rem] top-1/3 h-80 w-80 rounded-full bg-gray-200/60 blur-3xl dark:bg-zinc-800/10 pointer-events-none" />
+        <div className="absolute bottom-[-8rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-orange-50 blur-3xl dark:bg-zinc-900/10 pointer-events-none" />
       </div>
 
       <div className="relative flex h-[100dvh] min-h-0 overflow-hidden">
@@ -766,16 +769,16 @@ export default function DashboardLayout() {
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
   <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       <motion.div
-        key={location.pathname}
+        key={loading ? 'loading-skeleton' : location.pathname}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
         transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
         className="min-h-full"
       >
-        <Outlet />
+        {loading ? <DashboardPageSkeleton /> : <Outlet />}
       </motion.div>
     </AnimatePresence>
   </div>

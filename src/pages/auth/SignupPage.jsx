@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createUserWithEmailAndPassword,
   signInWithPopup,
@@ -118,15 +118,42 @@ function getPasswordStrength(password) {
   return { level: 'strong', label: 'Senha forte', score }
 }
 
-function formatPhoneBR(value) {
+function getBrazilianPhoneDigits(value) {
   const digits = String(value || '').replace(/\D/g, '')
-  const truncated = digits.slice(0, 11)
+  if (digits.length > 11 && digits.startsWith('55')) {
+    return digits.slice(2, 13)
+  }
+  return digits.slice(0, 11)
+}
+
+function formatPhoneBR(value) {
+  const truncated = getBrazilianPhoneDigits(value)
 
   if (truncated.length === 0) return ''
   if (truncated.length <= 2) return `(${truncated}`
   if (truncated.length <= 6) return `(${truncated.slice(0, 2)}) ${truncated.slice(2)}`
   if (truncated.length <= 10) return `(${truncated.slice(0, 2)}) ${truncated.slice(2, 6)}-${truncated.slice(6)}`
   return `(${truncated.slice(0, 2)}) ${truncated.slice(2, 7)}-${truncated.slice(7)}`
+}
+
+function isValidBrazilianMobilePhone(value) {
+  const digits = getBrazilianPhoneDigits(value)
+  if (digits.length !== 11) return false
+  if (digits[0] === '0' || digits[2] !== '9') return false
+
+  const localNumber = digits.slice(2)
+  const localTail = localNumber.slice(1)
+  const obviousLocalNumbers = new Set([
+    '999999999',
+    '999111111',
+    '900000000',
+    '911111111',
+  ])
+
+  if (/^(\d)\1+$/.test(digits)) return false
+  if (/(\d)\1{4,}/.test(localNumber)) return false
+  if (obviousLocalNumbers.has(localNumber)) return false
+  return !['12345678', '87654321', '11111111', '00000000'].some((pattern) => localTail.includes(pattern))
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -530,6 +557,7 @@ function AlertBox({ children }) {
 
 export default function SignupPage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { refreshUserData } = useAuth()
 
   const [selectedPlanId, setSelectedPlanId] = useState(() => {
@@ -555,7 +583,6 @@ export default function SignupPage() {
   })
   const [formError, setFormError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
 
   // ── Derivados ──────────────────────────────
   const selectedPlan = useMemo(
@@ -612,7 +639,7 @@ export default function SignupPage() {
       role: 'merchant',
       email: user.email,
       displayName: finalDisplayName,
-      phone: form.whatsapp || '',
+      phone: getBrazilianPhoneDigits(form.whatsapp),
       phoneVerified: false,
       plan: selectedPlanId,
       billingCycle,
@@ -657,9 +684,8 @@ export default function SignupPage() {
   const handleGoogleSignup = useCallback(async () => {
     setFormError('')
     if (!form.whatsapp.trim()) return setFormError('Preencha seu WhatsApp primeiro.')
-    const phoneDigits = form.whatsapp.replace(/\D/g, '')
-    if (phoneDigits.length < 10) {
-      return setFormError('Informe um WhatsApp válido com DDD (10 ou 11 dígitos) antes de continuar.')
+    if (!isValidBrazilianMobilePhone(form.whatsapp)) {
+      return setFormError('Informe um celular válido com DDD e 9 dígitos antes de continuar.')
     }
     if (!form.storeName.trim()) return setFormError('Preencha o nome da sua loja primeiro.')
 
@@ -669,7 +695,10 @@ export default function SignupPage() {
       const user = result.user
       try {
         await saveUserDocument(user, 'google', user.displayName)
-        setSubmitted('google')
+        navigate('/onboarding', {
+          replace: true,
+          state: { accountCreated: true, displayName: user.displayName || '' },
+        })
       } catch (docError) {
         // Roll back created Google account if doc creation fails
         await signOut(auth);
@@ -682,7 +711,7 @@ export default function SignupPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [form.whatsapp, form.storeName, saveUserDocument])
+  }, [form.whatsapp, form.storeName, navigate, saveUserDocument])
 
   const handleContinue = useCallback(
     async (e) => {
@@ -691,9 +720,8 @@ export default function SignupPage() {
       if (!form.email.trim()) return setFormError('Informe seu e-mail.')
       if (!/\S+@\S+\.\S+/.test(form.email)) return setFormError('Digite um e-mail válido.')
       if (!form.whatsapp.trim()) return setFormError('Informe seu WhatsApp.')
-      const phoneDigits = form.whatsapp.replace(/\D/g, '')
-      if (phoneDigits.length < 10) {
-        return setFormError('Informe um WhatsApp válido com DDD (10 ou 11 dígitos).')
+      if (!isValidBrazilianMobilePhone(form.whatsapp)) {
+        return setFormError('Informe um celular válido com DDD e 9 dígitos.')
       }
       if (!form.storeName.trim()) return setFormError('Informe o nome da sua loja.')
       const strength = getPasswordStrength(form.password)
@@ -716,7 +744,10 @@ export default function SignupPage() {
           } catch (emailError) {
             console.warn('[Signup] Não foi possível enviar verificação de e-mail.', emailError)
           }
-          setSubmitted('password');
+          navigate('/onboarding', {
+            replace: true,
+            state: { accountCreated: true, displayName: form.name.trim() },
+          })
         } catch (docError) {
           // Roll back auth account if user document creation fails
           await deleteUser(user).catch(() => {});
@@ -731,54 +762,8 @@ export default function SignupPage() {
         setIsLoading(false)
       }
     },
-    [form, selectedPlanId, billingCycle, saveUserDocument]
+    [form, selectedPlanId, billingCycle, navigate, saveUserDocument]
   )
-
-  // ─────────────────────────────────────────────────────────
-  // RENDER — ESTADO "PRÓXIMA ETAPA"
-  // ─────────────────────────────────────────────────────────
-
-  if (submitted) {
-    return (
-      <main className="relative flex min-h-dvh items-center justify-center bg-[#f9fafb] px-4 text-[#111827] antialiased overflow-x-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: 28, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-sm sm:max-w-md rounded-[2rem] border border-orange-100/80 bg-white p-5 sm:p-8 text-center shadow-2xl shadow-orange-900/10 min-w-0"
-        >
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-orange-50 ring-1 ring-orange-100">
-            <FiCheckCircle size={32} className="text-[#f97316]" />
-          </div>
-          <h2 className="text-2xl font-black tracking-tight text-[#111827]">
-            Tudo certo, {form.name.split(' ')[0]}!
-          </h2>
-          <p className="mt-3 text-sm font-semibold leading-6 text-[#6b7280]">
-          Recebemos seus dados. Na próxima etapa, você poderá confirmar seu WhatsApp{' '}
-            <strong className="text-[#111827]">{form.whatsapp}</strong> e ativar 14 dias grátis
-            para testar sua loja com segurança.
-          </p>
-          {submitted === 'password' && (
-            <p className="mt-2 text-sm font-semibold leading-6 text-[#111827]">
-              Também enviamos um e-mail de verificação para sua caixa de entrada.
-            </p>
-          )}
-          <div className="mt-6 rounded-2xl border border-orange-100 bg-orange-50/60 px-4 py-4 text-sm font-bold text-[#374151]">
-            Plano <span className="text-[#f97316]">{selectedPlan.name}</span> ·{' '}
-            {billingCycle === 'annual' ? 'Cobrança anual' : 'Cobrança mensal'} ·{' '}
-            14 dias grátis
-          </div>
-          <Link
-            to="/onboarding"
-            className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:bg-[#ea580c]"
-          >
-            Continuar ativação 
-            <FiArrowRight size={15} />
-          </Link>
-        </motion.div>
-      </main>
-    )
-  }
 
   // ─────────────────────────────────────────────────────────
   // RENDER PRINCIPAL
@@ -1059,6 +1044,7 @@ export default function SignupPage() {
                     placeholder="(79) 99999-9999"
                     autoComplete="tel"
                     inputMode="tel"
+                    maxLength={15}
                     value={form.whatsapp}
                     onChange={handleField('whatsapp')}
                     required

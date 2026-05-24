@@ -247,7 +247,7 @@ export default function MenuManagementPage() {
                 href={`/${storeSlugForUrl}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#6b7280] transition hover:border-orange-200 hover:text-[#f97316]"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 text-xs font-black text-[#6b7280] transition hover:border-orange-200 hover:text-[#f97316] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-orange-500 dark:hover:text-[#f97316]"
               >
                 <FiExternalLink size={13} /> Ver loja
               </a>
@@ -256,7 +256,7 @@ export default function MenuManagementPage() {
               <button
                 type="button"
                 onClick={() => openCouponDrawer()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
               >
                 <FiPlus size={15} /> Novo cupom
               </button>
@@ -264,7 +264,7 @@ export default function MenuManagementPage() {
               <button
                 type="button"
                 onClick={() => openDeliveryDrawer()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
               >
                 <FiPlus size={15} /> Adicionar bairro
               </button>
@@ -273,14 +273,14 @@ export default function MenuManagementPage() {
                 <button
                   type="button"
                   onClick={() => openCategoryDrawer()}
-                  className="inline-flex items-center gap-1.5 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-[#f97316] transition hover:bg-orange-100"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-4 text-xs font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-950/20 dark:border-orange-900/50 dark:hover:bg-orange-950/40"
                 >
                   <FiPlus size={13} /> Categoria
                 </button>
                 <button
                   type="button"
                   onClick={() => openProductDrawer()}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+                  className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
                 >
                   <FiPlus size={15} /> Novo produto
                 </button>

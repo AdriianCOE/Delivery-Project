@@ -10,12 +10,20 @@ const TRIAL_DAYS = 14
 const START_ASAAS_LOCK_TTL_MS = 5 * 60 * 1000
 const BILLING_PROVIDER = 'asaas'
 const DEFAULT_ASAAS_BASE_URL = 'https://api-sandbox.asaas.com/v3'
+const BILLING_PENDING_PAYMENT_METHOD_STATUS = 'billing_pending_payment_method'
+const ASAAS_CHECKOUT_EXPIRATION_MINUTES = 1440
 
-const CHECKOUT_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const CHECKOUT_STATUSES = new Set([
+  'checkout_pending',
+  'pending_checkout',
+  'billing_pending',
+  BILLING_PENDING_PAYMENT_METHOD_STATUS,
+])
 const START_ASAAS_ALLOWED_STATUSES = new Set([
   'checkout_pending',
   'pending_checkout',
   'billing_pending',
+  BILLING_PENDING_PAYMENT_METHOD_STATUS,
   'trialing',
   'active',
   'past_due',
@@ -24,6 +32,7 @@ const START_ASAAS_ALLOWED_STATUSES = new Set([
 ])
 const INTERNAL_STATUSES = new Set([
   'checkout_pending',
+  BILLING_PENDING_PAYMENT_METHOD_STATUS,
   'trialing',
   'active',
   'past_due',
@@ -62,7 +71,41 @@ function getSecretValue(secret, envName) {
 }
 
 function getAsaasBaseUrl() {
-  return String(process.env.ASAAS_BASE_URL || DEFAULT_ASAAS_BASE_URL).replace(/\/+$/, '')
+  const configuredBaseUrl = process.env.ASAAS_BASE_URL
+  const allowSandboxFallback =
+    process.env.FUNCTIONS_EMULATOR === 'true' ||
+    process.env.ALLOW_ASAAS_SANDBOX_FALLBACK === 'true'
+
+  if (!configuredBaseUrl && !allowSandboxFallback) {
+    throw new HttpsError(
+      'failed-precondition',
+      'ASAAS_BASE_URL precisa ser configurada explicitamente para evitar uso acidental do sandbox.'
+    )
+  }
+
+  return String(configuredBaseUrl || DEFAULT_ASAAS_BASE_URL).replace(/\/+$/, '')
+}
+
+function getAsaasCheckoutBaseUrl() {
+  const configuredBaseUrl = process.env.ASAAS_CHECKOUT_BASE_URL
+
+  if (!configuredBaseUrl) {
+    throw new HttpsError(
+      'failed-precondition',
+      'ASAAS_CHECKOUT_BASE_URL precisa ser configurada quando o Asaas nao retornar URL direta do checkout.'
+    )
+  }
+
+  return String(configuredBaseUrl).replace(/\/+$/, '')
+}
+
+function getPublicAppBaseUrl() {
+  return String(
+    process.env.PUBLIC_APP_URL ||
+      process.env.APP_BASE_URL ||
+      process.env.FRONTEND_BASE_URL ||
+      'https://pratoby.com'
+  ).replace(/\/+$/, '')
 }
 
 function safeDocId(value) {
@@ -95,8 +138,18 @@ function normalizeCpfCnpj(value) {
   return digits
 }
 
+function normalizePostalCode(value) {
+  return String(value || '').replace(/\D/g, '')
+}
+
 function normalizePhoneDigits(value) {
   return String(value || '').replace(/\D/g, '')
+}
+
+function normalizeBrazilianPhoneForAsaas(value) {
+  const digits = normalizePhoneDigits(value)
+  if (digits.length === 13 && digits.startsWith('55')) return digits.slice(2)
+  return digits
 }
 
 function normalizePlan(value) {
@@ -334,10 +387,33 @@ function getCustomerPayload(uid, userData, billingData) {
     throw new HttpsError('invalid-argument', 'E-mail de cobranca invalido.')
   }
 
-  const mobilePhone = normalizePhoneDigits(billingData.phone || userData.phoneE164 || userData.phone)
+  const mobilePhone = normalizeBrazilianPhoneForAsaas(billingData.phone || userData.phoneE164 || userData.phone)
   if (!mobilePhone) {
     throw new HttpsError('invalid-argument', 'WhatsApp ou celular do pagador e obrigatorio.')
   }
+
+  // Validate and sanitize address fields required by Asaas
+  const postalCode = normalizePostalCode(billingData.postalCode || billingData.cep || '')
+  if (!postalCode || postalCode.length !== 8) {
+    throw new HttpsError('invalid-argument', 'CEP do pagador deve ter 8 digitos e e obrigatorio para o Asaas.')
+  }
+
+  const address = String(billingData.address || billingData.street || '').trim()
+  if (!address) {
+    throw new HttpsError('invalid-argument', 'Endereco do pagador e obrigatorio para o Asaas.')
+  }
+
+  const addressNumber = String(billingData.addressNumber || billingData.number || '').trim()
+  if (!addressNumber) {
+    throw new HttpsError('invalid-argument', 'Numero do endereco do pagador e obrigatorio para o Asaas.')
+  }
+
+  const province = String(billingData.province || billingData.neighborhood || billingData.bairro || '').trim()
+  if (!province) {
+    throw new HttpsError('invalid-argument', 'Bairro do pagador e obrigatorio para o Asaas.')
+  }
+
+  const complement = String(billingData.complement || billingData.complemento || '').trim() || undefined
 
   const payload = {
     name,
@@ -347,11 +423,13 @@ function getCustomerPayload(uid, userData, billingData) {
     externalReference: `pratoby:user:${uid}`,
     notificationDisabled: billingData.notificationDisabled === true,
     groupName: 'PratoBy',
+    postalCode,
+    address,
+    addressNumber,
+    province,
   }
 
-  for (const field of ['postalCode', 'address', 'addressNumber', 'complement', 'province']) {
-    if (billingData[field]) payload[field] = String(billingData[field]).trim()
-  }
+  if (complement) payload.complement = complement
 
   Object.keys(payload).forEach((key) => {
     if (payload[key] === undefined || payload[key] === '') delete payload[key]
@@ -399,6 +477,80 @@ async function createAsaasSubscription({
   })
 }
 
+function getCheckoutCustomerData(uid, userData, billingData) {
+  const customerPayload = getCustomerPayload(uid, userData, billingData)
+  const customerData = {
+    name: customerPayload.name,
+    cpfCnpj: customerPayload.cpfCnpj,
+    email: customerPayload.email,
+    phone: normalizeBrazilianPhoneForAsaas(customerPayload.mobilePhone),
+  }
+
+  for (const field of ['postalCode', 'address', 'addressNumber', 'complement', 'province']) {
+    if (customerPayload[field]) customerData[field] = customerPayload[field]
+  }
+
+  return customerData
+}
+
+function buildAsaasCheckoutUrl(asaasCheckout) {
+  const directUrl =
+    asaasCheckout?.url ||
+    asaasCheckout?.checkoutUrl ||
+    asaasCheckout?.paymentUrl ||
+    asaasCheckout?.invoiceUrl ||
+    asaasCheckout?.link ||
+    ''
+
+  if (/^https:\/\//i.test(String(directUrl))) return directUrl
+  if (!asaasCheckout?.id) return null
+
+  return `${getAsaasCheckoutBaseUrl()}?id=${encodeURIComponent(asaasCheckout.id)}`
+}
+
+async function createAsaasCheckout({
+  uid,
+  storeId,
+  userData,
+  billingData,
+  plan,
+  billingCycle,
+  nextDueDate,
+  operationId,
+}) {
+  const amountCents = getPlanAmountCents(plan, billingCycle)
+  const planName = PLAN_CATALOG[plan].name
+  const baseUrl = getPublicAppBaseUrl()
+
+  return await asaasRequest('/checkouts', {
+    method: 'POST',
+    body: {
+      billingTypes: ['CREDIT_CARD'],
+      chargeTypes: ['RECURRENT'],
+      minutesToExpire: ASAAS_CHECKOUT_EXPIRATION_MINUTES,
+      externalReference: `pratoby:checkout:${uid}:${storeId}:${operationId}`,
+      callback: {
+        successUrl: `${baseUrl}/dashboard/billing?asaasCheckout=success`,
+        cancelUrl: `${baseUrl}/dashboard/billing?asaasCheckout=cancel`,
+        expiredUrl: `${baseUrl}/dashboard/billing?asaasCheckout=expired`,
+      },
+      items: [
+        {
+          name: `PratoBy ${planName}`,
+          description: `Assinatura ${billingCycle === 'annual' ? 'anual' : 'mensal'} com 14 dias gratis`,
+          quantity: 1,
+          value: amountCents / 100,
+        },
+      ],
+      customerData: getCheckoutCustomerData(uid, userData, billingData),
+      subscription: {
+        cycle: getAsaasCycle(billingCycle),
+        nextDueDate,
+      },
+    },
+  })
+}
+
 function canUseExistingAsaasSubscription(userData) {
   return Boolean(getAsaasSubscriptionId(userData))
 }
@@ -419,6 +571,26 @@ function getAsaasCustomerId(data) {
       data?.providerCustomerId ||
       data?.subscription?.asaasCustomerId ||
       data?.subscription?.providerCustomerId ||
+      ''
+  ).trim()
+}
+
+function getAsaasCheckoutId(data) {
+  return String(
+    data?.asaasCheckoutId ||
+      data?.providerCheckoutId ||
+      data?.billingCheckout?.asaasCheckoutId ||
+      data?.billingCheckout?.providerCheckoutId ||
+      ''
+  ).trim()
+}
+
+function getAsaasCheckoutUrl(data) {
+  return String(
+    data?.asaasCheckoutUrl ||
+      data?.checkoutUrl ||
+      data?.billingCheckout?.asaasCheckoutUrl ||
+      data?.billingCheckout?.checkoutUrl ||
       ''
   ).trim()
 }
@@ -488,6 +660,65 @@ async function findExistingBillingReference({ db, transaction, userData, storeDa
       getAsaasCustomerId(userData) ||
       null,
     status: canonicalSubscription?.status || storeData?.subscriptionStatus || userData?.subscriptionStatus || null,
+  }
+}
+
+function findExistingCheckoutReference(userData, storeData) {
+  const checkoutId = getAsaasCheckoutId(storeData) || getAsaasCheckoutId(userData)
+  if (!checkoutId) {
+    return { exists: false }
+  }
+
+  return {
+    exists: true,
+    checkoutId,
+    checkoutUrl: getAsaasCheckoutUrl(storeData) || getAsaasCheckoutUrl(userData) || null,
+    asaasCustomerId: getAsaasCustomerId(storeData) || getAsaasCustomerId(userData) || null,
+    status:
+      storeData?.billingCheckoutStatus ||
+      userData?.billingCheckoutStatus ||
+      storeData?.subscriptionStatus ||
+      userData?.subscriptionStatus ||
+      BILLING_PENDING_PAYMENT_METHOD_STATUS,
+  }
+}
+
+async function findReusableCheckoutReference({ db, transaction, userData, storeData, now }) {
+  const checkoutId = getAsaasCheckoutId(storeData) || getAsaasCheckoutId(userData)
+  if (!checkoutId) return { exists: false }
+
+  const checkoutDoc = await transaction.get(db.collection('billingCheckouts').doc(safeDocId(checkoutId)))
+  const checkoutData = checkoutDoc.exists ? checkoutDoc.data() || {} : {}
+  const checkoutUrl =
+    checkoutData.checkoutUrl ||
+    getAsaasCheckoutUrl(storeData) ||
+    getAsaasCheckoutUrl(userData) ||
+    null
+  const checkoutStatus = String(
+    checkoutData.billingCheckoutStatus ||
+      storeData?.billingCheckoutStatus ||
+      userData?.billingCheckoutStatus ||
+      ''
+  ).trim()
+  const expiresAt = checkoutData.expiresAt || storeData?.asaasCheckoutExpiresAt || userData?.asaasCheckoutExpiresAt || null
+  const expiresAtDate = toDate(expiresAt)
+  const isReusable =
+    checkoutStatus === 'pending' &&
+    Boolean(checkoutUrl) &&
+    Boolean(expiresAtDate && expiresAtDate.getTime() > now.toMillis())
+
+  if (!isReusable) {
+    return { exists: false, staleCheckoutId: checkoutId }
+  }
+
+  return {
+    exists: true,
+    checkoutId,
+    checkoutUrl,
+    expiresAt,
+    asaasCustomerId: getAsaasCustomerId(checkoutData) || getAsaasCustomerId(storeData) || getAsaasCustomerId(userData) || null,
+    status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+    billingCheckoutStatus: checkoutStatus,
   }
 }
 
@@ -636,10 +867,17 @@ function buildAlreadyStartedResponse(existingReference) {
   return {
     ok: true,
     alreadyStarted: true,
-    message: 'Esta loja ja possui uma assinatura Asaas vinculada.',
+    message: existingReference.checkoutId
+      ? 'Esta loja ja possui um checkout Asaas pendente.'
+      : 'Esta loja ja possui uma assinatura Asaas vinculada.',
     subscriptionId: existingReference.localSubscriptionId || null,
     asaasCustomerId: existingReference.asaasCustomerId || null,
     asaasSubscriptionId: existingReference.providerSubscriptionId || null,
+    asaasCheckoutId: existingReference.checkoutId || null,
+    checkoutUrl: existingReference.checkoutUrl || null,
+    paymentUrl: existingReference.checkoutUrl || null,
+    expiresAt: existingReference.expiresAt || null,
+    billingCheckoutStatus: existingReference.billingCheckoutStatus || null,
     status: existingReference.status || null,
   }
 }
@@ -701,9 +939,23 @@ async function acquireStartAsaasSubscriptionLock({
       }
     }
 
+    const now = admin.firestore.Timestamp.now()
+    const existingCheckoutReference = await findReusableCheckoutReference({
+      db,
+      transaction,
+      userData,
+      storeData: storeState.storeData,
+      now,
+    })
+    if (existingCheckoutReference.exists) {
+      return {
+        alreadyStarted: true,
+        existing: buildAlreadyStartedResponse(existingCheckoutReference),
+      }
+    }
+
     validateUserCanStart(userData, storeState.storeData)
 
-    const now = admin.firestore.Timestamp.now()
     assertLockCanBeAcquired(lockDoc, now)
 
     const plan = normalizePlan(requestedPlan || userData.plan || 'professional')
@@ -852,7 +1104,7 @@ function toExternalProvisioningError(error) {
 function toFinalPersistenceError(error, localSubscriptionId) {
   return new HttpsError(
     'internal',
-    `Assinatura criada no Asaas, mas falhou ao salvar estado local (${localSubscriptionId}): ${error.message || String(error)}`,
+    `Checkout criado no Asaas, mas falhou ao salvar estado local (${localSubscriptionId}): ${error.message || String(error)}`,
     {
       localSubscriptionId,
       originalCode: error.code || null,
@@ -952,6 +1204,56 @@ function buildStorePayload({
     updatedAt: trialStartedAt,
     createdBy: uid,
     source: 'self_signup_asaas_trial',
+  }
+}
+
+function buildPendingBillingStorePayload({
+  uid,
+  userData,
+  storeId,
+  storeSlug,
+  plan,
+  billingCycle,
+  asaasCustomerId,
+  asaasCheckoutId,
+  checkoutUrl,
+  now,
+}) {
+  const storeName = userData.signup?.storeName || 'Minha Loja'
+
+  return {
+    name: storeName,
+    storeName,
+    storeId,
+    storeDocId: storeId,
+    slug: storeSlug,
+    storeSlug,
+    storeKeys: [storeId, storeSlug],
+    ownerId: uid,
+    ownerUid: uid,
+    ownerEmail: userData.email || '',
+    city: userData.signup?.city || '',
+    category: userData.signup?.segment || '',
+    segment: userData.signup?.segment || '',
+    isActive: true,
+    isOpen: false,
+    isBlocked: false,
+    isBillingBlocked: true,
+    isDeleted: false,
+    subscriptionStatus: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+    onboardingStatus: 'billing_pending',
+    billingProvider: BILLING_PROVIDER,
+    billingMethodConfigured: false,
+    billingCheckoutStatus: 'pending',
+    plan,
+    billingCycle,
+    asaasCustomerId: asaasCustomerId || null,
+    asaasCheckoutId,
+    asaasCheckoutUrl: checkoutUrl,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: uid,
+    source: 'self_signup_asaas_checkout_pending',
   }
 }
 
@@ -1059,6 +1361,276 @@ function buildMirrorFromSubscription(subscriptionData, update, now) {
   }
 }
 
+function getCheckoutPayload(body) {
+  return body?.checkout || body?.payment?.checkout || body?.checkoutSession || null
+}
+
+function getCheckoutPayloadId(body) {
+  const checkout = getCheckoutPayload(body)
+  return String(checkout?.id || body?.checkoutId || body?.checkoutSessionId || '').trim()
+}
+
+function getCheckoutProviderSubscriptionId(checkout) {
+  const subscription = checkout?.subscription
+  if (typeof subscription === 'string') return subscription
+
+  return String(
+    subscription?.id ||
+      subscription?.subscriptionId ||
+      checkout?.subscriptionId ||
+      checkout?.providerSubscriptionId ||
+      ''
+  ).trim()
+}
+
+function isCheckoutPaidEvent(event) {
+  const normalized = String(event || '').toUpperCase()
+  return normalized === 'CHECKOUT_PAID'
+}
+
+function getCheckoutStatusForEvent(event) {
+  const normalized = String(event || '').toUpperCase()
+  if (isCheckoutPaidEvent(normalized)) return 'paid'
+  if (normalized === 'CHECKOUT_EXPIRED') return 'expired'
+  if (normalized === 'CHECKOUT_CANCELED') return 'canceled'
+  return 'pending'
+}
+
+async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, event }) {
+  const checkout = getCheckoutPayload(body)
+  const checkoutId = getCheckoutPayloadId(body)
+
+  if (!checkoutId) {
+    return { ignored: true, reason: 'checkout_without_id' }
+  }
+
+  const eventRef = db.collection('providerEvents').doc(safeDocId(eventId || `${event}_${checkoutId}`))
+  const checkoutRef = db.collection('billingCheckouts').doc(safeDocId(checkoutId))
+
+  return await db.runTransaction(async (transaction) => {
+    const eventDoc = await transaction.get(eventRef)
+    const checkoutDoc = await transaction.get(checkoutRef)
+    const now = admin.firestore.Timestamp.now()
+
+    if (eventDoc.exists && ['processed', 'ignored'].includes(eventDoc.data().status)) {
+      return { duplicate: true, status: eventDoc.data().status }
+    }
+
+    const baseEventData = {
+      provider: BILLING_PROVIDER,
+      eventId: eventId || null,
+      eventType: event,
+      providerCheckoutId: checkoutId,
+      payloadHash: payloadHash(body),
+      receivedAt: eventDoc.exists ? eventDoc.data().receivedAt || now : now,
+      updatedAt: now,
+      ...(shouldStoreWebhookDebugPayload() ? { payloadDebug: body } : {}),
+    }
+
+    if (!checkoutDoc.exists) {
+      transaction.set(
+        eventRef,
+        {
+          ...baseEventData,
+          status: 'ignored',
+          ignoreReason: 'checkout_not_found',
+          processedAt: now,
+        },
+        { merge: true }
+      )
+
+      setAuditLog(transaction, db, now, {
+        action: 'asaas_checkout_webhook_ignored',
+        entity: 'provider_event',
+        entityId: eventId || checkoutId,
+        provider: BILLING_PROVIDER,
+        eventType: event,
+        asaasCheckoutId: checkoutId,
+        reason: 'checkout_not_found',
+      })
+
+      return { ignored: true, reason: 'checkout_not_found' }
+    }
+
+    const checkoutData = checkoutDoc.data() || {}
+    const checkoutStatus = getCheckoutStatusForEvent(event)
+
+    if (!isCheckoutPaidEvent(event)) {
+      const pendingMirrorPayload = {
+        subscriptionStatus: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+        onboardingStatus: 'billing_pending',
+        billingProvider: BILLING_PROVIDER,
+        billingMethodConfigured: false,
+        billingCheckoutStatus: checkoutStatus,
+        updatedAt: now,
+      }
+
+      transaction.set(
+        checkoutRef,
+        {
+          billingCheckoutStatus: checkoutStatus,
+          status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+          lastProviderEventType: event,
+          lastProviderEventAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      )
+
+      if (checkoutData.uid) {
+        transaction.set(db.collection('users').doc(checkoutData.uid), pendingMirrorPayload, { merge: true })
+      }
+
+      if (checkoutData.storeId) {
+        transaction.set(
+          db.collection('stores').doc(checkoutData.storeId),
+          {
+            ...pendingMirrorPayload,
+            isBillingBlocked: true,
+          },
+          { merge: true }
+        )
+      }
+
+      transaction.set(
+        eventRef,
+        {
+          ...baseEventData,
+          status: 'processed',
+          processedAt: now,
+          resultingCheckoutStatus: checkoutStatus,
+        },
+        { merge: true }
+      )
+      return { processed: true, checkoutId, checkoutStatus }
+    }
+
+    const providerSubscriptionId = getCheckoutProviderSubscriptionId(checkout)
+    const localSubscriptionId = providerSubscriptionId
+      ? buildLocalSubscriptionId(providerSubscriptionId)
+      : `asaas_checkout_${safeDocId(checkoutId)}`
+    const subscriptionRef = db.collection('subscriptions').doc(localSubscriptionId)
+    const subscriptionDoc = await transaction.get(subscriptionRef)
+    const amountCents = Number(checkoutData.amountCents || 0)
+    const trialStartedAt = checkoutData.trialStartedAt || now
+    const trialEndsAt =
+      checkoutData.scheduledTrialEndsAt ||
+      admin.firestore.Timestamp.fromDate(addDays(new Date(), TRIAL_DAYS))
+
+    const subscriptionData = {
+      id: localSubscriptionId,
+      uid: checkoutData.uid || null,
+      storeId: checkoutData.storeId || null,
+      provider: BILLING_PROVIDER,
+      providerCustomerId: checkoutData.providerCustomerId || null,
+      providerSubscriptionId: providerSubscriptionId || null,
+      providerCheckoutId: checkoutId,
+      status: 'trialing',
+      providerStatus: checkout?.status || checkoutStatus,
+      plan: checkoutData.plan || 'professional',
+      billingCycle: checkoutData.billingCycle || 'monthly',
+      amountCents,
+      billingType: 'CREDIT_CARD',
+      billingMethodConfigured: true,
+      trialStartedAt,
+      trialEndsAt,
+      currentPeriodEnd: trialEndsAt,
+      createdAt: subscriptionDoc.exists ? subscriptionDoc.data().createdAt || now : now,
+      updatedAt: now,
+    }
+
+    transaction.set(subscriptionRef, subscriptionData, { merge: true })
+    transaction.set(
+      checkoutRef,
+      {
+        billingCheckoutStatus: 'paid',
+        status: 'trialing',
+        providerSubscriptionId: providerSubscriptionId || null,
+        localSubscriptionId,
+        trialStartedAt,
+        trialEndsAt,
+        lastProviderEventType: event,
+        lastProviderEventAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    )
+
+    const mirrorPayload = {
+      subscriptionStatus: 'trialing',
+      onboardingStatus: 'completed',
+      billingProvider: BILLING_PROVIDER,
+      billingMethodConfigured: true,
+      billingCheckoutStatus: 'paid',
+      plan: subscriptionData.plan,
+      billingCycle: subscriptionData.billingCycle,
+      trialStartedAt,
+      trialEndsAt,
+      currentPeriodEnd: trialEndsAt,
+      asaasCustomerId: subscriptionData.providerCustomerId,
+      asaasSubscriptionId: providerSubscriptionId || null,
+      asaasCheckoutId: checkoutId,
+      subscriptionId: localSubscriptionId,
+      updatedAt: now,
+    }
+
+    if (subscriptionData.uid) {
+      transaction.set(db.collection('users').doc(subscriptionData.uid), mirrorPayload, { merge: true })
+    }
+
+    if (subscriptionData.storeId) {
+      transaction.set(
+        db.collection('stores').doc(subscriptionData.storeId),
+        {
+          ...mirrorPayload,
+          isBillingBlocked: false,
+          isActive: true,
+        },
+        { merge: true }
+      )
+    }
+
+    transaction.set(
+      eventRef,
+      {
+        ...baseEventData,
+        status: 'processed',
+        processedAt: now,
+        resultingSubscriptionStatus: 'trialing',
+        subscriptionId: localSubscriptionId,
+      },
+      { merge: true }
+    )
+
+    setAuditLog(transaction, db, now, {
+      action: 'asaas_checkout_paid',
+      entity: 'billing_checkout',
+      entityId: checkoutId,
+      uid: subscriptionData.uid,
+      storeId: subscriptionData.storeId,
+      provider: BILLING_PROVIDER,
+      eventType: event,
+      asaasCheckoutId: checkoutId,
+      asaasSubscriptionId: providerSubscriptionId || null,
+      subscriptionId: localSubscriptionId,
+    })
+
+    logger.info('Asaas checkout activated trial', {
+      checkoutId,
+      storeId: subscriptionData.storeId,
+      uid: subscriptionData.uid,
+      providerSubscriptionId: providerSubscriptionId || null,
+    })
+
+    return {
+      processed: true,
+      checkoutId,
+      subscriptionId: localSubscriptionId,
+      nextStatus: 'trialing',
+    }
+  })
+}
+
 function createAsaasFunctions({ db, admin, logger }) {
   const startAsaasSubscription = onCall(
     {
@@ -1102,7 +1674,7 @@ function createAsaasFunctions({ db, admin, logger }) {
 
       let asaasCustomerId = getAsaasCustomerId(lockState.userData) || getAsaasCustomerId(lockState.storeData) || null
       let createdCustomer = null
-      let asaasSubscription = null
+      let asaasCheckout = null
 
       try {
         if (!asaasCustomerId) {
@@ -1143,17 +1715,18 @@ function createAsaasFunctions({ db, admin, logger }) {
           })
         }
 
-        asaasSubscription = await createAsaasSubscription({
-          customerId: asaasCustomerId,
+        asaasCheckout = await createAsaasCheckout({
           uid,
           storeId,
+          userData: lockState.userData,
+          billingData,
           plan,
           billingCycle,
-          billingType: data.billingType,
+          operationId,
           nextDueDate,
         })
-        if (!asaasSubscription?.id) {
-          throw new Error('Asaas nao retornou id da assinatura.')
+        if (!asaasCheckout?.id) {
+          throw new Error('Asaas nao retornou id do checkout.')
         }
       } catch (error) {
         await releaseStartAsaasSubscriptionLock({
@@ -1163,19 +1736,42 @@ function createAsaasFunctions({ db, admin, logger }) {
           logger,
         })
 
-        logger.error('Asaas external provisioning failed', {
+        logger.error('Asaas checkout provisioning failed', {
           uid,
           storeId,
           operationId,
           error: error.message || String(error),
         })
 
+
         throw toExternalProvisioningError(error)
       }
 
-      const asaasSubscriptionId = asaasSubscription.id
-      const localSubscriptionId = buildLocalSubscriptionId(asaasSubscriptionId)
-      const subscriptionRef = db.collection('subscriptions').doc(localSubscriptionId)
+      const asaasCheckoutId = asaasCheckout.id
+      let checkoutUrl = null
+      try {
+        checkoutUrl = buildAsaasCheckoutUrl(asaasCheckout)
+      } catch (error) {
+        await releaseStartAsaasSubscriptionLock({
+          db,
+          lockRef: lockState.lockRef,
+          operationId,
+          logger,
+        })
+        throw error
+      }
+      if (!checkoutUrl) {
+        await releaseStartAsaasSubscriptionLock({
+          db,
+          lockRef: lockState.lockRef,
+          operationId,
+          logger,
+        })
+        throw new HttpsError('failed-precondition', 'Asaas nao retornou URL valida do checkout.')
+      }
+
+      const localCheckoutId = `asaas_checkout_${safeDocId(asaasCheckoutId)}`
+      const checkoutRef = db.collection('billingCheckouts').doc(safeDocId(asaasCheckoutId))
 
       let result = null
 
@@ -1211,8 +1807,8 @@ function createAsaasFunctions({ db, admin, logger }) {
             userData: freshUserData,
             storeData,
           })
-          const existingSubscriptionDoc = await transaction.get(subscriptionRef)
-          if (existingReference.exists || existingSubscriptionDoc.exists) {
+          const existingCheckoutDoc = await transaction.get(checkoutRef)
+          if (existingReference.exists || existingCheckoutDoc.exists) {
             throw new HttpsError('already-exists', 'Esta loja ja possui uma assinatura Asaas vinculada.')
           }
 
@@ -1220,9 +1816,7 @@ function createAsaasFunctions({ db, admin, logger }) {
 
           let storeSlug = storeData?.storeSlug || storeData?.slug || null
           const now = admin.firestore.Timestamp.now()
-          const existingTrialStartedAt = storeData?.trialStartedAt || freshUserData.trialStartedAt || null
-          const trialStartedAt = existingTrialStartedAt || now
-          const trialEndsAt = admin.firestore.Timestamp.fromDate(trialEndsDate)
+          const scheduledTrialEndsAt = admin.firestore.Timestamp.fromDate(trialEndsDate)
 
           if (!lockState.hasExistingStore) {
             storeSlug = await claimStoreSlug(
@@ -1233,66 +1827,61 @@ function createAsaasFunctions({ db, admin, logger }) {
               freshUserData.signup?.storeName || 'Minha Loja',
               now
             )
-            storeData = buildStorePayload({
+            storeData = buildPendingBillingStorePayload({
               uid,
               userData: freshUserData,
               storeId,
               storeSlug,
               plan,
               billingCycle,
-              trialStartedAt,
-              trialEndsAt,
               asaasCustomerId,
-              asaasSubscriptionId,
-              localSubscriptionId,
+              asaasCheckoutId,
+              checkoutUrl,
+              now,
             })
             transaction.set(storeRef, storeData)
           }
 
           const amountCents = getPlanAmountCents(plan, billingCycle)
-          const initialPaymentId = asaasSubscription.payment?.id || asaasSubscription.lastPaymentId || null
-          const initialPaymentStatus =
-            asaasSubscription.payment?.status ||
-            asaasSubscription.lastPaymentStatus ||
-            'PENDING'
-          const subscriptionData = {
-            id: localSubscriptionId,
+          const checkoutExpiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + ASAAS_CHECKOUT_EXPIRATION_MINUTES * 60 * 1000)
+          const checkoutData = {
+            id: asaasCheckoutId,
             uid,
             storeId,
             provider: BILLING_PROVIDER,
             providerCustomerId: asaasCustomerId,
-            providerSubscriptionId: asaasSubscriptionId,
-            status: 'trialing',
-            providerStatus: asaasSubscription.status || null,
+            providerCheckoutId: asaasCheckoutId,
+            checkoutUrl,
+            status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+            providerStatus: asaasCheckout.status || null,
             plan,
             billingCycle,
             amountCents,
-            billingType: asaasSubscription.billingType || data.billingType || 'UNDEFINED',
-            trialStartedAt,
-            trialEndsAt,
-            currentPeriodEnd: trialEndsAt,
-            lastPaymentId: initialPaymentId,
-            lastPaymentStatus: initialPaymentStatus,
+            billingType: 'CREDIT_CARD',
+            chargeType: 'RECURRENT',
+            billingCheckoutStatus: 'pending',
+            scheduledTrialEndsAt,
+            expiresAt: checkoutExpiresAt,
             createdAt: now,
             updatedAt: now,
           }
 
-          transaction.set(subscriptionRef, subscriptionData)
+          transaction.set(checkoutRef, checkoutData)
 
-          const mirroredPayload = buildMirroredBillingPayload({
+          const mirroredPayload = {
+            subscriptionStatus: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+            onboardingStatus: 'billing_pending',
+            billingProvider: BILLING_PROVIDER,
+            billingMethodConfigured: false,
+            billingCheckoutStatus: 'pending',
             plan,
             billingCycle,
-            status: 'trialing',
-            trialStartedAt,
-            trialEndsAt,
-            currentPeriodEnd: trialEndsAt,
             asaasCustomerId,
-            asaasSubscriptionId,
-            localSubscriptionId,
-            lastPaymentId: initialPaymentId,
-            lastPaymentStatus: initialPaymentStatus,
-            now,
-          })
+            asaasCheckoutId,
+            asaasCheckoutUrl: checkoutUrl,
+            asaasCheckoutExpiresAt: checkoutExpiresAt,
+            updatedAt: now,
+          }
 
           const existingStoreIds = Array.isArray(freshUserData.storeIds) ? freshUserData.storeIds : []
           const existingStoreKeys = Array.isArray(freshUserData.storeKeys) ? freshUserData.storeKeys : []
@@ -1302,32 +1891,31 @@ function createAsaasFunctions({ db, admin, logger }) {
             storeId,
             storeIds: Array.from(new Set([...existingStoreIds, storeId].filter(Boolean))),
             storeKeys: Array.from(new Set([...existingStoreKeys, storeId, storeSlug].filter(Boolean))),
-            onboardingStatus: 'completed',
           })
 
           transaction.set(
             storeRef,
             {
               ...mirroredPayload,
-              isBillingBlocked: false,
+              isBillingBlocked: true,
               updatedAt: now,
             },
             { merge: true }
           )
 
           setAuditLog(transaction, db, now, {
-            action: 'asaas_subscription_created',
-            entity: 'subscription',
-            entityId: localSubscriptionId,
+            action: 'asaas_checkout_created',
+            entity: 'billing_checkout',
+            entityId: asaasCheckoutId,
             actorUid: uid,
             uid,
             storeId,
             provider: BILLING_PROVIDER,
             asaasCustomerId,
-            asaasSubscriptionId,
+            asaasCheckoutId,
             plan,
             billingCycle,
-            trialEndsAt,
+            scheduledTrialEndsAt,
           })
 
           transaction.delete(lockState.lockRef)
@@ -1335,8 +1923,9 @@ function createAsaasFunctions({ db, admin, logger }) {
           return {
             storeId,
             storeSlug,
-            subscriptionId: localSubscriptionId,
-            trialEndsAtMillis: trialEndsAt.toMillis(),
+            checkoutId: asaasCheckoutId,
+            checkoutUrl,
+            scheduledTrialEndsAtMillis: scheduledTrialEndsAt.toMillis(),
           }
         })
       } catch (error) {
@@ -1348,35 +1937,37 @@ function createAsaasFunctions({ db, admin, logger }) {
           operationId,
           uid,
           storeId,
-          localSubscriptionId,
+          localSubscriptionId: localCheckoutId,
           asaasCustomerId,
-          asaasSubscription,
+          asaasSubscription: asaasCheckout,
           plan,
           billingCycle,
           trialEndsDate,
           error,
         })
 
-        throw toFinalPersistenceError(error, localSubscriptionId)
+        throw toFinalPersistenceError(error, localCheckoutId)
       }
 
-      logger.info('Asaas subscription started', {
+      logger.info('Asaas checkout created', {
         uid,
         storeId: result.storeId,
-        subscriptionId: result.subscriptionId,
-        asaasSubscriptionId,
+        checkoutId: result.checkoutId,
         createdCustomer: Boolean(createdCustomer),
       })
 
       return {
         ok: true,
-        status: 'trialing',
+        status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+        requiresPaymentMethod: true,
         storeId: result.storeId,
         storeSlug: result.storeSlug,
-        subscriptionId: result.subscriptionId,
+        checkoutId: result.checkoutId,
         asaasCustomerId,
-        asaasSubscriptionId,
-        trialEndsAt: result.trialEndsAtMillis,
+        asaasCheckoutId: result.checkoutId,
+        checkoutUrl: result.checkoutUrl,
+        paymentUrl: result.checkoutUrl,
+        scheduledTrialEndsAt: result.scheduledTrialEndsAtMillis,
       }
     }
   )
@@ -1407,6 +1998,29 @@ function createAsaasFunctions({ db, admin, logger }) {
       const eventId = body.id
       const event = body.event
       const payment = body.payment
+
+      if (String(event || '').toUpperCase().startsWith('CHECKOUT_')) {
+        try {
+          const checkoutResult = await processAsaasCheckoutWebhook({
+            db,
+            admin,
+            logger,
+            body,
+            eventId,
+            event,
+          })
+          response.status(200).json({ ok: true, ...checkoutResult })
+        } catch (error) {
+          logger.error('Asaas checkout webhook failed', {
+            eventId,
+            event,
+            checkoutId: getCheckoutPayloadId(body),
+            error: error.message || String(error),
+          })
+          response.status(500).json({ ok: false, error: 'checkout_webhook_processing_failed' })
+        }
+        return
+      }
 
       if (!event || !payment?.id || !eventId) {
         response.status(400).json({ ok: false, error: 'invalid_payload' })

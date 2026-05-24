@@ -102,23 +102,34 @@ function getPostLoginRoute(userData) {
   if (['admin', 'developer', 'dev', 'superadmin', 'owner'].includes(role)) {
     return '/admin'
   }
-  
+
   if (role === 'merchant') {
-    const onboardingStatus = userData?.onboardingStatus || ''
-    const subscriptionStatus = userData?.subscriptionStatus || ''
-    
+    const onboardingStatus = String(userData?.onboardingStatus || '').trim()
+    const subscriptionStatus = String(userData?.subscriptionStatus || '').trim()
+
     const hasStore =
       Boolean(userData?.storeId) ||
       (Array.isArray(userData?.storeIds) && userData.storeIds.length > 0)
-    
-    const isPending =
-      !hasStore ||
-      ['phone_pending'].includes(onboardingStatus) ||
-      ['pending_checkout'].includes(subscriptionStatus)
-      
-    return isPending ? '/onboarding' : '/dashboard'
+
+    if (onboardingStatus === 'phone_pending' || userData?.phoneVerified !== true) {
+      return '/onboarding'
+    }
+
+    if (!hasStore) {
+      return '/onboarding'
+    }
+
+    if (['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'].includes(subscriptionStatus)) {
+      return '/dashboard/billing'
+    }
+
+    if (['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus)) {
+      return '/dashboard'
+    }
+
+    return '/dashboard'
   }
-  
+
   return '/'
 }
 

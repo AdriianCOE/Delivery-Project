@@ -99,7 +99,7 @@ export default function ProtectedRoute({
       (Array.isArray(auth?.userData?.storeIds) && auth.userData.storeIds.length > 0) ||
       (Array.isArray(auth?.user?.storeIds) && auth.user.storeIds.length > 0)
 
-    const billingPendingStatuses = ['checkout_pending', 'billing_pending']
+    const billingPendingStatuses = ['checkout_pending', 'billing_pending', 'billing_pending_payment_method']
     const isBillingPending =
       billingPendingStatuses.includes(subscriptionStatus) ||
       onboardingStatus === 'billing_pending'
@@ -115,7 +115,7 @@ export default function ProtectedRoute({
 
     const isPendingMerchant =
       (!hasMerchantStore &&
-       !['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus) &&
+       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'billing_pending_payment_method'].includes(subscriptionStatus) &&
        onboardingStatus !== 'completed' &&
        onboardingStatus !== 'billing_pending' &&
        !isBillingPending) ||

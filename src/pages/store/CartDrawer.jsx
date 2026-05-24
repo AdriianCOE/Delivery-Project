@@ -1783,7 +1783,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     if (!localDigits) return 'Informe seu WhatsApp.'
 
     if (localDigits.length < 10 || localDigits.length > 11) {
-      return 'O WhatsApp deve ter o DDD e o número (Ex: 79 99999-9999).'
+      return 'O WhatsApp deve ter o DDD e o número (Ex: (79) 99999-9999).'
     }
 
     if (localDigits.length === 11 && localDigits[2] !== '9') {

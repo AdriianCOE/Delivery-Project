@@ -68,7 +68,7 @@ function PricingValidationBadge({ order }) {
 }
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
-const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'])
 const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
 const PUBLIC_STORE_BASE_URL =
   import.meta.env.VITE_PUBLIC_STORE_BASE_URL ||
@@ -1319,7 +1319,7 @@ subscribeOrders(query(
     const validOrders = periodOrders.filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
     const deliveredOrders = validOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
     const activeOrders = orders.filter((order) => ACTIVE_STATUSES.includes(normalizeStatus(order.status)))
-    
+
   const urgentOrders = activeOrders.filter((order) => isUrgentPending(order, 3))
 const priceReviewOrders = activeOrders.filter((order) => {
   const status = order?.pricingValidation?.status
@@ -1549,35 +1549,35 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
           </div>
         </div>
       ) : selectedStore ? (
-        <section className="relative overflow-hidden border-b border-orange-100/70 bg-gradient-to-br from-orange-50 via-white to-white">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#f97316]/10 blur-3xl" />
+        <section className="relative overflow-hidden border-b border-orange-100/70 dark:border-zinc-800 bg-gradient-to-br from-orange-50 via-white to-white dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-950">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#f97316]/10 blur-3xl dark:bg-[#f97316]/5" />
           <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
-      
+
           <div className="relative px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#f97316] shadow-sm ring-1 ring-orange-100">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-zinc-900 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#f97316] shadow-sm ring-1 ring-orange-100 dark:ring-zinc-800">
                     <span className="h-2 w-2 rounded-full bg-[#f97316]" />
                     Tempo real
                   </span>
-      
+
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
                       isStoreOpen(selectedStore)
-                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-                        : 'bg-red-50 text-red-700 ring-1 ring-red-100'
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/50'
+                        : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
                     }`}
                   >
                     <span className={`h-1.5 w-1.5 rounded-full bg-current ${isStoreOpen(selectedStore) ? 'animate-pulse' : ''}`} />
                     {isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada'}
                   </span>
-      
+
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
                       hasPeopleOnMenu
-                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-                        : 'bg-gray-50 text-gray-500 ring-1 ring-gray-100'
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/50'
+                        : 'bg-gray-50 text-gray-500 ring-1 ring-gray-100 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700/50'
                     }`}
                   >
                     <FiUsers size={12} />
@@ -1585,13 +1585,13 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                       ? `${menuPeopleCount} ${menuPeopleLabel}`
                       : 'Sem visitantes agora'}
                   </span>
-      
+
                   {(isTrialActive || trialDaysRemaining !== null) && (
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
                         trialDaysRemaining > 0
-                          ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100'
-                          : 'bg-red-50 text-red-700 ring-1 ring-red-100'
+                          ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:ring-indigo-900/50'
+                          : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
                       }`}
                     >
                       <FiClock size={12} />
@@ -1599,7 +1599,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     </span>
                   )}
                 </div>
-      
+
                 <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
                   <StoreLogo
                     store={selectedStore}
@@ -1607,25 +1607,25 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     rounded="rounded-[1.35rem]"
                     fallbackClassName="bg-orange-50 text-[#f97316] ring-orange-100"
                   />
-      
+
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-[#6b7280]">
+                    <p className="text-sm font-black text-[#6b7280] dark:text-zinc-400">
                       Olá, {merchantName}
                     </p>
-      
-                    <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-[#111827] sm:text-4xl">
+
+                    <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-[#111827] dark:text-zinc-100 sm:text-4xl">
                       {selectedStore.name || 'Sua loja'}
                     </h1>
-      
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-[#6b7280]">
+
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-[#6b7280] dark:text-zinc-400">
                       {storeSlug && (
-                        <span className="rounded-full bg-white px-2.5 py-1 text-[#f97316] ring-1 ring-orange-100">
+                        <span className="rounded-full bg-white dark:bg-zinc-900 px-2.5 py-1 text-[#f97316] ring-1 ring-orange-100 dark:ring-zinc-800">
                           /{storeSlug}
                         </span>
                       )}
-      
+
                       {todayOpeningHoursLabel && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 ring-1 ring-gray-100">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white dark:bg-zinc-900 px-2.5 py-1 ring-1 ring-gray-100 dark:ring-zinc-800 text-[#111827] dark:text-zinc-300">
                           <FiClock size={12} />
                           {todayOpeningHoursLabel}
                         </span>
@@ -1633,12 +1633,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     </div>
                   </div>
                 </div>
-      
-                <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#6b7280]">
+
+                <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#6b7280] dark:text-zinc-400">
                   Acompanhe pedidos, faturamento, clientes online e os principais pontos da operação em tempo real.
                 </p>
               </div>
-      
+
               <div className="flex flex-col gap-3 xl:w-[360px] xl:items-end xl:justify-between">
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                   <button
@@ -1673,7 +1673,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     href={storePublicUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:w-auto"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 text-sm font-black text-[#111827] dark:text-zinc-100 shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:w-auto"
                   >
                     <FiExternalLink size={16} />
                     Ver loja
@@ -1682,7 +1682,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   <button
                     type="button"
                     onClick={handleCopyStoreLink}
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-[#6b7280] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:h-12 sm:w-12 sm:px-0"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 text-sm font-black text-[#6b7280] dark:text-zinc-400 shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:h-12 sm:w-12 sm:px-0"
                     title="Copiar link da loja"
                   >
                     <FiCopy size={16} />
@@ -1691,53 +1691,53 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 xl:w-full">
-                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Pendentes</p>
-                    <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.pendingCount}</p>
+                  <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Pendentes</p>
+                    <p className="mt-1 text-2xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.pendingCount}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Preparo</p>
-                    <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.preparingCount}</p>
+                  <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Preparo</p>
+                    <p className="mt-1 text-2xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.preparingCount}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af]">Em rota</p>
-                    <p className="mt-1 text-2xl font-black text-[#111827]">{dashboardData.routeCount}</p>
+                  <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Em rota</p>
+                    <p className="mt-1 text-2xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.routeCount}</p>
                   </div>
                 </div>
               </div>
             </div>
-      
+
             {(dashboardData.urgentOrders.length > 0 || dashboardData.priceReviewOrders.length > 0 || dashboardData.activeOrders.length > 0) && (
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="rounded-2xl border border-orange-100 bg-white/80 p-4 shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">Pedidos ativos</p>
-                  <p className="mt-1 text-xl font-black text-[#111827]">{dashboardData.activeOrders.length}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#6b7280]">Em andamento agora</p>
+                <div className="rounded-2xl border border-orange-100 dark:border-orange-950/40 bg-white/80 dark:bg-zinc-900/80 p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Pedidos ativos</p>
+                  <p className="mt-1 text-xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.activeOrders.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">Em andamento agora</p>
                 </div>
-      
-                <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">Atenção</p>
-                  <p className="mt-1 text-xl font-black text-[#111827]">{dashboardData.urgentOrders.length}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#6b7280]">
+
+                <div className="rounded-2xl border border-amber-100 dark:border-amber-950/40 bg-white/80 dark:bg-zinc-900/80 p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Atenção</p>
+                  <p className="mt-1 text-xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.urgentOrders.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
                     {dashboardData.oldestPendingMinutes > 0
                       ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
                       : 'Nenhum pedido atrasado'}
                   </p>
                 </div>
-      
-                <div className="rounded-2xl border border-red-100 bg-white/80 p-4 shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">Revisão</p>
-                  <p className="mt-1 text-xl font-black text-[#111827]">{dashboardData.priceReviewOrders.length}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#6b7280]">Pedidos com alerta de preço</p>
+
+                <div className="rounded-2xl border border-red-100 dark:border-red-950/40 bg-white/80 dark:bg-zinc-900/80 p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Revisão</p>
+                  <p className="mt-1 text-xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.priceReviewOrders.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">Pedidos com alerta de preço</p>
                 </div>
               </div>
             )}
           </div>
         </section>
       ) : null}
-      
+
       <div className="px-4 py-4 pb-8 sm:px-6 lg:px-8">
         {loadingStores ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1959,13 +1959,13 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             {/* INSIGHTS RÁPIDOS */}
-            <div className="mt-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mt-6 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
                     Insights rápidos
                   </p>
-                  <h3 className="mt-1 text-lg font-black text-[#111827]">
+                  <h3 className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100">
                     Resumo do dia
                   </h3>
                 </div>
@@ -1979,38 +1979,38 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">
+                <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-[#fafafa] dark:bg-zinc-950 p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">
                     Mais vendido
                   </p>
-                  <p className="mt-2 text-base font-black text-[#111827]">
+                  <p className="mt-2 text-base font-black text-[#111827] dark:text-zinc-100">
                     {dashboardData?.topProductName || 'Ainda sem dados'}
                   </p>
-                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                     Produto destaque do período
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">
+                <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-[#fafafa] dark:bg-zinc-950 p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">
                     Bairro destaque
                   </p>
-                  <p className="mt-2 text-base font-black text-[#111827]">
+                  <p className="mt-2 text-base font-black text-[#111827] dark:text-zinc-100">
                     {dashboardData?.topNeighborhood || 'Sem dados'}
                   </p>
-                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                     Onde você mais vendeu
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af]">
+                <div className="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-[#fafafa] dark:bg-zinc-950 p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">
                     Horário de pico
                   </p>
-                  <p className="mt-2 text-base font-black text-[#111827]">
+                  <p className="mt-2 text-base font-black text-[#111827] dark:text-zinc-100">
                     {dashboardData?.peakHourLabel || 'Sem dados'}
                   </p>
-                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                     Faixa com mais pedidos
                   </p>
                 </div>
@@ -2074,28 +2074,28 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             {/* CHECKLIST DA LOJA PRONTA */}
-            <div className="mt-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mt-6 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af]">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
                     Loja pronta
                   </p>
-                  <h3 className="mt-1 text-lg font-black text-[#111827]">
+                  <h3 className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100">
                     {onboardingChecklist.completed} de {onboardingChecklist.total} etapas concluídas
                   </h3>
-                  <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                  <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
                     Complete os passos para deixar sua operação redonda.
                   </p>
                 </div>
 
                 <div className="w-full max-w-[180px]">
-                  <div className="h-2 rounded-full bg-gray-100">
+                  <div className="h-2 rounded-full bg-gray-100 dark:bg-zinc-800">
                     <div
                       className="h-2 rounded-full bg-[#f97316] transition-all"
                       style={{ width: `${onboardingChecklist.percent}%` }}
                     />
                   </div>
-                  <p className="mt-2 text-sm font-black text-[#111827]">
+                  <p className="mt-2 text-sm font-black text-[#111827] dark:text-zinc-100">
                     {onboardingChecklist.percent}% concluído
                   </p>
                 </div>
@@ -2105,14 +2105,14 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 {onboardingChecklist.steps.map((step) => (
                   <div
                     key={step.label}
-                    className="flex items-center justify-between rounded-2xl border border-gray-100 bg-[#fafafa] px-4 py-3"
+                    className="flex items-center justify-between rounded-2xl border border-gray-100 dark:border-zinc-800 bg-[#fafafa] dark:bg-zinc-950 px-4 py-3"
                   >
-                    <span className="text-sm font-semibold text-[#111827]">{step.label}</span>
+                    <span className="text-sm font-semibold text-[#111827] dark:text-zinc-200">{step.label}</span>
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
                         step.done
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-amber-50 text-amber-700'
+                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
                       }`}
                     >
                       {step.done ? 'Concluído' : 'Pendente'}

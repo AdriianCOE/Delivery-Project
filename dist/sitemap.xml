@@ -15,6 +15,20 @@
   </url>
 
   <url>
+    <loc>https://pratoby.com/sobre</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://pratoby.com/exemplos</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
     <loc>https://pratoby.com/contato</loc>
     <lastmod>2026-05-11</lastmod>
     <changefreq>monthly</changefreq>
@@ -22,9 +36,16 @@
   </url>
 
   <url>
-    <loc>https://pratoby.com/capivaras-lanches</loc>
-    <lastmod>2026-05-11</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
+    <loc>https://pratoby.com/privacidade</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://pratoby.com/termos</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>

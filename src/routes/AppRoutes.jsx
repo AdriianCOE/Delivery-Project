@@ -87,6 +87,8 @@ export default function AppRoutes() {
         <Route path="/exemplos" element={<RestaurantExamplesPage />} />
         <Route path="/privacidade" element={<PrivacyPage />} />
         <Route path="/termos" element={<TermsPage />} />
+        <Route path="/privacy" element={<Navigate to="/privacidade" replace />} />
+        <Route path="/terms" element={<Navigate to="/termos" replace />} />
 
         {/* Página 404 manual */}
         <Route path="/404" element={<NotFoundPage />} />

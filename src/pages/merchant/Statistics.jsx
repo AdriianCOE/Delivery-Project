@@ -32,7 +32,7 @@ import {
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 
-const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending'])
+const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'])
 const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
 const PERIOD_OPTIONS = [
   { label: 'Hoje', days: 0 },
