@@ -225,8 +225,6 @@ async function copyText(text) {
 export default function StoreFooter({ store, todayHoursLabel }) {
   const [copied, setCopied] = useState(false)
 
-  if (!store) return null
-
   const year = new Date().getFullYear()
   const themeColor = getThemeColor(store)
   const logoUrl = getLogoUrl(store)
@@ -259,6 +257,8 @@ export default function StoreFooter({ store, todayHoursLabel }) {
       console.error('Erro ao copiar link da loja:', error)
     }
   }, [publicStoreUrl])
+
+  if (!store) return null
 
   return (
     <footer className="border-t border-orange-100/70 bg-white antialiased">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'motion/react'
 
@@ -185,7 +185,7 @@ function PratoByMark({ compact = false }) {
             'truncate font-black tracking-tight text-[#111827] dark:text-white'
           )}
         >
-          PratoBy
+          Prato<span className="text-[#f97316]">By</span>
         </p>
 
         <p className="truncate text-xs font-bold text-[#6b7280] dark:text-zinc-400">
@@ -742,6 +742,7 @@ export default function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const authContext = useAuth()
+  const currentOutlet = useOutlet()
 
   // Time & Greeting State
   const [now, setNow] = useState(new Date())
@@ -907,7 +908,7 @@ export default function DashboardLayout() {
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 className="min-h-full"
               >
-                {loading ? <DashboardPageSkeleton /> : <Outlet />}
+                {loading ? <DashboardPageSkeleton /> : currentOutlet}
               </motion.div>
             </AnimatePresence>
           </div>

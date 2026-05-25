@@ -44,6 +44,7 @@ import {
   FiTrendingUp,
   FiTruck,
   FiUsers,
+  FiX,
   FiXCircle,
   FiPlay,
 } from 'react-icons/fi'

@@ -365,7 +365,7 @@ export default function OnboardingPage() {
   const auth = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const initialPhoneSendStateRef = useRef(readPhoneSendSessionState())
+  const [initialPhoneSendState] = useState(() => readPhoneSendSessionState())
 
   // — e-mail —
   const [resendStatus, setResendStatus] = useState({ type: '', message: '' })
@@ -380,8 +380,8 @@ export default function OnboardingPage() {
   const [isRequestingPhone, setIsRequestingPhone] = useState(false)
   const [isConfirmingPhone, setIsConfirmingPhone] = useState(false)
   const [isEditingPhone, setIsEditingPhone] = useState(false)
-  const [phoneSendCount, setPhoneSendCount] = useState(initialPhoneSendStateRef.current.count)
-  const [phoneCooldownUntil, setPhoneCooldownUntil] = useState(initialPhoneSendStateRef.current.cooldownUntil)
+  const [phoneSendCount, setPhoneSendCount] = useState(initialPhoneSendState.count)
+  const [phoneCooldownUntil, setPhoneCooldownUntil] = useState(initialPhoneSendState.cooldownUntil)
   const [phoneCooldownNow, setPhoneCooldownNow] = useState(() => Date.now())
   const recaptchaVerifierRef = useRef(null)
   const phoneVerificationIdRef = useRef('')

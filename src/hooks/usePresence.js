@@ -4,12 +4,24 @@ import {
   ref,
   onValue,
   onDisconnect,
-  push,
   set,
   remove,
   serverTimestamp,
 } from 'firebase/database'
-import { rtdb } from '../services/firebase'
+import {
+  browserSessionPersistence,
+  setPersistence,
+  signInAnonymously,
+} from 'firebase/auth'
+import { auth, rtdb } from '../services/firebase'
+
+async function getPresenceUser() {
+  if (auth.currentUser) return auth.currentUser
+
+  await setPersistence(auth, browserSessionPersistence)
+  const credential = await signInAnonymously(auth)
+  return credential.user
+}
 
 export function usePresence(storeId, isMerchant = false) {
   const [activeUsers, setActiveUsers] = useState(0)
@@ -27,14 +39,21 @@ export function usePresence(storeId, isMerchant = false) {
 
     let myUserRef = null
     let unsubscribePresence = null
+    let isRegisteringPresence = false
+    let isCancelled = false
 
     const unsubscribeConnected = onValue(connectedRef, async (snapshot) => {
       if (snapshot.val() !== true) return
 
-      if (!isMerchant) {
-        myUserRef = push(storePresenceRef)
+      if (!isMerchant && !myUserRef && !isRegisteringPresence) {
+        isRegisteringPresence = true
 
         try {
+          const presenceUser = await getPresenceUser()
+          if (isCancelled || !presenceUser?.uid) return
+
+          myUserRef = ref(rtdb, `presence/${safeStoreId}/${presenceUser.uid}`)
+
           await onDisconnect(myUserRef).remove()
 
           await set(myUserRef, {
@@ -43,6 +62,8 @@ export function usePresence(storeId, isMerchant = false) {
           })
         } catch (error) {
           console.error('Erro ao registrar presença:', error)
+        } finally {
+          isRegisteringPresence = false
         }
       }
     })
@@ -59,6 +80,8 @@ export function usePresence(storeId, isMerchant = false) {
     })
 
     return () => {
+      isCancelled = true
+
       if (myUserRef) {
         remove(myUserRef).catch(() => {})
       }

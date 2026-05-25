@@ -119,6 +119,10 @@ export default function ProtectedRoute({
       )
     }
 
+    if (!hasMerchantStore && isDashboardRoute && !isBillingRoute) {
+      return <Navigate to="/onboarding" replace state={{ reason: 'store_required' }} />
+    }
+
     const isPendingMerchant =
       (!hasMerchantStore &&
        !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'billing_pending_payment_method'].includes(subscriptionStatus) &&

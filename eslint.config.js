@@ -39,4 +39,14 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    files: ['functions/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.commonjs,
+      },
+      sourceType: 'commonjs',
+    },
+  },
 ])

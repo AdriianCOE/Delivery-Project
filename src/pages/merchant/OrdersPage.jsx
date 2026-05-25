@@ -291,7 +291,7 @@ function shouldShowCustomerThanksAction(order) {
   return (
     normalizeStatus(order?.status) === 'entregue' &&
     Boolean(order?.customerConfirmedDeliveryAt) &&
-    !Boolean(order?.storeThankedCustomerAt || order?.thankYouSentAt)
+    !(order?.storeThankedCustomerAt || order?.thankYouSentAt)
   )
 }
 

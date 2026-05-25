@@ -61,11 +61,11 @@ function getStoreLogoUrl(store) {
 }
 
 function getStoreStatus(store) {
+  const statusOpen = String(store?.status || '').toLowerCase() === 'open'
   const isOpen =
     store?.isOpen ??
     store?.open ??
-    store?.status === 'open' ??
-    false
+    statusOpen
 
   return Boolean(isOpen)
 }

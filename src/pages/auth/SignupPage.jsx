@@ -15,7 +15,7 @@ import { auth, db, functions, googleProvider } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import { AnimatePresence, motion } from 'motion/react'
-import { FiAlertCircle, FiCheck, FiCheckCircle, FiChevronDown, FiX, FiInfo, FiChevronRight, FiCreditCard, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield } from 'react-icons/fi'
+import { FiAlertCircle, FiCheck, FiArrowLeft, FiStar, FiCheckCircle, FiChevronDown, FiX, FiInfo, FiChevronRight, FiCreditCard, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield, FiLoader } from 'react-icons/fi'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 
 // ─────────────────────────────────────────────────────────────

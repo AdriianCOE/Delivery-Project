@@ -112,6 +112,28 @@ function safeDocId(value) {
   return String(value || '').replace(/\//g, '_')
 }
 
+function stringToTimingBytes(value) {
+  const stringValue = String(value || '')
+  const bytes = new Uint8Array(stringValue.length)
+
+  for (let index = 0; index < stringValue.length; index += 1) {
+    bytes[index] = stringValue.charCodeAt(index)
+  }
+
+  return bytes
+}
+
+function timingSafeStringEqual(receivedValue, expectedValue) {
+  const expectedBuffer = stringToTimingBytes(expectedValue)
+  const receivedBuffer = stringToTimingBytes(receivedValue)
+
+  if (!expectedBuffer.length || receivedBuffer.length !== expectedBuffer.length) {
+    return false
+  }
+
+  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
+}
+
 function buildLocalSubscriptionId(providerSubscriptionId) {
   return `${BILLING_PROVIDER}_${safeDocId(providerSubscriptionId)}`
 }
@@ -1988,7 +2010,7 @@ function createAsaasFunctions({ db, admin, logger }) {
       const expectedToken = getSecretValue(ASAAS_WEBHOOK_AUTH_TOKEN, 'ASAAS_WEBHOOK_AUTH_TOKEN')
       const receivedToken = request.get('asaas-access-token') || ''
 
-      if (!expectedToken || receivedToken !== expectedToken) {
+      if (!timingSafeStringEqual(receivedToken, expectedToken)) {
         logger.warn('Asaas webhook rejected: invalid token')
         response.status(401).json({ ok: false, error: 'invalid_token' })
         return

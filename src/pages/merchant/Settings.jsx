@@ -4,9 +4,6 @@ import { Link } from 'react-router-dom'
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
-  limit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -212,6 +209,105 @@ function getStoreKeys(store, nextSlug = '') {
     store?.slug,
     nextSlug,
   ])
+}
+
+function getUserStoreKeys(user) {
+  return uniqueArray([
+    user?.storeId,
+    user?.storeSlug,
+    ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+    ...(Array.isArray(user?.storeKeys) ? user.storeKeys : []),
+  ])
+}
+
+function userCanManageStore(user, store) {
+  if (!user?.uid || !store) return false
+
+  const role = String(user.role || '').trim().toLowerCase()
+  if (['admin', 'developer', 'dev'].includes(role)) return true
+
+  const storeKeys = getStoreKeys(store)
+  const userStoreKeys = getUserStoreKeys(user)
+
+  return (
+    store.ownerId === user.uid ||
+    store.ownerUid === user.uid ||
+    (Array.isArray(store.allowedUserIds) && store.allowedUserIds.includes(user.uid)) ||
+    (Array.isArray(store.merchantUids) && store.merchantUids.includes(user.uid)) ||
+    storeKeys.some((key) => userStoreKeys.includes(key))
+  )
+}
+
+function sanitizeTextField(value, maxLength) {
+  return String(value || '').trim().slice(0, maxLength)
+}
+
+function normalizeThemeColor(value) {
+  const color = String(value || '').trim()
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : DEFAULT_THEME
+}
+
+function isValidTime(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || '').trim())
+}
+
+function normalizeOpeningHoursForSave(openingHours) {
+  const defaults = getDefaultOpeningHours()
+
+  return DAYS_OF_WEEK.reduce((acc, day) => {
+    const current = openingHours?.[day.id] || defaults[day.id]
+    const fallback = defaults[day.id]
+
+    acc[day.id] = {
+      enabled: Boolean(current.enabled),
+      open: isValidTime(current.open) ? current.open : fallback.open,
+      close: isValidTime(current.close) ? current.close : fallback.close,
+    }
+
+    return acc
+  }, {})
+}
+
+function currencyToCents(value) {
+  return Math.max(0, Math.round(parseCurrency(value) * 100))
+}
+
+function sanitizeImageUrl(value) {
+  const url = String(value || '').trim()
+  if (!url) return ''
+  if (url.startsWith('/') && !url.startsWith('//')) return url
+
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'https:' && parsed.hostname === 'res.cloudinary.com') {
+      return parsed.toString()
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function isPlainObject(value) {
+  return Object.prototype.toString.call(value) === '[object Object]' &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+}
+
+function cleanFirestoreValue(value) {
+  if (value === undefined || value === null) return undefined
+  if (Array.isArray(value)) {
+    return value
+      .map(cleanFirestoreValue)
+      .filter((item) => item !== undefined)
+  }
+  if (!isPlainObject(value)) return value
+
+  return Object.entries(value).reduce((acc, [key, childValue]) => {
+    const cleaned = cleanFirestoreValue(childValue)
+    if (cleaned !== undefined) acc[key] = cleaned
+    return acc
+  }, {})
 }
 
 function getStorePublicUrl(storeOrSlug) {
@@ -752,7 +848,9 @@ export default function Settings() {
     const unsubscribe = onSnapshot(
       storesQuery,
       (snapshot) => {
-        const nextStores = snapshot.docs.map(normalizeStore)
+        const nextStores = snapshot.docs
+          .map(normalizeStore)
+          .filter((store) => userCanManageStore(user, store))
 
         setStores(nextStores)
         setLoadingStores(false)
@@ -766,7 +864,7 @@ export default function Settings() {
     )
 
     return () => unsubscribe()
-  }, [showToast, user?.uid])
+  }, [showToast, user])
 
   useEffect(() => {
     if (!stores.length) {
@@ -806,6 +904,11 @@ export default function Settings() {
     async (file, fieldName) => {
       if (!file || !selectedStore) return
 
+      if (!userCanManageStore(user, selectedStore)) {
+        showToast('error', 'Você não tem permissão para alterar esta loja.')
+        return
+      }
+
       if (!file.type?.startsWith('image/')) {
         showToast('error', 'Envie uma imagem válida.')
         return
@@ -838,60 +941,49 @@ export default function Settings() {
         setUploadingImage('')
       }
     },
-    [selectedStore, showToast, updateField]
-  )
-
-
-  const checkSlugAvailability = useCallback(
-    async (nextSlug) => {
-      if (!selectedStore) return false
-
-      const cleanSlug = slugify(nextSlug)
-
-      if (!cleanSlug) return false
-
-      const currentSlug = getStoreSlug(selectedStore)
-
-      if (cleanSlug === currentSlug) return true
-
-      const docSnap = await getDoc(doc(db, 'stores', cleanSlug))
-
-      if (docSnap.exists() && docSnap.id !== selectedStore.id) {
-        return false
-      }
-
-      const slugQuery = query(
-        collection(db, 'stores'),
-        where('storeSlug', '==', cleanSlug),
-        limit(1)
-      )
-
-      const slugSnap = await getDocs(slugQuery)
-
-      const usedByAnotherStore = slugSnap.docs.some(
-        (storeDoc) => storeDoc.id !== selectedStore.id
-      )
-
-      return !usedByAnotherStore
-    },
-    [selectedStore]
+    [selectedStore, showToast, updateField, user]
   )
 
   const handleSave = useCallback(async () => {
     if (!selectedStore || saving) return
 
-    const cleanName = form.name.trim()
+    const cleanName = sanitizeTextField(form.name, 100)
     if (!cleanName) {
       showToast('error', 'Digite o nome da loja.')
+      return
+    }
+
+    if (!userCanManageStore(user, selectedStore)) {
+      showToast('error', 'Você não tem permissão para alterar esta loja.')
       return
     }
 
     setSaving(true)
 
     try {
+      const themeColor = normalizeThemeColor(form.themeColor)
+      const segment = SEGMENTS.includes(form.segment) ? form.segment : 'Restaurante'
+      const deliveryTime = sanitizeTextField(form.deliveryTime, 40) || DEFAULT_FORM.deliveryTime
+      const instagram = sanitizeSocial(form.instagram).slice(0, 80)
+      const whatsapp = normalizePhoneBR(form.whatsapp)
+      const logoUrl = sanitizeImageUrl(form.logoUrl)
+      const bannerUrl = sanitizeImageUrl(form.bannerUrl)
 
-      const minOrder = parseCurrency(form.minOrder)
-      const openingHours = form.openingHours || getDefaultOpeningHours()
+      if (logoUrl === null || bannerUrl === null) {
+        throw new Error('Use imagens HTTPS do Cloudinary ou caminhos internos do PratoBy.')
+      }
+
+      if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
+        throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
+      }
+
+      const minOrderCents = currencyToCents(form.minOrder)
+      const minOrder = minOrderCents / 100
+      const openingHours = normalizeOpeningHoursForSave(form.openingHours)
+      const autoCloseGraceMinutes = Math.min(
+        240,
+        Math.max(0, Number.parseInt(form.autoCloseGraceMinutes, 10) || 30)
+      )
 
       const activeDays = DAYS_OF_WEEK
         .filter((day) => openingHours?.[day.id]?.enabled)
@@ -911,42 +1003,42 @@ export default function Settings() {
 
       const settings = {
         ...(selectedStore.settings || {}),
-        themeColor: form.themeColor || DEFAULT_THEME,
-        acceptDelivery: form.acceptDelivery,
-        acceptPickup: form.acceptPickup,
-        acceptDineIn: form.acceptDineIn,
-        deliveryTime: form.deliveryTime.trim() || DEFAULT_FORM.deliveryTime,
-        newOrderSoundEnabled: form.newOrderSoundEnabled,
-        printAfterConfirm: form.printAfterConfirm,
-        autoCloseEnabled: form.autoCloseEnabled,
-        autoCloseGraceMinutes: Number(form.autoCloseGraceMinutes || 30),
+        themeColor,
+        acceptDelivery: Boolean(form.acceptDelivery),
+        acceptPickup: Boolean(form.acceptPickup),
+        acceptDineIn: Boolean(form.acceptDineIn),
+        deliveryTime,
+        newOrderSoundEnabled: Boolean(form.newOrderSoundEnabled),
+        printAfterConfirm: Boolean(form.printAfterConfirm),
+        autoCloseEnabled: Boolean(form.autoCloseEnabled),
+        autoCloseGraceMinutes,
         openingHours,
-        whatsapp: normalizePhoneBR(form.whatsapp),
-        instagram: sanitizeSocial(form.instagram),
+        whatsapp,
+        instagram,
       }
 
       const payload = {
         name: cleanName,
         storeName: cleanName,
-        description: form.description.trim(),
-        segment: form.segment || 'Restaurante',
-        category: form.segment || 'Restaurante',
+        description: sanitizeTextField(form.description, 500),
+        segment,
+        category: segment,
 
-        logoUrl: form.logoUrl?.trim() || null,
-        bannerUrl: form.bannerUrl?.trim() || null,
-        themeColor: form.themeColor || DEFAULT_THEME,
+        logoUrl,
+        bannerUrl,
+        themeColor,
 
-        whatsapp: normalizePhoneBR(form.whatsapp),
-        whatsapp1: normalizePhoneBR(form.whatsapp),
-        phone: normalizePhoneBR(form.whatsapp),
-        instagram: sanitizeSocial(form.instagram),
+        whatsapp,
+        whatsapp1: whatsapp,
+        phone: whatsapp,
+        instagram,
         social: {
           ...(selectedStore.social || {}),
-          instagram: sanitizeSocial(form.instagram),
+          instagram,
         },
 
-        isOpen: form.isOpen,
-        isActive: form.isActive,
+        isOpen: Boolean(form.isOpen),
+        isActive: Boolean(form.isActive),
 
         activeDays,
         hoursOpen,
@@ -954,44 +1046,46 @@ export default function Settings() {
         openingHours,
         settings,
 
-        deliveryTime: form.deliveryTime.trim() || DEFAULT_FORM.deliveryTime,
+        deliveryTime,
         minOrder,
-        minOrderCents: Math.round(minOrder * 100),
+        minOrderCents,
 
-        acceptDelivery: form.acceptDelivery,
-        acceptPickup: form.acceptPickup,
-        acceptDineIn: form.acceptDineIn,
+        acceptDelivery: Boolean(form.acceptDelivery),
+        acceptPickup: Boolean(form.acceptPickup),
+        acceptDineIn: Boolean(form.acceptDineIn),
 
         paymentMethods: {
-          pix: form.paymentPix,
-          card: form.paymentCard,
-          cash: form.paymentCash,
+          pix: Boolean(form.paymentPix),
+          card: Boolean(form.paymentCard),
+          cash: Boolean(form.paymentCash),
         },
 
         pix: {
-          enabled: form.pixEnabled,
-          key: form.pixKey.trim(),
-          keyType: form.pixKeyType,
-          merchantName: form.pixMerchantName.trim() || cleanName,
-          merchantCity: form.pixMerchantCity.trim() || form.city.trim(),
+          enabled: Boolean(form.pixEnabled),
+          key: sanitizeTextField(form.pixKey, 120),
+          keyType: ['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType)
+            ? form.pixKeyType
+            : 'phone',
+          merchantName: sanitizeTextField(form.pixMerchantName, 80) || cleanName,
+          merchantCity: sanitizeTextField(form.pixMerchantCity, 60) || sanitizeTextField(form.city, 60),
         },
 
         address: {
-          cep: form.cep.trim(),
-          street: form.street.trim(),
-          number: form.number.trim(),
-          neighborhood: form.neighborhood.trim(),
-          complement: form.complement.trim(),
-          city: form.city.trim(),
-          state: form.state.trim() || 'SE',
+          cep: sanitizeTextField(form.cep, 12),
+          street: sanitizeTextField(form.street, 120),
+          number: sanitizeTextField(form.number, 20),
+          neighborhood: sanitizeTextField(form.neighborhood, 80),
+          complement: sanitizeTextField(form.complement, 120),
+          city: sanitizeTextField(form.city, 80),
+          state: sanitizeTextField(form.state, 2).toUpperCase() || 'SE',
         },
 
-        cep: form.cep.trim(),
-        street: form.street.trim(),
-        number: form.number.trim(),
-        neighborhood: form.neighborhood.trim(),
-        city: form.city.trim(),
-        state: form.state.trim() || 'SE',
+        cep: sanitizeTextField(form.cep, 12),
+        street: sanitizeTextField(form.street, 120),
+        number: sanitizeTextField(form.number, 20),
+        neighborhood: sanitizeTextField(form.neighborhood, 80),
+        city: sanitizeTextField(form.city, 80),
+        state: sanitizeTextField(form.state, 2).toUpperCase() || 'SE',
 
         updatedAt: serverTimestamp(),
       }
@@ -1008,11 +1102,13 @@ export default function Settings() {
 
       const finalPayload = Object.keys(payload).reduce((acc, key) => {
         if (ALLOWED_KEYS.includes(key)) {
-          acc[key] = payload[key]
+          const value = cleanFirestoreValue(payload[key])
+          if (value !== undefined) acc[key] = value
         }
         return acc
       }, {})
 
+      // TODO: migrar este updateDoc para Cloud Function com audit log server-side.
       await updateDoc(doc(db, 'stores', selectedStore.id), finalPayload)
 
       safeSetLocalStorage(SELECTED_STORE_KEY, selectedStore.id)
@@ -1023,7 +1119,7 @@ export default function Settings() {
     } finally {
       setSaving(false)
     }
-  }, [checkSlugAvailability, form, saving, selectedStore, showToast])
+  }, [form, saving, selectedStore, showToast, user])
 
   if (loadingStores) {
     return (

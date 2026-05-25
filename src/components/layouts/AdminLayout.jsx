@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'motion/react'
 import {
@@ -701,6 +701,7 @@ function AdminDesktopTopbar({ activeItem, onOpenSoon }) {
 export default function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const currentOutlet = useOutlet()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
 
@@ -788,7 +789,7 @@ export default function AdminLayout() {
                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                 className="min-h-full"
               >
-                <Outlet />
+                {currentOutlet}
               </motion.div>
             </AnimatePresence>
           </div>

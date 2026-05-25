@@ -4,13 +4,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
 import {
-  browserSessionPersistence,
   onAuthStateChanged,
-  setPersistence,
   signOut,
 } from 'firebase/auth'
 
@@ -37,6 +36,7 @@ function normalizeFirebaseUser(firebaseUser) {
     emailVerified: firebaseUser.emailVerified,
     phoneNumber: firebaseUser.phoneNumber,
     providerId: firebaseUser.providerId,
+    isAnonymous: firebaseUser.isAnonymous === true,
   }
 }
 
@@ -74,16 +74,19 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
+  const authLoadIdRef = useRef(0)
 
   useEffect(() => {
     let isMounted = true
     let unsubscribeAuth = null
 
-    async function bootAuth() {
+    function bootAuth() {
 
 
       unsubscribeAuth = onAuthStateChanged(auth, async (currentFirebaseUser) => {
         if (!isMounted) return
+        const loadId = authLoadIdRef.current + 1
+        authLoadIdRef.current = loadId
 
         setLoading(true)
         setAuthError(null)
@@ -93,6 +96,7 @@ export function AuthProvider({ children }) {
             setFirebaseUser(null)
             setUser(null)
             setUserData(null)
+            setSentryUser(null)
             return
           }
 
@@ -100,31 +104,42 @@ export function AuthProvider({ children }) {
           const firestoreUserData = await loadUserData(currentFirebaseUser.uid)
           const normalizedRole = getNormalizedRole(firestoreUserData)
 
-          if (!isMounted) return
+          if (!isMounted || authLoadIdRef.current !== loadId) return
+
+          if (!firestoreUserData) {
+            setFirebaseUser(baseUser)
+            setUser(null)
+            setUserData(null)
+            setSentryUser(null)
+            return
+          }
 
           const mergedUser = {
             ...baseUser,
-            ...(firestoreUserData || {}),
-            role: normalizedRole || firestoreUserData?.role || '',
+            ...firestoreUserData,
+            role: normalizedRole || firestoreUserData.role || '',
           }
 
           setFirebaseUser(baseUser)
           setUser(mergedUser)
           setUserData({
-            ...(firestoreUserData || {}),
-            role: normalizedRole || firestoreUserData?.role || '',
+            ...firestoreUserData,
+            role: normalizedRole || firestoreUserData.role || '',
           })
+          setSentryUser(mergedUser)
         } catch (error) {
           console.error('[Auth] Erro ao carregar usuário:', error)
+          if (!isMounted || authLoadIdRef.current !== loadId) return
           setAuthError(error)
 
           const fallbackUser = normalizeFirebaseUser(currentFirebaseUser)
 
           setFirebaseUser(fallbackUser)
-          setUser(fallbackUser)
+          setUser(null)
           setUserData(null)
+          setSentryUser(null)
         } finally {
-          if (isMounted) {
+          if (isMounted && authLoadIdRef.current === loadId) {
             setLoading(false)
           }
         }
@@ -147,6 +162,7 @@ export function AuthProvider({ children }) {
     setFirebaseUser(null)
     setUser(null)
     setUserData(null)
+    setSentryUser(null)
   }, [])
 
   const refreshUserData = useCallback(async () => {
@@ -156,18 +172,29 @@ export function AuthProvider({ children }) {
     try {
       const firestoreUserData = await loadUserData(currentUser.uid)
       const normalizedRole = getNormalizedRole(firestoreUserData)
+      const baseUser = normalizeFirebaseUser(currentUser)
 
-      const mergedUser = {
-        ...normalizeFirebaseUser(currentUser),
-        ...(firestoreUserData || {}),
-        role: normalizedRole || firestoreUserData?.role || '',
+      if (!firestoreUserData) {
+        setFirebaseUser(baseUser)
+        setUser(null)
+        setUserData(null)
+        setSentryUser(null)
+        return null
       }
 
+      const mergedUser = {
+        ...baseUser,
+        ...firestoreUserData,
+        role: normalizedRole || firestoreUserData.role || '',
+      }
+
+      setFirebaseUser(baseUser)
       setUser(mergedUser)
       setUserData({
-        ...(firestoreUserData || {}),
-        role: normalizedRole || firestoreUserData?.role || '',
+        ...firestoreUserData,
+        role: normalizedRole || firestoreUserData.role || '',
       })
+      setSentryUser(mergedUser)
 
       return firestoreUserData
     } catch (error) {
@@ -184,11 +211,12 @@ export function AuthProvider({ children }) {
         return true
       }
 
-      const normalizedAllowedRoles = allowedRoles.map((item) =>
-        String(item).trim().toLowerCase() === 'lojista'
-          ? 'merchant'
-          : String(item).trim().toLowerCase()
-      )
+      const normalizedAllowedRoles = allowedRoles.map((item) => {
+        const allowedRole = String(item).trim().toLowerCase()
+        if (allowedRole === 'lojista') return 'merchant'
+        if (allowedRole === 'dev') return 'developer'
+        return allowedRole
+      })
 
       return normalizedAllowedRoles.includes(role)
     },

@@ -920,7 +920,7 @@ exports.confirmFirebasePhoneVerified = onCall(PHONE_CALLABLE_OPTIONS, async (req
 })
 
 // Legacy verification flow. Firebase Phone Auth is the active onboarding verification path.
-exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, async (request) => {
+const _requestPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-east1' }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
 
@@ -1052,7 +1052,7 @@ exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
 })
 
 // Legacy verification flow. Firebase Phone Auth is the active onboarding verification path.
-exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, async (request) => {
+const _confirmPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-east1' }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
 
@@ -1171,6 +1171,22 @@ exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, asyn
       onboardingStatus: nextOnboarding
     }
   })
+})
+
+// Deprecated callable names kept to avoid surprise deletions on deploy.
+// Firebase Phone Auth is the active verification path.
+exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, async () => {
+  throw new HttpsError(
+    'failed-precondition',
+    'Fluxo legado de verificacao desativado. Use a verificacao por Firebase Phone Auth.'
+  )
+})
+
+exports.confirmPhoneVerification = onCall({ region: 'southamerica-east1' }, async () => {
+  throw new HttpsError(
+    'failed-precondition',
+    'Fluxo legado de verificacao desativado. Use a verificacao por Firebase Phone Auth.'
+  )
 })
 
 // Legacy name kept for frontend compatibility. This function now only prepares
@@ -1383,7 +1399,10 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
   const { phoneE164, phoneDigits } = normalizedPhone
 
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError('invalid-argument', 'E-mail inválido.')
-  if (!password || password.length < 6) throw new HttpsError('invalid-argument', 'A senha precisa ter pelo menos 6 caracteres.')
+  if (!password || password.length < 8) throw new HttpsError('invalid-argument', 'A senha precisa ter pelo menos 8 caracteres.')
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    throw new HttpsError('invalid-argument', 'A senha precisa misturar letras e números.')
+  }
   if (!name) throw new HttpsError('invalid-argument', 'Nome da loja obrigatório.')
   if (!ownerName) throw new HttpsError('invalid-argument', 'Nome do proprietário obrigatório.')
 

@@ -8,7 +8,7 @@
           ".read": true,
   
           "$sessionId": {
-            ".write": "newData.val() == null || newData.hasChildren(['online', 'connectedAt'])",
+            ".write": "auth != null && $sessionId == auth.uid && (newData.val() == null || newData.hasChildren(['online', 'connectedAt']))",
   
             "online": {
               ".validate": "newData.isBoolean() && newData.val() == true"

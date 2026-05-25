@@ -59,10 +59,9 @@ function orderStoreKeys(data) {
       // When called from users/{userId} allow get, this branch is only
       // reached when request.auth.uid != userId (admin reading someone
       // else's doc), so there is no circular read.
-      let callerData = get(userPath(request.auth.uid)).data;
       return signedIn()
-        && callerData != null
-        && callerData.get('role', '') in ['admin', 'developer', 'dev'];
+        && exists(userPath(request.auth.uid))
+        && get(userPath(request.auth.uid)).data.get('role', '') in ['admin', 'developer', 'dev'];
     }
 
     function isPublicStoreData(data) {
@@ -182,6 +181,10 @@ function publicOrderUpdateAllowed(orderId) {
       ) || (
         changed.hasOnly(['reviewId', 'review', 'updatedAt'])
         && request.resource.data.get('status', '') == resource.data.get('status', '')
+        && request.resource.data.get('reviewId', '') == orderId
+        && request.resource.data.get('review', {}) is map
+        && request.resource.data.review.get('submitted', false) == true
+        && exists(/databases/$(database)/documents/reviews/$(orderId))
       )
     );
 }
@@ -285,6 +288,7 @@ function publicOrderUpdateAllowed(orderId) {
         ])
         && request.resource.data.get('storeId', '') == orderData.get('storeId', '')
         && request.resource.data.get('trackingToken', '') == orderData.get('trackingToken', '')
+        && request.resource.data.get('customerPhone', '') == orderData.get('customerPhone', '')
         && orderData.get('status', '') in ['entregue', 'delivered', 'concluido', 'concluído', 'finalizado', 'finished']
         && request.resource.data.get('rating', 0) is number
         && request.resource.data.rating >= 1
