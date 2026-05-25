@@ -25,6 +25,7 @@ import {
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 
 // --- UTILIDADES ---
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -342,7 +343,7 @@ export default function Reviews() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
+    <main className="bg-[#f9fafb] text-[#111827]">
       <DashboardPageHeader
         title="Avaliações"
         description="Gestão de qualidade e feedback dos seus clientes."
@@ -379,24 +380,19 @@ export default function Reviews() {
               <span className="hidden pl-3 pr-2 text-[#6b7280] sm:block">
                 <FiCalendar />
               </span>
-              {[
-                { id: 'today', label: 'Hoje' },
-                { id: '7d', label: 'Últimos 7 dias' },
-                { id: '30d', label: 'Últimos 30 dias' },
-                { id: 'all', label: 'Todo o período' },
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setPeriod(p.id)}
-                  className={`shrink-0 rounded-xl px-5 py-2.5 text-sm font-black transition ${
-                    period === p.id
-                      ? 'bg-[#f97316] text-white shadow-sm'
-                      : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827]'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+              <AnimatedSegmentedControl
+                options={[
+                  { label: 'Hoje', value: 'today' },
+                  { label: 'Últimos 7 dias', value: '7d' },
+                  { label: 'Últimos 30 dias', value: '30d' },
+                  { label: 'Todo o período', value: 'all' },
+                ]}
+                value={period}
+                onChange={(newPeriod) => setPeriod(newPeriod)}
+                size="md"
+                variant="primary"
+                className="!border-none !bg-transparent !p-0"
+              />
             </div>
 
             {/* CARDS DE ESTATÍSTICA */}

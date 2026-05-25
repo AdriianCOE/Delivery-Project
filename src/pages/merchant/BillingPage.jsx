@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import SubscriptionStatusBadge from '../../components/billing/SubscriptionStatusBadge'
 import {
   formatBillingDate,
@@ -793,7 +794,7 @@ export default function BillingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
+    <main className="bg-[#f9fafb] text-[#111827]">
       <DashboardPageHeader
         title="Assinatura"
         description="Plano, teste grátis e forma de pagamento."
@@ -1027,26 +1028,16 @@ export default function BillingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <button
-              type="button"
-              onClick={() => setSelectedPlanCycle('monthly')}
-              className={`rounded-md px-4 py-2 text-xs font-black transition ${
-                selectedPlanCycle === 'monthly' ? 'bg-[#f97316] text-white' : 'text-[#6b7280] hover:bg-gray-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
-              }`}
-            >
-              Mensal
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedPlanCycle('annual')}
-              className={`rounded-md px-4 py-2 text-xs font-black transition ${
-                selectedPlanCycle === 'annual' ? 'bg-[#f97316] text-white' : 'text-[#6b7280] hover:bg-gray-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
-              }`}
-            >
-              Anual
-            </button>
-          </div>
+          <AnimatedSegmentedControl
+            options={[
+              { label: 'Mensal', value: 'monthly' },
+              { label: 'Anual', value: 'annual' }
+            ]}
+            value={selectedPlanCycle}
+            onChange={(newCycle) => setSelectedPlanCycle(newCycle)}
+            size="sm"
+            variant="primary"
+          />
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-3">

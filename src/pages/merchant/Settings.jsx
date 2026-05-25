@@ -1027,7 +1027,7 @@ export default function Settings() {
 
   if (loadingStores) {
     return (
-      <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
+      <main className="bg-[#f9fafb] text-[#111827]">
         <header className="sticky top-0 z-30 border-b border-gray-100 bg-[#f9fafb]/90 px-4 py-4 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-7xl items-center gap-4">
             <div className="h-10 w-10 animate-pulse rounded-2xl bg-gray-200" />
@@ -1052,7 +1052,7 @@ export default function Settings() {
 
   return (
     <main style={themeVars}
-      className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]"
+      className="bg-[#f9fafb] text-[#111827]"
     >
       <Toast toast={toast} onClose={() => setToast(null)} />
 

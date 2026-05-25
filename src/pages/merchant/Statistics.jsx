@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import {
   collection,
   onSnapshot,
@@ -725,7 +726,7 @@ export default function Statistics() {
   const displayedBairros = showAllBairros ? activeBairrosList : activeBairrosList.slice(0, 5)
 
   return (
-    <main className="min-h-screen bg-[#f9fafb] text-[#111827]">
+    <main className="bg-[#f9fafb] text-[#111827]">
       <DashboardPageHeader
         title="Estatísticas e Relatórios"
         description="Acompanhe de forma prática o desempenho financeiro, produtos favoritos e dados logísticos."
@@ -752,29 +753,20 @@ export default function Statistics() {
             </select>
           )}
 
-          <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white p-1 shadow-sm max-w-full">
-            {PERIOD_OPTIONS.map((option, index) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => {
-                  setPeriodIdx(index)
-                  setShowAllBairros(false)
-                }}
-                className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-                  periodIdx === index
-                    ? 'bg-[#f97316] text-white shadow-sm'
-                    : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827]'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <AnimatedSegmentedControl
+            options={PERIOD_OPTIONS.map((opt, i) => ({ label: opt.label, value: i }))}
+            value={periodIdx}
+            onChange={(newIdx) => {
+              setPeriodIdx(newIdx)
+              setShowAllBairros(false)
+            }}
+            size="md"
+            variant="primary"
+          />
         </div>
       </DashboardPageHeader>
 
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 pt-6 pb-28 lg:pb-8 sm:px-6 lg:px-8">
         {loading ? (
           <div className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -898,36 +890,19 @@ export default function Statistics() {
                   </div>
                   
                   {/* Tabs internas */}
-                  <div className="flex items-center gap-1 rounded-xl bg-gray-50 p-1 border border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBairrosTab('orders')
-                        setShowAllBairros(false)
-                      }}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${
-                        bairrosTab === 'orders'
-                          ? 'bg-[#f97316] text-white shadow-sm'
-                          : 'text-[#6b7280] hover:bg-gray-100 hover:text-[#111827]'
-                      }`}
-                    >
-                      Mais Pedidos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBairrosTab('revenue')
-                        setShowAllBairros(false)
-                      }}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${
-                        bairrosTab === 'revenue'
-                          ? 'bg-[#f97316] text-white shadow-sm'
-                          : 'text-[#6b7280] hover:bg-gray-100 hover:text-[#111827]'
-                      }`}
-                    >
-                      Mais Faturamento
-                    </button>
-                  </div>
+                  <AnimatedSegmentedControl
+                    options={[
+                      { label: 'Mais Pedidos', value: 'orders' },
+                      { label: 'Mais Faturamento', value: 'revenue' }
+                    ]}
+                    value={bairrosTab}
+                    onChange={(newTab) => {
+                      setBairrosTab(newTab)
+                      setShowAllBairros(false)
+                    }}
+                    size="sm"
+                    variant="primary"
+                  />
                 </div>
 
                 {activeBairrosList.length === 0 ? (
@@ -937,7 +912,7 @@ export default function Statistics() {
                   </div>
                 ) : (
                   <div className="flex-1 flex flex-col">
-                    <div className="overflow-x-auto min-w-0">
+                  <div className="flex-1 overflow-x-auto min-w-0 -mx-6 px-6">
                       <table className="w-full text-left border-collapse min-w-[400px]">
                         <thead>
                           <tr className="border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-[#9ca3af]">
@@ -1004,7 +979,7 @@ export default function Statistics() {
                     <p className="text-sm font-semibold">Sem dados de produtos no período.</p>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-x-auto min-w-0">
+                  <div className="flex-1 overflow-x-auto min-w-0 -mx-6 px-6">
                     <table className="w-full text-left border-collapse min-w-[400px]">
                       <thead>
                         <tr className="border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-[#9ca3af]">

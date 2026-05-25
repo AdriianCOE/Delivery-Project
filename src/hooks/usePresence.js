@@ -11,7 +11,7 @@ import {
 } from 'firebase/database'
 import { rtdb } from '../services/firebase'
 
-export function usePresence(storeId) {
+export function usePresence(storeId, isMerchant = false) {
   const [activeUsers, setActiveUsers] = useState(0)
 
   useEffect(() => {
@@ -31,17 +31,19 @@ export function usePresence(storeId) {
     const unsubscribeConnected = onValue(connectedRef, async (snapshot) => {
       if (snapshot.val() !== true) return
 
-      myUserRef = push(storePresenceRef)
+      if (!isMerchant) {
+        myUserRef = push(storePresenceRef)
 
-      try {
-        await onDisconnect(myUserRef).remove()
+        try {
+          await onDisconnect(myUserRef).remove()
 
-        await set(myUserRef, {
-          online: true,
-          connectedAt: serverTimestamp(),
-        })
-      } catch (error) {
-        console.error('Erro ao registrar presença:', error)
+          await set(myUserRef, {
+            online: true,
+            connectedAt: serverTimestamp(),
+          })
+        } catch (error) {
+          console.error('Erro ao registrar presença:', error)
+        }
       }
     })
 
@@ -64,7 +66,7 @@ export function usePresence(storeId) {
       unsubscribeConnected()
       unsubscribePresence?.()
     }
-  }, [storeId])
+  }, [storeId, isMerchant])
 
   return activeUsers
 }

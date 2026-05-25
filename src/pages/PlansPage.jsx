@@ -13,6 +13,7 @@ import {
   FiMonitor,
   FiShield,
 } from 'react-icons/fi'
+import AnimatedSegmentedControl from '../components/ui/AnimatedSegmentedControl'
 
 const plans = PLAN_OPTIONS
 
@@ -216,36 +217,28 @@ export default function PlansPage() {
               </div>
 
               <div className="mt-6 flex sm:mt-0">
-                <div className="inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
-                  {[
-                    { value: 'monthly', label: 'Mensal' },
-                    { value: 'annual', label: 'Anual' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setBillingCycle(opt.value)}
-                      aria-pressed={billingCycle === opt.value}
-                      className={[
-                        'relative rounded-[1rem] px-5 py-2.5 text-sm font-black transition-all duration-200',
-                        billingCycle === opt.value
-                          ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/25'
-                          : 'text-[#6b7280] hover:text-[#111827]',
-                      ].join(' ')}
-                    >
-                      {opt.label}
-                      {opt.value === 'annual' && (
-                        <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-black ${
-                          billingCycle === 'annual' 
-                            ? 'bg-white/25 text-white' 
-                            : 'bg-green-100 text-green-700'
-                        }`}>
-                          -17%
+                <AnimatedSegmentedControl
+                  options={[
+                    { label: 'Mensal', value: 'monthly' },
+                    { 
+                      label: (
+                        <span className="flex items-center gap-1.5">
+                          Anual
+                          {billingCycle === 'annual' ? (
+                            <span className="shrink-0 inline-block rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white">-17%</span>
+                          ) : (
+                            <span className="shrink-0 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700">-17%</span>
+                          )}
                         </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                      ), 
+                      value: 'annual' 
+                    }
+                  ]}
+                  value={billingCycle}
+                  onChange={(newCycle) => setBillingCycle(newCycle)}
+                  size="md"
+                  variant="primary"
+                />
               </div>
             </motion.div>
 

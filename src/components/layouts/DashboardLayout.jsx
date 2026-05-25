@@ -228,18 +228,25 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
       onClick={handleClick}
       className={({ isActive }) =>
         cn(
-          'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
+          'group relative flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
           isActive
-            ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/20'
+            ? 'text-white'
             : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white'
         )
       }
     >
       {({ isActive }) => (
         <>
+          {isActive && (
+            <motion.div
+              layoutId="sidebar-active-pill"
+              className="absolute inset-0 rounded-2xl bg-[#f97316] shadow-lg shadow-orange-600/20"
+              transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
+            />
+          )}
           <span
             className={cn(
-              'grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition',
+              'relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition',
               isActive
                 ? 'bg-white/15 text-white'
                 : 'bg-gray-50 text-[#6b7280] group-hover:bg-white group-hover:text-[#f97316] dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:bg-zinc-700'
@@ -248,7 +255,7 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
             <Icon size={18} />
           </span>
 
-          <span className="min-w-0 flex-1">
+          <span className="relative z-10 min-w-0 flex-1">
             <span className="block truncate">{item.label}</span>
 
             <span
@@ -261,7 +268,7 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
             </span>
           </span>
 
-          {isActive && <FiChevronRight className="shrink-0" size={16} />}
+          {isActive && <FiChevronRight className="relative z-10 shrink-0" size={16} />}
         </>
       )}
     </NavLink>
@@ -648,8 +655,11 @@ function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
   return (
     <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)]">
       <div className="flex h-full min-h-0 flex-col">
-        <div className="rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-3 shadow-sm ring-1 ring-white dark:from-zinc-800 dark:to-zinc-900 dark:border-zinc-700/50 dark:ring-zinc-800">
+        <div className="relative rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-3 shadow-sm ring-1 ring-white dark:from-zinc-800 dark:to-zinc-900 dark:border-zinc-700/50 dark:ring-zinc-800">
           <PratoByMark />
+          <div className="absolute right-3 top-3 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-black tracking-wide text-gray-500 shadow-sm dark:bg-zinc-800 dark:text-zinc-400">
+            {import.meta.env.VITE_APP_VERSION || 'v0.0.7'}
+          </div>
         </div>
 
         <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -680,14 +690,20 @@ function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
         <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} />
 
         {/* Logout rápido no desktop */}
-        <button
-          type="button"
-          onClick={onLogout}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
-        >
-          <FiLogOut size={13} className="shrink-0" />
-          <span>Sair da conta</span>
-        </button>
+        <div className="mt-2 space-y-2">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            <FiLogOut size={13} className="shrink-0" />
+            <span>Sair da conta</span>
+          </button>
+          
+          <p className="text-center text-[10px] font-bold text-gray-400 dark:text-zinc-600">
+            © 2026 PratoBy
+          </p>
+        </div>
       </div>
     </aside>
   )
@@ -828,7 +844,7 @@ export default function DashboardLayout() {
                   <div className="flex items-center gap-1.5 truncate text-[11px] font-bold leading-4 text-[#6b7280] dark:text-zinc-400">
                     <span className="capitalize">{dateStr}</span>
                     <span>·</span>
-                    <span>{timeStr} </span>
+                    <span>{timeStr}</span>
                     <span>·</span>
                     <span>{storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : 'Painel do lojista'}</span>
                   </div>
@@ -885,10 +901,10 @@ export default function DashboardLayout() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={loading ? 'loading-skeleton' : location.pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -15, scale: 0.98 }}
+                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 className="min-h-full"
               >
                 {loading ? <DashboardPageSkeleton /> : <Outlet />}

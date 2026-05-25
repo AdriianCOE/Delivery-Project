@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { Check, Pizza, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl';
 
 const plans = [
   {
@@ -125,35 +126,28 @@ export function PricingSection() {
           </div>
           
           <div className="mt-10 flex justify-center">
-            <div className="inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
-              {[
-                { value: 'monthly', label: 'Mensal' },
-                { value: 'annual', label: 'Anual' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setBillingCycle(opt.value as 'monthly' | 'annual')}
-                  className={[
-                    'relative rounded-[1rem] px-5 py-2.5 text-sm font-black transition-all duration-200',
-                    billingCycle === opt.value
-                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/25'
-                      : 'text-gray-500 hover:text-gray-900',
-                  ].join(' ')}
-                >
-                  {opt.label}
-                  {opt.value === 'annual' && (
-                    <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-black ${
-                      billingCycle === 'annual' 
-                        ? 'bg-white/25 text-white' 
-                        : 'bg-green-100 text-green-700'
-                    }`}>
-                      -17%
+            <AnimatedSegmentedControl
+              options={[
+                { label: 'Mensal', value: 'monthly' },
+                { 
+                  label: (
+                    <span className="flex items-center gap-1.5">
+                      Anual
+                      {billingCycle === 'annual' ? (
+                        <span className="shrink-0 inline-block rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white">-17%</span>
+                      ) : (
+                        <span className="shrink-0 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700">-17%</span>
+                      )}
                     </span>
-                  )}
-                </button>
-              ))}
-            </div>
+                  ), 
+                  value: 'annual' 
+                }
+              ]}
+              value={billingCycle}
+              onChange={(newCycle: any) => setBillingCycle(newCycle as 'monthly' | 'annual')}
+              size="md"
+              variant="primary"
+            />
           </div>
         </motion.div>
 

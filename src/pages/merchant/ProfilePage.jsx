@@ -25,7 +25,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
+    <main className="bg-[#f9fafb] text-[#111827]">
       <DashboardPageHeader
         title="Perfil"
         description="Gerencie sua conta e segurança"

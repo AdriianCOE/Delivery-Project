@@ -15,23 +15,8 @@ import { auth, db, functions, googleProvider } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import { AnimatePresence, motion } from 'motion/react'
-import {
-  FiArrowLeft,
-  FiArrowRight,
-  FiCheck,
-  FiCheckCircle,
-  FiAlertCircle,
-  FiLoader,
-  FiLock,
-  FiMail,
-  FiMapPin,
-  FiPhone,
-  FiShield,
-  FiShoppingBag,
-  FiStar,
-  FiUser,
-  FiZap,
-} from 'react-icons/fi'
+import { FiAlertCircle, FiCheck, FiCheckCircle, FiChevronDown, FiX, FiInfo, FiChevronRight, FiCreditCard, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield } from 'react-icons/fi'
+import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 
 // ─────────────────────────────────────────────────────────────
 // DADOS DOS PLANOS
@@ -976,37 +961,29 @@ export default function SignupPage() {
                 <p className="mb-3 text-xs font-black uppercase tracking-widest text-[#6b7280]">
                   Ciclo de cobrança
                 </p>
-                <div className="grid grid-cols-2 w-full sm:inline-flex sm:w-auto rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
-                  {[
-                    { value: 'monthly', label: 'Mensal' },
-                    { value: 'annual', label: 'Anual' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => handleCycleChange(opt.value)}
-                      aria-pressed={billingCycle === opt.value}
-                      className={[
-                        'relative flex items-center justify-center rounded-[1rem] px-2 sm:px-4 py-2 text-sm font-black transition-all duration-200 min-w-0',
-                        billingCycle === opt.value
-                          ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/25'
-                          : 'text-[#6b7280] hover:text-[#111827]',
-                      ].join(' ')}
-                    >
-                      <span className="truncate">{opt.label}</span>
-                      {opt.value === 'annual' && billingCycle !== 'annual' && (
-                        <span className="ml-1.5 shrink-0 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-black text-[#f97316]">
-                          -17%
+                <AnimatedSegmentedControl
+                  options={[
+                    { label: 'Mensal', value: 'monthly' },
+                    { 
+                      label: (
+                        <span className="flex items-center gap-1.5">
+                          Anual
+                          {billingCycle !== 'annual' ? (
+                            <span className="shrink-0 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-black text-[#f97316]">-17%</span>
+                          ) : (
+                            <span className="shrink-0 inline-block rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-black text-white dark:text-orange-50 dark:bg-orange-600/50">2 meses grátis</span>
+                          )}
                         </span>
-                      )}
-                      {opt.value === 'annual' && billingCycle === 'annual' && (
-                        <span className="ml-1.5 shrink-0 inline-block rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-black text-white">
-                          2 meses grátis
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                      ), 
+                      value: 'annual' 
+                    }
+                  ]}
+                  value={billingCycle}
+                  onChange={(newCycle) => handleCycleChange(newCycle)}
+                  size="md"
+                  fullWidth={true}
+                  variant="primary"
+                />
               </motion.div>
 
               {/* Cards dos planos */}

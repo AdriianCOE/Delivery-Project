@@ -16,6 +16,7 @@ import {
 
 import { db } from '../../services/firebase'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePresence } from '../../hooks/usePresence'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
@@ -43,8 +44,8 @@ import {
   FiTrendingUp,
   FiTruck,
   FiUsers,
-  FiX,
   FiXCircle,
+  FiPlay,
 } from 'react-icons/fi'
 
 function PricingValidationBadge({ order }) {
@@ -984,7 +985,7 @@ const merchantName =
 const loading = loadingStores || loadingOrders
 const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
 
-const activeUsers = usePresence(selectedStore?.id || selectedStore?.storeId)
+const activeUsers = usePresence(selectedStore?.id || selectedStore?.storeId, true)
 const menuPeopleCount = Number(activeUsers || 0)
 
 const menuPeopleLabel =
@@ -1588,7 +1589,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
 
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="mt-4 flex items-center gap-3 sm:gap-4">
                   <StoreLogo
                     store={selectedStore}
                     className="h-14 w-14 shrink-0 shadow-lg shadow-orange-100 dark:shadow-none sm:h-16 sm:w-16"
@@ -1825,17 +1826,24 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 {recommendedAction.action === 'open-store' ? (
                   <button
                     type="button"
+                    disabled={storeActionLoading}
                     onClick={handleToggleStoreOpen}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-emerald-600"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[13px] font-black text-white shadow-md shadow-emerald-500/20 ring-1 ring-inset ring-white/10 transition hover:-translate-y-0.5 hover:bg-emerald-400 active:scale-95 disabled:opacity-70 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                   >
-                    {recommendedAction.cta}
+                    {storeActionLoading ? (
+                      <FiLoader size={16} className="animate-spin" />
+                    ) : (
+                      <FiPlay size={16} className="fill-current" />
+                    )}
+                    {storeActionLoading ? 'Atualizando...' : recommendedAction.cta}
                   </button>
                 ) : (
                   <a
                     href={recommendedAction.href}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#f97316] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-[13px] font-black text-white shadow-md shadow-orange-500/20 ring-1 ring-inset ring-white/10 transition hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-95 dark:bg-[#ea580c] dark:hover:bg-[#f97316]"
                   >
                     {recommendedAction.cta}
+                    <FiChevronRight size={16} />
                   </a>
                 )}
               </div>
@@ -1883,22 +1891,13 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-2xl border border-gray-100 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                {PERIOD_OPTIONS.map((option, index) => (
-                  <button
-                    key={option.label}
-                    type="button"
-                    onClick={() => setPeriodIdx(index)}
-                    className={`rounded-xl px-4 py-2 text-sm font-black transition ${
-                      periodIdx === index
-                        ? 'bg-[#f97316] text-white shadow-sm'
-                        : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+            <AnimatedSegmentedControl
+              options={PERIOD_OPTIONS.map((opt, i) => ({ label: opt.label, value: i }))}
+              value={periodIdx}
+              onChange={(newIdx) => setPeriodIdx(newIdx)}
+              size="md"
+              variant="primary"
+            />
               <button
                 type="button"
                 onClick={() => showToast('success', 'Os dados já estão sincronizados em tempo real.')}
@@ -1950,12 +1949,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   </h3>
                 </div>
 
-                <a
-                  href="/dashboard/stats"
+                <Link
+                  to="/dashboard/stats"
                   className="text-sm font-black text-[#f97316] hover:text-[#ea580c]"
                 >
                   Ver estatísticas
-                </a>
+                </Link>
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -2115,24 +2114,24 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <a
-                    href="/dashboard/menu"
+                  <Link
+                    to="/dashboard/menu"
                     className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Cardápio
-                  </a>
-                  <a
-                    href="/dashboard/orders"
+                  </Link>
+                  <Link
+                    to="/dashboard/orders"
                     className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Pedidos
-                  </a>
-                  <a
-                    href="/dashboard/stats"
+                  </Link>
+                  <Link
+                    to="/dashboard/stats"
                     className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Estatísticas
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>

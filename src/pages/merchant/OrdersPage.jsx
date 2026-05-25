@@ -42,6 +42,9 @@ import {
   FiPrinter,
   FiXCircle,
   FiZap,
+  FiLoader,
+  FiPower,
+  FiPlay,
 } from 'react-icons/fi'
 
 import { db } from '../../services/firebase'
@@ -2514,6 +2517,7 @@ export default function OrdersPage() {
   const [loadingStores, setLoadingStores] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState('')
+  const [storeActionLoading, setStoreActionLoading] = useState(false)
   const [toast, setToast] = useState(null)
 
   const selectedStore = useMemo(() => {
@@ -2542,6 +2546,33 @@ export default function OrdersPage() {
     setSelectedStoreId(storeId)
     safeSetLocalStorage(SELECTED_STORE_KEY, storeId)
   }, [])
+
+  const handleToggleStoreOpen = useCallback(async () => {
+    if (!selectedStore || storeActionLoading) return
+
+    const storeDocId = selectedStore.id || selectedStore.docId || selectedStore.storeId
+
+    if (!storeDocId) {
+      showToast('error', 'Loja sem ID válido para atualizar.')
+      return
+    }
+
+    const nextStatus = !selectedStore.isOpen
+
+    try {
+      setStoreActionLoading(true)
+      await updateDoc(doc(db, 'stores', storeDocId), {
+        isOpen: nextStatus,
+        updatedAt: Timestamp.now(),
+      })
+      showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
+    } catch (error) {
+      console.error('Erro ao atualizar status da loja:', error)
+      showToast('error', 'Erro ao atualizar o status da loja.')
+    } finally {
+      setStoreActionLoading(false)
+    }
+  }, [selectedStore, showToast, storeActionLoading])
 
   const handleUpdateStatus = useCallback(
   async (order, status) => {
@@ -3294,7 +3325,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   }, [orders, search, statusFilter])
 
   return (
-    <main className="min-h-screen bg-[#f9fafb] text-[#111827]">
+    <main className="min-h-full">
       <DashboardPageHeader
         title="Gerenciamento de pedidos"
         description="Operação e acompanhamento em tempo real."
@@ -3324,15 +3355,33 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               </select>
             )}
             {selectedStore && (
-              <a
-                href={`/${getStoreSlug(selectedStore)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316]"
+              <button
+                type="button"
+                disabled={storeActionLoading}
+                onClick={handleToggleStoreOpen}
+                className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 ${
+                  selectedStore?.isOpen
+                    ? 'bg-red-50 text-red-700 ring-red-200 shadow-red-100/50 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/40 dark:hover:bg-red-900/40'
+                    : 'bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40'
+                }`}
               >
-                <FiExternalLink />
-                Ver loja
-              </a>
+                {storeActionLoading ? (
+                  <>
+                    <FiLoader size={16} className="animate-spin" />
+                    Atualizando...
+                  </>
+                ) : selectedStore?.isOpen ? (
+                  <>
+                    <FiPower size={16} />
+                    Fechar loja
+                  </>
+                ) : (
+                  <>
+                    <FiPower size={16} />
+                    Abrir loja
+                  </>
+                )}
+              </button>
             )}
             <button
               type="button"
@@ -3370,16 +3419,15 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
           />
         ) : (
           <>
-            <div className="mb-6 rounded-[1.8rem] bg-[#111827] p-5 text-white shadow-xl shadow-gray-300/40">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mb-6 rounded-[1.8rem] bg-[#111827] p-5 text-white shadow-xl shadow-black/20 ring-1 ring-white/5">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black text-orange-100">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black text-orange-50">
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        selectedStore?.isOpen ? 'bg-[#00FF00]' : 'bg-red-500'
+                      className={`h-2.5 w-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)] ${
+                        selectedStore?.isOpen ? 'bg-[#00FF00] shadow-[#00FF00]/40' : 'bg-red-500 shadow-red-500/40'
                       }`}
                     />
-
                     {selectedStore?.isOpen ? 'Loja aberta' : 'Loja fechada'}
                   </div>
 
@@ -3387,30 +3435,30 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     {selectedStore.name || 'Sua loja'}
                   </h2>
 
-                  <p className="mt-1 text-sm text-gray-300">
+                  <p className="mt-1 text-sm font-medium text-gray-400">
                     /{getStoreSlug(selectedStore)}
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-4 lg:min-w-[680px]">
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs font-bold text-gray-300">Hoje</p>
-                    <p className="mt-2 text-2xl font-black">{summary.todayCount}</p>
+                <div className="grid gap-3 sm:grid-cols-4 lg:min-w-[640px]">
+                  <div className="rounded-[1.2rem] border border-blue-900/30 bg-blue-950/20 p-4 transition hover:bg-blue-950/30">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-blue-400">Hoje</p>
+                    <p className="mt-1.5 text-2xl font-black text-white">{summary.todayCount}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs font-bold text-gray-300">Faturamento</p>
-                    <p className="mt-2 text-xl font-black">{formatMoney(summary.revenueToday)}</p>
+                  <div className="rounded-[1.2rem] border border-emerald-900/30 bg-emerald-950/20 p-4 transition hover:bg-emerald-950/30">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-emerald-400">Faturamento</p>
+                    <p className="mt-1.5 text-xl font-black text-white">{formatMoney(summary.revenueToday)}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs font-bold text-gray-300">Ativos</p>
-                    <p className="mt-2 text-2xl font-black">{summary.activeCount}</p>
+                  <div className="rounded-[1.2rem] border border-amber-900/30 bg-amber-950/20 p-4 transition hover:bg-amber-950/30">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-amber-400">Ativos</p>
+                    <p className="mt-1.5 text-2xl font-black text-white">{summary.activeCount}</p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs font-bold text-gray-300">Atenção</p>
-                    <p className="mt-2 text-2xl font-black">{summary.latePendingCount}</p>
+                  <div className="rounded-[1.2rem] border border-red-900/30 bg-red-950/20 p-4 transition hover:bg-red-950/30">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-red-400">Atenção</p>
+                    <p className="mt-1.5 text-2xl font-black text-white">{summary.latePendingCount}</p>
                   </div>
                 </div>
               </div>

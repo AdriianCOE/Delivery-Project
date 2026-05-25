@@ -42,6 +42,7 @@ import {
   getCloudinaryOptimizedUrl,
   uploadImageToCloudinary,
 } from '../../services/cloudinary'
+import AnimatedSegmentedControl from '../ui/AnimatedSegmentedControl'
 
 // ─── Cloud Function callable ────────────────────────────────
 const _fns = getFunctions(app, 'southamerica-east1')
@@ -797,27 +798,19 @@ function ThemeCard() {
       title="Aparência do painel"
       description="Personalize o tema visual"
     >
-      <div className="grid grid-cols-3 gap-2">
-        {options.map((opt) => {
-          const Icon = opt.icon
-          const active = theme === opt.id
-
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => setTheme(opt.id)}
-              className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-3.5 text-xs font-black transition active:scale-95 cursor-pointer ${
-                active
-                  ? 'border-[#f97316] bg-orange-50/50 text-[#f97316] dark:bg-orange-950/20 dark:border-[#f97316] dark:text-[#f97316]'
-                  : 'border-gray-100 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white'
-              }`}
-            >
-              <Icon size={18} />
-              <span>{opt.label}</span>
-            </button>
-          )
-        })}
+      <div className="pt-2">
+        <AnimatedSegmentedControl
+          options={[
+            { label: 'Claro', value: 'light', icon: FiSun },
+            { label: 'Escuro', value: 'dark', icon: FiMoon },
+            { label: 'Sistema', value: 'system', icon: FiMonitor }
+          ]}
+          value={theme}
+          onChange={(newTheme) => setTheme(newTheme)}
+          size="lg"
+          fullWidth={true}
+          variant="primary"
+        />
       </div>
     </SectionCard>
   )
