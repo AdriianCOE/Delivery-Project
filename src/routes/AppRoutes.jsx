@@ -37,6 +37,7 @@ import Reviews from '../pages/merchant/Reviews'
 import MenuManagementPage from '../pages/merchant/menu/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 import BillingPage from '../pages/merchant/BillingPage'
+import SubscriptionManagementPage from '../pages/merchant/SubscriptionManagementPage'
 import AdminSubscriptionsPage from '../pages/admin/AdminSubscriptionsPage'
 
 // Layouts / Proteção
@@ -167,6 +168,8 @@ export default function AppRoutes() {
           <Route path="automacoes" element={<ComingSoon title="Automações" icon={FiZap} />} />
           <Route path="billing" element={<BillingPage />} />
           <Route path="assinatura" element={<Navigate to="/dashboard/billing" replace />} />
+          <Route path="subscription-management" element={<SubscriptionManagementPage />} />
+          <Route path="gerenciar-assinatura" element={<Navigate to="/dashboard/subscription-management" replace />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 

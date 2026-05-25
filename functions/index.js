@@ -17,6 +17,12 @@ const TERMS_VERSION = '2026-05-24'
 const PRIVACY_VERSION = '2026-05-24'
 
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
+exports.getSubscriptionManagementData = asaasFunctions.getSubscriptionManagementData
+exports.changeSubscriptionPlan = asaasFunctions.changeSubscriptionPlan
+exports.cancelSubscription = asaasFunctions.cancelSubscription
+exports.requestSubscriptionDueDateChange = asaasFunctions.requestSubscriptionDueDateChange
+exports.syncAsaasSubscriptionStatus = asaasFunctions.syncAsaasSubscriptionStatus
+exports.createPaymentMethodUpdateCheckout = asaasFunctions.createPaymentMethodUpdateCheckout
 exports.asaasWebhook = asaasFunctions.asaasWebhook
 
 exports.createPublicOrder = onCall(

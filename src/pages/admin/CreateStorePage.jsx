@@ -73,14 +73,14 @@ const PLAN_OPTIONS = [
   {
     id: 'essential',
     label: 'Essencial',
-    price: 'R$ 5/mês',
+    price: 'R$ 59,99/mês',
     description: 'Cardápio digital, link próprio e pedido pelo WhatsApp.',
     features: ['Link próprio', 'Sem comissão', 'Cardápio digital'],
   },
   {
     id: 'professional',
     label: 'Profissional',
-    price: 'R$ 89/mês',
+    price: 'R$ 89,99/mês',
     description: 'Mais controle para cupons, entrega, painel e operação.',
     features: ['Dashboard', 'Cupons', 'Taxa por bairro'],
     popular: true,
@@ -88,7 +88,7 @@ const PLAN_OPTIONS = [
   {
     id: 'premium',
     label: 'Premium (White-label)',
-    price: 'R$ 159/mês',
+    price: 'R$ 159,99/mês',
     description: 'Experiência premium para marcas maiores ou redes.',
     features: ['Visual premium', 'Domínio próprio', 'Suporte prioritário'],
   },

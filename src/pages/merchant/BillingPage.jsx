@@ -35,6 +35,15 @@ import {
 } from 'react-icons/fi'
 import { motion, AnimatePresence } from 'motion/react'
 
+function formatPhoneBR(value) {
+  const clean = String(value || '').replace(/\D/g, '').slice(0, 11)
+  if (!clean) return ''
+  if (clean.length <= 2) return `(${clean}`
+  if (clean.length <= 6) return `(${clean.slice(0, 2)}) ${clean.slice(2)}`
+  if (clean.length <= 10) return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`
+  return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`
+}
+
 function formatCurrency(value) {
   return value.toLocaleString('pt-BR', {
     style: 'currency',
@@ -63,33 +72,11 @@ function normalizeCycleId(cycle) {
   return 'monthly'
 }
 
-function getStatusCopy(status) {
-  const map = {
-    checkout_pending: 'Configure sua cobrança para ativar o teste grátis',
-    pending_checkout: 'Configure sua cobrança para ativar o teste grátis',
-    billing_pending: 'Configure sua cobrança para ativar o teste grátis',
-    billing_pending_payment_method: 'Configure sua cobrança para ativar o teste grátis',
-    trialing: 'Teste grátis ativo',
-    active: 'Assinatura ativa',
-    past_due: 'Pagamento pendente',
-    blocked: 'Assinatura bloqueada/cancelada',
-    canceled: 'Assinatura bloqueada/cancelada',
-  }
-  return map[status] || 'Checkout pendente'
-}
-
-function getHeroTone(status, hasAsaasSubscription) {
-  if (status === 'active') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/40 dark:bg-emerald-950/15'
-  if (status === 'past_due' || status === 'blocked' || status === 'canceled') return 'border-red-200 bg-red-50/70 dark:border-red-800/40 dark:bg-red-950/15'
-  if (status === 'trialing' && !hasAsaasSubscription) return 'border-orange-200 bg-orange-50/80 dark:border-orange-900/20 dark:bg-orange-950/15'
-  return 'border-orange-100 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-}
-
 function getPrimaryAction({ status, hasAsaasSubscription }) {
   if (status === 'checkout_pending') {
     return {
-      label: 'Configurar cobrança Asaas',
-      support: 'Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis.',
+      label: 'Configurar cobrança e ativar teste grátis',
+      support: 'Você não será cobrado agora. A primeira cobrança acontece após os 14 dias grátis.',
       needsBillingData: true,
       tone: 'orange',
     }
@@ -97,8 +84,8 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
 
   if (status === 'trialing' && !hasAsaasSubscription) {
     return {
-      label: 'Configurar cobrança Asaas',
-      support: 'Você não será cobrado agora. A primeira cobrança será apenas no fim do teste.',
+      label: 'Configurar cobrança',
+      support: 'Você não será cobrado agora. A primeira cobrança acontece após os 14 dias grátis.',
       needsBillingData: true,
       tone: 'orange',
     }
@@ -108,7 +95,7 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
     return {
       label: 'Regularizar pagamento',
       support: hasAsaasSubscription
-        ? 'Confira os dados da assinatura Asaas para regularizar a pendência.'
+        ? 'Confira os dados da assinatura para regularizar a pendência.'
         : 'Configure a cobrança para regularizar a assinatura.',
       needsBillingData: !hasAsaasSubscription,
       tone: 'red',
@@ -117,9 +104,9 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
 
   if (status === 'blocked' || status === 'canceled') {
     return {
-      label: 'Reativar assinatura',
+      label: 'Regularizar pagamento',
       support: hasAsaasSubscription
-        ? 'Confira a assinatura Asaas e regularize a situação para reativar a loja.'
+        ? 'Confira a assinatura e regularize a situação para reativar a loja.'
         : 'Informe os dados de faturamento para reativar sua assinatura.',
       needsBillingData: !hasAsaasSubscription,
       tone: 'red',
@@ -128,10 +115,100 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
 
   return {
     label: 'Ver detalhes da assinatura',
-    support: 'Cobrança Asaas configurada para este plano.',
+    support: 'Cobrança configurada para este plano.',
     needsBillingData: false,
     tone: 'neutral',
   }
+}
+
+const BILLING_PLAN_PRESENTATION = {
+  essential: {
+    name: 'Essencial',
+    tagline: 'Para começar simples.',
+    description: 'O básico para colocar sua loja online, receber pedidos e vender pelo próprio link.',
+    bestFor: 'Lojas que estão começando ou querem validar o delivery digital sem complexidade.',
+    cta: 'Começar com Essencial',
+    badge: '',
+    highlights: ['Cardápio digital ilimitado', 'Pedidos em tempo real', 'Link próprio da loja'],
+  },
+  professional: {
+    name: 'Plus',
+    tagline: 'Para vender mais.',
+    description: 'Cupons, WhatsApp e relatórios para aumentar pedidos e acompanhar melhor a operação.',
+    bestFor: 'Lojas que já vendem online e querem campanhas, mais controle e rotina mais ágil.',
+    cta: 'Escolher Plus',
+    badge: 'Mais escolhido',
+    highlights: ['Cupons e ofertas', 'WhatsApp integrado', 'Relatórios avançados'],
+  },
+  premium: {
+    name: 'Premium',
+    tagline: 'Para operações maiores.',
+    description: 'Mais estrutura para marcas fortes, filiais, domínio próprio e atendimento VIP.',
+    bestFor: 'Operações com mais de uma loja ou que precisam de marca própria e suporte próximo.',
+    cta: 'Escolher Premium',
+    badge: 'Mais completo',
+    highlights: ['Até 3 filiais', 'Domínio personalizado', 'Suporte VIP'],
+  },
+}
+
+const PLAN_COMPARISON_SECTIONS = [
+  {
+    category: 'Operação',
+    rows: [
+      { feature: 'Cardápio e pedidos', essential: 'Incluído', professional: 'Incluído', premium: 'Incluído' },
+      { feature: 'Entrega por região', essential: 'Simples', professional: 'Avançada', premium: 'Avançada' },
+      { feature: 'Pedidos pelo WhatsApp', essential: 'Manual', professional: 'Integrado', premium: 'Integrado' },
+    ],
+  },
+  {
+    category: 'Vendas',
+    rows: [
+      { feature: 'Cupons e ofertas', essential: 'Não incluído', professional: 'Ilimitados', premium: 'Ilimitados' },
+      { feature: 'Avisos por WhatsApp', essential: 'Não incluído', professional: 'Status automático', premium: 'Status automático' },
+      { feature: 'Relatórios', essential: 'Básicos', professional: 'Avançados', premium: 'Avançados' },
+    ],
+  },
+  {
+    category: 'Marca e suporte',
+    rows: [
+      { feature: 'Domínio próprio', essential: 'Não incluído', professional: 'Não incluído', premium: 'Incluído' },
+      { feature: 'Marca própria', essential: 'Não incluído', professional: 'Não incluído', premium: 'Incluído' },
+      { feature: 'Atendimento', essential: 'E-mail', professional: 'Prioritário', premium: 'VIP' },
+    ],
+  },
+]
+
+function normalizePlanId(planId) {
+  if (!planId) return 'essential'
+  const normalized = String(planId).toLowerCase().trim()
+  if (normalized === 'essential' || normalized === 'essencial') return 'essential'
+  if (normalized === 'professional' || normalized === 'profissional' || normalized === 'plus') return 'professional'
+  if (normalized === 'premium') return 'premium'
+  return normalized
+}
+
+function getBillingPlanPresentation(planId) {
+  const normalizedId = normalizePlanId(planId)
+  return BILLING_PLAN_PRESENTATION[normalizedId] || {
+    name: formatPlanName(planId),
+    tagline: 'Plano da sua loja.',
+    description: 'Plano selecionado para sua assinatura.',
+    bestFor: 'Lojas que usam o PratoBy no plano atual.',
+    cta: 'Selecionar plano',
+    badge: '',
+    highlights: [],
+  }
+}
+
+function getComparisonValueTone(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized.includes('não')) {
+    return 'bg-gray-50 text-gray-500 ring-gray-200 dark:bg-zinc-800/50 dark:text-zinc-400 dark:ring-zinc-700'
+  }
+  if (normalized.includes('avanç') || normalized.includes('integrado') || normalized.includes('priorit') || normalized.includes('vip')) {
+    return 'bg-orange-50 text-[#f97316] ring-orange-100 dark:bg-orange-950/20 dark:ring-orange-900/40'
+  }
+  return 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40'
 }
 
 function SummaryItem({ label, value, helper }) {
@@ -167,31 +244,6 @@ function TimelineStep({ done, active, title, description, meta }) {
         {meta && <p className="mt-2 text-xs font-black text-[#f97316]">{meta}</p>}
       </div>
     </div>
-  )
-}
-
-function InfoList({ title, items, tone = 'orange' }) {
-  const toneClass = tone === 'red'
-    ? 'bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400'
-    : 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20 dark:text-[#f97316]'
-
-  return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 dark:border-zinc-800 dark:bg-zinc-900 transition-colors">
-      <div className="flex items-center gap-3">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
-          {tone === 'red' ? <FiAlertTriangle /> : <FiInfo />}
-        </span>
-        <h2 className="text-base font-black text-[#111827] dark:text-white">{title}</h2>
-      </div>
-      <ul className="mt-4 space-y-3">
-        {items.map((item) => (
-          <li key={item} className="flex gap-3 text-sm font-semibold leading-relaxed text-[#4b5563] dark:text-zinc-300">
-            <FiCheck className="mt-1 shrink-0 text-emerald-600 dark:text-emerald-500" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }
 
@@ -396,7 +448,7 @@ export default function BillingPage() {
 
     setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
     setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
-    setBillingPhone(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || '')
+    setBillingPhone(formatPhoneBR(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || ''))
     setBillingCpfCnpj(store.cnpj || store.cpf || '')
     setBillingPostalCode(formatCep(cep))
     setBillingAddress(street)
@@ -438,13 +490,12 @@ export default function BillingPage() {
   const isActive = subscriptionStatus === 'active'
   const isPending = subscriptionStatus === 'checkout_pending'
   const showBillingRequiredBanner = searchParams.get('reason') === 'billing_required' && isPending
-  const isTrialNoAsaas = isTrial && !hasAsaasBillingSetup
   const trialIsFuture = Boolean(trialEndsDate && trialEndsDate.getTime() > Date.now())
 
   const nextBillingInfo = useMemo(() => {
     if (!hasAsaasBillingSetup) {
       return {
-        label: 'Cobrança Asaas',
+        label: 'Cobrança',
         value: 'Pendente de configuração',
         helper: 'Cadastre a forma de pagamento para ativar seu teste grátis.',
       }
@@ -477,7 +528,7 @@ export default function BillingPage() {
     return {
       label: 'Próxima cobrança',
       value: formatBillingDate(currentPeriodEnd || trialEndsAt),
-      helper: 'Dados atualizados pelo webhook do Asaas.',
+      helper: 'Dados atualizados pela integração de cobrança.',
     }
   }, [
     currentPeriodEnd,
@@ -494,6 +545,7 @@ export default function BillingPage() {
     () => getPrimaryAction({ status: subscriptionStatus, hasAsaasSubscription: hasAsaasBillingSetup }),
     [subscriptionStatus, hasAsaasBillingSetup]
   )
+  const currentPlanPresentation = getBillingPlanPresentation(plan)
 
   const headerBadge = useMemo(() => {
     if (isPending) return { label: 'Configure sua cobrança', color: 'orange', dot: true, pulse: true }
@@ -510,39 +562,6 @@ export default function BillingPage() {
     if (isBlocked || isCanceled) return { label: 'Assinatura bloqueada/cancelada', color: 'red', dot: true }
     return { label: 'Checkout pendente', color: 'gray', dot: true }
   }, [isActive, isBlocked, isCanceled, isPastDue, isPending, isTrial, hasAsaasBillingSetup])
-
-  const whatNowItems = useMemo(() => {
-    if (isTrialNoAsaas) {
-      return [
-        'Seu teste grátis está ativo.',
-        'Você ainda precisa configurar a cobrança Asaas.',
-        'A primeira cobrança só acontece após o fim do teste.',
-        'Se não configurar, a loja poderá ser bloqueada ao final do período.',
-      ]
-    }
-
-    if (isActive) {
-      return [
-        'Sua assinatura está ativa.',
-        'Você continuará sem taxas por pedido.',
-        `A próxima cobrança acontecerá em ${formatBillingDate(currentPeriodEnd)}.`,
-      ]
-    }
-
-    if (isPastDue || isBlocked || isCanceled) {
-      return [
-        'Regularize para manter a loja ativa.',
-        'Seu painel continuará acessível para resolver a pendência.',
-        'Novas liberações dependem da confirmação pelo Asaas.',
-      ]
-    }
-
-    return [
-      'Configure a cobrança para ativar seu teste.',
-      'Durante o beta, se precisar cancelar antes da primeira cobrança, fale com nosso suporte.',
-      'A primeira cobrança acontece somente após o período de teste.',
-    ]
-  }, [currentPeriodEnd, isActive, isBlocked, isCanceled, isPastDue, isTrialNoAsaas])
 
   const timelineSteps = useMemo(() => {
     const trialDescription = trialEndsAt
@@ -567,7 +586,7 @@ export default function BillingPage() {
       {
         title: 'Primeira cobrança',
         description: hasAsaasBillingSetup ? 'Forma de pagamento cadastrada no Asaas' : 'Forma de pagamento pendente',
-        meta: chargeDate ? `Prevista para ${formatBillingDate(chargeDate)}` : 'Configure a cobrança Asaas',
+        meta: chargeDate ? `Prevista para ${formatBillingDate(chargeDate)}` : 'Configure a cobrança',
         done: hasAsaasBillingSetup && isActive,
         active: !hasAsaasBillingSetup || isPastDue,
       },
@@ -592,7 +611,7 @@ export default function BillingPage() {
 
     if (!billingName) setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
     if (!billingEmail) setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
-    if (!billingPhone) setBillingPhone(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || '')
+    if (!billingPhone) setBillingPhone(formatPhoneBR(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || ''))
     if (!billingCpfCnpj) setBillingCpfCnpj(store.cnpj || store.cpf || '')
     if (!billingPostalCode) setBillingPostalCode(formatCep(cep))
     if (!billingAddress) setBillingAddress(street)
@@ -613,7 +632,7 @@ export default function BillingPage() {
     setShowTechnical(true)
     setToast({
       type: 'info',
-      message: 'Detalhes da assinatura exibidos na seção técnica abaixo.',
+      message: 'Mostrei os detalhes da assinatura no final da página.',
     })
   }
 
@@ -761,7 +780,7 @@ export default function BillingPage() {
       console.error('[BillingPage] error starting subscription:', error)
       setToast({
         type: 'error',
-        message: error.message || 'Nao foi possivel configurar a cobranca Asaas.',
+        message: error.message || 'Não foi possível configurar a cobrança Asaas.',
       })
     } finally {
       setSubmitting(false)
@@ -780,13 +799,13 @@ export default function BillingPage() {
   if (!store) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="rounded-lg border border-dashed border-gray-200 bg-white p-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-orange-50 text-[#f97316]">
+        <div className="rounded-lg border border-dashed border-gray-200 bg-white p-8 text-center dark:bg-zinc-900 dark:border-zinc-800">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
             <FiAlertTriangle size={22} />
           </div>
-          <h3 className="mt-4 text-lg font-black text-[#111827]">Nenhuma loja ativa</h3>
-          <p className="mt-2 text-sm text-[#6b7280]">
-            Nao encontramos nenhuma loja cadastrada sob sua titularidade para gerenciar assinatura.
+          <h3 className="mt-4 text-lg font-black text-[#111827] dark:text-white">Nenhuma loja ativa</h3>
+          <p className="mt-2 text-sm text-[#6b7280] dark:text-zinc-400">
+            Não encontramos nenhuma loja ativa associada ao seu painel. Se acabou de criar a sua loja, tente recarregar ou contate o suporte.
           </p>
         </div>
       </div>
@@ -794,324 +813,412 @@ export default function BillingPage() {
   }
 
   return (
-    <main className="bg-[#f9fafb] text-[#111827]">
+    <main className="min-h-screen bg-[#f8fafc] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 transition-colors duration-300">
       <DashboardPageHeader
-        title="Assinatura"
-        description="Plano, teste grátis e forma de pagamento."
+        title="Faturamento & Assinatura"
+        description="Acompanhe o período de testes, plano ativo e cadastre sua forma de pagamento recorrente e segura."
         icon={FiCreditCard}
         badge={headerBadge}
         actions={
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={handlePrimaryAction}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
-              primaryAction.tone === 'red'
-                ? 'bg-red-600 hover:bg-red-700'
-                : primaryAction.tone === 'neutral'
-                ? 'bg-gray-800 hover:bg-gray-900'
-                : 'bg-[#f97316] hover:bg-[#ea580c]'
-            }`}
+          <motion.div
+            whileHover={{ scale: 1.05, y: -1 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 450, damping: 15 }}
           >
-            {submitting ? <FiLoader className="animate-spin" /> : primaryAction.needsBillingData ? <FiCreditCard /> : <FiSettings />}
-            {primaryAction.label}
-          </button>
+            <Link
+            to="/dashboard/subscription-management"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316] border border-orange-200/50 hover:bg-orange-100/50 px-4 text-xs font-black transition-all duration-300 active:scale-95 shadow-sm"
+          >
+            <FiSettings size={13} />
+            <span>Gerenciar assinatura</span>
+          </Link>
+          </motion.div>
         }
       />
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {showBillingRequiredBanner && (
-        <section className="mt-6 rounded-2xl border border-orange-200 bg-orange-50/80 p-4 shadow-sm ring-1 ring-orange-100/70 dark:border-orange-900/40 dark:bg-orange-950/20 dark:ring-orange-900/20 sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#f97316] shadow-sm dark:bg-zinc-900">
-                <FiShield size={18} />
-              </span>
-              <div>
-                <h2 className="text-sm font-black text-[#111827] dark:text-white">Finalize a configuração da cobrança</h2>
-                <p className="mt-1 text-sm font-semibold leading-relaxed text-[#7c2d12] dark:text-orange-300">
-                  Para liberar seu teste grátis e acessar o painel, cadastre sua forma de pagamento com segurança pelo Asaas.
-                </p>
-                <p className="mt-1 text-xs font-bold text-[#9a3412] dark:text-orange-400">
-                  Você não será cobrado agora. A primeira cobrança acontece somente após os 14 dias grátis.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => openBillingModal(plan, billingCycle)}
-              className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#f97316] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] sm:w-auto"
-            >
-              <FiCreditCard />
-              Cadastrar forma de pagamento
-            </button>
-          </div>
-        </section>
-      )}
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
 
-      {showCheckoutSuccessBanner && (
-        <section className="mt-6 rounded-lg border border-orange-100 bg-orange-50 p-4 text-sm font-bold leading-relaxed text-[#9a3412] shadow-sm dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-400">
-          <div className="flex items-start gap-3">
-            <FiClock className="mt-0.5 shrink-0" />
-            <div>
-              <p className="font-black text-[#111827] dark:text-white">Estamos confirmando sua forma de pagamento.</p>
-              <p className="mt-1 text-xs font-semibold text-[#9a3412] dark:text-orange-400/80">
-                Isso pode levar alguns segundos. A liberação do teste grátis acontece somente após confirmação do webhook do Asaas.
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
-        <section className={`rounded-2xl border p-5 shadow-sm transition-colors ${getHeroTone(subscriptionStatus, hasAsaasBillingSetup)}`}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <SubscriptionStatusBadge status={subscriptionStatus} />
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ring-inset ${
-                  hasAsaasBillingSetup
-                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/25'
-                    : 'bg-orange-50 text-[#f97316] ring-orange-600/10 dark:bg-orange-500/10 dark:text-[#f97316] dark:ring-orange-500/25'
-                }`}
-              >
-                {hasAsaasBillingSetup ? 'Forma de pagamento cadastrada' : 'Forma de pagamento pendente'}
-              </span>
-            </div>
-
-            <div>
-              <h2 className="text-lg font-black tracking-tight text-[#111827] dark:text-white">
-                {getStatusCopy(subscriptionStatus)}
-              </h2>
-              <p className="mt-1 text-xs font-semibold leading-relaxed text-[#4b5563] dark:text-zinc-300">
-                {hasAsaasBillingSetup
-                  ? 'Sua forma de pagamento está conectada ao Asaas. As liberações financeiras continuam dependendo dos webhooks de cobrança e pagamento.'
-                  : isPending
-                  ? 'Configure sua cobrança Asaas para ativar o teste grátis. Você não será cobrado agora durante os 14 dias grátis.'
-                  : isTrialNoAsaas
-                  ? 'Configure sua cobrança Asaas para manter sua loja ativa após o teste grátis. Você não será cobrado agora.'
-                  : 'Configure sua cobrança Asaas para manter sua loja ativa. Você não será cobrado durante o período de teste grátis.'}
-              </p>
-            </div>
-
-            {isTrial && trialEndsAt && (
-              <div className="inline-flex max-w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-xs font-black text-[#111827] ring-1 ring-orange-100 dark:bg-zinc-800/80 dark:text-white dark:ring-zinc-700">
-                <FiCalendar className="shrink-0 text-[#f97316]" />
-                <span className="truncate">
-                  {trialDaysLeft !== null ? `Termina em ${trialDaysLeft} dias` : 'Teste grátis ativo'} · Fim do teste: {formatBillingDate(trialEndsAt)}
+        {/* Banner de aviso crítico */}
+        {showBillingRequiredBanner && (
+          <motion.section
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-orange-200 bg-orange-50/90 dark:border-orange-950/40 dark:bg-orange-950/20 p-5 shadow-sm ring-1 ring-orange-100/70"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 text-[#f97316] shadow-sm">
+                  <FiShield size={20} />
                 </span>
+                <div>
+                  <h2 className="text-sm font-black text-gray-900 dark:text-white">Finalize a configuração da cobrança</h2>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-gray-700 dark:text-zinc-300">
+                    Para manter o seu teste grátis e garantir que sua loja continue ativa após os 14 dias, cadastre sua forma de pagamento.
+                  </p>
+                  <p className="mt-1 text-[11px] font-bold text-[#f97316]">
+                    Nenhuma cobrança é realizada hoje. A primeira fatura só ocorre ao término dos 14 dias grátis.
+                  </p>
+                </div>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={() => openBillingModal(plan, billingCycle)}
+                className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#f97316] px-5 text-xs font-black text-white shadow-lg shadow-orange-600/10 transition hover:bg-[#ea580c] sm:w-auto"
+              >
+                <FiCreditCard size={14} />
+                Cadastrar forma de pagamento
+              </button>
+            </div>
+          </motion.section>
+        )}
+
+        {/* Banner de Sincronização */}
+        {showCheckoutSuccessBanner && (
+          <motion.section
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-2xl border border-emerald-200 bg-emerald-50 dark:border-emerald-950/40 dark:bg-emerald-950/20 p-5 text-sm font-semibold text-emerald-800 dark:text-emerald-400 shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <FiCheck className="mt-0.5 shrink-0 text-emerald-600" size={18} />
+              <div>
+                <p className="font-black text-gray-900 dark:text-white">Forma de pagamento confirmada!</p>
+                <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
+                  Seu teste grátis será atualizado automaticamente após a confirmação. Se necessário, use o botão de verificar status no painel abaixo.
+                </p>
+              </div>
+            </div>
+          </motion.section>
+        )}
+
+        {/* UNIFIED HUD CONTROL CENTER */}
+        <section className="bg-gradient-to-br from-white via-[#fffdfb] to-orange-50/15 dark:from-zinc-900 dark:to-zinc-950 text-gray-900 dark:text-white rounded-[2rem] p-6 lg:p-8 shadow-sm dark:shadow-xl border border-orange-100 dark:border-zinc-800 relative overflow-hidden">
+          <div className="absolute -right-20 -top-20 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-orange-600/5 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative grid gap-8 lg:grid-cols-[1.4fr_1fr] items-stretch">
+            {/* Left Side: Status Info & Progress */}
+            <div className="flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 px-3 py-1 text-[11px] font-bold text-[#f97316] dark:text-orange-400 uppercase tracking-wider">
+                    <FiShield size={12} className="text-orange-500" />
+                    Status da Assinatura
+                  </span>
+                  <SubscriptionStatusBadge status={subscriptionStatus} />
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ring-1 ring-inset ${
+                    hasAsaasBillingSetup
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
+                      : 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20'
+                  }`}>
+                    <FiLock size={11} className={hasAsaasBillingSetup ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'} />
+                    {hasAsaasBillingSetup ? 'Forma de Pagamento Ativa' : 'Faturamento Não Configurado'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest block">Plano da sua loja</span>
+                  <h2 className="text-3xl font-black tracking-tight text-gray-900 dark:text-white mt-1">
+                    Plano {currentPlanPresentation.name}
+                  </h2>
+                  <p className="mt-1.5 text-xs text-gray-600 dark:text-zinc-300 font-medium max-w-lg leading-relaxed">
+                    {currentPlanPresentation.description}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 font-semibold mt-2">
+                    Ciclo {normalizeBillingCycle(billingCycle)} · Sem comissão por pedidos.
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress HUD de Trial */}
+              {isTrial && trialEndsAt ? (
+                <div className="bg-orange-50/25 dark:bg-zinc-900/60 border border-orange-100/40 dark:border-zinc-800/80 rounded-2xl p-4 lg:p-5 space-y-3">
+                  <div className="flex justify-between items-center text-xs lg:text-sm">
+                    <span className="text-gray-700 dark:text-zinc-300 font-bold flex items-center gap-2">
+                      <FiClock className="text-orange-500" size={15} />
+                      Teste grátis de 14 dias ativo
+                    </span>
+                    <span className="font-black text-[#f97316] dark:text-orange-400">
+                      {trialDaysLeft !== null ? `${trialDaysLeft} dias restantes` : 'Ativo'}
+                    </span>
+                  </div>
+                  {/* Progress Bar */}
+                  <div className="w-full bg-orange-100/30 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-orange-500 to-amber-400 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.max(5, (trialDaysLeft / 14) * 100))}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] text-zinc-500 font-semibold">
+                    <span>Dia 1 (Início)</span>
+                    <span>Término em {formatBillingDate(trialEndsAt)}</span>
+                  </div>
+                </div>
+              ) : isActive ? (
+                <div className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100/40 dark:border-emerald-900/30 rounded-2xl p-4 lg:p-5 flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <FiCheck size={16} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Acesso Totalmente Ativo</p>
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 font-semibold mt-1">Sua loja está com a cobrança regularizada. Boas vendas!</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-red-50/40 dark:bg-red-950/25 border border-red-100/40 dark:border-red-900/30 rounded-2xl p-4 lg:p-5 flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400">
+                    <FiAlertTriangle size={16} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-wider">Configuração Pendente</p>
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 font-semibold mt-1">Para liberar o painel da sua loja, ative os 14 dias grátis informando os dados de cobrança.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side: CTA Panel */}
+            <div className="bg-[#fffcf9] dark:bg-zinc-900/60 border border-orange-100 dark:border-zinc-800 rounded-3xl p-5 lg:p-6 flex flex-col justify-between space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FiLock className="text-orange-500" size={14} />
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">Pagamento seguro</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">Valor programado do plano</p>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-2xl font-black text-gray-900 dark:text-white">
+                      {formatCurrency(selectedPlanCycle === 'annual' ? (PLAN_OPTIONS.find(p => p.id === plan)?.priceAnnual || 599.90) : (PLAN_OPTIONS.find(p => p.id === plan)?.priceMonthly || 59.99))}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-zinc-400 font-semibold">
+                      /{selectedPlanCycle === 'annual' ? 'ano' : 'mês'}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 p-3 rounded-xl bg-orange-50/20 dark:bg-zinc-950/50 border border-orange-100/50 dark:border-zinc-800">
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 font-semibold leading-normal">
+                      {hasAsaasBillingSetup
+                        ? `Cobrança automática ativa. Próximo faturamento agendado em: ${formatBillingDate(currentPeriodEnd || trialEndsAt)}.`
+                        : isTrial && trialEndsAt
+                        ? `Cobrança programada: R$ 0,00 cobrados hoje. O primeiro faturamento real acontecerá apenas em ${formatBillingDate(trialEndsAt)}.`
+                        : 'Sua assinatura requer o cadastro dos dados de faturamento. Nenhum valor será debitado hoje.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handlePrimaryAction}
+                  className={`w-full inline-flex h-12 items-center justify-center gap-2 rounded-xl text-xs font-black transition-all duration-300 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
+                    primaryAction.tone === 'red'
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/10'
+                      : primaryAction.tone === 'neutral'
+                      ? 'bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-white border border-gray-200 dark:border-zinc-700 shadow-sm'
+                      : 'bg-[#f97316] hover:bg-[#ea580c] text-white shadow-lg shadow-orange-600/10'
+                  }`}
+                >
+                  {submitting ? (
+                    <FiLoader className={`animate-spin ${primaryAction.tone === 'neutral' ? 'text-gray-800 dark:text-white' : 'text-white'}`} size={14} />
+                  ) : primaryAction.needsBillingData ? (
+                    <>
+                      <FiCreditCard size={14} />
+                      <span>{primaryAction.label}</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiSettings size={14} />
+                      <span>{primaryAction.label}</span>
+                    </>
+                  )}
+                </button>
+
+                {checkoutUrlToOpen && !hasAsaasBillingSetup && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(checkoutUrlToOpen, '_blank', 'noopener,noreferrer')}
+                    className="w-full inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200/60 dark:border-zinc-800 bg-orange-50/30 dark:bg-zinc-950/20 text-[11px] font-black text-[#f97316] dark:text-orange-400 transition hover:bg-orange-50/70 dark:hover:bg-zinc-900"
+                  >
+                    <FiArrowRight size={12} />
+                    Abrir página de checkout novamente
+                  </button>
+                )}
+
+                {!hasAsaasBillingSetup && (
+                  <button
+                    type="button"
+                    onClick={handleRefreshBillingStatus}
+                    disabled={isCheckingBillingStatus}
+                    className="w-full inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-950/20 text-[11px] font-black text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-zinc-900 disabled:opacity-50"
+                  >
+                    {isCheckingBillingStatus ? <FiLoader className="animate-spin" size={12} /> : <FiClock size={12} />}
+                    {isCheckingBillingStatus ? 'Verificando...' : 'Verificar status da assinatura'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="flex flex-col gap-3 justify-center rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">{primaryAction.support}</p>
-          {checkoutUrlToOpen && !hasAsaasBillingSetup && (
-            <button
-              type="button"
-              onClick={() => window.open(checkoutUrlToOpen, '_blank', 'noopener,noreferrer')}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50/50 px-4 text-xs font-black text-[#f97316] transition hover:bg-orange-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-[#f97316]"
-            >
-              <FiArrowRight />
-              Abrir página de pagamento novamente
-            </button>
-          )}
-          {!hasAsaasBillingSetup && (
-            <button
-              type="button"
-              onClick={handleRefreshBillingStatus}
-              disabled={isCheckingBillingStatus}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-750 dark:text-zinc-300"
-            >
-              {isCheckingBillingStatus ? <FiLoader className="animate-spin" /> : <FiClock />}
-              {isCheckingBillingStatus ? 'Verificando...' : 'Verificar status da assinatura'}
-            </button>
-          )}
+        {/* METRICS ROW */}
+        <section className="hidden gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-4 lg:p-5 rounded-2xl shadow-sm transition-colors">
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">Plano</p>
+            <p className="mt-1.5 text-sm lg:text-base font-black text-gray-900 dark:text-white">{currentPlanPresentation.name}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{hasAsaasBillingSetup ? 'Configurado' : 'Pendente'}</p>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-4 lg:p-5 rounded-2xl shadow-sm transition-colors">
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">Ciclo</p>
+            <p className="mt-1.5 text-sm lg:text-base font-black text-gray-900 dark:text-white">{normalizeBillingCycle(billingCycle)}</p>
+            <p className="mt-1 text-xs text-[#f97316] font-bold">Taxa zero por vendas</p>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-4 lg:p-5 rounded-2xl shadow-sm transition-colors">
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">Fim do Teste</p>
+            <p className="mt-1.5 text-sm lg:text-base font-black text-gray-900 dark:text-white">{formatBillingDate(trialEndsAt)}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{isTrial ? `${trialDaysLeft} dias restantes` : 'Período grátis finalizado'}</p>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-4 lg:p-5 rounded-2xl shadow-sm transition-colors">
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">{nextBillingInfo.label}</p>
+            <p className="mt-1.5 text-sm lg:text-base font-black text-gray-900 dark:text-white">{nextBillingInfo.value}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 truncate">{nextBillingInfo.helper}</p>
+          </div>
         </section>
-      </div>
 
-      <section className="mt-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryItem label="Plano" value={formatPlanName(plan)} helper={hasAsaasBillingSetup ? 'Plano atual' : 'Plano selecionado'} />
-          <SummaryItem label="Ciclo" value={normalizeBillingCycle(billingCycle)} helper="Sem taxas por pedido" />
-          <SummaryItem label="Fim do teste grátis" value={formatBillingDate(trialEndsAt)} helper={isTrial ? 'Período de 14 dias grátis' : 'Data de referência'} />
-          <SummaryItem label={nextBillingInfo.label} value={nextBillingInfo.value} helper={nextBillingInfo.helper} />
-        </div>
-      </section>
-
-      {/* Bloco de Confiança e Segurança */}
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-colors">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400">
-            <FiShield size={16} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-black text-gray-900 dark:text-white">Pagamento seguro via Asaas</h4>
-            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
-              Assinaturas processadas de forma segura diretamente pela infraestrutura oficial do Asaas.
-            </p>
+        {/* TRUST CARDS */}
+        <section className="grid gap-3 md:grid-cols-3">
+          <div className="flex items-start gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm transition-colors sm:p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400">
+              <FiShield size={16} />
+            </span>
+            <div className="min-w-0">
+              <h4 className="text-xs font-black text-gray-900 dark:text-white">Pagamento Seguro Asaas</h4>
+              <p className="mt-1 hidden text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400 sm:block">
+                Sua assinatura é processada de forma segura diretamente na infraestrutura criptografada oficial do Asaas.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-colors">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-950/20 dark:text-[#f97316]">
-            <FiLock size={16} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-black text-gray-900 dark:text-white">O PratoBy não armazena seu cartão</h4>
-            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
-              Dados de cartão e pagamento ficam no ambiente seguro do Asaas, fora dos servidores do PratoBy.
-            </p>
+          <div className="flex items-start gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm transition-colors sm:p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
+              <FiLock size={16} />
+            </span>
+            <div className="min-w-0">
+              <h4 className="text-xs font-black text-gray-900 dark:text-white">Cartão Não Armazenado</h4>
+              <p className="mt-1 hidden text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400 sm:block">
+                Seus dados de cartão ficam totalmente no ambiente Asaas. O PratoBy não armazena dados confidenciais de faturamento.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-colors">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400">
-            <FiCalendar size={16} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-black text-gray-900 dark:text-white">Você não será cobrado agora</h4>
-            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
-              Os 14 dias de teste grátis são totalmente livres. Cadastre sua forma de pagamento sem sustos.
-            </p>
+          <div className="flex items-start gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm transition-colors sm:p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400">
+              <FiCalendar size={16} />
+            </span>
+            <div className="min-w-0">
+              <h4 className="text-xs font-black text-gray-900 dark:text-white">14 Dias Grátis Garantidos</h4>
+              <p className="mt-1 hidden text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400 sm:block">
+                O período de teste é livre. Cadastre seus dados e aproveite a plataforma. Nenhuma cobrança é gerada hoje.
+              </p>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-colors">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400">
-            <FiCheck size={16} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-black text-gray-900 dark:text-white">Cobrança programada</h4>
-            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
-              A primeira cobrança real só ocorrerá {(trialEndsAt || currentPeriodEnd) ? `em ${formatBillingDate(trialEndsAt || currentPeriodEnd)}` : 'quando a configuração de cobrança for concluída'} após os 14 dias grátis.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
-        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 dark:border-zinc-800 dark:bg-zinc-900 transition-colors">
+        {/* HISTORICO & TIMELINE COMPACTO */}
+        <section className="hidden bg-white dark:bg-zinc-900 rounded-[2rem] border border-gray-100 dark:border-zinc-800 p-5 shadow-sm transition-colors md:block">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-[#f97316] dark:bg-orange-950/20 dark:text-[#f97316]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
               <FiZap />
             </span>
             <div>
-              <h2 className="text-base font-black text-[#111827] dark:text-white">Linha do tempo</h2>
-              <p className="text-xs font-semibold text-[#6b7280] dark:text-zinc-400">Da criação da conta até a primeira cobrança.</p>
+              <h2 className="text-sm font-black text-gray-950 dark:text-white">Linha do tempo da assinatura</h2>
+              <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Acompanhe seu fluxo de faturamento até a primeira cobrança real.</p>
             </div>
           </div>
 
-          <div className="mt-5 grid gap-0 md:grid-cols-3 md:gap-4">
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
             {timelineSteps.map((step) => (
               <TimelineStep key={step.title} {...step} />
             ))}
           </div>
         </section>
-
-        <InfoList
-          title="O que acontece agora?"
-          items={whatNowItems}
-          tone={isPastDue || isBlocked || isCanceled ? 'red' : 'orange'}
-        />
-      </div>
+        {/* INICIA SECAO DE PLANOS */}
 
 
 
-      <section className="mt-10">
+      <section className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-xl font-black tracking-tight text-[#111827] dark:text-white">Planos do PratoBy</h2>
-            <p className="mt-1 text-sm font-semibold text-[#6b7280] dark:text-zinc-400">
-              O plano atual não altera o status financeiro. A liberação continua vindo do backend e dos webhooks Asaas.
+            <h2 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Planos do PratoBy</h2>
+            <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-zinc-400">
+              Escolha o plano perfeito para o momento do seu negócio. Mude quando quiser.
             </p>
           </div>
 
-          <AnimatedSegmentedControl
-            options={[
-              { label: 'Mensal', value: 'monthly' },
-              { label: 'Anual', value: 'annual' }
-            ]}
-            value={selectedPlanCycle}
-            onChange={(newCycle) => setSelectedPlanCycle(newCycle)}
-            size="sm"
-            variant="primary"
-          />
+          <div className="flex shrink-0">
+            <AnimatedSegmentedControl
+              options={[
+                { label: 'Mensal', value: 'monthly' },
+                { label: 'Anual', value: 'annual' }
+              ]}
+              value={selectedPlanCycle}
+              onChange={(newCycle) => setSelectedPlanCycle(newCycle)}
+              size="sm"
+              variant="primary"
+            />
+          </div>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           {PLAN_OPTIONS.map((option) => {
+            const presentation = getBillingPlanPresentation(option.id)
             const isCurrent = plan === option.id
             const price = selectedPlanCycle === 'annual' ? option.equivalentMonthly : option.priceMonthly
             const suffix = '/mês'
-            const currentBadge = isTrialNoAsaas
-              ? 'Plano selecionado'
-              : hasAsaasBillingSetup || isActive
-              ? 'Plano atual'
-              : 'Selecionado'
-            const buttonLabel = isCurrent
-              ? isTrialNoAsaas
-                ? 'Atual no teste'
-                : hasAsaasBillingSetup || isActive
-                ? 'Plano atual'
-                : 'Selecionado'
-              : 'Selecionar plano'
+            const buttonLabel = isCurrent ? 'Plano atual' : presentation.cta
 
             return (
               <article
                 key={option.id}
-                className={`relative flex min-w-0 flex-col rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl dark:bg-zinc-900 sm:p-7 ${
-                  option.popular
-                    ? 'border-orange-300 shadow-orange-100/70 ring-4 ring-orange-50 dark:border-orange-900/40 dark:shadow-none dark:ring-orange-900/20'
-                    : 'border-gray-100 hover:border-orange-100 hover:shadow-orange-100/50 dark:border-zinc-800 dark:hover:border-orange-900/40 dark:hover:shadow-none'
+                className={`relative flex min-w-0 flex-col rounded-[1.5rem] border bg-white dark:bg-zinc-900 p-5 pt-12 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg sm:p-6 sm:pt-12 ${
+                  option.id === 'professional'
+                    ? 'border-[#f97316] ring-4 ring-[#f97316]/5 dark:ring-[#f97316]/10 shadow-orange-100/30'
+                    : 'border-gray-100 dark:border-zinc-800 hover:border-orange-200 dark:hover:border-orange-900/40'
                 }`}
               >
-                {option.badge && (
-                  <div className="absolute right-5 top-5 rounded-full bg-[#111827] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-md dark:bg-zinc-100 dark:text-zinc-950">
-                    {option.badge}
+                {isCurrent && (
+                  <div className="absolute left-5 top-5 rounded-full bg-orange-50 dark:bg-orange-950/20 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100 dark:ring-orange-900/30">
+                    Atual
                   </div>
                 )}
-                {isCurrent && !option.popular && (
-                  <div className="absolute right-5 top-5 rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-950/30 dark:ring-orange-900/40">
-                    {currentBadge}
-                  </div>
-                )}
-                {isCurrent && option.popular && (
-                  <div className="absolute right-5 top-12 rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#f97316] ring-1 ring-orange-100 shadow-sm dark:bg-orange-950/30 dark:ring-orange-900/40">
-                    {currentBadge}
+                {presentation.badge && (
+                  <div className="absolute right-5 top-5 rounded-full bg-[#111827] text-white dark:bg-zinc-100 dark:text-zinc-950 px-3 py-1 text-[10px] font-black uppercase tracking-wide shadow-md">
+                    {presentation.badge}
                   </div>
                 )}
 
-                <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${
-                    option.popular
-                      ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/25'
-                      : 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
-                  }`}
-                >
-                  <option.icon size={22} />
-                </div>
-
-                <div className="mt-5">
-                  <h3 className="text-xl font-black tracking-tight text-[#111827] dark:text-white">
-                    {option.name}
+                <div className="mt-3">
+                  <h3 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">
+                    {presentation.name}
                   </h3>
-                  <p className="mt-2 min-h-[38px] text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
-                    {option.description}
+                  <p className="mt-1.5 text-xs font-semibold text-gray-500 dark:text-zinc-400 leading-normal">
+                    {presentation.bestFor}
                   </p>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-5">
                   <div className="flex items-end gap-1">
                     <AnimatePresence mode="popLayout">
                       <motion.span
                         key={price}
-                        initial={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
-                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                        exit={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="text-3xl font-black tracking-tight text-[#111827] dark:text-white inline-block"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="text-4xl font-black tracking-tight text-gray-900 dark:text-white inline-block"
                       >
                         {formatCurrency(price)}
                       </motion.span>
@@ -1123,15 +1230,15 @@ export default function BillingPage() {
                   <AnimatePresence>
                     {selectedPlanCycle === 'annual' && (
                       <motion.div
-                        initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                        initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="mt-1"
+                        className="mt-1.5"
                       >
-                        <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100/50 dark:bg-green-950/20 dark:text-green-400 dark:ring-green-900/40">
-                          2 meses grátis
+                        <span className="inline-flex rounded-full bg-green-50 dark:bg-green-950/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-green-700 dark:text-green-400 ring-1 ring-green-100/50">
+                          Economia de 2 meses grátis
                         </span>
-                        <p className="mt-1.5 text-[11px] font-semibold text-[#6b7280] dark:text-zinc-500">
+                        <p className="mt-1 text-[10px] font-semibold text-[#6b7280] dark:text-zinc-500">
                           R$ {option.priceAnnual} cobrados ao ano
                         </p>
                       </motion.div>
@@ -1139,11 +1246,11 @@ export default function BillingPage() {
                   </AnimatePresence>
                 </div>
 
-                <ul className="mt-6 flex-1 space-y-3 border-t border-gray-100 pt-5 dark:border-zinc-800">
+                <ul className="mt-6 flex-1 space-y-3 border-t border-gray-100 dark:border-zinc-800 pt-5">
                   {option.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3 text-xs font-bold leading-relaxed text-[#374151] dark:text-zinc-300">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50 text-[#f97316] dark:bg-orange-950/20">
-                        <FiCheck size={12} />
+                    <li key={feature} className="flex items-start gap-2.5 text-xs font-bold leading-relaxed text-gray-700 dark:text-zinc-300">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
+                        <FiCheck size={11} />
                       </span>
                       <span>{feature}</span>
                     </li>
@@ -1154,20 +1261,59 @@ export default function BillingPage() {
                   type="button"
                   disabled={submitting || (isCurrent && hasAsaasBillingSetup)}
                   onClick={() => openBillingModal(option.id, selectedPlanCycle)}
-                  className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[1.25rem] px-5 text-xs font-black transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 ${
+                  className={`mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-xs font-black transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
                     isCurrent
-                      ? 'border border-orange-200 bg-orange-50 text-[#f97316] dark:border-orange-900/40 dark:bg-orange-950/20'
-                      : option.popular
-                      ? 'border-2 border-orange-500/20 bg-white text-[#f97316] shadow-sm hover:border-[#f97316] hover:bg-orange-50/50 hover:text-[#ea580c] dark:bg-zinc-950 dark:hover:bg-orange-950/20'
-                      : 'border-2 border-orange-500/20 bg-white text-[#f97316] shadow-sm hover:border-[#f97316] hover:bg-orange-50/50 hover:text-[#ea580c] dark:bg-zinc-950 dark:hover:bg-orange-950/20'
+                      ? 'border border-orange-200 bg-orange-50 dark:bg-orange-950/20 text-[#f97316] dark:border-orange-900/40'
+                    : option.id === 'professional'
+                      ? 'bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md'
+                      : 'border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-700 dark:text-zinc-300 hover:border-[#f97316] dark:hover:border-[#f97316]'
                   }`}
                 >
-                  {submitting ? <FiLoader className="animate-spin" /> : <FiArrowRight />}
+                  {submitting ? <FiLoader className="animate-spin" size={12} /> : <FiArrowRight size={12} />}
                   {buttonLabel}
                 </button>
               </article>
             )
           })}
+        </div>
+
+
+        {/* HUMAN FAQ */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] border border-gray-100 dark:border-zinc-800 p-6 lg:p-8 shadow-sm transition-colors mt-8">
+          <div className="max-w-xl mb-6">
+            <h3 className="text-lg font-black text-gray-950 dark:text-white">Dúvidas Frequentes</h3>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 font-semibold">Respostas diretas e transparentes sobre nosso faturamento.</p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 text-xs font-semibold leading-relaxed">
+            <div className="space-y-1.5">
+              <h4 className="font-black text-gray-900 dark:text-white">Vou ser cobrado ao configurar faturamento hoje?</h4>
+              <p className="text-gray-500 dark:text-zinc-400">
+                <strong>Não.</strong> A configuração garante a integridade da conta, mas a cobrança real do seu plano só ocorrerá ao fim dos 14 dias de testes grátis.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <h4 className="font-black text-gray-900 dark:text-white">Qual plano escolher: Plus ou Premium?</h4>
+              <p className="text-gray-500 dark:text-zinc-400">
+                O plano <strong>Plus</strong> atende a maioria das lojas que querem vender mais com cupons, WhatsApp e relatórios. Escolha o <strong>Premium</strong> se sua operação tem filiais, marca própria ou precisa de suporte VIP.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <h4 className="font-black text-gray-900 dark:text-white">Como funciona o cancelamento?</h4>
+              <p className="text-gray-500 dark:text-zinc-400">
+                Você é livre para cancelar a qualquer momento diretamente pelo suporte, sem taxas de rescisão ou fidelidade.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <h4 className="font-black text-gray-900 dark:text-white">Quais formas de pagamento são aceitas?</h4>
+              <p className="text-gray-500 dark:text-zinc-400">
+                O pagamento é processado pelo Asaas em ambiente seguro. O PratoBy não armazena cartão.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1217,170 +1363,172 @@ export default function BillingPage() {
                   <FiShield size={18} />
                 </span>
                 <div>
-                  <h3 className="text-base font-black text-[#111827] dark:text-white">Dados de faturamento</h3>
+                  <h3 className="text-base font-black text-[#111827] dark:text-white">Checkout seguro Asaas</h3>
                   <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
-                    Essas informações são usadas pelo Asaas para criar sua assinatura com segurança. Você não será cobrado agora.
+                    Você não será cobrado agora. O checkout seguro do Asaas será aberto ao final.
                   </p>
                 </div>
               </div>
             </div>
 
             <form onSubmit={handleConfirmSubscription} className="min-h-0 flex-1 overflow-y-auto">
-              <div className="space-y-0 divide-y divide-gray-50 px-5 py-4 dark:divide-zinc-800">
-
-                {/* Name */}
-                <div className="pb-4">
-                  <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                    Nome / Razão social
-                  </label>
-                  <input
-                    type="text"
-                    value={billingName}
-                    onChange={(e) => setBillingName(e.target.value)}
-                    disabled={submitting}
-                    placeholder="Nome completo ou Razão Social"
-                    className={getBillingInputClass(billingErrors.name)}
-                  />
-                  {billingErrors.name && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.name}</p>}
-                </div>
-
-                {/* CPF/CNPJ */}
-                <div className="py-4">
-                  <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                    CPF ou CNPJ
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={billingCpfCnpj}
-                    onChange={(e) => setBillingCpfCnpj(e.target.value)}
-                    disabled={submitting}
-                    placeholder="Apenas números"
-                    className={getBillingInputClass(billingErrors.cpfCnpj)}
-                  />
-                  {billingErrors.cpfCnpj && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.cpfCnpj}</p>}
-                </div>
-
-                {/* Email */}
-                <div className="py-4">
-                  <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                    E-mail de cobrança
-                  </label>
-                  <input
-                    type="email"
-                    value={billingEmail}
-                    onChange={(e) => setBillingEmail(e.target.value)}
-                    disabled={submitting}
-                    placeholder="financeiro@sualoja.com"
-                    className={getBillingInputClass(billingErrors.email)}
-                  />
-                  {billingErrors.email && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.email}</p>}
-                </div>
-
-                {/* Phone */}
-                <div className="py-4">
-                  <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                    WhatsApp / Celular
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="tel"
-                    value={billingPhone}
-                    onChange={(e) => setBillingPhone(e.target.value)}
-                    disabled={submitting}
-                    placeholder="(00) 00000-0000"
-                    className={getBillingInputClass(billingErrors.phone)}
-                  />
-                  {billingErrors.phone && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.phone}</p>}
-                </div>
-
-                {/* Address section header */}
-                <div className="pt-4">
-                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-[#f97316]">
-                    Endereço de cobrança
-                  </p>
-
-                  {/* CEP */}
-                  <div className="mb-3">
-                    <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                      CEP
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={billingPostalCode}
-                      onChange={(e) => setBillingPostalCode(formatCep(e.target.value))}
-                      disabled={submitting}
-                      placeholder="00000-000"
-                      maxLength={9}
-                      className={getBillingInputClass(billingErrors.postalCode)}
-                    />
-                    {billingErrors.postalCode && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.postalCode}</p>}
-                  </div>
-
-                  {/* Street + Number */}
-                  <div className="mb-3 grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                        Endereço
-                      </label>
-                      <input
-                        type="text"
-                        value={billingAddress}
-                        onChange={(e) => setBillingAddress(e.target.value)}
-                        disabled={submitting}
-                        placeholder="Rua, Av., Travessa..."
-                        className={getBillingInputClass(billingErrors.address)}
-                      />
-                      {billingErrors.address && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.address}</p>}
-                    </div>
+              <div className="space-y-4 px-4 py-4 sm:px-5">
+                <section className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-[#f97316]">Responsável</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                        Número
+                        Nome / Razão social
                       </label>
                       <input
                         type="text"
-                        value={billingAddressNumber}
-                        onChange={(e) => setBillingAddressNumber(e.target.value)}
+                        value={billingName}
+                        onChange={(e) => setBillingName(e.target.value)}
                         disabled={submitting}
-                        placeholder="Ex: 100"
-                        className={getBillingInputClass(billingErrors.addressNumber)}
+                        placeholder="Nome completo ou Razão Social"
+                        className={getBillingInputClass(billingErrors.name)}
                       />
-                      {billingErrors.addressNumber && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.addressNumber}</p>}
+                      {billingErrors.name && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.name}</p>}
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                        CPF ou CNPJ
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={billingCpfCnpj}
+                        onChange={(e) => setBillingCpfCnpj(e.target.value)}
+                        disabled={submitting}
+                        placeholder="Apenas números"
+                        className={getBillingInputClass(billingErrors.cpfCnpj)}
+                      />
+                      {billingErrors.cpfCnpj && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.cpfCnpj}</p>}
                     </div>
                   </div>
+                </section>
 
-                  {/* Neighborhood */}
-                  <div className="mb-3">
-                    <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                      Bairro
-                    </label>
-                    <input
-                      type="text"
-                      value={billingProvince}
-                      onChange={(e) => setBillingProvince(e.target.value)}
-                      disabled={submitting}
-                      placeholder="Nome do bairro"
-                      className={getBillingInputClass(billingErrors.province)}
-                    />
-                    {billingErrors.province && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.province}</p>}
-                  </div>
+                <section className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-[#f97316]">Contato</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                        E-mail de cobrança
+                      </label>
+                      <input
+                        type="email"
+                        value={billingEmail}
+                        onChange={(e) => setBillingEmail(e.target.value)}
+                        disabled={submitting}
+                        placeholder="financeiro@sualoja.com"
+                        className={getBillingInputClass(billingErrors.email)}
+                      />
+                      {billingErrors.email && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.email}</p>}
+                    </div>
 
-                  {/* Complement (optional) */}
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                      Complemento <span className="font-semibold normal-case text-gray-300 dark:text-zinc-600">(opcional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={billingComplement}
-                      onChange={(e) => setBillingComplement(e.target.value)}
-                      disabled={submitting}
-                      placeholder="Apto, Bloco, Sala..."
-                      className={getBillingInputClass(false)}
-                    />
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                        WhatsApp / Celular
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="tel"
+                        value={billingPhone}
+                        onChange={(e) => setBillingPhone(formatPhoneBR(e.target.value))}
+                        disabled={submitting}
+                        placeholder="(00) 00000-0000"
+                        className={getBillingInputClass(billingErrors.phone)}
+                      />
+                      {billingErrors.phone && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.phone}</p>}
+                    </div>
                   </div>
-                </div>
+                </section>
+
+                <section className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-[#f97316]">Endereço de cobrança</p>
+                  <div className="grid gap-3">
+                    <div className="grid gap-3 sm:grid-cols-[0.9fr_2fr_0.8fr]">
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                          CEP
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={billingPostalCode}
+                          onChange={(e) => setBillingPostalCode(formatCep(e.target.value))}
+                          disabled={submitting}
+                          placeholder="00000-000"
+                          maxLength={9}
+                          className={getBillingInputClass(billingErrors.postalCode)}
+                        />
+                        {billingErrors.postalCode && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.postalCode}</p>}
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                          Endereço
+                        </label>
+                        <input
+                          type="text"
+                          value={billingAddress}
+                          onChange={(e) => setBillingAddress(e.target.value)}
+                          disabled={submitting}
+                          placeholder="Rua, Av., Travessa..."
+                          className={getBillingInputClass(billingErrors.address)}
+                        />
+                        {billingErrors.address && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.address}</p>}
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                          Número
+                        </label>
+                        <input
+                          type="text"
+                          value={billingAddressNumber}
+                          onChange={(e) => setBillingAddressNumber(e.target.value)}
+                          disabled={submitting}
+                          placeholder="Ex: 100"
+                          className={getBillingInputClass(billingErrors.addressNumber)}
+                        />
+                        {billingErrors.addressNumber && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.addressNumber}</p>}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                          Bairro
+                        </label>
+                        <input
+                          type="text"
+                          value={billingProvince}
+                          onChange={(e) => setBillingProvince(e.target.value)}
+                          disabled={submitting}
+                          placeholder="Nome do bairro"
+                          className={getBillingInputClass(billingErrors.province)}
+                        />
+                        {billingErrors.province && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.province}</p>}
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                          Complemento <span className="font-semibold normal-case text-gray-300 dark:text-zinc-600">(opcional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={billingComplement}
+                          onChange={(e) => setBillingComplement(e.target.value)}
+                          disabled={submitting}
+                          placeholder="Apto, Bloco, Sala..."
+                          className={getBillingInputClass(false)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
 
               {submitting && (
@@ -1404,7 +1552,7 @@ export default function BillingPage() {
                   className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {submitting ? <FiLoader className="animate-spin" /> : <FiCreditCard />}
-                  {submitting ? 'Processando...' : 'Ir para o checkout'}
+                  {submitting ? 'Processando...' : 'Ir para checkout seguro do Asaas'}
                 </button>
               </div>
             </form>

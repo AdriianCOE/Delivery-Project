@@ -8,10 +8,14 @@ const ASAAS_WEBHOOK_AUTH_TOKEN = defineSecret('ASAAS_WEBHOOK_AUTH_TOKEN')
 const REGION = 'southamerica-east1'
 const TRIAL_DAYS = 14
 const START_ASAAS_LOCK_TTL_MS = 5 * 60 * 1000
+const SUBSCRIPTION_MANAGEMENT_RATE_LIMIT_MS = 30 * 1000
 const BILLING_PROVIDER = 'asaas'
 const DEFAULT_ASAAS_BASE_URL = 'https://api-sandbox.asaas.com/v3'
 const BILLING_PENDING_PAYMENT_METHOD_STATUS = 'billing_pending_payment_method'
 const ASAAS_CHECKOUT_EXPIRATION_MINUTES = 1440
+const SUBSCRIPTION_CHANGE_REQUESTS_COLLECTION = 'subscriptionChangeRequests'
+const SUBSCRIPTION_CANCELLATION_REQUESTS_COLLECTION = 'subscriptionCancellationRequests'
+const SUBSCRIPTION_DUE_DATE_REQUESTS_COLLECTION = 'subscriptionDueDateRequests'
 
 const CHECKOUT_STATUSES = new Set([
   'checkout_pending',
@@ -40,25 +44,34 @@ const INTERNAL_STATUSES = new Set([
   'blocked',
 ])
 const ASAAS_BILLING_TYPES = new Set(['UNDEFINED', 'BOLETO', 'PIX'])
+const PRIVILEGED_ROLES = new Set(['admin', 'developer', 'dev', 'superadmin'])
+const PLAN_ORDER = {
+  essential: 1,
+  professional: 2,
+  premium: 3,
+}
+const SUBSCRIPTION_MANAGEMENT_ACTIVE_STATUSES = new Set(['trialing', 'active', 'past_due'])
+const SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES = new Set(['canceled', 'blocked'])
 
+// Backend source of truth for billing amounts. Frontend plan catalogs are display-only.
 const PLAN_CATALOG = {
   essential: {
     id: 'essential',
     name: 'Essencial',
-    monthlyCents: 5900,
-    annualCents: 59000,
+    monthlyCents: 5999,
+    annualCents: 59990,
   },
   professional: {
     id: 'professional',
     name: 'Profissional',
-    monthlyCents: 8900,
-    annualCents: 89000,
+    monthlyCents: 8999,
+    annualCents: 89990,
   },
   premium: {
     id: 'premium',
     name: 'Premium',
-    monthlyCents: 15900,
-    annualCents: 159000,
+    monthlyCents: 15999,
+    annualCents: 159990,
   },
 }
 
@@ -1150,6 +1163,428 @@ function setAuditLog(transaction, db, now, data) {
   })
 }
 
+function assertCallableMerchantAuth(request) {
+  const uid = request.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
+
+  const provider = String(request.auth?.token?.firebase?.sign_in_provider || '').toLowerCase()
+  if (provider === 'anonymous') {
+    throw new HttpsError('permission-denied', 'Usuarios anonimos nao podem gerenciar assinatura.')
+  }
+
+  return uid
+}
+
+function userHasPrivilegedRole(userData) {
+  const directRole = String(userData?.role || userData?.userRole || '').toLowerCase().trim()
+  if (PRIVILEGED_ROLES.has(directRole)) return true
+
+  const roles = Array.isArray(userData?.roles) ? userData.roles : []
+  return roles.some((role) => PRIVILEGED_ROLES.has(String(role || '').toLowerCase().trim()))
+}
+
+function getProfileStoreKeys(userData) {
+  return uniqueValues([
+    userData?.storeId,
+    userData?.storeSlug,
+    ...(Array.isArray(userData?.storeIds) ? userData.storeIds : []),
+    ...(Array.isArray(userData?.storeKeys) ? userData.storeKeys : []),
+  ])
+}
+
+function getStoreManagementKeys(storeData, storeId) {
+  return uniqueValues([
+    storeId,
+    storeData?.storeId,
+    storeData?.storeDocId,
+    storeData?.storeSlug,
+    storeData?.slug,
+    ...(Array.isArray(storeData?.storeKeys) ? storeData.storeKeys : []),
+  ])
+}
+
+function storeAllowsUserForManagement(storeData, userData, uid, storeId) {
+  const owner = storeData?.owner
+  const ownerUid = typeof owner === 'object' && owner !== null ? owner.uid || owner.id : owner
+  if (ownerUid === uid || storeData?.createdBy === uid || storeAllowsUser(storeData, uid)) {
+    return true
+  }
+
+  const profileKeys = getProfileStoreKeys(userData)
+  const storeKeys = getStoreManagementKeys(storeData, storeId)
+  return storeKeys.some((key) => profileKeys.includes(key))
+}
+
+async function resolveManagementContextInTransaction({ db, transaction, uid, requestedStoreId }) {
+  const storeId = normalizeStoreId(requestedStoreId)
+  if (!storeId) {
+    throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+  }
+
+  const userRef = db.collection('users').doc(uid)
+  const storeRef = db.collection('stores').doc(storeId)
+  const userDoc = await transaction.get(userRef)
+  const storeDoc = await transaction.get(storeRef)
+
+  if (!userDoc.exists) {
+    throw new HttpsError('failed-precondition', 'Usuario nao encontrado.')
+  }
+
+  if (!storeDoc.exists) {
+    throw new HttpsError('failed-precondition', 'Loja informada nao encontrada.')
+  }
+
+  const userData = { uid, ...userDoc.data() }
+  const storeData = { id: storeDoc.id, ...storeDoc.data() }
+  const isPrivileged = userHasPrivilegedRole(userData)
+
+  if (!isPrivileged && !storeAllowsUserForManagement(storeData, userData, uid, storeId)) {
+    throw new HttpsError('permission-denied', 'Loja nao pertence ao usuario.')
+  }
+
+  const existingReference = await findExistingBillingReference({
+    db,
+    transaction,
+    userData,
+    storeData,
+  })
+
+  return {
+    uid,
+    userRef,
+    userData,
+    storeRef,
+    storeData,
+    storeId,
+    isPrivileged,
+    existingReference,
+  }
+}
+
+async function resolveManagementContext({ db, uid, requestedStoreId }) {
+  return await db.runTransaction(async (transaction) => {
+    return await resolveManagementContextInTransaction({
+      db,
+      transaction,
+      uid,
+      requestedStoreId,
+    })
+  })
+}
+
+function getKnownPlan(value, fallback = 'professional') {
+  const plan = String(value || '').trim().toLowerCase()
+  return PLAN_CATALOG[plan] ? plan : fallback
+}
+
+function getKnownBillingCycle(value, fallback = 'monthly') {
+  const cycle = String(value || '').trim().toLowerCase()
+  return ['monthly', 'annual'].includes(cycle) ? cycle : fallback
+}
+
+function getContextPlan(context) {
+  return getKnownPlan(
+    context.existingReference?.canonicalSubscription?.plan ||
+      context.storeData?.plan ||
+      context.userData?.plan ||
+      'professional'
+  )
+}
+
+function getContextBillingCycle(context) {
+  return getKnownBillingCycle(
+    context.existingReference?.canonicalSubscription?.billingCycle ||
+      context.storeData?.billingCycle ||
+      context.userData?.billingCycle ||
+      'monthly'
+  )
+}
+
+function getContextSubscriptionStatus(context) {
+  return String(
+    context.existingReference?.canonicalSubscription?.status ||
+      context.storeData?.subscriptionStatus ||
+      context.userData?.subscriptionStatus ||
+      'checkout_pending'
+  ).trim()
+}
+
+function serializeDate(value) {
+  const date = toDate(value)
+  return date ? date.toISOString() : null
+}
+
+function getPreferredDate(...values) {
+  return values.find((value) => Boolean(value)) || null
+}
+
+function sanitizeTextField(value, maxLength = 500) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) return null
+  return text.slice(0, maxLength)
+}
+
+function sanitizeAuditPayload(payload) {
+  return JSON.parse(JSON.stringify(payload || {}))
+}
+
+function buildManagementRequestId({ action, uid, storeId, payload, dateKey }) {
+  const hash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify({ action, uid, storeId, payload, dateKey }))
+    .digest('hex')
+    .slice(0, 24)
+  return `${safeDocId(action)}_${safeDocId(storeId)}_${hash}`
+}
+
+async function enforceSubscriptionManagementRateLimit({
+  db,
+  admin,
+  uid,
+  storeId,
+  action,
+  limitMs = SUBSCRIPTION_MANAGEMENT_RATE_LIMIT_MS,
+}) {
+  const rateLimitRef = db
+    .collection('rateLimits')
+    .doc(`subscriptionManagement_${safeDocId(uid)}_${safeDocId(storeId)}_${safeDocId(action)}`)
+
+  await db.runTransaction(async (transaction) => {
+    const rateLimitDoc = await transaction.get(rateLimitRef)
+    const now = admin.firestore.Timestamp.now()
+    const updatedAt = rateLimitDoc.exists ? toDate(rateLimitDoc.data()?.updatedAt) : null
+
+    if (updatedAt && now.toMillis() - updatedAt.getTime() < limitMs) {
+      throw new HttpsError('resource-exhausted', 'Aguarde alguns segundos antes de tentar novamente.')
+    }
+
+    transaction.set(
+      rateLimitRef,
+      {
+        uid,
+        storeId,
+        action,
+        operation: 'subscription_management',
+        updatedAt: now,
+        expiresAt: admin.firestore.Timestamp.fromMillis(now.toMillis() + limitMs),
+      },
+      { merge: true }
+    )
+  })
+}
+
+async function createManagementRequestInTransaction({
+  db,
+  transaction,
+  now,
+  collectionName,
+  action,
+  type,
+  uid,
+  storeId,
+  payload,
+  auditAction,
+}) {
+  const safePayload = sanitizeAuditPayload(payload)
+  const dateKey = new Date(now.toMillis()).toISOString().slice(0, 10)
+  const requestId = buildManagementRequestId({
+    action,
+    uid,
+    storeId,
+    payload: safePayload,
+    dateKey,
+  })
+  const requestRef = db.collection(collectionName).doc(requestId)
+  const requestDoc = await transaction.get(requestRef)
+
+  if (requestDoc.exists) {
+    return {
+      requestId,
+      alreadyExists: true,
+      status: requestDoc.data()?.status || 'pending',
+    }
+  }
+
+  transaction.set(requestRef, {
+    storeId,
+    userId: uid,
+    actorUid: uid,
+    type,
+    status: 'pending',
+    payload: safePayload,
+    source: 'merchant_panel',
+    provider: BILLING_PROVIDER,
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  setAuditLog(transaction, db, now, {
+    action: auditAction,
+    entity: collectionName,
+    entityId: requestId,
+    actorUid: uid,
+    uid,
+    storeId,
+    provider: BILLING_PROVIDER,
+    payload: safePayload,
+  })
+
+  return {
+    requestId,
+    alreadyExists: false,
+    status: 'pending',
+  }
+}
+
+function getSubscriptionManagementActions(context) {
+  const status = getContextSubscriptionStatus(context)
+  const hasAsaasSubscription = Boolean(context.existingReference?.providerSubscriptionId)
+  const activeEnough = SUBSCRIPTION_MANAGEMENT_ACTIVE_STATUSES.has(status)
+  const terminal = SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(status)
+
+  return {
+    canChangePlan: hasAsaasSubscription && !terminal,
+    canCancel: hasAsaasSubscription && activeEnough,
+    canRequestDueDateChange: hasAsaasSubscription && activeEnough,
+    canUpdatePaymentMethod: true,
+    canSyncStatus: hasAsaasSubscription,
+  }
+}
+
+function buildSubscriptionManagementResponse(context) {
+  const plan = getContextPlan(context)
+  const billingCycle = getContextBillingCycle(context)
+  const status = getContextSubscriptionStatus(context)
+  const subscriptionData = context.existingReference?.canonicalSubscription || {}
+  const trialEndsAt = getPreferredDate(
+    subscriptionData.trialEndsAt,
+    context.storeData?.trialEndsAt,
+    context.userData?.trialEndsAt
+  )
+  const currentPeriodEnd = getPreferredDate(
+    subscriptionData.currentPeriodEnd,
+    context.storeData?.currentPeriodEnd,
+    context.userData?.currentPeriodEnd
+  )
+  const nextChargeAt = status === 'trialing' ? trialEndsAt : currentPeriodEnd
+  const amountCents = Number.isFinite(Number(subscriptionData.amountCents))
+    ? Number(subscriptionData.amountCents)
+    : getPlanAmountCents(plan, billingCycle)
+  const hasAsaasSubscription = Boolean(context.existingReference?.providerSubscriptionId)
+  const billingMethodConfigured = Boolean(
+    context.storeData?.billingMethodConfigured ||
+      context.userData?.billingMethodConfigured ||
+      hasAsaasSubscription
+  )
+
+  return {
+    storeId: context.storeId,
+    plan: {
+      id: plan,
+      name: PLAN_CATALOG[plan].name,
+      billingCycle,
+      amountCents,
+    },
+    billingCycle,
+    subscriptionStatus: status,
+    trialEndsAt: serializeDate(trialEndsAt),
+    currentPeriodEnd: serializeDate(currentPeriodEnd),
+    nextChargeAt: serializeDate(nextChargeAt),
+    hasAsaasSubscription,
+    paymentMethod: {
+      provider: BILLING_PROVIDER,
+      configured: billingMethodConfigured,
+      status: billingMethodConfigured ? 'configured' : 'pending',
+      label: billingMethodConfigured ? 'Configurada com seguranca via Asaas' : 'Pendente de configuracao',
+    },
+    asaas: {
+      hasCustomer: Boolean(context.existingReference?.asaasCustomerId),
+      hasSubscription: hasAsaasSubscription,
+    },
+    latestCharges: [],
+    latestChargesAvailable: false,
+    actions: getSubscriptionManagementActions(context),
+  }
+}
+
+function getProviderValueCents(value) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return null
+  return Math.round(amount * 100)
+}
+
+function mapAsaasSubscriptionStatusToInternal(providerStatus, context) {
+  const normalizedStatus = String(providerStatus || '').toUpperCase().trim()
+  const currentStatus = getContextSubscriptionStatus(context)
+  const trialEndsAt = toDate(
+    getPreferredDate(
+      context.existingReference?.canonicalSubscription?.trialEndsAt,
+      context.storeData?.trialEndsAt,
+      context.userData?.trialEndsAt
+    )
+  )
+  const trialStillActive = trialEndsAt && trialEndsAt.getTime() > Date.now()
+
+  if (normalizedStatus === 'ACTIVE') {
+    if (currentStatus === 'trialing' && trialStillActive) return 'trialing'
+    if (CHECKOUT_STATUSES.has(currentStatus) && trialStillActive) return 'trialing'
+    if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(currentStatus)) return currentStatus
+    return 'active'
+  }
+
+  if (['OVERDUE', 'PAST_DUE'].includes(normalizedStatus)) return 'past_due'
+  if (['INACTIVE', 'CANCELLED', 'CANCELED', 'DELETED', 'EXPIRED'].includes(normalizedStatus)) {
+    return 'canceled'
+  }
+
+  return currentStatus
+}
+
+function buildAsaasSyncUpdate({ providerSubscription, context, now, admin }) {
+  const providerStatus = String(providerSubscription?.status || '').trim() || null
+  const nextStatus = mapAsaasSubscriptionStatusToInternal(providerStatus, context)
+  const nextDueDate = parseProviderDate(providerSubscription?.nextDueDate)
+  const currentPeriodEnd = nextDueDate
+    ? admin.firestore.Timestamp.fromDate(nextDueDate)
+    : getPreferredDate(
+        context.existingReference?.canonicalSubscription?.currentPeriodEnd,
+        context.storeData?.currentPeriodEnd,
+        context.userData?.currentPeriodEnd
+      )
+  const amountCents = getProviderValueCents(providerSubscription?.value)
+
+  const update = {
+    status: nextStatus,
+    providerStatus,
+    lastAsaasSyncAt: now,
+    updatedAt: now,
+  }
+
+  if (currentPeriodEnd) update.currentPeriodEnd = currentPeriodEnd
+  if (providerSubscription?.billingType) update.billingType = providerSubscription.billingType
+  if (amountCents !== null) update.amountCents = amountCents
+
+  return update
+}
+
+function normalizeCancelMode(value) {
+  const mode = String(value || 'end_of_cycle').trim().toLowerCase()
+  if (!['end_of_cycle', 'immediate'].includes(mode)) {
+    throw new HttpsError('invalid-argument', 'Modo de cancelamento invalido.')
+  }
+  return mode
+}
+
+function normalizeEffectiveMode(value, currentPlan, targetPlan) {
+  const requested = String(value || '').trim().toLowerCase()
+  if (requested && !['immediate', 'next_cycle'].includes(requested)) {
+    throw new HttpsError('invalid-argument', 'Modo de alteracao de plano invalido.')
+  }
+
+  if (PLAN_ORDER[targetPlan] < PLAN_ORDER[currentPlan]) return 'next_cycle'
+  return requested || 'immediate'
+}
+
 async function claimStoreSlug(transaction, db, uid, storeId, storeName, now) {
   const baseSlug = buildSlug(storeName)
   let finalSlug = null
@@ -1994,6 +2429,557 @@ function createAsaasFunctions({ db, admin, logger }) {
     }
   )
 
+  const getSubscriptionManagementData = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const context = await resolveManagementContext({
+        db,
+        uid,
+        requestedStoreId: request.data?.storeId,
+      })
+
+      return {
+        ok: true,
+        ...buildSubscriptionManagementResponse(context),
+      }
+    }
+  )
+
+  const changeSubscriptionPlan = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const data = request.data || {}
+      const requestedStoreId = normalizeStoreId(data.storeId)
+      if (!requestedStoreId) throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+
+      const targetPlan = normalizePlan(data.targetPlan || data.plan || data.planId)
+      const requestedBillingCycle = data.billingCycle ? normalizeBillingCycle(data.billingCycle) : null
+
+      await enforceSubscriptionManagementRateLimit({
+        db,
+        admin,
+        uid,
+        storeId: requestedStoreId,
+        action: 'changeSubscriptionPlan',
+      })
+
+      return await db.runTransaction(async (transaction) => {
+        const context = await resolveManagementContextInTransaction({
+          db,
+          transaction,
+          uid,
+          requestedStoreId,
+        })
+        const currentPlan = getContextPlan(context)
+        const currentBillingCycle = getContextBillingCycle(context)
+        const billingCycle = requestedBillingCycle || currentBillingCycle
+        const effectiveMode = normalizeEffectiveMode(data.effectiveMode, currentPlan, targetPlan)
+        const currentStatus = getContextSubscriptionStatus(context)
+        const amountCents = getPlanAmountCents(targetPlan, billingCycle)
+        const currentAmountCents = getPlanAmountCents(currentPlan, currentBillingCycle)
+        const now = admin.firestore.Timestamp.now()
+
+        if (targetPlan === currentPlan && billingCycle === currentBillingCycle) {
+          throw new HttpsError('failed-precondition', 'Este ja e o plano atual.')
+        }
+
+        if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(currentStatus)) {
+          throw new HttpsError('failed-precondition', 'Assinatura em estado invalido para alterar plano.')
+        }
+
+        if (!context.existingReference?.providerSubscriptionId) {
+          setAuditLog(transaction, db, now, {
+            action: 'change_plan_requested',
+            entity: 'subscription',
+            entityId: context.existingReference?.localSubscriptionId || null,
+            actorUid: uid,
+            uid,
+            storeId: context.storeId,
+            provider: BILLING_PROVIDER,
+            status: 'requires_checkout',
+            payload: {
+              currentPlan,
+              targetPlan,
+              billingCycle,
+              amountCents,
+            },
+          })
+
+          return {
+            ok: true,
+            status: 'requires_checkout',
+            checkoutRequired: true,
+            message: 'Configure a cobranca da loja antes de solicitar alteracao de plano.',
+            action: 'startAsaasSubscription',
+          }
+        }
+
+        const requestResult = await createManagementRequestInTransaction({
+          db,
+          transaction,
+          now,
+          collectionName: SUBSCRIPTION_CHANGE_REQUESTS_COLLECTION,
+          action: 'change_plan',
+          type: 'plan_change',
+          uid,
+          storeId: context.storeId,
+          payload: {
+            currentPlan,
+            targetPlan,
+            currentBillingCycle,
+            billingCycle,
+            effectiveMode,
+            currentAmountCents,
+            amountCents,
+            direction:
+              PLAN_ORDER[targetPlan] > PLAN_ORDER[currentPlan]
+                ? 'upgrade'
+                : PLAN_ORDER[targetPlan] < PLAN_ORDER[currentPlan]
+                ? 'downgrade'
+                : 'cycle_change',
+            providerSubscriptionId: context.existingReference.providerSubscriptionId,
+          },
+          auditAction: 'change_plan_requested',
+        })
+
+        return {
+          ok: true,
+          status: 'requested',
+          requestId: requestResult.requestId,
+          alreadyExists: requestResult.alreadyExists,
+          effectiveMode,
+          message: 'Solicitacao enviada. O suporte confirmara a alteracao com seguranca.',
+        }
+      })
+    }
+  )
+
+  const cancelSubscription = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const data = request.data || {}
+      const requestedStoreId = normalizeStoreId(data.storeId)
+      if (!requestedStoreId) throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+
+      const cancelMode = normalizeCancelMode(data.cancelMode)
+      const confirmationText = String(data.confirmationText || '').trim().toLowerCase()
+      if (cancelMode === 'immediate' && !['cancelar agora', 'cancelar minha assinatura'].includes(confirmationText)) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Confirmacao explicita obrigatoria para cancelamento imediato.'
+        )
+      }
+
+      await enforceSubscriptionManagementRateLimit({
+        db,
+        admin,
+        uid,
+        storeId: requestedStoreId,
+        action: 'cancelSubscription',
+      })
+
+      return await db.runTransaction(async (transaction) => {
+        const context = await resolveManagementContextInTransaction({
+          db,
+          transaction,
+          uid,
+          requestedStoreId,
+        })
+        const currentStatus = getContextSubscriptionStatus(context)
+        const now = admin.firestore.Timestamp.now()
+        const providerSubscriptionId = context.existingReference?.providerSubscriptionId || null
+
+        if (!providerSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para esta loja.')
+        }
+
+        if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(currentStatus)) {
+          throw new HttpsError('failed-precondition', 'Assinatura ja esta bloqueada ou cancelada.')
+        }
+
+        const requestResult = await createManagementRequestInTransaction({
+          db,
+          transaction,
+          now,
+          collectionName: SUBSCRIPTION_CANCELLATION_REQUESTS_COLLECTION,
+          action: 'cancel_subscription',
+          type: 'cancellation',
+          uid,
+          storeId: context.storeId,
+          payload: {
+            cancelMode,
+            reason: sanitizeTextField(data.reason, 800),
+            currentStatus,
+            currentPeriodEnd: serializeDate(
+              getPreferredDate(
+                context.existingReference?.canonicalSubscription?.currentPeriodEnd,
+                context.storeData?.currentPeriodEnd,
+                context.userData?.currentPeriodEnd
+              )
+            ),
+            providerSubscriptionId,
+          },
+          auditAction: 'cancellation_requested',
+        })
+
+        const cancellationStatus = cancelMode === 'end_of_cycle' ? 'cancel_scheduled' : 'immediate_requested'
+        const mirrorPayload = {
+          subscriptionCancellationStatus: cancellationStatus,
+          cancelScheduledAtPeriodEnd: cancelMode === 'end_of_cycle',
+          subscriptionCancelRequestedAt: now,
+          subscriptionCancelRequestedBy: uid,
+          updatedAt: now,
+        }
+
+        transaction.set(context.storeRef, mirrorPayload, { merge: true })
+        transaction.set(context.userRef, mirrorPayload, { merge: true })
+
+        if (context.existingReference?.localSubscriptionId) {
+          transaction.set(
+            db.collection('subscriptions').doc(context.existingReference.localSubscriptionId),
+            {
+              cancellationStatus,
+              cancelMode,
+              cancelRequestedAt: now,
+              cancelRequestedBy: uid,
+              updatedAt: now,
+            },
+            { merge: true }
+          )
+        }
+
+        return {
+          ok: true,
+          status: 'requested',
+          cancellationStatus,
+          requestId: requestResult.requestId,
+          alreadyExists: requestResult.alreadyExists,
+          message: 'Solicitacao de cancelamento enviada. O suporte confirmara o processamento.',
+        }
+      })
+    }
+  )
+
+  const requestSubscriptionDueDateChange = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const data = request.data || {}
+      const requestedStoreId = normalizeStoreId(data.storeId)
+      if (!requestedStoreId) throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+
+      const desiredDueDay = Number(data.desiredDueDay || data.dueDateDay)
+      if (!Number.isInteger(desiredDueDay) || desiredDueDay < 1 || desiredDueDay > 28) {
+        throw new HttpsError('invalid-argument', 'Dia de vencimento deve ser um numero de 1 a 28.')
+      }
+
+      await enforceSubscriptionManagementRateLimit({
+        db,
+        admin,
+        uid,
+        storeId: requestedStoreId,
+        action: 'requestSubscriptionDueDateChange',
+      })
+
+      return await db.runTransaction(async (transaction) => {
+        const context = await resolveManagementContextInTransaction({
+          db,
+          transaction,
+          uid,
+          requestedStoreId,
+        })
+        const now = admin.firestore.Timestamp.now()
+        const providerSubscriptionId = context.existingReference?.providerSubscriptionId || null
+
+        if (!providerSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para esta loja.')
+        }
+
+        const requestResult = await createManagementRequestInTransaction({
+          db,
+          transaction,
+          now,
+          collectionName: SUBSCRIPTION_DUE_DATE_REQUESTS_COLLECTION,
+          action: 'due_date_change',
+          type: 'due_date_change',
+          uid,
+          storeId: context.storeId,
+          payload: {
+            desiredDueDay,
+            reason: sanitizeTextField(data.reason, 800),
+            providerSubscriptionId,
+          },
+          auditAction: 'due_date_change_requested',
+        })
+
+        return {
+          ok: true,
+          status: 'requested',
+          requestId: requestResult.requestId,
+          alreadyExists: requestResult.alreadyExists,
+          message: 'Solicitacao enviada. O suporte confirmara a alteracao.',
+        }
+      })
+    }
+  )
+
+  const syncAsaasSubscriptionStatus = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 60,
+      memory: '256MiB',
+      secrets: [ASAAS_API_KEY],
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const requestedStoreId = normalizeStoreId(request.data?.storeId)
+      if (!requestedStoreId) throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+
+      const initialContext = await resolveManagementContext({
+        db,
+        uid,
+        requestedStoreId,
+      })
+      const providerSubscriptionId = initialContext.existingReference?.providerSubscriptionId
+      if (!providerSubscriptionId) {
+        throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para sincronizar.')
+      }
+
+      await enforceSubscriptionManagementRateLimit({
+        db,
+        admin,
+        uid,
+        storeId: requestedStoreId,
+        action: 'syncAsaasSubscriptionStatus',
+        limitMs: 15 * 1000,
+      })
+
+      let providerSubscription = null
+      try {
+        providerSubscription = await asaasRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}`)
+      } catch (error) {
+        logger.error('Failed to sync Asaas subscription status', {
+          uid,
+          storeId: requestedStoreId,
+          providerSubscriptionId,
+          error: error.message || String(error),
+        })
+        throw new HttpsError(
+          'internal',
+          'Nao foi possivel consultar a assinatura no Asaas. Tente novamente em instantes.'
+        )
+      }
+
+      return await db.runTransaction(async (transaction) => {
+        const context = await resolveManagementContextInTransaction({
+          db,
+          transaction,
+          uid,
+          requestedStoreId,
+        })
+        const currentProviderSubscriptionId = context.existingReference?.providerSubscriptionId
+        if (currentProviderSubscriptionId !== providerSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Assinatura da loja mudou durante a sincronizacao.')
+        }
+
+        const now = admin.firestore.Timestamp.now()
+        const subscriptionUpdate = buildAsaasSyncUpdate({
+          providerSubscription,
+          context,
+          now,
+          admin,
+        })
+        const localSubscriptionId =
+          context.existingReference?.localSubscriptionId || buildLocalSubscriptionId(providerSubscriptionId)
+        const currentPeriodEnd = subscriptionUpdate.currentPeriodEnd || getPreferredDate(
+          context.existingReference?.canonicalSubscription?.currentPeriodEnd,
+          context.storeData?.currentPeriodEnd,
+          context.userData?.currentPeriodEnd
+        )
+
+        transaction.set(
+          db.collection('subscriptions').doc(localSubscriptionId),
+          {
+            id: localSubscriptionId,
+            uid: context.userData?.uid || uid,
+            storeId: context.storeId,
+            provider: BILLING_PROVIDER,
+            providerCustomerId: context.existingReference?.asaasCustomerId || null,
+            providerSubscriptionId,
+            billingCycle: getContextBillingCycle(context),
+            plan: getContextPlan(context),
+            ...subscriptionUpdate,
+          },
+          { merge: true }
+        )
+
+        const mirrorPayload = {
+          subscriptionStatus: subscriptionUpdate.status,
+          billingProvider: BILLING_PROVIDER,
+          billingMethodConfigured: true,
+          asaasSubscriptionStatus: subscriptionUpdate.providerStatus,
+          asaasSubscriptionId: providerSubscriptionId,
+          subscriptionId: localSubscriptionId,
+          currentPeriodEnd: currentPeriodEnd || null,
+          lastAsaasSyncAt: now,
+          updatedAt: now,
+        }
+
+        transaction.set(context.userRef, mirrorPayload, { merge: true })
+        transaction.set(
+          context.storeRef,
+          {
+            ...mirrorPayload,
+            isBillingBlocked: ['blocked', 'canceled'].includes(subscriptionUpdate.status),
+          },
+          { merge: true }
+        )
+
+        setAuditLog(transaction, db, now, {
+          action: 'billing_status_synced',
+          entity: 'subscription',
+          entityId: localSubscriptionId,
+          actorUid: uid,
+          uid,
+          storeId: context.storeId,
+          provider: BILLING_PROVIDER,
+          asaasSubscriptionId: providerSubscriptionId,
+          before: { subscriptionStatus: getContextSubscriptionStatus(context) },
+          after: {
+            subscriptionStatus: subscriptionUpdate.status,
+            providerStatus: subscriptionUpdate.providerStatus,
+          },
+        })
+
+        return {
+          ok: true,
+          status: subscriptionUpdate.status,
+          providerStatus: subscriptionUpdate.providerStatus,
+          currentPeriodEnd: serializeDate(currentPeriodEnd),
+          message: 'Status sincronizado com o Asaas.',
+        }
+      })
+    }
+  )
+
+  const createPaymentMethodUpdateCheckout = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const data = request.data || {}
+      const requestedStoreId = normalizeStoreId(data.storeId)
+      if (!requestedStoreId) throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+
+      if (data.plan || data.planId) normalizePlan(data.plan || data.planId)
+      if (data.billingCycle) normalizeBillingCycle(data.billingCycle)
+
+      await enforceSubscriptionManagementRateLimit({
+        db,
+        admin,
+        uid,
+        storeId: requestedStoreId,
+        action: 'createPaymentMethodUpdateCheckout',
+      })
+
+      return await db.runTransaction(async (transaction) => {
+        const context = await resolveManagementContextInTransaction({
+          db,
+          transaction,
+          uid,
+          requestedStoreId,
+        })
+        const now = admin.firestore.Timestamp.now()
+        const reusableCheckout = await findReusableCheckoutReference({
+          db,
+          transaction,
+          userData: context.userData,
+          storeData: context.storeData,
+          now,
+        })
+
+        if (reusableCheckout.exists && reusableCheckout.checkoutUrl) {
+          setAuditLog(transaction, db, now, {
+            action: 'payment_method_checkout_created',
+            entity: 'billing_checkout',
+            entityId: reusableCheckout.checkoutId,
+            actorUid: uid,
+            uid,
+            storeId: context.storeId,
+            provider: BILLING_PROVIDER,
+            reusedCheckout: true,
+          })
+
+          return {
+            ok: true,
+            status: 'checkout_reused',
+            checkoutUrl: reusableCheckout.checkoutUrl,
+            paymentUrl: reusableCheckout.checkoutUrl,
+            checkoutId: reusableCheckout.checkoutId,
+            message: 'Checkout seguro Asaas reutilizado.',
+          }
+        }
+
+        if (!context.existingReference?.providerSubscriptionId) {
+          return {
+            ok: true,
+            status: 'requires_billing_data',
+            checkoutRequired: true,
+            message: 'Para configurar a cobranca, use o checkout atual da pagina de faturamento.',
+            action: 'startAsaasSubscription',
+          }
+        }
+
+        const requestResult = await createManagementRequestInTransaction({
+          db,
+          transaction,
+          now,
+          collectionName: SUBSCRIPTION_CHANGE_REQUESTS_COLLECTION,
+          action: 'payment_method_update',
+          type: 'payment_method_update',
+          uid,
+          storeId: context.storeId,
+          payload: {
+            providerSubscriptionId: context.existingReference.providerSubscriptionId,
+            currentStatus: getContextSubscriptionStatus(context),
+            reason: 'payment_method_update_checkout_not_supported_yet',
+          },
+          auditAction: 'payment_method_update_requested',
+        })
+
+        return {
+          ok: true,
+          status: 'manual_request_required',
+          requestId: requestResult.requestId,
+          alreadyExists: requestResult.alreadyExists,
+          message: 'Solicitacao enviada. O suporte enviara o caminho seguro para atualizar o pagamento.',
+        }
+      })
+    }
+  )
+
   const asaasWebhook = onRequest(
     {
       region: REGION,
@@ -2302,6 +3288,12 @@ function createAsaasFunctions({ db, admin, logger }) {
 
   return {
     startAsaasSubscription,
+    getSubscriptionManagementData,
+    changeSubscriptionPlan,
+    cancelSubscription,
+    requestSubscriptionDueDateChange,
+    syncAsaasSubscriptionStatus,
+    createPaymentMethodUpdateCheckout,
     asaasWebhook,
   }
 }

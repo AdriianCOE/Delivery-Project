@@ -89,6 +89,7 @@ function orderStoreKeys(data) {
     function canManageStoreId(storeId) {
       return isAdmin() || (
         storeId is string &&
+        storeId != '' &&
         (
           storeId in myStoreKeys() ||
           (exists(storePath(storeId)) && isStoreOwnerData(get(storePath(storeId)).data))
@@ -135,6 +136,17 @@ function ownsOrderData(data) {
     || canManageStoreId(data.get('storeSlug', ''))
     || canManageStoreId(data.get('storeDocId', ''))
     || orderStoreKeys(data).hasAny(myStoreKeys());
+}
+
+function ownsStoreScopedData(data) {
+  return canManageStoreId(data.get('storeId', ''))
+    || canManageStoreId(data.get('storeSlug', ''))
+    || canManageStoreId(data.get('storeDocId', ''))
+    || (
+      data.keys().hasAny(['storeKeys'])
+      && data.storeKeys is list
+      && data.storeKeys.hasAny(myStoreKeys())
+    );
 }
 
 function validPublicOrderCreate(orderId) {
@@ -426,7 +438,7 @@ match /orders/{orderId} {
 }
 
 match /auditLogs/{logId} {
-  allow get, list: if isAdmin() || ownsOrderData(resource.data);
+  allow get, list: if isAdmin() || ownsStoreScopedData(resource.data);
   allow create, update, delete: if false;
 }
 
@@ -465,6 +477,21 @@ match /auditLogs/{logId} {
 
     match /billingRecovery/{docId} {
       allow read, write: if false;
+    }
+
+    match /subscriptionChangeRequests/{docId} {
+      allow get, list: if isAdmin() || ownsStoreScopedData(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /subscriptionCancellationRequests/{docId} {
+      allow get, list: if isAdmin() || ownsStoreScopedData(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /subscriptionDueDateRequests/{docId} {
+      allow get, list: if isAdmin() || ownsStoreScopedData(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /providerEvents/{docId} {
