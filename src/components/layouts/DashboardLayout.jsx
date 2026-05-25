@@ -546,14 +546,21 @@ function ProfileModal({ open, onClose, onLogout, user, userData }) {
         transition={{ type: 'spring', damping: 25, stiffness: 350 }}
         className="relative flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-zinc-800"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div>
-            <p className="text-lg font-black text-[#111827] dark:text-white">Perfil da Conta</p>
-            <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400">Gerencie sua conta e segurança</p>
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center gap-4 min-w-0 pr-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/30">
+              <FiUser size={22} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-black tracking-tight text-[#111827] dark:text-white">Perfil da conta</h2>
+              <p className="mt-1 truncate text-sm font-semibold text-[#6b7280] dark:text-zinc-400">
+                Gerencie seus dados, segurança e preferências do painel.
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
           >
             <FiX size={18} />
           </button>
@@ -720,6 +727,20 @@ export default function DashboardLayout() {
   const navigate = useNavigate()
   const authContext = useAuth()
 
+  // Time & Greeting State
+  const [now, setNow] = useState(new Date())
+  
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const brTimeOpts = { timeZone: 'America/Sao_Paulo' }
+  const hour = parseInt(now.toLocaleTimeString('pt-BR', { ...brTimeOpts, hour: 'numeric', hour12: false }), 10)
+  const greeting = hour >= 5 && hour < 12 ? 'Bom dia' : hour >= 12 && hour < 18 ? 'Boa tarde' : 'Boa noite'
+  const timeStr = now.toLocaleTimeString('pt-BR', { ...brTimeOpts, hour: '2-digit', minute: '2-digit' })
+  const dateStr = now.toLocaleDateString('pt-BR', { ...brTimeOpts, weekday: 'short', day: '2-digit', month: 'short' })
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
@@ -801,12 +822,16 @@ export default function DashboardLayout() {
                   <FiHome size={17} />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black leading-5 text-[#111827] dark:text-zinc-100 sm:text-base">
-                    {storeName}
+                  <p className="truncate text-sm font-black leading-5 text-[#111827] dark:text-white sm:text-base">
+                    {greeting}, {storeName}
                   </p>
-                  <p className="truncate text-[11px] font-bold leading-4 text-[#6b7280] dark:text-zinc-400">
-                    {storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : 'Painel do lojista'}
-                  </p>
+                  <div className="flex items-center gap-1.5 truncate text-[11px] font-bold leading-4 text-[#6b7280] dark:text-zinc-400">
+                    <span className="capitalize">{dateStr}</span>
+                    <span>·</span>
+                    <span>{timeStr} </span>
+                    <span>·</span>
+                    <span>{storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : 'Painel do lojista'}</span>
+                  </div>
                 </div>
               </div>
             </div>

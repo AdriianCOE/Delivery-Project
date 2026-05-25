@@ -1167,7 +1167,7 @@ const showToast = useCallback(
 
     if (!selectedStore) {
       setOrders([])
-      setLoadingOrders(false)
+      setLoadingOrders(true)
       return undefined
     }
 
@@ -1259,7 +1259,7 @@ subscribeOrders(query(
       setHasCatalog(false)
       setProducts([])
       setCategories([])
-      setLoadingCatalog(false)
+      setLoadingCatalog(true)
       return undefined
     }
 
@@ -1504,7 +1504,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
       title: 'Sua operação está saudável',
       description: 'Agora vale acompanhar desempenho e aumentar as vendas.',
       cta: 'Ver estatísticas',
-      href: '/dashboard/statistics',
+      href: '/dashboard/stats',
       tone: 'emerald',
     }
   }, [products, categories, selectedStore, dashboardData])
@@ -1633,10 +1633,10 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     type="button"
                     onClick={handleToggleStoreOpen}
                     disabled={storeActionLoading}
-                    className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-lg transition active:scale-95 disabled:opacity-70 sm:w-auto ${
+                    className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:w-auto ${
                       isStoreOpen(selectedStore)
-                        ? 'bg-red-500 shadow-red-200 hover:bg-red-600'
-                        : 'bg-emerald-500 shadow-emerald-200 hover:bg-emerald-600'
+                        ? 'bg-red-50 text-red-700 ring-red-200 shadow-red-100/50 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/40 dark:hover:bg-red-900/40'
+                        : 'bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40'
                     }`}
                   >
                     {storeActionLoading ? (
@@ -1657,15 +1657,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     )}
                   </button>
 
-                  <a
-                    href={storePublicUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 text-sm font-black text-[#111827] dark:text-zinc-100 shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:w-auto"
-                  >
-                    <FiExternalLink size={16} />
-                    Ver loja
-                  </a>
+
 
                   <button
                     type="button"
@@ -1739,7 +1731,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             title="Nenhuma loja encontrada"
             description="Seu usuário ainda não possui uma loja vinculada. Peça ao administrador para criar ou vincular uma loja ao seu acesso."
           />
-        ) : !loadingCatalog && !hasCatalog && orders.length === 0 ? (
+        ) : !loadingCatalog && !loadingOrders && !hasCatalog && orders.length === 0 ? (
           <div className="mx-auto max-w-4xl pt-8">
             <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-100/50">
               <div className="bg-gradient-to-br from-orange-50 to-white px-8 py-10 sm:px-12 sm:py-16">
@@ -1959,7 +1951,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 </div>
 
                 <a
-                  href="/dashboard/statistics"
+                  href="/dashboard/stats"
                   className="text-sm font-black text-[#f97316] hover:text-[#ea580c]"
                 >
                   Ver estatísticas
@@ -2136,7 +2128,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     Pedidos
                   </a>
                   <a
-                    href="/dashboard/statistics"
+                    href="/dashboard/stats"
                     className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#111827] hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                   >
                     Estatísticas

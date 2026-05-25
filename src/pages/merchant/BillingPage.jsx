@@ -22,16 +22,17 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiClock,
-  FiLock,
-  FiCode,
   FiCreditCard,
   FiInfo,
   FiLoader,
+  FiLock,
+  FiCode,
   FiSettings,
   FiShield,
   FiX,
   FiZap,
 } from 'react-icons/fi'
+import { motion, AnimatePresence } from 'motion/react'
 
 function formatCurrency(value) {
   return value.toLocaleString('pt-BR', {
@@ -792,14 +793,32 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-8">
+    <main className="min-h-screen bg-[#f9fafb] pb-20 text-[#111827]">
       <DashboardPageHeader
-        title="Assinatura e faturamento"
-        description="Gerencie seu plano, teste grátis e forma de pagamento com segurança."
+        title="Assinatura"
+        description="Plano, teste grátis e forma de pagamento."
         icon={FiCreditCard}
         badge={headerBadge}
+        actions={
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={handlePrimaryAction}
+            className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              primaryAction.tone === 'red'
+                ? 'bg-red-600 hover:bg-red-700'
+                : primaryAction.tone === 'neutral'
+                ? 'bg-gray-800 hover:bg-gray-900'
+                : 'bg-[#f97316] hover:bg-[#ea580c]'
+            }`}
+          >
+            {submitting ? <FiLoader className="animate-spin" /> : primaryAction.needsBillingData ? <FiCreditCard /> : <FiSettings />}
+            {primaryAction.label}
+          </button>
+        }
       />
 
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {showBillingRequiredBanner && (
         <section className="mt-6 rounded-2xl border border-orange-200 bg-orange-50/80 p-4 shadow-sm ring-1 ring-orange-100/70 dark:border-orange-900/40 dark:bg-orange-950/20 dark:ring-orange-900/20 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -843,13 +862,13 @@ export default function BillingPage() {
         </section>
       )}
 
-      <section className={`mt-6 overflow-hidden rounded-2xl border p-5 shadow-sm sm:p-6 transition-colors ${getHeroTone(subscriptionStatus, hasAsaasBillingSetup)}`}>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
+        <section className={`rounded-2xl border p-5 shadow-sm transition-colors ${getHeroTone(subscriptionStatus, hasAsaasBillingSetup)}`}>
+          <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <SubscriptionStatusBadge status={subscriptionStatus} />
               <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ring-1 ring-inset ${
+                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ring-inset ${
                   hasAsaasBillingSetup
                     ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/25'
                     : 'bg-orange-50 text-[#f97316] ring-orange-600/10 dark:bg-orange-500/10 dark:text-[#f97316] dark:ring-orange-500/25'
@@ -859,71 +878,60 @@ export default function BillingPage() {
               </span>
             </div>
 
-            <h1 className="mt-4 text-2xl font-black tracking-tight text-[#111827] dark:text-white sm:text-3xl">
-              {getStatusCopy(subscriptionStatus)}
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-[#4b5563] dark:text-zinc-300">
-              {hasAsaasBillingSetup
-                ? 'Sua forma de pagamento está conectada ao Asaas. As liberações financeiras continuam dependendo dos webhooks de cobrança e pagamento.'
-                : isPending
-                ? 'Configure sua cobrança Asaas para ativar o teste grátis. Você não será cobrado agora durante os 14 dias grátis.'
-                : isTrialNoAsaas
-                ? 'Configure sua cobrança Asaas para manter sua loja ativa após o teste grátis. Você não será cobrado agora.'
-                : 'Configure sua cobrança Asaas para manter sua loja ativa. Você não será cobrado durante o período de teste grátis.'}
-            </p>
+            <div>
+              <h2 className="text-lg font-black tracking-tight text-[#111827] dark:text-white">
+                {getStatusCopy(subscriptionStatus)}
+              </h2>
+              <p className="mt-1 text-xs font-semibold leading-relaxed text-[#4b5563] dark:text-zinc-300">
+                {hasAsaasBillingSetup
+                  ? 'Sua forma de pagamento está conectada ao Asaas. As liberações financeiras continuam dependendo dos webhooks de cobrança e pagamento.'
+                  : isPending
+                  ? 'Configure sua cobrança Asaas para ativar o teste grátis. Você não será cobrado agora durante os 14 dias grátis.'
+                  : isTrialNoAsaas
+                  ? 'Configure sua cobrança Asaas para manter sua loja ativa após o teste grátis. Você não será cobrado agora.'
+                  : 'Configure sua cobrança Asaas para manter sua loja ativa. Você não será cobrado durante o período de teste grátis.'}
+              </p>
+            </div>
 
             {isTrial && trialEndsAt && (
-              <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm font-black text-[#111827] ring-1 ring-orange-100 dark:bg-zinc-800/80 dark:text-white dark:ring-zinc-700">
+              <div className="inline-flex max-w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-xs font-black text-[#111827] ring-1 ring-orange-100 dark:bg-zinc-800/80 dark:text-white dark:ring-zinc-700">
                 <FiCalendar className="shrink-0 text-[#f97316]" />
                 <span className="truncate">
-                  {trialDaysLeft !== null ? `Termina em ${trialDaysLeft} dias` : 'Teste grátis ativo'} · Fim do teste grátis: {formatBillingDate(trialEndsAt)}
+                  {trialDaysLeft !== null ? `Termina em ${trialDaysLeft} dias` : 'Teste grátis ativo'} · Fim do teste: {formatBillingDate(trialEndsAt)}
                 </span>
               </div>
             )}
           </div>
+        </section>
 
-          <div className="w-full shrink-0 lg:w-72">
+        <section className="flex flex-col gap-3 justify-center rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">{primaryAction.support}</p>
+          {checkoutUrlToOpen && !hasAsaasBillingSetup && (
             <button
               type="button"
-              disabled={submitting}
-              onClick={handlePrimaryAction}
-              className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                primaryAction.tone === 'red'
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : primaryAction.tone === 'neutral'
-                  ? 'bg-[#111827] hover:bg-black dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-100'
-                  : 'bg-[#f97316] hover:bg-[#ea580c]'
-              }`}
+              onClick={() => window.open(checkoutUrlToOpen, '_blank', 'noopener,noreferrer')}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50/50 px-4 text-xs font-black text-[#f97316] transition hover:bg-orange-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-[#f97316]"
             >
-              {submitting ? <FiLoader className="animate-spin" /> : primaryAction.needsBillingData ? <FiCreditCard /> : <FiSettings />}
-              {primaryAction.label}
+              <FiArrowRight />
+              Abrir página de pagamento novamente
             </button>
-            <p className="mt-2 text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">{primaryAction.support}</p>
-            {checkoutUrlToOpen && !hasAsaasBillingSetup && (
-              <button
-                type="button"
-                onClick={() => window.open(checkoutUrlToOpen, '_blank', 'noopener,noreferrer')}
-                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-white px-4 text-xs font-black text-[#f97316] transition hover:bg-orange-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-[#f97316]"
-              >
-                <FiArrowRight />
-                Abrir página de pagamento novamente
-              </button>
-            )}
-            {!hasAsaasBillingSetup && (
-              <button
-                type="button"
-                onClick={handleRefreshBillingStatus}
-                disabled={isCheckingBillingStatus}
-                className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-300"
-              >
-                {isCheckingBillingStatus ? <FiLoader className="animate-spin" /> : <FiClock />}
-                {isCheckingBillingStatus ? 'Verificando...' : 'Verificar status da assinatura'}
-              </button>
-            )}
-          </div>
-        </div>
+          )}
+          {!hasAsaasBillingSetup && (
+            <button
+              type="button"
+              onClick={handleRefreshBillingStatus}
+              disabled={isCheckingBillingStatus}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-750 dark:text-zinc-300"
+            >
+              {isCheckingBillingStatus ? <FiLoader className="animate-spin" /> : <FiClock />}
+              {isCheckingBillingStatus ? 'Verificando...' : 'Verificar status da assinatura'}
+            </button>
+          )}
+        </section>
+      </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mt-8">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryItem label="Plano" value={formatPlanName(plan)} helper={hasAsaasBillingSetup ? 'Plano atual' : 'Plano selecionado'} />
           <SummaryItem label="Ciclo" value={normalizeBillingCycle(billingCycle)} helper="Sem taxas por pedido" />
           <SummaryItem label="Fim do teste grátis" value={formatBillingDate(trialEndsAt)} helper={isTrial ? 'Período de 14 dias grátis' : 'Data de referência'} />
@@ -976,7 +984,7 @@ export default function BillingPage() {
           <div className="min-w-0 flex-1">
             <h4 className="text-xs font-black text-gray-900 dark:text-white">Cobrança programada</h4>
             <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
-              A primeira cobrança real só ocorrerá em {formatBillingDate(trialEndsAt || Date.now() + 14 * 86400000)} após os 14 dias grátis.
+              A primeira cobrança real só ocorrerá {(trialEndsAt || currentPeriodEnd) ? `em ${formatBillingDate(trialEndsAt || currentPeriodEnd)}` : 'quando a configuração de cobrança for concluída'} após os 14 dias grátis.
             </p>
           </div>
         </div>
@@ -1008,56 +1016,7 @@ export default function BillingPage() {
         />
       </div>
 
-      <section className="mt-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/25 dark:text-blue-400">
-              <FiClock size={18} />
-            </span>
-            <div>
-              <h2 className="text-base font-black text-[#111827] dark:text-white">Lembretes do teste grátis</h2>
-              <p className="mt-1 max-w-2xl text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
-                Podemos avisar por e-mail quando o fim do seu teste estiver se aproximando.
-              </p>
-              {isTrial && trialEndsAt && (
-                <p className="mt-2 text-xs font-bold text-[#4b5563] dark:text-zinc-300">
-                  Fim do teste: {formatBillingDate(trialEndsAt)} · Primeira cobrança prevista: {formatBillingDate(trialEndsAt)}
-                </p>
-              )}
-              {isPending && (
-                <p className="mt-2 text-xs font-bold text-[#9a3412] dark:text-orange-400">
-                  Você poderá receber lembretes após ativar o teste grátis.
-                </p>
-              )}
-              {(isBlocked || isCanceled) && (
-                <p className="mt-2 text-xs font-bold text-red-600 dark:text-red-400">
-                  Lembretes indisponíveis para assinaturas inativas.
-                </p>
-              )}
-            </div>
-          </div>
 
-          <label className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition sm:w-auto ${
-            isTrial
-              ? 'border-blue-100 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/15'
-              : 'cursor-not-allowed border-gray-100 bg-gray-50 dark:border-zinc-800 dark:bg-zinc-950'
-          }`}>
-            <span className="min-w-0 text-sm font-black text-[#111827] dark:text-white">
-              Receber lembretes por e-mail
-            </span>
-            <input
-              type="checkbox"
-              checked={trialReminderEmailOptIn}
-              onChange={handleTrialReminderEmailChange}
-              disabled={!isTrial || savingTrialReminder}
-              className="h-5 w-5 shrink-0 rounded border-gray-300 text-[#f97316] focus:ring-[#f97316] disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </label>
-        </div>
-        <p className="mt-3 text-xs font-semibold text-[#6b7280] dark:text-zinc-500">
-          Você pode alterar essa preferência a qualquer momento. Ela será usada apenas para avisos operacionais sobre o fim do teste.
-        </p>
-      </section>
 
       <section className="mt-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -1093,8 +1052,8 @@ export default function BillingPage() {
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {PLAN_OPTIONS.map((option) => {
             const isCurrent = plan === option.id
-            const price = selectedPlanCycle === 'annual' ? option.priceAnnual : option.priceMonthly
-            const suffix = selectedPlanCycle === 'annual' ? '/ano' : '/mês'
+            const price = selectedPlanCycle === 'annual' ? option.equivalentMonthly : option.priceMonthly
+            const suffix = '/mês'
             const currentBadge = isTrialNoAsaas
               ? 'Plano selecionado'
               : hasAsaasBillingSetup || isActive
@@ -1117,9 +1076,9 @@ export default function BillingPage() {
                     : 'border-gray-100 hover:border-orange-100 hover:shadow-orange-100/50 dark:border-zinc-800 dark:hover:border-orange-900/40 dark:hover:shadow-none'
                 }`}
               >
-                {option.popular && (
+                {option.badge && (
                   <div className="absolute right-5 top-5 rounded-full bg-[#111827] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-md dark:bg-zinc-100 dark:text-zinc-950">
-                    Recomendado
+                    {option.badge}
                   </div>
                 )}
                 {isCurrent && !option.popular && (
@@ -1154,20 +1113,39 @@ export default function BillingPage() {
 
                 <div className="mt-4">
                   <div className="flex items-end gap-1">
-                    <span className="text-3xl font-black tracking-tight text-[#111827] dark:text-white">
-                      {formatCurrency(price)}
-                    </span>
+                    <AnimatePresence mode="popLayout">
+                      <motion.span
+                        key={price}
+                        initial={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="text-3xl font-black tracking-tight text-[#111827] dark:text-white inline-block"
+                      >
+                        {formatCurrency(price)}
+                      </motion.span>
+                    </AnimatePresence>
                     <span className="pb-1 text-xs font-bold text-[#6b7280] dark:text-zinc-400">
                       {suffix}
                     </span>
                   </div>
-                  {selectedPlanCycle === 'annual' && (
-                    <div className="mt-1">
-                      <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100/50 dark:bg-green-950/20 dark:text-green-400 dark:ring-green-900/40">
-                        2 meses grátis
-                      </span>
-                    </div>
-                  )}
+                  <AnimatePresence>
+                    {selectedPlanCycle === 'annual' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-1"
+                      >
+                        <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100/50 dark:bg-green-950/20 dark:text-green-400 dark:ring-green-900/40">
+                          2 meses grátis
+                        </span>
+                        <p className="mt-1.5 text-[11px] font-semibold text-[#6b7280] dark:text-zinc-500">
+                          R$ {option.priceAnnual} cobrados ao ano
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <ul className="mt-6 flex-1 space-y-3 border-t border-gray-100 pt-5 dark:border-zinc-800">
@@ -1466,6 +1444,7 @@ export default function BillingPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </main>
   )
 }

@@ -293,12 +293,12 @@ export default function DashboardFooter({
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 ring-1 ring-gray-100">
+            <a href="/" className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 ring-1 ring-gray-100 transition-colors hover:bg-orange-50 hover:ring-orange-200">
               Tecnologia
-              <strong className="font-black text-[#111827]">
+              <strong className="font-black text-[#111827] transition-colors group-hover:text-[#f97316]">
                 Prato<span className="text-[#f97316]">by</span>
               </strong>
-            </span>
+            </a>
 
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 ring-1 ring-gray-100">
               <FiHelpCircle size={12} />

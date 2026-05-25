@@ -215,7 +215,7 @@ function SaveBtn({ loading, disabled, children = 'Salvar alterações' }) {
     <button
       type="submit"
       disabled={disabled || loading}
-      className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-md shadow-orange-500/20 transition hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none sm:w-auto"
+      className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-md shadow-orange-500/20 transition hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600 sm:w-auto"
     >
       {loading ? <FiLoader className="animate-spin" size={16} /> : null}
       {children}
@@ -827,6 +827,8 @@ function ThemeCard() {
 
 export default function ProfilePanel({ onLogout }) {
   const { user, userData, refreshUserData } = useAuth()
+  const { theme } = useDashboardTheme()
+  const themeLabels = { light: 'Claro', dark: 'Escuro', system: 'Sistema' }
   const [toast, setToast] = useState(null)
 
   const showToast = useCallback((type, message) => {
@@ -862,6 +864,43 @@ export default function ProfilePanel({ onLogout }) {
       <Toast toast={toast} onClose={() => setToast(null)} />
       
       <div className="space-y-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-orange-100 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-950/20">
+              <FiMail size={16} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-black uppercase tracking-wide text-[#6b7280]">E-mail</p>
+              <p className="truncate text-xs font-bold text-[#111827] dark:text-white">
+                {auth.currentUser?.emailVerified ? 'Verificado' : 'Pendente'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-orange-100 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-950/20">
+              <FiPhone size={16} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-black uppercase tracking-wide text-[#6b7280]">Telefone</p>
+              <p className="truncate text-xs font-bold text-[#111827] dark:text-white">
+                {userData?.phoneVerified ? 'Verificado' : (userData?.phone || userData?.whatsapp || userData?.phoneNumber ? 'Pendente' : 'Não cadastrado')}
+              </p>
+            </div>
+          </div>
+          <div className="hidden lg:flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-orange-100 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-950/20">
+              <FiMonitor size={16} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-black uppercase tracking-wide text-[#6b7280]">Tema</p>
+              <p className="truncate text-xs font-bold text-[#111827] dark:text-white capitalize">
+                {themeLabels[theme] || 'Sistema'}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Avatar (full width) */}
         <AvatarCard
           user={user}
