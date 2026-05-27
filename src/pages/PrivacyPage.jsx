@@ -14,11 +14,11 @@ import {
 } from 'lucide-react'
 
 const SECTIONS = [
-  { id: 'coleta', title: '1. Informações que Recolhemos', icon: Eye, summary: 'Recolhemos dados cadastrais dos lojistas para faturação e dados básicos dos clientes finais apenas para que o restaurante consiga processar e entregar o pedido.' },
-  { id: 'uso', title: '2. Como Utilizamos os Dados', icon: Settings, summary: 'Os dados servem unicamente para fazer o sistema funcionar: emitir o pedido no painel ao vivo e calcular a taxa de entrega por bairro.' },
-  { id: 'cookies', title: '3. Cookies e Armazenamento Local', icon: Database, summary: 'Utilizamos o localStorage do navegador do cliente para guardar o nome e endereço de forma segura, evitando que o cliente tenha de digitar tudo novamente no próximo pedido.' },
+  { id: 'coleta', title: '1. Informações que Coletamos', icon: Eye, summary: 'Coletamos dados cadastrais dos lojistas para faturamento e dados básicos dos clientes finais apenas para que o restaurante consiga processar e entregar o pedido.' },
+  { id: 'uso', title: '2. Como Usamos os Dados', icon: Settings, summary: 'Os dados servem unicamente para fazer o sistema funcionar: emitir o pedido no painel ao vivo e calcular a taxa de entrega por bairro.' },
+  { id: 'cookies', title: '3. Cookies e Armazenamento Local', icon: Database, summary: 'Usamos o localStorage do navegador do cliente para guardar o nome e endereço de forma segura, evitando que o cliente tenha de digitar tudo novamente no próximo pedido.' },
   { id: 'seguranca', title: '4. Segurança da Informação', icon: Lock, summary: 'Garantimos proteção reforçada através de firewalls e regras de segurança automatizadas na nuvem para blindar o acesso ao banco de dados.' },
-  { id: 'direitos', title: '5. Direitos do Titular (LGPD)', icon: ShieldCheck, summary: 'Em conformidade total com a LGPD, o titular da conta ou cliente final pode pedir a alteração ou eliminação total dos seus dados a qualquer momento.' },
+  { id: 'direitos', title: '5. Direitos do Titular (LGPD)', icon: ShieldCheck, summary: 'Em conformidade total com a LGPD, o titular da conta ou cliente final pode pedir a alteração ou exclusão total dos seus dados a qualquer momento.' },
 ]
 
 export default function PrivacyPage() {
@@ -97,7 +97,7 @@ export default function PrivacyPage() {
             Política de Privacidade
           </h1>
           <p className="mt-4 text-base sm:text-lg text-gray-500 max-w-2xl font-medium leading-relaxed">
-            Entenda detalhadamente como protegemos as suas informações operacionais e quais os dados recolhidos para a entrega de pedidos.
+            Entenda detalhadamente como protegemos as suas informações operacionais e quais os dados coletados para a entrega de pedidos.
           </p>
         </div>
       </header>
@@ -160,7 +160,7 @@ export default function PrivacyPage() {
                 <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
                   <Eye size={20} />
                 </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">1. Informações que Recolhemos</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">1. Informações que Coletamos</h2>
               </div>
               
               <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
@@ -169,11 +169,11 @@ export default function PrivacyPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  Para o funcionamento regular da plataforma, recolhemos dados em dois fluxos distintos:
+                  Para o funcionamento regular da plataforma, coletamos dados em dois fluxos distintos:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 mt-2">
                   <li><strong>Dados do Lojista:</strong> Nome completo, e-mail comercial, número de telefone, credenciais administrativas e informações para cobrança recorrente.</li>
-                  <li><strong>Dados do Consumidor Final:</strong> Quando um cliente faz um pedido através do link do restaurante, solicitamos o nome, telefone de contacto e dados de morada completa (rua, número, CEP, complemento e bairro) essenciais para a rota de entrega.</li>
+                  <li><strong>Dados do Consumidor Final:</strong> Quando um cliente faz um pedido através do link do restaurante, solicitamos o nome, telefone de contato e dados de endereço completo (rua, número, CEP, complemento e bairro) essenciais para a rota de entrega.</li>
                 </ul>
               </div>
             </section>
@@ -184,7 +184,7 @@ export default function PrivacyPage() {
                 <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
                   <Settings size={20} />
                 </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">2. Como Utilizamos as Informações</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">2. Como Usamos as Informações</h2>
               </div>
               
               <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
@@ -193,12 +193,12 @@ export default function PrivacyPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  Não vendemos, partilhamos ou alugamos dados pessoais para empresas de marketing terceiras. Toda a informação recolhida é aplicada rigorosamente para os seguintes fins estruturais:
+                  Não vendemos, compartilhamos ou alugamos dados pessoais para empresas de marketing terceiras. Toda a informação coletada é aplicada rigorosamente para os seguintes fins estruturais:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 mt-2">
                   <li>Processar, validar e notificar os lojistas em tempo real sobre pedidos recebidos.</li>
                   <li>Calcular dinamicamente a taxa de entrega estipulada pelo lojista para o bairro correspondente do cliente.</li>
-                  <li>Gerir o status de presença online da loja para a correta exibição do cardápio digital aos visitantes.</li>
+                  <li>Gerenciar o status de presença online da loja para a correta exibição do cardápio digital aos visitantes.</li>
                 </ul>
               </div>
             </section>
@@ -218,10 +218,10 @@ export default function PrivacyPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  Para garantir uma experiência de checkout fluida e ágil (Experiência One-Click), utilizamos o mecanismo de <strong>localStorage</strong> do próprio navegador do dispositivo do utilizador final.
+                  Para garantir uma experiência de checkout fluida e ágil (Experiência One-Click), usamos o mecanismo de <strong>localStorage</strong> do próprio navegador do dispositivo do usuário final.
                 </p>
                 <p>
-                  Esse recurso permite armazenar localmente no telemóvel do cliente as informações básicas inseridas no último pedido (como Nome e Morada). Assim, o cliente não precisa reinserir todos os campos repetidamente a cada nova compra no mesmo restaurante. Estes dados permanecem armazenados estritamente na sandbox do navegador do utilizador.
+                  Esse recurso permite armazenar localmente no celular do cliente as informações básicas inseridas no último pedido (como Nome e Endereço). Assim, o cliente não precisa reinserir todos os campos repetidamente a cada nova compra no mesmo restaurante. Estes dados permanecem armazenados estritamente na sandbox do navegador do usuário.
                 </p>
               </div>
             </section>
@@ -241,10 +241,10 @@ export default function PrivacyPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  O PratoBy utiliza infraestrutura moderna baseada em cloud computing para o processamento das transações. Adotamos rígidos protocolos de encriptação de tráfego e firewalls ativos.
+                  O PratoBy usa infraestrutura moderna baseada em cloud computing para o processamento das transações. Adotamos rígidos protocolos de criptografia de tráfego e firewalls ativos.
                 </p>
                 <p>
-                  Todas as comunicações com as nossas bases de dados de armazenamento contam com regras automáticas severas de leitura e gravação server-side. Isso impede que terceiros mal-intencionados ou agentes externos consigam intercetar os logs operacionais ou desviar relatórios confidenciais de faturamento das lojas.
+                  Todas as comunicações com as nossas bases de dados de armazenamento contam com regras automáticas severas de leitura e gravação server-side. Isso impede que terceiros mal-intencionados ou agentes externos consigam interceptar os logs operacionais ou desviar relatórios confidenciais de faturamento das lojas.
                 </p>
               </div>
             </section>
@@ -267,7 +267,7 @@ export default function PrivacyPage() {
                   Em conformidade com as diretrizes legais vigentes da Lei Geral de Proteção de Dados (LGPD), asseguramos aos titulares todos os direitos fundamentais sobre as suas informações armazenadas na nuvem.
                 </p>
                 <p>
-                  Pode, a qualquer momento, entrar em contacto com o nosso canal oficial de suporte para requerer a <strong>confirmação da existência de tratamento, a correção de dados incompletos ou a eliminação definitiva e total</strong> dos seus dados dos nossos servidores, sem custos ou burocracias desnecessárias.
+                  Você pode, a qualquer momento, entrar em contato com o nosso canal oficial de suporte para requerer a <strong>confirmação da existência de tratamento, a correção de dados incompletos ou a exclusão definitiva e total</strong> dos seus dados dos nossos servidores, sem custos ou burocracias desnecessárias.
                 </p>
               </div>
             </section>

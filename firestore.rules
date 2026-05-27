@@ -67,6 +67,7 @@ function orderStoreKeys(data) {
     function isPublicStoreData(data) {
       return data.get('isActive', true) != false
         && data.get('isBlocked', false) != true
+        && data.get('isBillingBlocked', false) != true
         && data.get('isDeleted', false) != true;
     }
 
@@ -112,9 +113,17 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('ownerId')
         && storeFieldUnchanged('ownerUid')
         && storeFieldUnchanged('ownerEmail')
+        && storeFieldUnchanged('allowedUserIds')
+        && storeFieldUnchanged('merchantUids')
+        && storeFieldUnchanged('role')
+        && storeFieldUnchanged('roles')
+        && storeFieldUnchanged('team')
+        && storeFieldUnchanged('members')
+        && storeFieldUnchanged('staff')
         && storeFieldUnchanged('createdAt')
         && storeFieldUnchanged('createdBy')
         && storeFieldUnchanged('isBlocked')
+        && storeFieldUnchanged('isBillingBlocked')
         && storeFieldUnchanged('isDeleted')
         && storeFieldUnchanged('subscriptionStatus')
         && storeFieldUnchanged('subscription')
@@ -128,7 +137,32 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('billingCycle')
         && storeFieldUnchanged('trialStartedAt')
         && storeFieldUnchanged('trialEndsAt')
-        && storeFieldUnchanged('onboardingStatus');
+        && storeFieldUnchanged('onboardingStatus')
+        && storeFieldUnchanged('billingProvider')
+        && storeFieldUnchanged('billingMethodConfigured')
+        && storeFieldUnchanged('asaasCustomerId')
+        && storeFieldUnchanged('asaasSubscriptionId')
+        && storeFieldUnchanged('asaasSubscriptionStatus')
+        && storeFieldUnchanged('providerCustomerId')
+        && storeFieldUnchanged('providerSubscriptionId')
+        && storeFieldUnchanged('providerCheckoutId')
+        && storeFieldUnchanged('subscriptionId')
+        && storeFieldUnchanged('currentPeriodEnd')
+        && storeFieldUnchanged('lastAsaasSyncAt')
+        && storeFieldUnchanged('lastPaymentId')
+        && storeFieldUnchanged('lastPaymentStatus')
+        && storeFieldUnchanged('asaasCheckoutId')
+        && storeFieldUnchanged('asaasCheckoutUrl')
+        && storeFieldUnchanged('asaasCheckoutExpiresAt')
+        && storeFieldUnchanged('checkoutUrl')
+        && storeFieldUnchanged('billingCheckout')
+        && storeFieldUnchanged('billingCheckoutStatus')
+        && storeFieldUnchanged('subscriptionCancellationStatus')
+        && storeFieldUnchanged('cancelScheduledAtPeriodEnd')
+        && storeFieldUnchanged('subscriptionCancelRequestedAt')
+        && storeFieldUnchanged('subscriptionCancelRequestedBy')
+        && storeFieldUnchanged('amountCents')
+        && storeFieldUnchanged('billingType');
     }
 
 function ownsOrderData(data) {
@@ -309,6 +343,29 @@ function publicOrderUpdateAllowed(orderId) {
         && request.resource.data.get('resolved', false) == false;
     }
 
+    function validMerchantReviewUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+
+      return canManageStoreId(resource.data.get('storeId', ''))
+        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '')
+        && changed.hasOnly([
+          'merchantReply',
+          'merchantReplyAt',
+          'merchantReplyBy',
+          'isPublic',
+          'resolved',
+          'moderationStatus',
+          'updatedAt'
+        ])
+        && (!changed.hasAny(['merchantReply']) || request.resource.data.get('merchantReply', '') is string)
+        && (!changed.hasAny(['merchantReplyAt']) || request.resource.data.get('merchantReplyAt', null) is timestamp)
+        && (!changed.hasAny(['merchantReplyBy']) || request.resource.data.get('merchantReplyBy', '') == request.auth.uid)
+        && (!changed.hasAny(['isPublic']) || request.resource.data.get('isPublic', false) is bool)
+        && (!changed.hasAny(['resolved']) || request.resource.data.get('resolved', false) is bool)
+        && (!changed.hasAny(['moderationStatus']) || request.resource.data.get('moderationStatus', '') in ['pending', 'public', 'hidden', 'resolved'])
+        && (!changed.hasAny(['updatedAt']) || request.resource.data.get('updatedAt', null) is timestamp);
+    }
+
     function validSignupUserCreate(data) {
   return data.keys().hasOnly([
     'uid',
@@ -446,8 +503,7 @@ match /auditLogs/{logId} {
       allow get, list: if canManageStoreId(resource.data.get('storeId', ''))
         || (resource.data.get('isPublic', false) == true && publicStoreExists(resource.data.get('storeId', '')));
       allow create: if validReviewCreate(reviewId);
-      allow update: if canManageStoreId(resource.data.get('storeId', ''))
-        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
+      allow update: if isAdmin() || validMerchantReviewUpdate();
       allow delete: if isAdmin();
     }
 

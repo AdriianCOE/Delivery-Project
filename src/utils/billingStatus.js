@@ -60,7 +60,7 @@ export function normalizeBillingCycle(cycle) {
 export function formatPlanName(plan) {
   const map = {
     essential: 'Essencial',
-    professional: 'Profissional',
+    professional: 'Professional',
     premium: 'Premium',
     enterprise: 'Enterprise',
   }

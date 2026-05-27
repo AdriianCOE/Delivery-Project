@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../../services/firebase'
@@ -51,6 +51,18 @@ function formatCurrency(value) {
   })
 }
 
+function openCheckoutUrl(url) {
+  const checkoutUrl = String(url || '').trim()
+  if (!/^https:\/\//i.test(checkoutUrl)) return false
+
+  const opened = window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+  if (!opened) {
+    window.location.assign(checkoutUrl)
+  }
+
+  return true
+}
+
 function getBillingInputClass(hasError = false) {
   return [
     'h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50',
@@ -95,7 +107,7 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
     return {
       label: 'Regularizar pagamento',
       support: hasAsaasSubscription
-        ? 'Confira os dados da assinatura para regularizar a pendência.'
+        ? 'Abra o gerenciamento da assinatura para regularizar a pendência.'
         : 'Configure a cobrança para regularizar a assinatura.',
       needsBillingData: !hasAsaasSubscription,
       tone: 'red',
@@ -106,7 +118,7 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
     return {
       label: 'Regularizar pagamento',
       support: hasAsaasSubscription
-        ? 'Confira a assinatura e regularize a situação para reativar a loja.'
+        ? 'Abra o gerenciamento da assinatura para regularizar a situação.'
         : 'Informe os dados de faturamento para reativar sua assinatura.',
       needsBillingData: !hasAsaasSubscription,
       tone: 'red',
@@ -114,10 +126,10 @@ function getPrimaryAction({ status, hasAsaasSubscription }) {
   }
 
   return {
-    label: 'Ver detalhes da assinatura',
-    support: 'Cobrança configurada para este plano.',
+    label: 'Gerenciar assinatura',
+    support: 'Cobrança configurada. Gerencie plano, pagamento e vencimento em uma tela segura.',
     needsBillingData: false,
-    tone: 'neutral',
+    tone: 'orange',
   }
 }
 
@@ -132,11 +144,11 @@ const BILLING_PLAN_PRESENTATION = {
     highlights: ['Cardápio digital ilimitado', 'Pedidos em tempo real', 'Link próprio da loja'],
   },
   professional: {
-    name: 'Plus',
+    name: 'Professional',
     tagline: 'Para vender mais.',
     description: 'Cupons, WhatsApp e relatórios para aumentar pedidos e acompanhar melhor a operação.',
     bestFor: 'Lojas que já vendem online e querem campanhas, mais controle e rotina mais ágil.',
-    cta: 'Escolher Plus',
+    cta: 'Escolher Professional',
     badge: 'Mais escolhido',
     highlights: ['Cupons e ofertas', 'WhatsApp integrado', 'Relatórios avançados'],
   },
@@ -291,6 +303,7 @@ function BillingFooter() {
 
 export default function BillingPage() {
   const auth = useAuth()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { user, userData, storeId, storeIds = [] } = auth
   const [store, setStore] = useState(null)
@@ -301,6 +314,7 @@ export default function BillingPage() {
   const [showTechnical, setShowTechnical] = useState(false)
   const [selectedPlanCycle, setSelectedPlanCycle] = useState('monthly')
   const [lastCheckoutUrl, setLastCheckoutUrl] = useState('')
+  const [lastCheckoutExpiresAt, setLastCheckoutExpiresAt] = useState('')
   const [storeRefreshNonce, setStoreRefreshNonce] = useState(0)
   const [savingTrialReminder, setSavingTrialReminder] = useState(false)
 
@@ -467,13 +481,30 @@ export default function BillingPage() {
   const asaasCustomerId = store?.asaasCustomerId || userData?.asaasCustomerId || ''
   const asaasSubscriptionId = store?.asaasSubscriptionId || userData?.asaasSubscriptionId || ''
   const asaasCheckoutUrl = store?.asaasCheckoutUrl || userData?.asaasCheckoutUrl || ''
+  const asaasCheckoutExpiresAt =
+    store?.asaasCheckoutExpiresAt ||
+    userData?.asaasCheckoutExpiresAt ||
+    ''
+
+  const checkoutExpiresAt = lastCheckoutExpiresAt || asaasCheckoutExpiresAt
+  const checkoutExpiresAtDate = checkoutExpiresAt ? toDate(checkoutExpiresAt) : null
   const billingMethodConfigured = Boolean(store?.billingMethodConfigured || userData?.billingMethodConfigured)
   const hasAsaasSubscription = Boolean(asaasSubscriptionId)
   const hasAsaasBillingSetup = hasAsaasSubscription || billingMethodConfigured
   const checkoutUrlToOpen = lastCheckoutUrl || asaasCheckoutUrl
+
+  const checkoutIsExpired =
+    Boolean(checkoutExpiresAtDate) && checkoutExpiresAtDate.getTime() <= Date.now()
+
+  const canReopenCheckout =
+    Boolean(checkoutUrlToOpen) && !hasAsaasBillingSetup && !checkoutIsExpired
   const showCheckoutSuccessBanner =
     searchParams.get('asaasCheckout') === 'success' && !hasAsaasBillingSetup
   const trialReminderEmailOptIn = Boolean(userData?.trialReminderEmailOptIn)
+  const currentPlanOption = PLAN_OPTIONS.find((planOption) => planOption.id === plan) || PLAN_OPTIONS[0]
+  const currentPlanDisplayAmount = billingCycle === 'annual'
+    ? currentPlanOption.priceAnnual
+    : currentPlanOption.priceMonthly
 
   useEffect(() => {
     setSelectedPlanCycle(billingCycle)
@@ -629,11 +660,7 @@ export default function BillingPage() {
       return
     }
 
-    setShowTechnical(true)
-    setToast({
-      type: 'info',
-      message: 'Mostrei os detalhes da assinatura no final da página.',
-    })
+    navigate('/dashboard/subscription-management')
   }
 
   async function handleRefreshBillingStatus() {
@@ -755,12 +782,38 @@ export default function BillingPage() {
         ''
 
       if (checkoutUrl) {
+        const checkoutExpiresAt =
+          response?.data?.checkoutExpiresAt ||
+          response?.data?.asaasCheckoutExpiresAt ||
+          response?.data?.expiresAt ||
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
         setLastCheckoutUrl(checkoutUrl)
-        window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
-        setToast({
-          type: 'info',
-          message: 'Redirecionando para o Asaas. Depois de cadastrar a forma de pagamento, volte para esta página.',
-        })
+        setLastCheckoutExpiresAt(checkoutExpiresAt)
+
+        try {
+          localStorage.setItem(
+            `pratoby:billingCheckout:${store.id}`,
+            JSON.stringify({
+              url: checkoutUrl,
+              expiresAt: checkoutExpiresAt,
+            })
+          )
+        } catch {
+          // localStorage pode falhar em modo privado; não bloqueia o fluxo
+        }
+
+        if (openCheckoutUrl(checkoutUrl)) {
+          setToast({
+            type: 'info',
+            message: 'Redirecionando para o Asaas. Depois de cadastrar a forma de pagamento, volte para esta página.',
+          })
+        } else {
+          setToast({
+            type: 'error',
+            message: 'O checkout retornado não parece seguro. Tente gerar um novo link.',
+          })
+        }
       } else {
         setToast({
           type: 'success',
@@ -786,6 +839,30 @@ export default function BillingPage() {
       setSubmitting(false)
     }
   }
+
+  useEffect(() => {
+    if (!store?.id || hasAsaasBillingSetup) return
+
+    try {
+      const raw = localStorage.getItem(`pratoby:billingCheckout:${store.id}`)
+      if (!raw) return
+
+      const saved = JSON.parse(raw)
+      const expiresAtDate = saved?.expiresAt ? new Date(saved.expiresAt) : null
+
+      if (expiresAtDate && expiresAtDate.getTime() <= Date.now()) {
+        localStorage.removeItem(`pratoby:billingCheckout:${store.id}`)
+        return
+      }
+
+      if (saved?.url) {
+        setLastCheckoutUrl(saved.url)
+        setLastCheckoutExpiresAt(saved.expiresAt || '')
+      }
+    } catch {
+      // ignora cache inválido
+    }
+  }, [store?.id, hasAsaasBillingSetup])
 
   if (loadingStore) {
     return (
@@ -988,10 +1065,10 @@ export default function BillingPage() {
                   <p className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">Valor programado do plano</p>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
                     <span className="text-2xl font-black text-gray-900 dark:text-white">
-                      {formatCurrency(selectedPlanCycle === 'annual' ? (PLAN_OPTIONS.find(p => p.id === plan)?.priceAnnual || 599.90) : (PLAN_OPTIONS.find(p => p.id === plan)?.priceMonthly || 59.99))}
+                      {formatCurrency(currentPlanDisplayAmount)}
                     </span>
                     <span className="text-xs text-gray-400 dark:text-zinc-400 font-semibold">
-                      /{selectedPlanCycle === 'annual' ? 'ano' : 'mês'}
+                      /{billingCycle === 'annual' ? 'ano' : 'mês'}
                     </span>
                   </div>
 
@@ -1035,15 +1112,32 @@ export default function BillingPage() {
                   )}
                 </button>
 
-                {checkoutUrlToOpen && !hasAsaasBillingSetup && (
+                {canReopenCheckout && (
                   <button
                     type="button"
-                    onClick={() => window.open(checkoutUrlToOpen, '_blank', 'noopener,noreferrer')}
-                    className="w-full inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200/60 dark:border-zinc-800 bg-orange-50/30 dark:bg-zinc-950/20 text-[11px] font-black text-[#f97316] dark:text-orange-400 transition hover:bg-orange-50/70 dark:hover:bg-zinc-900"
+                    onClick={() => openCheckoutUrl(checkoutUrlToOpen)}
+                    className="w-full inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200/60 bg-orange-50/70 text-[11px] font-black text-[#f97316] transition hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/15"
                   >
                     <FiArrowRight size={12} />
-                    Abrir página de checkout novamente
+                    Reabrir checkout seguro
                   </button>
+                )}
+
+                {checkoutUrlToOpen && !hasAsaasBillingSetup && checkoutIsExpired && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-[11px] font-semibold text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                    <p className="font-black">Checkout expirado</p>
+                    <p className="mt-1">
+                      O link anterior venceu. Gere um novo checkout seguro para continuar.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => openBillingModal(plan, billingCycle)}
+                      className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition hover:bg-[#ea580c]"
+                    >
+                      <FiCreditCard size={12} />
+                      Gerar novo checkout
+                    </button>
+                  </div>
                 )}
 
                 {!hasAsaasBillingSetup && (
@@ -1277,6 +1371,22 @@ export default function BillingPage() {
           })}
         </div>
 
+        <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-4 dark:border-orange-500/20 dark:bg-orange-500/10 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <p className="text-sm font-black text-gray-900 dark:text-white">Quer ver todos os recursos lado a lado?</p>
+            <p className="mt-1 text-xs font-semibold text-gray-600 dark:text-zinc-400">
+              Abra a lista de comparação completa para decidir entre Essencial, Professional e Premium.
+            </p>
+          </div>
+          <Link
+            to="/planos#comparacao"
+            className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-md shadow-orange-600/10 transition hover:bg-[#ea580c] active:scale-95 sm:mt-0 sm:w-auto"
+          >
+            Lista de comparação completa
+            <FiArrowRight size={13} />
+          </Link>
+        </div>
+
 
         {/* HUMAN FAQ */}
         <div className="bg-white dark:bg-zinc-900 rounded-[2rem] border border-gray-100 dark:border-zinc-800 p-6 lg:p-8 shadow-sm transition-colors mt-8">
@@ -1294,9 +1404,9 @@ export default function BillingPage() {
             </div>
 
             <div className="space-y-1.5">
-              <h4 className="font-black text-gray-900 dark:text-white">Qual plano escolher: Plus ou Premium?</h4>
+              <h4 className="font-black text-gray-900 dark:text-white">Qual plano escolher: Professional ou Premium?</h4>
               <p className="text-gray-500 dark:text-zinc-400">
-                O plano <strong>Plus</strong> atende a maioria das lojas que querem vender mais com cupons, WhatsApp e relatórios. Escolha o <strong>Premium</strong> se sua operação tem filiais, marca própria ou precisa de suporte VIP.
+                O plano <strong>Professional</strong> atende a maioria das lojas que querem vender mais com cupons, WhatsApp e relatórios. Escolha o <strong>Premium</strong> se sua operação tem filiais, marca própria ou precisa de suporte VIP.
               </p>
             </div>
 

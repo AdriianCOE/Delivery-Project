@@ -2,6 +2,7 @@ const {
     onDocumentCreated,
     onDocumentUpdated,
   } = require('firebase-functions/v2/firestore')
+const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
@@ -666,22 +667,6 @@ exports.auditOrderChanges = onDocumentUpdated(
           isVisible: afterData.isVisible ?? null,
         },
       })
-    }
-  )
-
-  // Legacy no-op. Coupon usage is now reserved transactionally by createPublicOrder.
-  exports.reserveCouponUsage = onDocumentCreated(
-    {
-      document: 'orders/{orderId}',
-      region: 'southamerica-east1',
-      timeoutSeconds: 60,
-      memory: '256MiB',
-    },
-    async (event) => {
-      logger.info('reserveCouponUsage skipped; coupon usage is reserved in createPublicOrder', {
-        orderId: event.params.orderId,
-      })
-      return
     }
   )
 
@@ -1718,5 +1703,120 @@ exports.updateMyProfile = onCall(
     await db.collection('users').doc(uid).update(patch)
 
     return { ok: true, updated: Object.keys(patch) }
+  }
+)
+
+// ---------------------------------------------------------------------------
+// Audit: registra alterações de status da loja (isOpen, isActive, etc.)
+// Permite rastrear quando o lojista abriu/fechou a loja em disputas.
+// ---------------------------------------------------------------------------
+exports.auditStoreChanges = onDocumentUpdated(
+  {
+    document: 'stores/{storeId}',
+    region: 'southamerica-east1',
+    timeoutSeconds: 30,
+    memory: '256MiB',
+  },
+  async (event) => {
+    const beforeData = event.data?.before?.data() || {}
+    const afterData = event.data?.after?.data() || {}
+    const storeId = event.params.storeId
+
+    const AUDITED_FIELDS = [
+      'isOpen',
+      'isActive',
+      'isPaused',
+      'pausedAt',
+      'openedAt',
+      'closedAt',
+      'subscriptionStatus',
+      'isBillingBlocked',
+    ]
+
+    const changedFields = AUDITED_FIELDS.filter((field) => {
+      return JSON.stringify(beforeData[field] ?? null) !== JSON.stringify(afterData[field] ?? null)
+    })
+
+    if (!changedFields.length) return
+
+    let action = 'store_updated'
+    if ('isOpen' in beforeData && beforeData.isOpen !== afterData.isOpen) {
+      action = afterData.isOpen ? 'store_opened' : 'store_closed'
+    } else if ('isActive' in beforeData && beforeData.isActive !== afterData.isActive) {
+      action = afterData.isActive ? 'store_activated' : 'store_deactivated'
+    }
+
+    await createAuditLog({
+      action,
+      entity: 'store',
+      entityId: storeId,
+      storeId,
+      storeSlug: afterData.storeSlug || afterData.slug || beforeData.storeSlug || '',
+      actorUid: afterData.updatedBy || afterData.lastUpdatedBy || null,
+      changedFields,
+      before: Object.fromEntries(changedFields.map((f) => [f, beforeData[f] ?? null])),
+      after: Object.fromEntries(changedFields.map((f) => [f, afterData[f] ?? null])),
+    })
+  }
+)
+
+// ---------------------------------------------------------------------------
+// Scheduler: limpa usuários anônimos do Firebase Auth com mais de 30 dias.
+// Evita acumulação ilimitada de contas fantasmas de visitantes da storefront.
+// Roda diariamente às 03:00 (horário de Brasília = 06:00 UTC).
+// ---------------------------------------------------------------------------
+exports.cleanupAnonymousUsers = onSchedule(
+  {
+    schedule: '0 6 * * *',
+    timeZone: 'UTC',
+    region: 'southamerica-east1',
+    timeoutSeconds: 540,
+    memory: '256MiB',
+  },
+  async () => {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+    const cutoff = new Date(Date.now() - THIRTY_DAYS_MS)
+
+    let nextPageToken = undefined
+    let totalDeleted = 0
+    let totalScanned = 0
+
+    try {
+      do {
+        const listResult = await admin.auth().listUsers(1000, nextPageToken)
+        nextPageToken = listResult.pageToken
+
+        const toDelete = listResult.users
+          .filter((u) => {
+            // Anonymous users have no providerData entries
+            if (!u.providerData || u.providerData.length > 0) return false
+            const lastSignIn = u.metadata?.lastSignInTime
+              ? new Date(u.metadata.lastSignInTime)
+              : null
+            const created = u.metadata?.creationTime
+              ? new Date(u.metadata.creationTime)
+              : null
+            const referenceDate = lastSignIn || created
+            return referenceDate && referenceDate < cutoff
+          })
+          .map((u) => u.uid)
+
+        totalScanned += listResult.users.length
+
+        if (toDelete.length > 0) {
+          // deleteUsers accepts up to 1000 UIDs per call
+          for (let i = 0; i < toDelete.length; i += 1000) {
+            const chunk = toDelete.slice(i, i + 1000)
+            await admin.auth().deleteUsers(chunk)
+            totalDeleted += chunk.length
+          }
+        }
+      } while (nextPageToken)
+
+      logger.info('[cleanupAnonymousUsers] Concluído.', { totalScanned, totalDeleted })
+    } catch (error) {
+      logger.error('[cleanupAnonymousUsers] Erro durante limpeza:', error)
+      throw error
+    }
   }
 )

@@ -4,7 +4,6 @@ import MarketingLayout from '../MarketingLayout'
 import { HeroSection } from './components/HeroSection'
 import { PainSection } from './components/PainSection'
 import { SolutionSection } from './components/SolutionSection'
-import { HowItWorksSection } from './components/HowItWorksSection'
 import { ProductDemoSection } from './components/ProductDemoSection'
 import { TrustSection } from './components/TrustSection'
 import { ComparisonSection } from './components/ComparisonSection'
@@ -25,7 +24,6 @@ export default function LandingPage() {
         <HeroSection />
         <PainSection />
         <SolutionSection />
-        <HowItWorksSection />
         <ProductDemoSection />
         <TrustSection />
         <ComparisonSection />

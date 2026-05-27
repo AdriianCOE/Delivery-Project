@@ -291,7 +291,7 @@ function getStoreKeys(store) {
 }
 
 export default function Statistics() {
-  const { user, userData, role, loading: authLoading } = useAuth()
+  const { user, userData, role, loading: authLoading, storeIds: authStoreIds } = useAuth()
   const [orders, setOrders] = useState([])
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -359,16 +359,31 @@ export default function Statistics() {
       unsubscribers.push(unsubscribe)
     }
 
-    subscribeStores(query(collection(db, 'stores'), where('ownerId', '==', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
+    // Optimization: if AuthContext already has storeIds from the user profile,
+    // subscribe to only those stores (1 query per storeId). This eliminates
+    // 5 broad parallel queries, which were opened on every Statistics mount.
+    const profileStoreIds = Array.isArray(authStoreIds)
+      ? authStoreIds.filter(Boolean).slice(0, 30)
+      : []
+
+    if (profileStoreIds.length > 0) {
+      // Fast path: subscribe to the exact stores we know the user owns.
+      // Firestore `in` allows up to 30 values; profile rarely has > 10.
+      subscribeStores(query(collection(db, 'stores'), where('__name__', 'in', profileStoreIds)))
+    } else {
+      // Fallback path: user profile doesn't have storeIds yet — use broad queries.
+      // This covers legacy accounts or incomplete onboarding.
+      subscribeStores(query(collection(db, 'stores'), where('ownerId', '==', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
+    }
 
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [user?.uid])
+  }, [user?.uid, authStoreIds])
 
   useEffect(() => {
     if (!stores.length) {

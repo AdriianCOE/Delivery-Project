@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,7 +12,6 @@ import {
   formatPlanName,
   getTrialDaysRemaining,
   normalizeBillingCycle,
-  toDate,
 } from '../../utils/billingStatus'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import {
@@ -30,17 +29,55 @@ import {
   FiTrash2,
   FiX,
   FiRefreshCw,
-  FiDollarSign,
   FiMessageSquare,
   FiTrendingUp,
 } from 'react-icons/fi'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 
 function formatCurrency(value) {
   return value.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   })
+}
+
+function openCheckoutUrl(url) {
+  const checkoutUrl = String(url || '').trim()
+  if (!/^https:\/\//i.test(checkoutUrl)) return false
+
+  const opened = window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+  if (!opened) {
+    window.location.assign(checkoutUrl)
+  }
+
+  return true
+}
+
+const pageMotion = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.04 },
+  },
+}
+
+const sectionMotion = {
+  hidden: { opacity: 0, y: 18 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.38, ease: [0.22, 1, 0.36, 1] },
+  },
+}
+
+const actionCardMotion = {
+  hidden: { opacity: 0, y: 14, scale: 0.98 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+  },
 }
 
 const BILLING_PLAN_PRESENTATION = {
@@ -50,7 +87,7 @@ const BILLING_PLAN_PRESENTATION = {
     description: 'O básico para colocar sua loja online, receber pedidos e vender pelo próprio link.',
   },
   professional: {
-    name: 'Plus',
+    name: 'Professional',
     tagline: 'Para vender mais.',
     description: 'Cupons, WhatsApp e relatórios para aumentar pedidos e acompanhar melhor a operação.',
   },
@@ -80,14 +117,92 @@ function getBillingPlanPresentation(planId) {
 }
 
 const SUPPORT_WHATSAPP = '5579999786984'
+const DEFAULT_SUBSCRIPTION_ACTIONS = {
+  canChangePlan: false,
+  canCancel: false,
+  canRequestDueDateChange: false,
+  canUpdatePaymentMethod: false,
+  canSyncStatus: false,
+}
+
+function uniqueValues(values) {
+  return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
+}
+
+function getInitialStoreId({ storeId, storeIds, userData, user }) {
+  const knownStoreIds = uniqueValues([
+    storeId,
+    ...(Array.isArray(storeIds) ? storeIds : []),
+    userData?.storeId,
+    ...(Array.isArray(userData?.storeIds) ? userData.storeIds : []),
+    user?.storeId,
+    ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+  ])
+
+  const selectedStoreId = localStorage.getItem('@PratoBy:selectedStoreId')
+  if (selectedStoreId && knownStoreIds.includes(selectedStoreId)) return selectedStoreId
+  return knownStoreIds[0] || ''
+}
+
+function buildStoreFromManagementData(managementData, fallbackStore, selectedStoreId) {
+  const planId = managementData?.plan?.id || fallbackStore?.plan || 'essential'
+  const billingCycle = managementData?.billingCycle || managementData?.plan?.billingCycle || fallbackStore?.billingCycle || 'monthly'
+  const storeDocId = managementData?.storeId || fallbackStore?.id || selectedStoreId
+
+  return {
+    ...fallbackStore,
+    id: storeDocId,
+    storeId: storeDocId,
+    storeDocId,
+    name: fallbackStore?.name || fallbackStore?.storeName || userStoreName(fallbackStore) || 'Minha Loja',
+    storeName: fallbackStore?.storeName || fallbackStore?.name || userStoreName(fallbackStore) || 'Minha Loja',
+    subscriptionStatus: managementData?.subscriptionStatus || fallbackStore?.subscriptionStatus || 'checkout_pending',
+    plan: planId,
+    billingCycle,
+    trialEndsAt: managementData?.trialEndsAt || fallbackStore?.trialEndsAt || null,
+    currentPeriodEnd: managementData?.currentPeriodEnd || managementData?.nextChargeAt || fallbackStore?.currentPeriodEnd || null,
+    billingMethodConfigured: managementData?.paymentMethod?.configured ?? Boolean(fallbackStore?.billingMethodConfigured),
+    asaasSubscriptionId: managementData?.hasAsaasSubscription ? 'configured' : fallbackStore?.asaasSubscriptionId || '',
+  }
+}
+
+function userStoreName(store) {
+  return store?.signup?.storeName || ''
+}
+
+function getPlanDisplayName(planId) {
+  return getBillingPlanPresentation(planId).name
+}
+
+function getPlanCyclePrice(option, cycle) {
+  if (cycle === 'annual') return option.priceAnnual
+  return option.priceMonthly
+}
+
+function getUnavailableActionMessage(actionKey) {
+  const messages = {
+    canChangePlan: 'Alteração de plano indisponível para o status atual da assinatura.',
+    canCancel: 'Cancelamento indisponível para o status atual da assinatura.',
+    canRequestDueDateChange: 'Alteração de vencimento indisponível para o status atual da assinatura.',
+    canUpdatePaymentMethod: 'Atualização de pagamento indisponível para o status atual da assinatura.',
+    canSyncStatus: 'Sincronização indisponível porque não há assinatura Asaas vinculada.',
+  }
+  return messages[actionKey] || 'Ação indisponível para o status atual da assinatura.'
+}
 
 export default function SubscriptionManagementPage() {
   const auth = useAuth()
   const navigate = useNavigate()
   const { user, userData, storeId, storeIds = [] } = auth
   const [store, setStore] = useState(null)
+  const [managementData, setManagementData] = useState(null)
+  const [managementError, setManagementError] = useState(null)
   const [loadingStore, setLoadingStore] = useState(true)
   const [storeRefreshNonce, setStoreRefreshNonce] = useState(0)
+  const selectedStoreId = useMemo(
+    () => getInitialStoreId({ storeId, storeIds, userData, user }),
+    [storeId, storeIds, userData, user]
+  )
 
   // Loading States for Actions
   const [submittingSync, setSubmittingSync] = useState(false)
@@ -128,121 +243,89 @@ export default function SubscriptionManagementPage() {
     return undefined
   }, [toast])
 
-  // Firestore Store Syncing Listener
+  // Backend-first subscription data loading. Firestore is only a single-doc fallback.
   useEffect(() => {
-    const uid = user?.uid
-    if (!uid && !storeId && (!storeIds || !storeIds.length)) {
-      setLoadingStore(false)
-      setStore(null)
-      return undefined
-    }
+    let active = true
 
-    setLoadingStore(true)
-    const storesMap = new Map()
-    const unsubscribers = []
-
-    function normalizeStoreDoc(storeDoc) {
-      const data = storeDoc.data() || {}
-      return {
-        ...data,
-        id: storeDoc.id,
-        storeId: data.storeId || storeDoc.id,
-        storeDocId: data.storeDocId || storeDoc.id,
-        storeSlug: data.storeSlug || data.slug || storeDoc.id,
-        slug: data.slug || data.storeSlug || storeDoc.id,
-      }
-    }
-
-    function publishStores() {
-      const nextStores = Array.from(storesMap.values()).sort((a, b) => {
-        const aName = String(a.name || a.storeName || a.storeSlug || a.id || '')
-        const bName = String(b.name || b.storeName || b.storeSlug || b.id || '')
-        return aName.localeCompare(bName, 'pt-BR')
+    if (!selectedStoreId) {
+      Promise.resolve().then(() => {
+        if (!active) return
+        setLoadingStore(false)
+        setStore(null)
+        setManagementData(null)
       })
 
-      if (nextStores.length > 0) {
-        const activeStoreId = localStorage.getItem('@PratoBy:selectedStoreId')
-        const active = nextStores.find((s) => s.id === activeStoreId) || nextStores[0]
-        setStore(active)
-      } else {
-        setStore(null)
+      return () => {
+        active = false
       }
-      setLoadingStore(false)
     }
 
-    function subscribeToQuery(storesQuery) {
-      const unsubscribe = onSnapshot(
-        storesQuery,
-        (snapshot) => {
-          snapshot.docs.forEach((storeDoc) => {
-            storesMap.set(storeDoc.id, normalizeStoreDoc(storeDoc))
-          })
-          publishStores()
-        },
-        (error) => {
-          console.error('[SubscriptionManagement] Error loading stores query:', error)
-          setLoadingStore(false)
-        }
-      )
-      unsubscribers.push(unsubscribe)
-    }
+    async function loadSubscriptionManagementData() {
+      setLoadingStore(true)
+      setManagementError(null)
 
-    function subscribeToStoreDoc(storeDocId) {
-      if (!storeDocId) return
-      const unsubscribe = onSnapshot(
-        doc(db, 'stores', storeDocId),
-        (snapshot) => {
-          if (snapshot.exists()) {
-            storesMap.set(snapshot.id, normalizeStoreDoc(snapshot))
+      try {
+        const getManagementData = httpsCallable(functions, 'getSubscriptionManagementData')
+        const result = await getManagementData({ storeId: selectedStoreId })
+        if (!active) return
+
+        const nextManagementData = result?.data || {}
+        setManagementData(nextManagementData)
+        setStore(buildStoreFromManagementData(nextManagementData, {
+          ownerEmail: user?.email || userData?.email || '',
+          name: userData?.signup?.storeName || userData?.storeName || 'Minha Loja',
+          storeName: userData?.signup?.storeName || userData?.storeName || 'Minha Loja',
+        }, selectedStoreId))
+      } catch (error) {
+        console.warn('[SubscriptionManagement] getSubscriptionManagementData failed. Loading single store fallback.', error)
+        if (!active) return
+        setManagementData(null)
+        setManagementError(error)
+
+        try {
+          const storeSnapshot = await getDoc(doc(db, 'stores', selectedStoreId))
+          if (!active) return
+
+          if (storeSnapshot.exists()) {
+            const storeData = storeSnapshot.data() || {}
+            setStore({
+              ...storeData,
+              id: storeSnapshot.id,
+              storeId: storeData.storeId || storeSnapshot.id,
+              storeDocId: storeData.storeDocId || storeSnapshot.id,
+              storeSlug: storeData.storeSlug || storeData.slug || storeSnapshot.id,
+              slug: storeData.slug || storeData.storeSlug || storeSnapshot.id,
+            })
+          } else {
+            setStore(null)
           }
-          publishStores()
-        },
-        (error) => {
-          console.error('[SubscriptionManagement] Error loading store doc:', error)
-          setLoadingStore(false)
+        } catch (fallbackError) {
+          console.error('[SubscriptionManagement] single store fallback failed:', fallbackError)
+          if (active) setStore(null)
         }
-      )
-      unsubscribers.push(unsubscribe)
+      } finally {
+        if (active) setLoadingStore(false)
+      }
     }
 
-    if (uid) {
-      subscribeToQuery(query(collection(db, 'stores'), where('ownerId', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
-    }
-
-    const knownStoreIds = Array.from(new Set([
-      storeId,
-      ...(Array.isArray(storeIds) ? storeIds : []),
-      userData?.storeId,
-      ...(Array.isArray(userData?.storeIds) ? userData.storeIds : []),
-      user?.storeId,
-      ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
-    ].filter(Boolean)))
-
-    knownStoreIds.forEach(subscribeToStoreDoc)
-
-    if (unsubscribers.length === 0) {
-      setStore(null)
-      setLoadingStore(false)
-      return undefined
-    }
+    loadSubscriptionManagementData()
 
     return () => {
-      unsubscribers.forEach((unsubscribe) => unsubscribe())
+      active = false
     }
-  }, [user, storeId, storeIds, userData, storeRefreshNonce])
+  }, [selectedStoreId, storeRefreshNonce, user?.email, userData])
 
   // Normalization Helpers
-  const subscriptionStatus = store?.subscriptionStatus || userData?.subscriptionStatus || 'checkout_pending'
-  const currentPlan = store?.plan || userData?.plan || 'essential'
-  const billingCycle = store?.billingCycle || userData?.billingCycle || 'monthly'
-  const trialEndsAt = store?.trialEndsAt || userData?.trialEndsAt
-  const currentPeriodEnd = store?.currentPeriodEnd || userData?.currentPeriodEnd
-  const billingMethodConfigured = Boolean(store?.billingMethodConfigured || userData?.billingMethodConfigured)
-  const asaasSubscriptionId = store?.asaasSubscriptionId || userData?.asaasSubscriptionId
+  const subscriptionActions = managementData?.actions || DEFAULT_SUBSCRIPTION_ACTIONS
+  const subscriptionStatus = managementData?.subscriptionStatus || store?.subscriptionStatus || userData?.subscriptionStatus || 'checkout_pending'
+  const currentPlan = managementData?.plan?.id || store?.plan || userData?.plan || 'essential'
+  const billingCycle = managementData?.billingCycle || managementData?.plan?.billingCycle || store?.billingCycle || userData?.billingCycle || 'monthly'
+  const trialEndsAt = managementData?.trialEndsAt || store?.trialEndsAt || userData?.trialEndsAt
+  const currentPeriodEnd = managementData?.currentPeriodEnd || store?.currentPeriodEnd || userData?.currentPeriodEnd
+  const nextChargeAt = managementData?.nextChargeAt || currentPeriodEnd || trialEndsAt
+  const billingMethodConfigured = Boolean(
+    managementData?.paymentMethod?.configured ?? store?.billingMethodConfigured ?? userData?.billingMethodConfigured
+  )
 
   const trialDaysLeft = useMemo(() => getTrialDaysRemaining(trialEndsAt), [trialEndsAt])
   const isTrial = subscriptionStatus === 'trialing'
@@ -250,6 +333,10 @@ export default function SubscriptionManagementPage() {
   const isPastDue = subscriptionStatus === 'past_due'
   const isPending = subscriptionStatus === 'checkout_pending'
   const currentPlanPresentation = getBillingPlanPresentation(currentPlan)
+  const currentPlanOption = PLAN_OPTIONS.find((planOption) => planOption.id === currentPlan)
+  const currentPlanDisplayAmount = Number.isFinite(Number(managementData?.plan?.amountCents))
+    ? Number(managementData.plan.amountCents) / 100
+    : getPlanCyclePrice(currentPlanOption || PLAN_OPTIONS[0], billingCycle)
 
   // Header Status Badge Object
   const headerBadge = useMemo(() => {
@@ -272,10 +359,15 @@ export default function SubscriptionManagementPage() {
   // 1. Action: Sync Status
   async function handleSyncStatus() {
     if (submittingSync) return
+    if (!subscriptionActions.canSyncStatus) {
+      setToast({ type: 'info', message: getUnavailableActionMessage('canSyncStatus') })
+      return
+    }
+
     setSubmittingSync(true)
     try {
       const syncStatusFn = httpsCallable(functions, 'syncAsaasSubscriptionStatus')
-      const result = await syncStatusFn({ storeId: store?.id })
+      const result = await syncStatusFn({ storeId: store?.id || selectedStoreId })
       
       if (auth.refreshUserData) {
         await auth.refreshUserData()
@@ -297,7 +389,7 @@ export default function SubscriptionManagementPage() {
           type: 'info',
           message: 'Status atualizado com os dados locais salvos. Boas vendas!',
         })
-      } catch (err) {
+      } catch (_err) {
         triggerSupportFallback(
           'Sincronizar Status da Assinatura',
           'Desejo que o financeiro verifique e sincronize manualmente a confirmação de pagamento Asaas no meu painel.'
@@ -311,12 +403,17 @@ export default function SubscriptionManagementPage() {
   // 2. Action: Change Plan
   async function handleConfirmPlanChange() {
     if (submittingPlanChange || !pendingPlanId) return
+    if (!subscriptionActions.canChangePlan) {
+      setToast({ type: 'info', message: getUnavailableActionMessage('canChangePlan') })
+      return
+    }
+
     setSubmittingPlanChange(true)
     try {
       const changePlanFn = httpsCallable(functions, 'changeSubscriptionPlan')
-      await changePlanFn({
-        storeId: store?.id,
-        plan: pendingPlanId,
+      const result = await changePlanFn({
+        storeId: store?.id || selectedStoreId,
+        targetPlan: pendingPlanId,
         billingCycle: selectedPlanCycle,
       })
 
@@ -327,7 +424,7 @@ export default function SubscriptionManagementPage() {
       setShowPlanModal(false)
       setToast({
         type: 'success',
-        message: 'Solicitação de alteração de plano enviada com sucesso!',
+        message: result?.data?.message || 'Solicitação de alteração de plano enviada com sucesso!',
       })
     } catch (error) {
       console.warn('[SubscriptionManagement] changeSubscriptionPlan failed or not deployed.', error)
@@ -348,18 +445,23 @@ export default function SubscriptionManagementPage() {
   // 3. Action: Change Due Date
   async function handleConfirmDueDateChange() {
     if (submittingDueDate) return
+    if (!subscriptionActions.canRequestDueDateChange) {
+      setToast({ type: 'info', message: getUnavailableActionMessage('canRequestDueDateChange') })
+      return
+    }
+
     setSubmittingDueDate(true)
     try {
       const changeDueDateFn = httpsCallable(functions, 'requestSubscriptionDueDateChange')
-      await changeDueDateFn({
-        storeId: store?.id,
-        dueDateDay: selectedDueDate,
+      const result = await changeDueDateFn({
+        storeId: store?.id || selectedStoreId,
+        desiredDueDay: selectedDueDate,
       })
 
       setShowDueDateModal(false)
       setToast({
         type: 'success',
-        message: 'Solicitação de alteração de vencimento enviada com sucesso!',
+        message: result?.data?.message || 'Solicitação de alteração de vencimento enviada com sucesso!',
       })
     } catch (error) {
       console.warn('[SubscriptionManagement] requestSubscriptionDueDateChange failed or not deployed.', error)
@@ -376,6 +478,11 @@ export default function SubscriptionManagementPage() {
   // 4. Action: Cancel Subscription
   async function handleConfirmCancel() {
     if (submittingCancel) return
+    if (!subscriptionActions.canCancel) {
+      setToast({ type: 'info', message: getUnavailableActionMessage('canCancel') })
+      return
+    }
+
     if (cancelConfirmationText.trim().toLowerCase() !== 'cancelar minha assinatura') {
       setToast({
         type: 'error',
@@ -387,9 +494,11 @@ export default function SubscriptionManagementPage() {
     setSubmittingCancel(true)
     try {
       const cancelFn = httpsCallable(functions, 'cancelSubscription')
-      await cancelFn({
-        storeId: store?.id,
+      const result = await cancelFn({
+        storeId: store?.id || selectedStoreId,
         reason: cancelReason,
+        cancelMode: 'end_of_cycle',
+        confirmationText: cancelConfirmationText.trim().toLowerCase(),
       })
 
       if (auth.refreshUserData) {
@@ -397,9 +506,19 @@ export default function SubscriptionManagementPage() {
       }
       setStoreRefreshNonce((v) => v + 1)
       setShowCancelModal(false)
+      const resultStatus = result?.data?.status
+      const cancellationStatus = result?.data?.cancellationStatus
+      const message =
+        resultStatus === 'requested'
+          ? 'Cancelamento solicitado com sucesso. Nossa equipe confirmará o processamento.'
+          : resultStatus === 'canceled'
+          ? 'Assinatura cancelada com sucesso.'
+          : resultStatus === 'cancel_scheduled' || cancellationStatus === 'cancel_scheduled'
+          ? 'Cancelamento agendado para o fim do ciclo atual.'
+          : 'Cancelamento solicitado com sucesso. Nossa equipe confirmará o processamento.'
       setToast({
         type: 'success',
-        message: 'Sua assinatura foi cancelada com sucesso.',
+        message,
       })
     } catch (error) {
       console.warn('[SubscriptionManagement] cancelSubscription failed or not deployed.', error)
@@ -416,18 +535,38 @@ export default function SubscriptionManagementPage() {
   // 5. Action: Update Payment Method (Redirect/Checkout Asaas)
   async function handleUpdatePaymentMethod() {
     if (submittingPaymentMethod) return
+    if (!subscriptionActions.canUpdatePaymentMethod) {
+      setToast({ type: 'info', message: getUnavailableActionMessage('canUpdatePaymentMethod') })
+      return
+    }
+
     setSubmittingPaymentMethod(true)
     try {
       const updatePaymentFn = httpsCallable(functions, 'createPaymentMethodUpdateCheckout')
-      const result = await updatePaymentFn({ storeId: store?.id })
+      const result = await updatePaymentFn({ storeId: store?.id || selectedStoreId })
       
       const checkoutUrl = result?.data?.checkoutUrl || result?.data?.paymentUrl
       if (checkoutUrl) {
-        window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+        if (!openCheckoutUrl(checkoutUrl)) {
+          throw new Error('URL de checkout inválida.')
+        }
         setToast({
           type: 'success',
           message: 'Checkout seguro Asaas aberto em uma nova aba!',
         })
+      } else if (result?.data?.status === 'manual_request_required') {
+        setToast({
+          type: 'success',
+          message: result?.data?.message || 'Solicitação enviada. Nossa equipe enviará o caminho seguro para atualizar o pagamento.',
+        })
+      } else if (result?.data?.status === 'requires_billing_data') {
+        setToast({
+          type: 'info',
+          message: result?.data?.message || 'Redirecionando para configurar cobrança.',
+        })
+        setTimeout(() => {
+          navigate('/dashboard/billing')
+        }, 800)
       } else {
         throw new Error('Nenhuma URL retornada.')
       }
@@ -496,10 +635,26 @@ export default function SubscriptionManagementPage() {
         }
       />
 
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      <motion.div
+        variants={pageMotion}
+        initial="hidden"
+        animate="visible"
+        className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8"
+      >
+        {managementError && (
+          <motion.section
+            variants={sectionMotion}
+            className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+          >
+            Dados financeiros carregados em modo local. Algumas ações podem ficar indisponíveis até a função de gerenciamento responder.
+          </motion.section>
+        )}
         
         {/* Dynamic HUD Control Center */}
-        <section className="bg-gradient-to-br from-white via-[#fffdfb] to-orange-50/15 dark:from-zinc-900 dark:to-zinc-950 text-gray-900 dark:text-white rounded-[2rem] p-6 lg:p-8 shadow-sm dark:shadow-xl border border-orange-100 dark:border-zinc-800 relative overflow-hidden">
+        <motion.section
+          variants={sectionMotion}
+          className="bg-gradient-to-br from-white via-[#fffdfb] to-orange-50/15 dark:from-zinc-900 dark:to-zinc-950 text-gray-900 dark:text-white rounded-[2rem] p-6 lg:p-8 shadow-sm dark:shadow-xl border border-orange-100 dark:border-zinc-800 relative overflow-hidden"
+        >
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-orange-600/5 rounded-full blur-3xl pointer-events-none" />
 
@@ -595,11 +750,7 @@ export default function SubscriptionManagementPage() {
                   <p className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">Valor do Plano</p>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
                     <span className="text-2xl font-black text-gray-900 dark:text-white">
-                      {formatCurrency(
-                        billingCycle === 'annual'
-                          ? (PLAN_OPTIONS.find((p) => p.id === currentPlan)?.priceAnnual || 599.90)
-                          : (PLAN_OPTIONS.find((p) => p.id === currentPlan)?.priceMonthly || 59.99)
-                      )}
+                      {formatCurrency(currentPlanDisplayAmount)}
                     </span>
                     <span className="text-xs text-gray-400 dark:text-zinc-400 font-semibold">
                       /{billingCycle === 'annual' ? 'ano' : 'mês'}
@@ -609,7 +760,7 @@ export default function SubscriptionManagementPage() {
                   <div className="mt-3 p-3 rounded-xl bg-orange-50/20 dark:bg-zinc-950/50 border border-orange-100/50 dark:border-zinc-800">
                     <p className="text-[11px] text-gray-600 dark:text-zinc-300 font-semibold leading-relaxed">
                       {billingMethodConfigured
-                        ? `Próxima fatura automática agendada para: ${formatBillingDate(currentPeriodEnd || trialEndsAt)}.`
+                        ? `Próxima referência de cobrança: ${formatBillingDate(nextChargeAt)}.`
                         : 'Aguardando o cadastro dos dados de faturamento para iniciar o ciclo seguro.'}
                     </p>
                   </div>
@@ -621,8 +772,9 @@ export default function SubscriptionManagementPage() {
                 <button
                   type="button"
                   onClick={handleSyncStatus}
-                  disabled={submittingSync}
-                  className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md text-xs font-black transition disabled:opacity-60"
+                  disabled={submittingSync || !subscriptionActions.canSyncStatus}
+                  title={!subscriptionActions.canSyncStatus ? getUnavailableActionMessage('canSyncStatus') : undefined}
+                  className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submittingSync ? (
                     <FiLoader className="animate-spin" size={14} />
@@ -642,24 +794,33 @@ export default function SubscriptionManagementPage() {
               </div>
             </div>
           </div>
-        </section>
+        </motion.section>
 
         {/* Core Actions Grid */}
-        <section className="space-y-4">
+        <motion.section variants={sectionMotion} className="space-y-4">
           <h3 className="text-lg font-black tracking-tight text-gray-900 dark:text-white">Ações da Assinatura</h3>
           
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             
             {/* Card: Alterar Plano */}
-            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <motion.div
+              variants={actionCardMotion}
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+            >
               <div>
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
                   <FiTrendingUp size={18} />
                 </span>
                 <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">Alterar Plano</h4>
                 <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
-                  Mude seu plano de assinatura a qualquer momento de forma simplificada.
+                  Solicite a troca de plano com validação segura do financeiro.
                 </p>
+                {!subscriptionActions.canChangePlan && (
+                  <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
+                    {getUnavailableActionMessage('canChangePlan')}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -668,35 +829,49 @@ export default function SubscriptionManagementPage() {
                   setSelectedPlanCycle(billingCycle)
                   setShowPlanModal(true)
                 }}
-                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition dark:bg-orange-950/20"
+                disabled={!subscriptionActions.canChangePlan}
+                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-orange-950/20"
               >
                 Escolher outro plano
               </button>
-            </div>
+            </motion.div>
 
             {/* Card: Atualizar Forma de Pagamento */}
-            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <motion.div
+              variants={actionCardMotion}
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+            >
               <div>
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
                   <FiCreditCard size={18} />
                 </span>
                 <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">Forma de Pagamento</h4>
                 <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
-                  Atualize seu cartão de crédito ou altere a modalidade de faturamento recorrente.
+                  Atualize a forma de pagamento por checkout seguro ou solicitação assistida.
                 </p>
+                {!subscriptionActions.canUpdatePaymentMethod && (
+                  <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
+                    {getUnavailableActionMessage('canUpdatePaymentMethod')}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={handleUpdatePaymentMethod}
-                disabled={submittingPaymentMethod}
-                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition dark:bg-orange-950/20"
+                disabled={submittingPaymentMethod || !subscriptionActions.canUpdatePaymentMethod}
+                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-orange-950/20"
               >
                 {submittingPaymentMethod ? <FiLoader className="animate-spin" /> : 'Atualizar dados'}
               </button>
-            </div>
+            </motion.div>
 
             {/* Card: Alterar Vencimento */}
-            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <motion.div
+              variants={actionCardMotion}
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+            >
               <div>
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
                   <FiCalendar size={18} />
@@ -705,26 +880,41 @@ export default function SubscriptionManagementPage() {
                 <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
                   Solicite a alteração do dia de faturamento das suas próximas mensalidades.
                 </p>
+                {!subscriptionActions.canRequestDueDateChange && (
+                  <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
+                    {getUnavailableActionMessage('canRequestDueDateChange')}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => setShowDueDateModal(true)}
-                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition dark:bg-orange-950/20"
+                disabled={!subscriptionActions.canRequestDueDateChange}
+                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-orange-950/20"
               >
                 Mudar vencimento
               </button>
-            </div>
+            </motion.div>
 
             {/* Card: Cancelar Assinatura */}
-            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <motion.div
+              variants={actionCardMotion}
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+            >
               <div>
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/20 text-red-600">
                   <FiTrash2 size={18} />
                 </span>
                 <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">Cancelar Assinatura</h4>
                 <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
-                  Caso deseje encerrar seu contrato com a plataforma e desativar o cardápio.
+                  Solicite o cancelamento ao fim do ciclo, sem apagar dados da loja.
                 </p>
+                {!subscriptionActions.canCancel && (
+                  <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
+                    {getUnavailableActionMessage('canCancel')}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -733,17 +923,21 @@ export default function SubscriptionManagementPage() {
                   setCancelConfirmationText('')
                   setShowCancelModal(true)
                 }}
-                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black transition dark:bg-red-950/20"
+                disabled={!subscriptionActions.canCancel}
+                className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/20"
               >
                 Encerrar contrato
               </button>
-            </div>
+            </motion.div>
 
           </div>
-        </section>
+        </motion.section>
 
         {/* WhatsApp Support Callout */}
-        <section className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col gap-6 md:flex-row md:items-center md:justify-between transition">
+        <motion.section
+          variants={sectionMotion}
+          className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col gap-6 md:flex-row md:items-center md:justify-between transition"
+        >
           <div className="flex items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
               <FiMessageSquare size={22} />
@@ -763,9 +957,9 @@ export default function SubscriptionManagementPage() {
             <FiMessageSquare size={14} />
             <span>Falar com suporte</span>
           </button>
-        </section>
+        </motion.section>
 
-      </div>
+      </motion.div>
 
       {/* MODAL 1: Alterar Plano */}
       {showPlanModal && (
@@ -814,7 +1008,7 @@ export default function SubscriptionManagementPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 {PLAN_OPTIONS.map((opt) => {
                   const isCurrentChoice = pendingPlanId === opt.id
-                  const price = selectedPlanCycle === 'annual' ? opt.equivalentMonthly : opt.priceMonthly
+                  const cyclePrice = getPlanCyclePrice(opt, selectedPlanCycle)
                   
                   return (
                     <button
@@ -829,7 +1023,7 @@ export default function SubscriptionManagementPage() {
                     >
                       <div>
                         <div className="flex justify-between items-start">
-                          <span className="text-xs font-black text-gray-900 dark:text-white">{formatPlanName(opt.id)}</span>
+                          <span className="text-xs font-black text-gray-900 dark:text-white">{getPlanDisplayName(opt.id)}</span>
                           {opt.id === currentPlan && (
                             <span className="text-[9px] font-black uppercase bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-zinc-400 px-1.5 py-0.5 rounded-full">Atual</span>
                           )}
@@ -839,8 +1033,21 @@ export default function SubscriptionManagementPage() {
 
                       <div>
                         <div className="flex items-baseline gap-1 mt-3">
-                          <span className="text-lg font-black text-gray-900 dark:text-white">{formatCurrency(price)}</span>
-                          <span className="text-[10px] text-gray-400 font-semibold">/mês</span>
+                          <span className="text-lg font-black text-gray-900 dark:text-white">{formatCurrency(cyclePrice)}</span>
+                          <span className="text-[10px] text-gray-400 font-semibold">/{selectedPlanCycle === 'annual' ? 'ano' : 'mês'}</span>
+                        </div>
+                        {selectedPlanCycle === 'annual' && (
+                          <p className="mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            Equivale a {formatCurrency(opt.equivalentMonthly)}/mês
+                          </p>
+                        )}
+                        <div className="mt-3 space-y-1 rounded-xl bg-gray-50 p-2 dark:bg-zinc-950/60">
+                          <p className="text-[10px] font-semibold text-gray-500 dark:text-zinc-400">
+                            Mensal: {formatCurrency(opt.priceMonthly)}/mês
+                          </p>
+                          <p className="text-[10px] font-semibold text-gray-500 dark:text-zinc-400">
+                            Anual: {formatCurrency(opt.priceAnnual)}/ano
+                          </p>
                         </div>
                       </div>
                     </button>
@@ -848,15 +1055,31 @@ export default function SubscriptionManagementPage() {
                 })}
               </div>
 
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-4 dark:border-orange-500/20 dark:bg-orange-500/10 sm:flex sm:items-center sm:justify-between sm:gap-4">
+                <div>
+                  <p className="text-sm font-black text-gray-900 dark:text-white">Precisa comparar antes de solicitar?</p>
+                  <p className="mt-1 text-xs font-semibold text-gray-600 dark:text-zinc-400">
+                    Veja a lista completa de recursos dos planos Essencial, Professional e Premium.
+                  </p>
+                </div>
+                <Link
+                  to="/planos#comparacao"
+                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-xs font-black text-[#f97316] ring-1 ring-orange-100 transition hover:bg-orange-50 dark:bg-zinc-950/80 dark:ring-orange-500/20 dark:hover:bg-zinc-900 sm:mt-0 sm:w-auto"
+                >
+                  Lista de comparação completa
+                  <FiArrowRight size={13} />
+                </Link>
+              </div>
+
               {/* Informational Alerts */}
               <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4 text-xs font-semibold text-gray-500 leading-relaxed dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400 space-y-2">
                 <p className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
                   <FiCheck className="shrink-0" />
-                  Upgrade (Plano maior): Os novos recursos serão liberados imediatamente em sua conta lojista.
+                  A troca de plano será solicitada com o valor oficial calculado pelo PratoBy.
                 </p>
                 <p className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
                   <FiInfo className="shrink-0" />
-                  Downgrade (Plano menor): O novo valor e recursos serão aplicados no final do período de ciclo atual.
+                  Nossa equipe confirmará o melhor momento de aplicação para evitar cobranças confusas.
                 </p>
               </div>
 
@@ -878,7 +1101,7 @@ export default function SubscriptionManagementPage() {
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] px-5 text-xs font-black text-white shadow-md transition disabled:opacity-60"
               >
                 {submittingPlanChange ? <FiLoader className="animate-spin" /> : <FiCheck />}
-                Confirmar Alteração de Plano
+                Solicitar alteração de plano
               </button>
             </div>
 
@@ -912,7 +1135,7 @@ export default function SubscriptionManagementPage() {
 
             <div className="p-6 space-y-4">
               <p className="text-xs text-gray-500 dark:text-zinc-400 font-semibold leading-relaxed">
-                A alteração do vencimento ajustará as datas das faturas futuras cobradas automaticamente em sua conta no Asaas.
+                Sua solicitação será registrada para análise segura. Faturas já geradas podem exigir confirmação manual do suporte.
               </p>
 
               <div>
@@ -953,7 +1176,7 @@ export default function SubscriptionManagementPage() {
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] px-5 text-xs font-black text-white shadow-md transition disabled:opacity-60"
               >
                 {submittingDueDate ? <FiLoader className="animate-spin" /> : <FiCheck />}
-                Salvar Novo Vencimento
+                Solicitar alteração de vencimento
               </button>
             </div>
 
@@ -1041,7 +1264,7 @@ export default function SubscriptionManagementPage() {
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-5 text-xs font-black text-white shadow-md transition disabled:opacity-50"
               >
                 {submittingCancel ? <FiLoader className="animate-spin" /> : <FiTrash2 />}
-                Confirmar Cancelamento de Assinatura
+                Solicitar cancelamento
               </button>
             </div>
 
@@ -1081,7 +1304,7 @@ export default function SubscriptionManagementPage() {
               <div className="text-center space-y-2">
                 <h4 className="text-sm font-black text-gray-900 dark:text-white">Esta solicitação será concluída pelo WhatsApp</h4>
                 <p className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
-                  A ação <strong className="text-gray-900 dark:text-white">"{fallbackActionTitle}"</strong> requer a confirmação manual ou processamento imediato pelo nosso time financeiro. Clique abaixo para enviar uma mensagem predefinida segura para nosso suporte.
+                  A ação <strong className="text-gray-900 dark:text-white">"{fallbackActionTitle}"</strong> requer confirmação manual do nosso time financeiro. Clique abaixo para enviar uma mensagem predefinida segura para nosso suporte.
                 </p>
               </div>
 

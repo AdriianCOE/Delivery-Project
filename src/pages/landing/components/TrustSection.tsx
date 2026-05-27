@@ -17,11 +17,6 @@ const trustFeatures = [
     title: 'LGPD',
     description: 'Dados protegidos',
   },
-  {
-    icon: CheckCircle,
-    title: '0% comissão',
-    description: '100% do lucro é seu',
-  },
 ];
 
 export function TrustSection() {

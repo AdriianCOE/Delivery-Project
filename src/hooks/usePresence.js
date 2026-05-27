@@ -16,8 +16,12 @@ import {
 import { auth, rtdb } from '../services/firebase'
 
 async function getPresenceUser() {
+  // Guard: if ANY authenticated user is active (merchant or previous anon session),
+  // skip setPersistence entirely. Calling it here could downgrade a merchant's
+  // localStorage-based session to sessionStorage, logging them out on the next tab.
   if (auth.currentUser) return auth.currentUser
 
+  // Only change persistence when we are certain no user is active.
   await setPersistence(auth, browserSessionPersistence)
   const credential = await signInAnonymously(auth)
   return credential.user

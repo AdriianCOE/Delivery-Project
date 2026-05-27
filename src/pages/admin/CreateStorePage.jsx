@@ -79,7 +79,7 @@ const PLAN_OPTIONS = [
   },
   {
     id: 'professional',
-    label: 'Profissional',
+    label: 'Professional',
     price: 'R$ 89,99/mês',
     description: 'Mais controle para cupons, entrega, painel e operação.',
     features: ['Dashboard', 'Cupons', 'Taxa por bairro'],

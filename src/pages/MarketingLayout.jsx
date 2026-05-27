@@ -29,7 +29,7 @@ const footerLinks = [
 const socialLinks = [
   {
     label: 'Instagram',
-    href: 'https://www.instagram.com/',
+    href: 'https://www.instagram.com/pratobybr',
     icon: FiInstagram,
     hoverClass: 'hover:border-pink-200 hover:bg-pink-50 hover:text-pink-600',
   },

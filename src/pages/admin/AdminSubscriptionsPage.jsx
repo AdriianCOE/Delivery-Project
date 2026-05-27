@@ -209,7 +209,7 @@ export default function AdminSubscriptionsPage() {
               >
                 <option value="all">Todos os Planos</option>
                 <option value="essential">Básico</option>
-                <option value="professional">Profissional</option>
+                <option value="professional">Professional</option>
                 <option value="premium">Premium</option>
               </select>
             </div>

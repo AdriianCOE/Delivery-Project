@@ -96,7 +96,7 @@ function formatSubscriptionStatus(status) {
 function formatPlanName(plan) {
   const map = {
     essential: 'Essencial',
-    professional: 'Profissional',
+    professional: 'Professional',
     premium: 'Premium',
   }
   return map[String(plan || '').toLowerCase()] || plan || '—'

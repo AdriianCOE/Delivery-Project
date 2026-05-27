@@ -63,7 +63,7 @@ const PLAN_CATALOG = {
   },
   professional: {
     id: 'professional',
-    name: 'Profissional',
+    name: 'Professional',
     monthlyCents: 8999,
     annualCents: 89990,
   },
@@ -993,7 +993,7 @@ async function acquireStartAsaasSubscriptionLock({
 
     assertLockCanBeAcquired(lockDoc, now)
 
-    const plan = normalizePlan(requestedPlan || userData.plan || 'professional')
+    const plan = normalizePlan(requestedPlan || userData.plan || 'essential')
     const billingCycle = normalizeBillingCycle(requestedBillingCycle || userData.billingCycle || 'monthly')
 
     transaction.set(lockRef, {
@@ -1272,7 +1272,7 @@ async function resolveManagementContext({ db, uid, requestedStoreId }) {
   })
 }
 
-function getKnownPlan(value, fallback = 'professional') {
+function getKnownPlan(value, fallback = 'essential') {
   const plan = String(value || '').trim().toLowerCase()
   return PLAN_CATALOG[plan] ? plan : fallback
 }
@@ -1287,7 +1287,7 @@ function getContextPlan(context) {
     context.existingReference?.canonicalSubscription?.plan ||
       context.storeData?.plan ||
       context.userData?.plan ||
-      'professional'
+      'essential'
   )
 }
 
@@ -1984,7 +1984,7 @@ async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, e
       providerCheckoutId: checkoutId,
       status: 'trialing',
       providerStatus: checkout?.status || checkoutStatus,
-      plan: checkoutData.plan || 'professional',
+      plan: checkoutData.plan || 'essential',
       billingCycle: checkoutData.billingCycle || 'monthly',
       amountCents,
       billingType: 'CREDIT_CARD',
@@ -2578,10 +2578,10 @@ function createAsaasFunctions({ db, admin, logger }) {
 
       const cancelMode = normalizeCancelMode(data.cancelMode)
       const confirmationText = String(data.confirmationText || '').trim().toLowerCase()
-      if (cancelMode === 'immediate' && !['cancelar agora', 'cancelar minha assinatura'].includes(confirmationText)) {
+      if (confirmationText !== 'cancelar minha assinatura') {
         throw new HttpsError(
           'invalid-argument',
-          'Confirmacao explicita obrigatoria para cancelamento imediato.'
+          'Digite a confirmacao exatamente para solicitar o cancelamento.'
         )
       }
 

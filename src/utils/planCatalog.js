@@ -26,7 +26,7 @@ export const PLAN_OPTIONS = [
   },
   {
     id: 'professional',
-    name: 'Profissional',
+    name: 'Professional',
     subtitle: 'Mais escolhido pelos lojistas',
     description: 'Mais escolhido pelos lojistas',
     priceMonthly: 89.99,
@@ -64,7 +64,7 @@ export const PLAN_OPTIONS = [
     cta: 'Começar agora',
     features: [
       '14 dias grátis inclusos',
-      'Tudo do Profissional',
+      'Tudo do Professional',
       'Multi-loja até 3 unidades',
       'API de integração',
       'Domínio personalizado',

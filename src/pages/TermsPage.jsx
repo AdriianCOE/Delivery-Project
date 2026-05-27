@@ -15,12 +15,12 @@ import {
 } from 'lucide-react'
 
 const SECTIONS = [
-  { id: 'aceitacao', title: '1. Aceitação dos Termos', icon: UserCheck, summary: 'Ao criar uma conta ou utilizar a plataforma PratoBy, está a concordar com as nossas regras de utilização.' },
+  { id: 'aceitacao', title: '1. Aceitação dos Termos', icon: UserCheck, summary: 'Ao criar uma conta ou usar a plataforma PratoBy, você concorda com as nossas regras de uso.' },
   { id: 'servicos', title: '2. Descrição do Serviço', icon: ShoppingBag, summary: 'O PratoBy é um ecossistema de cardápio digital e gestão. Não cobramos comissões sobre as suas vendas e não intermediamos as entregas.' },
-  { id: 'contas', title: '3. Registo e Segurança', icon: FileText, summary: 'É responsável por manter a segurança da sua palavra-passe e por todas as ações realizadas no seu painel administrativo.' },
-  { id: 'pagamentos', title: '4. Subscrições e Cancelamento', icon: CreditCard, summary: 'Os planos são cobrados mensalmente. Pode cancelar a sua subscrição a qualquer momento, sem fidelizações ou multas.' },
-  { id: 'responsabilidade', title: '5. Responsabilidades', icon: Scale, summary: 'Não nos responsabilizamos por problemas nas entregas, disputas financeiras com clientes ou falhas na ligação à internet da sua loja.' },
-  { id: 'propriedade', title: '6. Propriedade Intelectual', icon: ShieldAlert, summary: 'O código, a tecnologia e a marca PratoBy pertencem-nos. Os dados das suas vendas e dos seus produtos são 100% seus.' },
+  { id: 'contas', title: '3. Registro e Segurança', icon: FileText, summary: 'Você é responsável por manter a segurança da sua senha e por todas as ações realizadas no seu painel administrativo.' },
+  { id: 'pagamentos', title: '4. Assinaturas e Cancelamento', icon: CreditCard, summary: 'Os planos são cobrados mensalmente. Você pode cancelar a sua assinatura a qualquer momento, sem fidelidade ou multas.' },
+  { id: 'responsabilidade', title: '5. Responsabilidades', icon: Scale, summary: 'Não nos responsabilizamos por problemas nas entregas, disputas financeiras com clientes ou falhas na conexão de internet da sua loja.' },
+  { id: 'propriedade', title: '6. Propriedade Intelectual', icon: ShieldAlert, summary: 'O código, a tecnologia e a marca PratoBy pertencem a nós. Os dados das suas vendas e dos seus produtos são 100% seus.' },
 ]
 
 export default function TermsPage() {
@@ -85,7 +85,7 @@ export default function TermsPage() {
             Termos de Serviço
           </h1>
           <p className="mt-4 text-base sm:text-lg text-gray-500 max-w-2xl font-medium leading-relaxed">
-            Regras transparentes e sem letras miúdas sobre como funciona a nossa plataforma e a sua subscrição no PratoBy.
+            Regras transparentes e sem letras miúdas sobre como funciona a nossa plataforma e a sua assinatura no PratoBy.
           </p>
         </div>
       </header>
@@ -158,10 +158,10 @@ export default function TermsPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  Ao aceder, registar-se ou utilizar o ecossistema PratoBy, está a celebrar um contrato vinculativo com a nossa empresa, aceitando integralmente as condições descritas neste documento.
+                  Ao acessar, registrar-se ou usar o ecossistema PratoBy, você está celebrando um contrato vinculativo com a nossa empresa, aceitando integralmente as condições descritas neste documento.
                 </p>
                 <p>
-                  Se não concordar com qualquer cláusula aqui presente, aconselhamos que interrompa de imediato a utilização do nosso software, painel administrativo e links de cardápio associados.
+                  Se não concordar com qualquer cláusula aqui presente, aconselhamos que interrompa de imediato o uso do nosso software, painel administrativo e links de cardápio associados.
                 </p>
               </div>
             </section>
@@ -195,7 +195,7 @@ export default function TermsPage() {
                 <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
                   <FileText size={20} />
                 </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">3. Registo e Segurança da Conta</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">3. Registro e Segurança da Conta</h2>
               </div>
               
               <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
@@ -204,10 +204,10 @@ export default function TermsPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  Para configurar a sua loja online, deve fornecer dados verídicos, precisos e atualizados (tais como nome do estabelecimento, e-mail de contacto corporativo e dados fiscais necessários).
+                  Para configurar a sua loja online, você deve fornecer dados verídicos, precisos e atualizados (tais como nome do estabelecimento, e-mail de contato corporativo e dados fiscais necessários).
                 </p>
                 <p>
-                  É estritamente proibido partilhar as suas credenciais de acesso com terceiros não autorizados. Quaisquer prejuízos causados por má utilização das chaves de acesso serão da inteira responsabilidade do titular da conta.
+                  É estritamente proibido compartilhar as suas credenciais de acesso com terceiros não autorizados. Quaisquer prejuízos causados por mau uso das chaves de acesso serão da inteira responsabilidade do titular da conta.
                 </p>
               </div>
             </section>
@@ -227,10 +227,10 @@ export default function TermsPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  A ativação das funcionalidades completas do painel operacional ocorre mediante a subscrição de um plano recorrente mensal, debitado automaticamente através do método escolhido no checkout administrativo.
+                  A ativação das funcionalidades completas do painel operacional ocorre mediante a assinatura de um plano recorrente mensal, debitado automaticamente através do método escolhido no checkout administrativo.
                 </p>
                 <p>
-                  O cancelamento pode ser acionado a qualquer momento diretamente na aba de faturação do seu painel. Não existem taxas ocultas de quebra de contrato. Após o cancelamento, o acesso ao painel de pedidos permanecerá ativo até ao término do ciclo de faturação já liquidado.
+                  O cancelamento pode ser acionado a qualquer momento diretamente na aba de faturamento do seu painel. Não existem taxas ocultas de quebra de contrato. Após o cancelamento, o acesso ao painel de pedidos permanecerá ativo até ao término do ciclo de faturamento já pago.
                 </p>
               </div>
             </section>
@@ -250,10 +250,10 @@ export default function TermsPage() {
 
               <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
                 <p>
-                  O PratoBy atua estritamente como fornecedor da ferramenta tecnológica de vendas. Não possuímos qualquer responsabilidade civil ou criminal sobre a qualidade dos produtos alimentares vendidos, atrasos na entrega efetuada pelos estafetas do estabelecimento ou desacordos comerciais entre a loja e o consumidor final.
+                  O PratoBy atua estritamente como fornecedor da ferramenta tecnológica de vendas. Não possuímos qualquer responsabilidade civil ou criminal sobre a qualidade dos produtos alimentícios vendidos, atrasos na entrega efetuada pelos entregadores do estabelecimento ou desacordos comerciais entre a loja e o consumidor final.
                 </p>
                 <p>
-                  A infraestrutura do servidor é monitorizada continuamente para manter uma taxa de uptime de 99.9%, porém, falhas pontuais causadas por indisponibilidade na rede global de internet ou operadoras locais não dão direito a indemnizações financeiras.
+                  A infraestrutura do servidor é monitorada continuamente para manter uma taxa de uptime de 99.9%, porém, falhas pontuais causadas por indisponibilidade na rede global de internet ou operadoras locais não dão direito a indenizações financeiras.
                 </p>
               </div>
             </section>
