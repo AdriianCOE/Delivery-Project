@@ -101,6 +101,16 @@ export function AuthProvider({ children }) {
           }
 
           const baseUser = normalizeFirebaseUser(currentFirebaseUser)
+          
+          if (currentFirebaseUser.isAnonymous) {
+            setFirebaseUser(baseUser)
+            setUser(null)
+            setUserData(null)
+            setSentryUser(null)
+            setLoading(false)
+            return
+          }
+
           const firestoreUserData = await loadUserData(currentFirebaseUser.uid)
           const normalizedRole = getNormalizedRole(firestoreUserData)
 

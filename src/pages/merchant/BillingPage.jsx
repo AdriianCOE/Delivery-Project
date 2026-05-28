@@ -408,14 +408,6 @@ export default function BillingPage() {
       unsubscribers.push(unsubscribe)
     }
 
-    if (uid) {
-      subscribeToQuery(query(collection(db, 'stores'), where('ownerId', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
-    }
-
     const knownStoreIds = Array.from(new Set([
       storeId,
       ...(Array.isArray(storeIds) ? storeIds : []),
@@ -425,7 +417,12 @@ export default function BillingPage() {
       ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
     ].filter(Boolean)))
 
-    knownStoreIds.forEach(subscribeToStoreDoc)
+    if (knownStoreIds.length > 0) {
+      knownStoreIds.forEach(subscribeToStoreDoc)
+    } else {
+      setLoadingStore(false)
+      setStore(null)
+    }
 
     if (unsubscribers.length === 0) {
       setStore(null)
@@ -914,6 +911,29 @@ export default function BillingPage() {
       />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+
+        {/* Nenhuma Loja Vinculada */}
+        {!store && !loadingStore && (
+          <motion.section
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-red-200 bg-red-50/90 dark:border-red-950/40 dark:bg-red-950/20 p-5 shadow-sm ring-1 ring-red-100/70"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 text-red-600 shadow-sm">
+                  <FiAlertTriangle size={20} />
+                </span>
+                <div>
+                  <h2 className="text-sm font-black text-gray-900 dark:text-white">Nenhuma loja vinculada à sua conta</h2>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-gray-700 dark:text-zinc-300">
+                    Conclua o onboarding para criar a sua loja ou fale com o suporte se acredita que isso é um erro.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.section>
+        )}
 
         {/* Banner de aviso crítico */}
         {showBillingRequiredBanner && (
