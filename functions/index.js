@@ -2411,17 +2411,21 @@ exports.materializePublicCategory = onDocumentWritten(
 )
 
 exports.aggregateStorePresence = onValueWritten(
-  { ref: '/storePresence/{storeId}/{userId}', region: 'us-central1' },
+  {
+    ref: 'presence/{storeId}',
+    region: 'us-central1',
+    timeoutSeconds: 30,
+    memory: '256MiB',
+  },
   async (event) => {
-    const storeId = event.params.storeId
-    const presenceRef = admin.database().ref(`/storePresence/${storeId}`)
-    const snapshot = await presenceRef.once('value')
-    let activeUsers = 0
-    snapshot.forEach((child) => {
-      const val = child.val()
-      if (val === true || val?.state === 'online') activeUsers++
-    })
-    
-    await db.collection('publicStores').doc(storeId).set({ activeViewers: activeUsers }, { merge: true })
+    const storeId = String(event.params.storeId || '').trim()
+    if (!storeId) return
+
+    const presence = event.data?.after?.val?.() || {}
+    const activeCount = Object.values(presence).filter((session) => {
+      return session && typeof session === 'object' && session.online === true
+    }).length
+
+    await admin.database().ref(`presenceCounts/${storeId}/activeCount`).set(activeCount)
   }
 )
