@@ -12,6 +12,7 @@ admin.initializeApp({
 
 const db = admin.firestore()
 const FieldValue = admin.firestore.FieldValue
+const BILLING_BLOCKED_PUBLIC_STATUSES = new Set(['blocked', 'canceled'])
 
 const args = new Set(process.argv.slice(2))
 const dryRun = args.has('--dry-run')
@@ -63,10 +64,14 @@ function sanitizeString(value, maxLength = 240) {
 }
 
 function isStorePubliclyAvailable(data = {}) {
+  const subscriptionStatus = String(data.subscriptionStatus || data.subscription?.status || '').trim()
+
   return data.isActive !== false &&
     data.isBlocked !== true &&
     data.isBillingBlocked !== true &&
-    data.isDeleted !== true
+    data.isDeleted !== true &&
+    !data.deletedAt &&
+    !BILLING_BLOCKED_PUBLIC_STATUSES.has(subscriptionStatus)
 }
 
 function sanitizePublicAddress(data = {}) {
@@ -170,14 +175,18 @@ function isPublicCategoryData(data = {}) {
   return data.isDeleted !== true &&
     !data.deletedAt &&
     data.isActive !== false &&
-    data.isVisible !== false
+    data.active !== false &&
+    data.isVisible !== false &&
+    data.visible !== false
 }
 
 function isPublicProductData(data = {}) {
   return data.isDeleted !== true &&
     !data.deletedAt &&
     data.isActive !== false &&
+    data.active !== false &&
     data.isVisible !== false &&
+    data.visible !== false &&
     data.hidden !== true
 }
 
@@ -187,9 +196,15 @@ function buildPublicCategory(data = {}, categoryId, storeId) {
       'name',
       'description',
       'order',
+      'sortOrder',
       'position',
+      'slug',
+      'icon',
+      'imageUrl',
       'isActive',
+      'active',
       'isVisible',
+      'visible',
       'updatedAt',
       'createdAt',
     ]),
@@ -212,23 +227,39 @@ function buildPublicProduct(data = {}, productId, storeId) {
       'categoryName',
       'price',
       'priceCents',
+      'priceInCents',
       'oldPrice',
       'oldPriceCents',
       'imageUrl',
+      'image',
+      'photoUrl',
+      'coverUrl',
+      'thumbnailUrl',
       'isAvailable',
+      'available',
+      'status',
+      'showInStorefront',
       'isFeatured',
       'isPromotion',
+      'promotion',
       'acceptsCoupons',
       'acceptsCoupon',
       'couponEligible',
       'order',
+      'sortOrder',
       'position',
       'preparationTime',
       'optionGroups',
+      'additionalOptions',
+      'variations',
       'optionsGroups',
       'customizationGroups',
       'extras',
+      'addons',
       'tags',
+      'availableDays',
+      'availability',
+      'stock',
       'updatedAt',
       'createdAt',
     ]),

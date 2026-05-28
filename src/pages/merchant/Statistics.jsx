@@ -4,6 +4,7 @@ import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import {
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
@@ -291,7 +292,26 @@ function getStoreKeys(store) {
 }
 
 export default function Statistics() {
-  const { user, userData, role, loading: authLoading, storeIds: authStoreIds } = useAuth()
+  const {
+    user,
+    userData,
+    role,
+    loading: authLoading,
+    storeId: authStoreId,
+    storeIds: authStoreIds = [],
+  } = useAuth()
+
+  const knownStoreIds = useMemo(() => {
+    const rawList = [
+      authStoreId,
+      ...(Array.isArray(authStoreIds) ? authStoreIds : []),
+      user?.storeId,
+      ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+    ]
+    return [...new Set(rawList.map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 10)
+  }, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
+
+  const knownStoreIdsKey = useMemo(() => knownStoreIds.join('|'), [knownStoreIds])
   const [orders, setOrders] = useState([])
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -313,7 +333,7 @@ export default function Statistics() {
   const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!user?.uid || !knownStoreIds.length) {
       setStores([])
       setOrders([])
       setLoading(false)
@@ -336,54 +356,42 @@ export default function Statistics() {
       }
     }
 
-    function handleStoresSnapshot(snapshot) {
-      snapshot.docs.forEach((storeDoc) => {
-        storesMap.set(storeDoc.id, normalizeStoreDoc(storeDoc))
-      })
-      publishStores()
-    }
+    function subscribeToStoreDoc(storeDocId) {
+      if (!storeDocId) return
 
-    function handleStoresError(error) {
-      console.error('Erro ao carregar lojas nas estatísticas:', error)
-      setStores([])
-      setOrders([])
-      setLoading(false)
-    }
-
-    function subscribeStores(storesQuery) {
       const unsubscribe = onSnapshot(
-        storesQuery,
-        handleStoresSnapshot,
-        handleStoresError
+        doc(db, 'stores', storeDocId),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            storesMap.set(snapshot.id, normalizeStoreDoc(snapshot))
+          } else {
+            storesMap.delete(storeDocId)
+          }
+
+          publishStores()
+        },
+        (error) => {
+          console.error('Erro ao carregar loja por ID nas estatísticas:', error)
+          publishStores()
+        }
       )
+
       unsubscribers.push(unsubscribe)
     }
 
-    // Optimization: if AuthContext already has storeIds from the user profile,
-    // subscribe to only those stores (1 query per storeId). This eliminates
-    // 5 broad parallel queries, which were opened on every Statistics mount.
-    const profileStoreIds = Array.isArray(authStoreIds)
-      ? authStoreIds.filter(Boolean).slice(0, 30)
-      : []
+    knownStoreIds.forEach(subscribeToStoreDoc)
 
-    if (profileStoreIds.length > 0) {
-      // Fast path: subscribe to the exact stores we know the user owns.
-      // Firestore `in` allows up to 30 values; profile rarely has > 10.
-      subscribeStores(query(collection(db, 'stores'), where('__name__', 'in', profileStoreIds)))
-    } else {
-      // Fallback path: user profile doesn't have storeIds yet — use broad queries.
-      // This covers legacy accounts or incomplete onboarding.
-      subscribeStores(query(collection(db, 'stores'), where('ownerId', '==', uid)))
-      subscribeStores(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
-      subscribeStores(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
-      subscribeStores(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
-      subscribeStores(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
+    if (!unsubscribers.length) {
+      setStores([])
+      setOrders([])
+      setLoading(false)
+      return undefined
     }
 
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [user?.uid, authStoreIds])
+  }, [user?.uid, knownStoreIds, knownStoreIdsKey])
 
   useEffect(() => {
     if (!stores.length) {
@@ -797,10 +805,10 @@ export default function Statistics() {
               <FiShoppingBag size={30} />
             </div>
             <h3 className="mt-5 text-xl font-black text-[#111827]">
-              Nenhuma loja encontrada.
+              Nenhuma loja vinculada
             </h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-[#6b7280]">
-              Vincule uma loja ao seu usuário para visualizar estatísticas.
+              Nenhuma loja vinculada à sua conta. Conclua o onboarding ou fale com o suporte.
             </p>
           </div>
         ) : !canReadOrders ? (

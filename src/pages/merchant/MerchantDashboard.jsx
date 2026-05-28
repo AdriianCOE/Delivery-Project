@@ -1043,7 +1043,7 @@ const showToast = useCallback(
   useEffect(() => {
     const uid = user?.uid
 
-    if (!uid && !knownStoreIds.length) {
+    if (!uid || !knownStoreIds.length) {
       setLoadingStores(false)
       setStores([])
       return undefined
@@ -1053,7 +1053,6 @@ const showToast = useCallback(
 
     const storesMap = new Map()
     const unsubscribers = []
-    let errorCount = 0
 
     function normalizeStoreDoc(storeDoc) {
       const data = storeDoc.data() || {}
@@ -1078,32 +1077,6 @@ const showToast = useCallback(
       setLoadingStores(false)
     }
 
-    function subscribeToQuery(storesQuery) {
-      const unsubscribe = onSnapshot(
-        storesQuery,
-        (snapshot) => {
-          snapshot.docs.forEach((storeDoc) => {
-            const store = normalizeStoreDoc(storeDoc)
-            storesMap.set(storeDoc.id, store)
-          })
-
-          publishStores()
-        },
-        (error) => {
-          errorCount += 1
-          console.error('Erro ao carregar lojas:', error)
-
-          if (storesMap.size === 0 && errorCount <= 1) {
-            showToast('error', 'Erro ao carregar suas lojas. Confira regras, permissões ou índices do Firestore.')
-          }
-
-          setLoadingStores(false)
-        }
-      )
-
-      unsubscribers.push(unsubscribe)
-    }
-
     function subscribeToStoreDoc(storeDocId) {
       if (!storeDocId) return
 
@@ -1112,25 +1085,19 @@ const showToast = useCallback(
         (snapshot) => {
           if (snapshot.exists()) {
             storesMap.set(snapshot.id, normalizeStoreDoc(snapshot))
+          } else {
+            storesMap.delete(storeDocId)
           }
 
           publishStores()
         },
         (error) => {
           console.error('Erro ao carregar loja por ID:', error)
-          setLoadingStores(false)
+          publishStores()
         }
       )
 
       unsubscribers.push(unsubscribe)
-    }
-
-    if (uid) {
-      subscribeToQuery(query(collection(db, 'stores'), where('ownerId', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
-      subscribeToQuery(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
     }
 
     knownStoreIds.forEach(subscribeToStoreDoc)
@@ -1144,7 +1111,7 @@ const showToast = useCallback(
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [knownStoreIds, knownStoreIdsKey, showToast, user?.uid])
+  }, [knownStoreIds, knownStoreIdsKey, user?.uid])
 
 
   useEffect(() => {
@@ -1730,8 +1697,8 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
         ) : !selectedStore ? (
           <EmptyState
             icon={FiHome}
-            title="Nenhuma loja encontrada"
-            description="Seu usuário ainda não possui uma loja vinculada. Peça ao administrador para criar ou vincular uma loja ao seu acesso."
+            title="Nenhuma loja vinculada"
+            description="Nenhuma loja vinculada à sua conta. Conclua o onboarding ou fale com o suporte."
           />
         ) : !loadingCatalog && !loadingOrders && !hasCatalog && orders.length === 0 ? (
           <div className="mx-auto max-w-4xl pt-8">

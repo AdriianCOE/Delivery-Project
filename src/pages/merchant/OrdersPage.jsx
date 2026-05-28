@@ -2506,7 +2506,25 @@ function OrderModal({
 }
 
 export default function OrdersPage() {
-  const { user, userData, role, loading: authLoading } = useAuth()
+  const {
+    user,
+    userData,
+    role,
+    loading: authLoading,
+    storeId: authStoreId,
+    storeIds: authStoreIds = [],
+  } = useAuth()
+
+  const knownStoreIds = useMemo(() => {
+    return uniqueArray([
+      authStoreId,
+      ...(Array.isArray(authStoreIds) ? authStoreIds : []),
+      user?.storeId,
+      ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+    ]).slice(0, 10)
+  }, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
+
+  const knownStoreIdsKey = useMemo(() => knownStoreIds.join('|'), [knownStoreIds])
 
   const [stores, setStores] = useState([])
   const [orders, setOrders] = useState([])
@@ -3022,7 +3040,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   useEffect(() => {
     const uid = user?.uid
 
-    if (!uid) {
+    if (!uid || !knownStoreIds.length) {
       setStores([])
       setLoadingStores(false)
       return undefined
@@ -3032,12 +3050,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
     const storesMap = new Map()
     const unsubscribers = []
-    let receivedAnySnapshot = false
-    let errorShown = false
 
     function normalizeStoreDoc(storeDoc) {
       const data = storeDoc.data() || {}
-
       return {
         ...data,
         id: storeDoc.id,
@@ -3052,7 +3067,6 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       const storesData = Array.from(storesMap.values()).sort((a, b) => {
         const aName = String(a.name || a.storeName || a.storeSlug || a.id || '')
         const bName = String(b.name || b.storeName || b.storeSlug || b.id || '')
-
         return aName.localeCompare(bName, 'pt-BR')
       })
 
@@ -3060,45 +3074,41 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       setLoadingStores(false)
     }
 
-    function handleStoresSnapshot(snapshot) {
-      receivedAnySnapshot = true
+    function subscribeToStoreDoc(storeDocId) {
+      if (!storeDocId) return
 
-      snapshot.docs.forEach((storeDoc) => {
-        storesMap.set(storeDoc.id, normalizeStoreDoc(storeDoc))
-      })
+      const unsubscribe = onSnapshot(
+        doc(db, 'stores', storeDocId),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            storesMap.set(snapshot.id, normalizeStoreDoc(snapshot))
+          } else {
+            storesMap.delete(storeDocId)
+          }
 
-      publishStores()
-    }
+          publishStores()
+        },
+        (error) => {
+          console.error('Erro ao carregar loja por ID:', error)
+          publishStores()
+        }
+      )
 
-    function handleStoresError(error) {
-      console.error('Erro ao carregar lojas:', error)
-      setLoadingStores(false)
-
-      if (!errorShown) {
-        errorShown = true
-        showToast('error', 'Erro ao carregar lojas. Confira permissões ou índices do Firestore.')
-      }
-
-      if (!receivedAnySnapshot) {
-        setStores([])
-      }
-    }
-
-    function subscribeStores(storesQuery) {
-      const unsubscribe = onSnapshot(storesQuery, handleStoresSnapshot, handleStoresError)
       unsubscribers.push(unsubscribe)
     }
 
-    subscribeStores(query(collection(db, 'stores'), where('ownerId', '==', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
-    subscribeStores(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
+    knownStoreIds.forEach(subscribeToStoreDoc)
+
+    if (!unsubscribers.length) {
+      setStores([])
+      setLoadingStores(false)
+      return undefined
+    }
 
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [showToast, user?.uid])
+  }, [knownStoreIds, knownStoreIdsKey, user?.uid])
 
   useEffect(() => {
     if (!stores.length) {
@@ -3408,8 +3418,8 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         ) : !selectedStore ? (
           <EmptyState
             icon={FiHome}
-            title="Nenhuma loja encontrada"
-            description="Seu usuário ainda não possui uma loja vinculada. Peça ao administrador para criar ou vincular uma loja ao seu acesso."
+            title="Nenhuma loja vinculada"
+            description="Nenhuma loja vinculada à sua conta. Conclua o onboarding ou fale com o suporte."
           />
         ) : !canReadOrders ? (
           <EmptyState

@@ -160,8 +160,9 @@ function pickPublicFields(data, fields) {
 
 function normalizeStorePayload(storeId, data) {
   const storeSlug = data.storeSlug || data.slug || storeId
+  const publicData = sanitizePublicStore(data)
   return {
-    ...pickPublicFields(data, PUBLIC_STORE_FIELDS),
+    ...publicData,
     id: storeId,
     docId: data.storeDocId || storeId,
     storeId: data.storeId || storeId,
@@ -177,6 +178,82 @@ function isStorePubliclyReadable(data) {
   const subscriptionStatus = String(data.subscriptionStatus || data.subscription?.status || '').trim()
   return !BILLING_BLOCKED_PUBLIC_STATUSES.has(subscriptionStatus)
 }
+
+function isPublicStoreVisible(data) {
+  return isStorePubliclyReadable(data)
+}
+
+function sanitizePublicStore(data) {
+  if (!data) return {}
+
+  const profile = pickPublicFields(data, PUBLIC_STORE_FIELDS)
+
+  delete profile.pix
+  delete profile.pixKey
+  delete profile.pixKeyType
+  delete profile.settings
+
+  if (data.address && typeof data.address === 'object') {
+    profile.address = {
+      street: String(data.address.street || '').trim().slice(0, 120),
+      number: String(data.address.number || '').trim().slice(0, 20),
+      neighborhood: String(data.address.neighborhood || '').trim().slice(0, 80),
+      city: String(data.address.city || '').trim().slice(0, 80),
+      state: String(data.address.state || '').toUpperCase().trim().slice(0, 2),
+      cep: String(data.address.cep || '').trim().slice(0, 10),
+    }
+  } else {
+    profile.address = {
+      street: String(data.street || '').trim().slice(0, 120),
+      number: String(data.number || '').trim().slice(0, 20),
+      neighborhood: String(data.neighborhood || '').trim().slice(0, 80),
+      city: String(data.city || '').trim().slice(0, 80),
+      state: String(data.state || '').toUpperCase().trim().slice(0, 2),
+      cep: String(data.cep || '').trim().slice(0, 10),
+    }
+  }
+
+  profile.whatsapp = String(data.whatsapp || data.phone || data.contactPhone || '').trim().slice(0, 30)
+  profile.phone = String(data.phone || data.contactPhone || '').trim().slice(0, 30)
+
+  const settings = data.settings || {}
+  profile.settings = {
+    themeColor: String(settings.themeColor || data.themeColor || '').trim().slice(0, 30),
+    primaryColor: String(settings.primaryColor || data.primaryColor || '').trim().slice(0, 30),
+    openingHours: settings.openingHours || data.openingHours || null,
+    businessHours: settings.businessHours || data.businessHours || null,
+    acceptDelivery: settings.acceptDelivery !== false && data.acceptDelivery !== false,
+    acceptPickup: settings.acceptPickup !== false && data.acceptPickup !== false,
+    acceptDineIn: settings.acceptDineIn !== false && data.acceptDineIn !== false,
+    deliveryTime: String(settings.deliveryTime || data.deliveryTime || '').trim().slice(0, 50),
+  }
+
+  const pix = data.pix || {}
+  const settingsPix = data.paymentSettings?.pix || {}
+  const hasPixKey = Boolean(pix.key || settingsPix.key || data.pixKey)
+  profile.pix = {
+    enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
+  }
+
+  return profile
+}
+
+function publicProductIsVisible(data) {
+  return isPublicItemVisible(data)
+}
+
+function sanitizePublicProduct(data) {
+  return pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
+}
+
+function publicCategoryIsVisible(data) {
+  return isPublicItemVisible(data)
+}
+
+function sanitizePublicCategory(data) {
+  return pickPublicFields(data, PUBLIC_CATEGORY_FIELDS)
+}
+
 
 async function findStoreForCallable(input = {}) {
   const keys = uniqueTruthy([
@@ -503,8 +580,7 @@ exports.validatePublicCoupon = onCall(
 
     const publicCoupon = pickPublicFields(coupon, [
       'code', 'type', 'value', 'valueCents', 'maxDiscount', 'maxDiscountCents',
-      'minOrder', 'minOrderCents', 'startsAt', 'expiresAt', 'appliesTo',
-      'targetId', 'productIds', 'active', 'usageLimit', 'usedCount',
+      'minOrder', 'minOrderCents', 'appliesTo', 'targetId', 'productIds'
     ])
 
     return {
@@ -512,7 +588,6 @@ exports.validatePublicCoupon = onCall(
       message: 'Cupom aplicado.',
       coupon: {
         ...publicCoupon,
-        id: couponDoc.id,
         code: String(coupon.code || data.couponCode || '').trim().toUpperCase(),
         discountCents: validation.discountCents,
         eligibleSubtotalCents: validation.eligibleSubtotalCents,
@@ -2351,19 +2426,36 @@ exports.cleanupAnonymousUsers = onSchedule(
   }
 )
 
+async function deleteDocsInChunks(docs, chunkSize = 450) {
+  for (let i = 0; i < docs.length; i += chunkSize) {
+    const batch = db.batch()
+    docs.slice(i, i + chunkSize).forEach((doc) => batch.delete(doc.ref))
+    await batch.commit()
+  }
+}
+
 exports.materializePublicStoreProfile = onDocumentWritten(
   { document: 'stores/{storeId}', region: REGION, maxInstances: 3 },
   async (event) => {
-    const data = event.data.after.data()
+    const afterData = event.data.after.data()
     const storeId = event.params.storeId
-    if (!data || !isPublicStoreVisible(data)) {
-      await db.collection('publicStores').doc(storeId).delete()
+
+    if (!afterData || !isPublicStoreVisible(afterData)) {
+      const publicRef = db.collection('publicStores').doc(storeId)
+      const [productsSnap, categoriesSnap] = await Promise.all([
+        publicRef.collection('products').get(),
+        publicRef.collection('categories').get()
+      ])
+
+      const allDocs = [...productsSnap.docs, ...categoriesSnap.docs]
+      await deleteDocsInChunks(allDocs)
+      await publicRef.delete()
     } else {
       await db.collection('publicStores').doc(storeId).set({
-        ...sanitizePublicStore(data),
+        ...sanitizePublicStore(afterData),
         id: storeId,
         storeId
-      }, { merge: true })
+      }, { merge: false })
     }
   }
 )
@@ -2371,20 +2463,40 @@ exports.materializePublicStoreProfile = onDocumentWritten(
 exports.materializePublicProduct = onDocumentWritten(
   { document: 'products/{productId}', region: REGION, maxInstances: 3 },
   async (event) => {
-    const data = event.data.after.data()
+    const beforeData = event.data.before.data()
+    const afterData = event.data.after.data()
     const productId = event.params.productId
-    if (!data || !data.storeId) return
-    const storeId = data.storeId
-    
-    if (!publicProductIsVisible(data)) {
-      await db.collection('publicStores').doc(storeId).collection('products').doc(productId).delete()
+
+    const oldStoreId = beforeData?.storeId
+    const newStoreId = afterData?.storeId
+
+    if (oldStoreId && oldStoreId !== newStoreId) {
+      await db.collection('publicStores')
+        .doc(oldStoreId)
+        .collection('products')
+        .doc(productId)
+        .delete()
+    }
+
+    if (!afterData || !newStoreId || !publicProductIsVisible(afterData)) {
+      if (newStoreId) {
+        await db.collection('publicStores')
+          .doc(newStoreId)
+          .collection('products')
+          .doc(productId)
+          .delete()
+      }
     } else {
-      await db.collection('publicStores').doc(storeId).collection('products').doc(productId).set({
-        ...sanitizePublicProduct(data),
-        id: productId,
-        productId,
-        storeId
-      }, { merge: true })
+      await db.collection('publicStores')
+        .doc(newStoreId)
+        .collection('products')
+        .doc(productId)
+        .set({
+          ...sanitizePublicProduct(afterData),
+          id: productId,
+          productId,
+          storeId: newStoreId
+        }, { merge: false })
     }
   }
 )
@@ -2392,20 +2504,40 @@ exports.materializePublicProduct = onDocumentWritten(
 exports.materializePublicCategory = onDocumentWritten(
   { document: 'categories/{categoryId}', region: REGION, maxInstances: 3 },
   async (event) => {
-    const data = event.data.after.data()
+    const beforeData = event.data.before.data()
+    const afterData = event.data.after.data()
     const categoryId = event.params.categoryId
-    if (!data || !data.storeId) return
-    const storeId = data.storeId
-    
-    if (!publicCategoryIsVisible(data)) {
-      await db.collection('publicStores').doc(storeId).collection('categories').doc(categoryId).delete()
+
+    const oldStoreId = beforeData?.storeId
+    const newStoreId = afterData?.storeId
+
+    if (oldStoreId && oldStoreId !== newStoreId) {
+      await db.collection('publicStores')
+        .doc(oldStoreId)
+        .collection('categories')
+        .doc(categoryId)
+        .delete()
+    }
+
+    if (!afterData || !newStoreId || !publicCategoryIsVisible(afterData)) {
+      if (newStoreId) {
+        await db.collection('publicStores')
+          .doc(newStoreId)
+          .collection('categories')
+          .doc(categoryId)
+          .delete()
+      }
     } else {
-      await db.collection('publicStores').doc(storeId).collection('categories').doc(categoryId).set({
-        ...sanitizePublicCategory(data),
-        id: categoryId,
-        categoryId,
-        storeId
-      }, { merge: true })
+      await db.collection('publicStores')
+        .doc(newStoreId)
+        .collection('categories')
+        .doc(categoryId)
+        .set({
+          ...sanitizePublicCategory(afterData),
+          id: categoryId,
+          categoryId,
+          storeId: newStoreId
+        }, { merge: false })
     }
   }
 )

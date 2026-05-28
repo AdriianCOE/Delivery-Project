@@ -40,6 +40,22 @@ function normalizeFirebaseUser(firebaseUser) {
   }
 }
 
+async function isAnonymousFirebaseUser(firebaseUser) {
+  if (!firebaseUser) return false
+  if (firebaseUser.isAnonymous === true) return true
+
+  try {
+    const token = await firebaseUser.getIdTokenResult?.()
+    const signInProvider =
+      token?.signInProvider ||
+      token?.claims?.firebase?.sign_in_provider
+
+    return signInProvider === 'anonymous'
+  } catch {
+    return firebaseUser.isAnonymous === true
+  }
+}
+
 async function loadUserData(uid) {
   const userRef = doc(db, 'users', uid)
 
@@ -100,9 +116,13 @@ export function AuthProvider({ children }) {
             return
           }
 
-          const baseUser = normalizeFirebaseUser(currentFirebaseUser)
+          const anonymousAuth = await isAnonymousFirebaseUser(currentFirebaseUser)
+          const baseUser = {
+            ...normalizeFirebaseUser(currentFirebaseUser),
+            isAnonymous: anonymousAuth,
+          }
           
-          if (currentFirebaseUser.isAnonymous) {
+          if (anonymousAuth) {
             setFirebaseUser(baseUser)
             setUser(null)
             setUserData(null)
@@ -180,9 +200,22 @@ export function AuthProvider({ children }) {
     if (!currentUser) return null
 
     try {
+      const anonymousAuth = await isAnonymousFirebaseUser(currentUser)
+      const baseUser = {
+        ...normalizeFirebaseUser(currentUser),
+        isAnonymous: anonymousAuth,
+      }
+
+      if (anonymousAuth) {
+        setFirebaseUser(baseUser)
+        setUser(null)
+        setUserData(null)
+        setSentryUser(null)
+        return null
+      }
+
       const firestoreUserData = await loadUserData(currentUser.uid)
       const normalizedRole = getNormalizedRole(firestoreUserData)
-      const baseUser = normalizeFirebaseUser(currentUser)
 
       if (!firestoreUserData) {
         setFirebaseUser(baseUser)

@@ -172,7 +172,22 @@ function Toast({ toast, onClose }) {
 
 // --- PÁGINA PRINCIPAL ---
 export default function Reviews() {
-  const { user } = useAuth()
+  const {
+    user,
+    storeId: authStoreId,
+    storeIds: authStoreIds = [],
+  } = useAuth()
+
+  const knownStoreIds = useMemo(() => {
+    return uniqueArray([
+      authStoreId,
+      ...(Array.isArray(authStoreIds) ? authStoreIds : []),
+      user?.storeId,
+      ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+    ]).slice(0, 10)
+  }, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
+
+  const knownStoreIdsKey = useMemo(() => knownStoreIds.join('|'), [knownStoreIds])
 
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -197,24 +212,65 @@ export default function Reviews() {
 
   // 1. Busca Lojas
   useEffect(() => {
-    if (!user?.uid) {
+    if (!user?.uid || !knownStoreIds.length) {
       setStores([])
       setLoadingStores(false)
       return
     }
 
-    const storesQuery = query(collection(db, 'stores'), where('ownerId', '==', user.uid))
-    const unsubscribe = onSnapshot(storesQuery, (snapshot) => {
-      const storesData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+    setLoadingStores(true)
+    const storesMap = new Map()
+    const unsubscribers = []
+
+    function normalizeStoreDoc(storeDoc) {
+      return {
+        id: storeDoc.id,
+        ...storeDoc.data()
+      }
+    }
+
+    function publishStores() {
+      const storesData = Array.from(storesMap.values()).sort((a, b) =>
+        String(a?.name || '').localeCompare(String(b?.name || ''))
+      )
       setStores(storesData)
       setLoadingStores(false)
-    })
+    }
 
-    return () => unsubscribe()
-  }, [user?.uid])
+    function subscribeToStoreDoc(storeDocId) {
+      if (!storeDocId) return
+
+      const unsubscribe = onSnapshot(
+        doc(db, 'stores', storeDocId),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            storesMap.set(snapshot.id, normalizeStoreDoc(snapshot))
+          } else {
+            storesMap.delete(storeDocId)
+          }
+          publishStores()
+        },
+        (error) => {
+          console.error('Erro ao carregar loja por ID:', error)
+          publishStores()
+        }
+      )
+
+      unsubscribers.push(unsubscribe)
+    }
+
+    knownStoreIds.forEach(subscribeToStoreDoc)
+
+    if (!unsubscribers.length) {
+      setStores([])
+      setLoadingStores(false)
+      return
+    }
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe())
+    }
+  }, [knownStoreIds, knownStoreIdsKey, user?.uid])
 
   // 2. Define Loja Selecionada
   useEffect(() => {

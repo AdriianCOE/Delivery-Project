@@ -13,9 +13,18 @@ node --check publicOrder.js
 node --check scripts/backfillPublicCatalog.js
 ```
 
+## Deploy de Rules e Índices
+
+Faça o deploy das regras antes dos lotes de Functions. As regras do Realtime Database são necessárias para o presence público (`presence` e `presenceCounts`).
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+firebase deploy --only database
+```
+
 ## Deploy em Lotes (Batches)
 
-Para não esbarrar na cota de "CPU quotas for region southamerica-east1", realize o deploy em lotes específicos. Use `--only functions:NOME,functions:NOME`.
+Para não esbarrar na cota de "CPU quotas for region southamerica-east1", realize o deploy em lotes específicos. Use `--only functions:<nome-da-function>,functions:<nome-da-function>`.
 
 ### Lote 1: Pedidos Públicos
 ```bash

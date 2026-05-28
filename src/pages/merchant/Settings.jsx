@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
 import {
-  collection,
+  doc,
   onSnapshot,
-  query,
-  where,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 
@@ -755,11 +753,11 @@ function EmptyState() {
         </div>
 
         <h1 className="mt-5 text-2xl font-black text-[#111827]">
-          Nenhuma loja encontrada
+          Nenhuma loja vinculada
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-[#6b7280]">
-          Você ainda não possui uma loja vinculada à sua conta.
+          Nenhuma loja vinculada à sua conta. Conclua o onboarding ou fale com o suporte.
         </p>
 
         <Link
@@ -774,7 +772,22 @@ function EmptyState() {
 }
 
 export default function Settings() {
-  const { user } = useAuth()
+  const {
+    user,
+    storeId: authStoreId,
+    storeIds: authStoreIds = [],
+  } = useAuth()
+
+  const knownStoreIds = useMemo(() => {
+    return uniqueArray([
+      authStoreId,
+      ...(Array.isArray(authStoreIds) ? authStoreIds : []),
+      user?.storeId,
+      ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+    ].map((id) => String(id || '').trim())).slice(0, 10)
+  }, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
+
+  const knownStoreIdsKey = useMemo(() => knownStoreIds.join('|'), [knownStoreIds])
 
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -830,7 +843,7 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!user?.uid || !knownStoreIds.length) {
       setStores([])
       setLoadingStores(false)
       return undefined
@@ -838,31 +851,57 @@ export default function Settings() {
 
     setLoadingStores(true)
 
-    const storesQuery = query(
-      collection(db, 'stores'),
-      where('ownerId', '==', user.uid)
-    )
+    const storesMap = new Map()
+    const unsubscribers = []
 
-    const unsubscribe = onSnapshot(
-      storesQuery,
-      (snapshot) => {
-        const nextStores = snapshot.docs
-          .map(normalizeStore)
-          .filter((store) => userCanManageStore(user, store))
+    function publishStores() {
+      const nextStores = Array.from(storesMap.values())
+        .filter((store) => userCanManageStore(user, store))
+        .sort((a, b) => {
+          const aName = String(a.name || a.storeName || a.storeSlug || a.id || '')
+          const bName = String(b.name || b.storeName || b.storeSlug || b.id || '')
+          return aName.localeCompare(bName, 'pt-BR')
+        })
 
-        setStores(nextStores)
-        setLoadingStores(false)
-      },
-      (error) => {
-        console.error(error)
-        setStores([])
-        setLoadingStores(false)
-        showToast('error', 'Erro ao carregar suas lojas.')
-      }
-    )
+      setStores(nextStores)
+      setLoadingStores(false)
+    }
 
-    return () => unsubscribe()
-  }, [showToast, user])
+    function subscribeToStoreDoc(storeDocId) {
+      if (!storeDocId) return
+
+      const unsubscribe = onSnapshot(
+        doc(db, 'stores', storeDocId),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            storesMap.set(snapshot.id, normalizeStore(snapshot))
+          } else {
+            storesMap.delete(storeDocId)
+          }
+
+          publishStores()
+        },
+        (error) => {
+          console.error(error)
+          publishStores()
+        }
+      )
+
+      unsubscribers.push(unsubscribe)
+    }
+
+    knownStoreIds.forEach(subscribeToStoreDoc)
+
+    if (!unsubscribers.length) {
+      setStores([])
+      setLoadingStores(false)
+      return undefined
+    }
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe())
+    }
+  }, [knownStoreIds, knownStoreIdsKey, user])
 
   useEffect(() => {
     if (!stores.length) {
