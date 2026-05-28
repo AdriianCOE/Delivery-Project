@@ -3287,6 +3287,75 @@ function createAsaasFunctions({ db, admin, logger }) {
     }
   )
 
+  const adminUpdateSubscriptionRequestStatus = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const data = request.data || {}
+      
+      const { collectionName, requestId, status, notes } = data
+      
+      const safeRequestId = String(requestId || '').trim()
+      if (!safeRequestId || safeRequestId.includes('/')) {
+        throw new HttpsError('invalid-argument', 'Solicitação inválida.')
+      }
+      
+      const safeNotes = String(notes || '').trim().slice(0, 1000)
+      
+      const allowedCollections = [
+        'subscriptionChangeRequests',
+        'subscriptionCancellationRequests',
+        'subscriptionDueDateRequests'
+      ]
+      if (!allowedCollections.includes(collectionName)) {
+        throw new HttpsError('invalid-argument', 'Colecao invalida.')
+      }
+      
+      const allowedStatuses = ['pending', 'processing', 'done', 'rejected']
+      if (!allowedStatuses.includes(status)) {
+        throw new HttpsError('invalid-argument', 'Status invalido.')
+      }
+
+      const userDoc = await db.collection('users').doc(uid).get()
+      if (!userDoc.exists || !userHasPrivilegedRole(userDoc.data())) {
+        throw new HttpsError('permission-denied', 'Somente administradores podem atualizar solicitacoes manuais.')
+      }
+      
+      const now = admin.firestore.Timestamp.now()
+      const reqRef = db.collection(collectionName).doc(safeRequestId)
+      
+      return await db.runTransaction(async (transaction) => {
+        const reqDoc = await transaction.get(reqRef)
+        if (!reqDoc.exists) {
+           throw new HttpsError('not-found', 'Solicitacao nao encontrada.')
+        }
+        
+        transaction.update(reqRef, {
+           status,
+           notes: safeNotes,
+           processedBy: userDoc.data()?.email || uid,
+           processedAt: now,
+           updatedAt: now
+        })
+        
+        setAuditLog(transaction, db, now, {
+           action: 'admin_updated_subscription_request',
+           entity: 'subscription_request',
+           entityId: safeRequestId,
+           actorUid: uid,
+           uid,
+           payload: { collectionName, status, notes: safeNotes }
+        })
+        
+        return { ok: true }
+      })
+    }
+  )
+
   return {
     startAsaasSubscription,
     getSubscriptionManagementData,
@@ -3296,6 +3365,7 @@ function createAsaasFunctions({ db, admin, logger }) {
     syncAsaasSubscriptionStatus,
     createPaymentMethodUpdateCheckout,
     asaasWebhook,
+    adminUpdateSubscriptionRequestStatus,
   }
 }
 

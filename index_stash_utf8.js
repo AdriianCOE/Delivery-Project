@@ -1,18 +1,15 @@
-const {
+﻿const {
     onDocumentCreated,
     onDocumentWritten,
     onDocumentUpdated,
   } = require('firebase-functions/v2/firestore')
-const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onValueWritten } = require('firebase-functions/v2/database')
+const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
+const { setGlobalOptions } = require('firebase-functions/v2')
 const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
 const crypto = require('crypto')
-const { createPublicOrderHandler } = require('./publicOrder')
-const { createAsaasFunctions } = require('./asaas')
-
-const { setGlobalOptions } = require('firebase-functions/v2')
 
 setGlobalOptions({
   region: 'southamerica-east1',
@@ -20,6 +17,8 @@ setGlobalOptions({
   maxInstances: 3,
   cpu: 'gcf_gen1'
 })
+const { createPublicOrderHandler } = require('./publicOrder')
+const { createAsaasFunctions } = require('./asaas')
 
 admin.initializeApp()
 
@@ -27,8 +26,6 @@ const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
 const TERMS_VERSION = '2026-05-24'
 const PRIVACY_VERSION = '2026-05-24'
-const REGION = 'southamerica-east1'
-const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
 
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
 exports.getSubscriptionManagementData = asaasFunctions.getSubscriptionManagementData
@@ -38,15 +35,12 @@ exports.requestSubscriptionDueDateChange = asaasFunctions.requestSubscriptionDue
 exports.syncAsaasSubscriptionStatus = asaasFunctions.syncAsaasSubscriptionStatus
 exports.createPaymentMethodUpdateCheckout = asaasFunctions.createPaymentMethodUpdateCheckout
 exports.asaasWebhook = asaasFunctions.asaasWebhook
-exports.adminUpdateSubscriptionRequestStatus = asaasFunctions.adminUpdateSubscriptionRequestStatus
 
 exports.createPublicOrder = onCall(
   {
     region: 'southamerica-east1',
     timeoutSeconds: 60,
     memory: '256MiB',
-    maxInstances: 10,
-    enforceAppCheck: ENFORCE_APP_CHECK,
   },
   createPublicOrderHandler({
     db,
@@ -55,520 +49,6 @@ exports.createPublicOrder = onCall(
     logger,
     maxOrderCents: 100000000,
   })
-)
-
-const BILLING_BLOCKED_PUBLIC_STATUSES = new Set(['blocked', 'canceled'])
-
-const PUBLIC_STORE_FIELDS = [
-  'name', 'storeName', 'description', 'segment', 'category',
-  'logoUrl', 'logo', 'bannerUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
-  'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
-  'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
-  'openingHours', 'businessHours', 'hours', 'settings', 'deliveryTime', 'estimatedDeliveryTime',
-  'minOrder', 'minOrderCents', 'minimumOrder', 'minimumOrderCents', 'deliveryFee',
-  'deliveryFeeCents', 'deliveryFees', 'acceptDelivery', 'acceptPickup', 'acceptDineIn',
-  'paymentMethods', 'pix', 'pixKey', 'pixKeyType', 'address', 'cep', 'street', 'number',
-  'neighborhood', 'city', 'state', 'rating', 'promoBanner', 'promotionBanner',
-  'marketingBanner', 'adBanner', 'promoBanners', 'banners',
-]
-
-const PUBLIC_CATEGORY_FIELDS = [
-  'name', 'description', 'order', 'sortOrder', 'position', 'slug', 'icon', 'imageUrl',
-  'isActive', 'active', 'isVisible', 'visible', 'isDeleted', 'deletedAt',
-]
-
-const PUBLIC_PRODUCT_FIELDS = [
-  'name', 'description', 'price', 'priceCents', 'priceInCents', 'oldPrice', 'oldPriceCents',
-  'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'categoryId', 'category',
-  'categoryName', 'order', 'sortOrder', 'position', 'isActive', 'active', 'isVisible',
-  'visible', 'isDeleted', 'deletedAt', 'isAvailable', 'available', 'status',
-  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isPromotion',
-  'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
-  'unit', 'tags', 'availableDays', 'availability', 'stock',
-]
-
-const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
-  'name', 'storeName', 'description', 'segment', 'category',
-  'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
-  'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
-  'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
-  'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
-  'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
-  'number', 'neighborhood', 'city', 'state',
-])
-
-const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
-  'ownerId', 'ownerUid', 'owner', 'ownerEmail', 'ownerName',
-  'role', 'allowedUserIds', 'merchantUids',
-  'subscriptionStatus', 'subscription', 'billingProvider', 'billingCycle',
-  'plan', 'trialStartedAt', 'trialEndsAt', 'currentPeriodEnd',
-  'isBillingBlocked', 'asaasCustomerId', 'asaasSubscriptionId',
-  'asaasPaymentId', 'asaasCheckoutUrl', 'billingMethodConfigured',
-  'lastPaymentId', 'lastPaymentStatus',
-  'createdAt', 'createdBy', 'deletedAt', 'isDeleted',
-])
-
-function uniqueTruthy(values) {
-  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
-}
-
-function timestampToMillis(value) {
-  if (!value) return null
-  if (typeof value.toMillis === 'function') return value.toMillis()
-  if (typeof value.toDate === 'function') return value.toDate().getTime()
-  if (value.seconds) return Number(value.seconds) * 1000
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date.getTime()
-}
-
-function cleanCallableFirestoreValue(value, depth = 0) {
-  if (value === undefined || typeof value === 'function') return undefined
-  if (value === null) return null
-  if (typeof value === 'string') return value.trim().slice(0, 5000)
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
-  if (value instanceof Date) return admin.firestore.Timestamp.fromDate(value)
-  if (typeof value.toDate === 'function' || typeof value.toMillis === 'function') return value
-
-  if (Array.isArray(value)) {
-    return value
-      .slice(0, 200)
-      .map((item) => cleanCallableFirestoreValue(item, depth + 1))
-      .filter((item) => item !== undefined)
-  }
-
-  if (typeof value === 'object') {
-    if (depth > 8) return undefined
-    return Object.entries(value).reduce((acc, [key, entry]) => {
-      if (['__proto__', 'prototype', 'constructor'].includes(key)) return acc
-      const cleanValue = cleanCallableFirestoreValue(entry, depth + 1)
-      if (cleanValue !== undefined) acc[key] = cleanValue
-      return acc
-    }, {})
-  }
-
-  return undefined
-}
-
-function pickPublicFields(data, fields) {
-  return fields.reduce((acc, field) => {
-    const cleanValue = cleanCallableFirestoreValue(data?.[field])
-    if (cleanValue !== undefined) acc[field] = cleanValue
-    return acc
-  }, {})
-}
-
-function normalizeStorePayload(storeId, data) {
-  const storeSlug = data.storeSlug || data.slug || storeId
-  return {
-    ...pickPublicFields(data, PUBLIC_STORE_FIELDS),
-    id: storeId,
-    docId: data.storeDocId || storeId,
-    storeId: data.storeId || storeId,
-    storeSlug,
-    slug: data.slug || storeSlug,
-  }
-}
-
-function isStorePubliclyReadable(data) {
-  if (!data) return false
-  if (data.isDeleted === true || data.deletedAt) return false
-  if (data.isActive === false || data.isBlocked === true || data.isBillingBlocked === true) return false
-  const subscriptionStatus = String(data.subscriptionStatus || data.subscription?.status || '').trim()
-  return !BILLING_BLOCKED_PUBLIC_STATUSES.has(subscriptionStatus)
-}
-
-async function findStoreForCallable(input = {}) {
-  const keys = uniqueTruthy([
-    input.storeId,
-    input.storeSlug,
-    input.slug,
-    input.storeDocId,
-  ]).slice(0, 8)
-
-  for (const key of keys) {
-    for (const collectionName of ['publicStores', 'stores']) {
-      const snapshot = await db.collection(collectionName).doc(key).get()
-      if (snapshot.exists) {
-        return {
-          id: snapshot.id,
-          collectionName,
-          data: snapshot.data() || {},
-        }
-      }
-    }
-  }
-
-  for (const key of keys) {
-    for (const collectionName of ['publicStores', 'stores']) {
-      for (const field of ['storeSlug', 'slug']) {
-        const snapshot = await db.collection(collectionName)
-          .where(field, '==', key)
-          .limit(1)
-          .get()
-        if (!snapshot.empty) {
-          const docSnapshot = snapshot.docs[0]
-          return {
-            id: docSnapshot.id,
-            collectionName,
-            data: docSnapshot.data() || {},
-          }
-        }
-      }
-    }
-  }
-
-  return null
-}
-
-function getStoreLookupKeys(storeRecord) {
-  if (!storeRecord) return []
-  const data = storeRecord.data || {}
-  return uniqueTruthy([
-    storeRecord.id,
-    data.storeId,
-    data.storeDocId,
-    data.storeSlug,
-    data.slug,
-    ...(Array.isArray(data.storeKeys) ? data.storeKeys : []),
-  ]).slice(0, 12)
-}
-
-function sortPublicItems(a, b) {
-  const orderA = Number(a.order ?? a.sortOrder ?? a.position ?? 9999)
-  const orderB = Number(b.order ?? b.sortOrder ?? b.position ?? 9999)
-  if (orderA !== orderB) return orderA - orderB
-  return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')
-}
-
-function isPublicItemVisible(item) {
-  return item?.isDeleted !== true &&
-    !item?.deletedAt &&
-    item?.isActive !== false &&
-    item?.active !== false &&
-    item?.isVisible !== false &&
-    item?.visible !== false &&
-    item?.showInStorefront !== false
-}
-
-async function loadPublicSubcollection(storeRecord, subcollection, publicFields) {
-  const results = new Map()
-  const lookupKeys = getStoreLookupKeys(storeRecord)
-
-  for (const key of lookupKeys.slice(0, 4)) {
-    const publicSnapshot = await db.collection('publicStores').doc(key).collection(subcollection).get()
-    publicSnapshot.docs.forEach((docSnapshot) => {
-      const data = docSnapshot.data() || {}
-      results.set(docSnapshot.id, {
-        ...pickPublicFields(data, publicFields),
-        id: docSnapshot.id,
-      })
-    })
-  }
-
-  if (results.size === 0) {
-    for (const key of lookupKeys) {
-      const snapshot = await db.collection(subcollection)
-        .where('storeId', '==', key)
-        .limit(500)
-        .get()
-      snapshot.docs.forEach((docSnapshot) => {
-        const data = docSnapshot.data() || {}
-        results.set(docSnapshot.id, {
-          ...pickPublicFields(data, publicFields),
-          id: docSnapshot.id,
-          storeId: data.storeId || key,
-        })
-      })
-    }
-  }
-
-  return Array.from(results.values())
-    .filter(isPublicItemVisible)
-    .sort(sortPublicItems)
-}
-
-function assertStoreOwnerOrAdmin(storeData, uid, userData) {
-  const role = String(userData?.role || '').toLowerCase()
-  if (['admin', 'developer', 'dev'].includes(role)) return
-
-  const allowedUserIds = Array.isArray(storeData.allowedUserIds) ? storeData.allowedUserIds : []
-  const merchantUids = Array.isArray(storeData.merchantUids) ? storeData.merchantUids : []
-  const isOwner =
-    storeData.ownerUid === uid ||
-    storeData.ownerId === uid ||
-    allowedUserIds.includes(uid) ||
-    merchantUids.includes(uid)
-
-  if (!isOwner) {
-    throw new HttpsError('permission-denied', 'Permissão negada para esta loja.')
-  }
-}
-
-function hasForbiddenSettingsKeyDeep(value, depth = 0) {
-  if (!value || typeof value !== 'object' || depth > 8) return false
-  return Object.entries(value).some(([key, entry]) => (
-    STORE_SETTINGS_FORBIDDEN_FIELDS.has(key) ||
-    hasForbiddenSettingsKeyDeep(entry, depth + 1)
-  ))
-}
-
-function sanitizeStoreSettingsPayload(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new HttpsError('invalid-argument', 'Payload de configurações inválido.')
-  }
-
-  return Object.entries(payload).reduce((acc, [key, value]) => {
-    if (STORE_SETTINGS_FORBIDDEN_FIELDS.has(key)) {
-      throw new HttpsError('permission-denied', `Campo "${key}" não pode ser alterado por esta função.`)
-    }
-    if (!STORE_SETTINGS_ALLOWED_FIELDS.has(key)) return acc
-    if (hasForbiddenSettingsKeyDeep(value)) {
-      throw new HttpsError('permission-denied', `Campo "${key}" contém dados restritos.`)
-    }
-
-    const cleanValue = cleanCallableFirestoreValue(value)
-    if (cleanValue !== undefined) acc[key] = cleanValue
-    return acc
-  }, {})
-}
-
-async function findPublicCoupon(storeRecord, couponCode) {
-  const code = String(couponCode || '').trim().toUpperCase().slice(0, 80)
-  if (!code) return null
-
-  for (const storeKey of getStoreLookupKeys(storeRecord)) {
-    const snapshot = await db.collection('coupons')
-      .where('storeId', '==', storeKey)
-      .where('code', '==', code)
-      .limit(1)
-      .get()
-    if (!snapshot.empty) {
-      const docSnapshot = snapshot.docs[0]
-      return { id: docSnapshot.id, data: docSnapshot.data() || {} }
-    }
-  }
-
-  return null
-}
-
-function couponMoneyCents(coupon, centsField, moneyField) {
-  if (coupon?.[centsField] !== undefined && coupon?.[centsField] !== null) {
-    return toCents(coupon[centsField])
-  }
-  if (coupon?.[moneyField] !== undefined && coupon?.[moneyField] !== null) {
-    return moneyToCents(coupon[moneyField])
-  }
-  return 0
-}
-
-function publicCouponAppliesToItem(coupon, item) {
-  if (item?.acceptsCoupons === false || item?.acceptsCoupon === false || item?.couponEligible === false) {
-    return false
-  }
-
-  const productId = String(item?.productId || item?.id || '').trim()
-  const productIds = Array.isArray(coupon.productIds) ? coupon.productIds.map((id) => String(id)) : []
-  const appliesTo = coupon.appliesTo || 'all'
-
-  if (coupon.targetId && coupon.targetId !== 'all') return productId === String(coupon.targetId)
-  if (appliesTo === 'includeProducts') return productIds.includes(productId)
-  if (appliesTo === 'excludeProducts') return !productIds.includes(productId)
-  return true
-}
-
-function validateCouponForPublicResponse(coupon, items, subtotalCents) {
-  const now = Date.now()
-  const startsAt = timestampToMillis(coupon.startsAt)
-  const expiresAt = timestampToMillis(coupon.expiresAt)
-
-  if (coupon.isDeleted === true || coupon.deletedAt || coupon.active === false) {
-    return { valid: false, message: 'Cupom inativo ou indisponível.' }
-  }
-  if (startsAt && now < startsAt) return { valid: false, message: 'Cupom ainda não está vigente.' }
-  if (expiresAt && now > expiresAt) return { valid: false, message: 'Cupom expirado.' }
-
-  const usageLimit = Number(coupon.usageLimit || 0)
-  const usedCount = Number(coupon.usedCount || 0)
-  if (usageLimit > 0 && usedCount >= usageLimit) {
-    return { valid: false, message: 'Cupom esgotado.' }
-  }
-
-  const eligibleSubtotalCents = items
-    .filter((item) => publicCouponAppliesToItem(coupon, item))
-    .reduce((acc, item) => acc + toCents(item.totalCents), 0)
-
-  if (eligibleSubtotalCents <= 0) {
-    return { valid: false, message: 'Cupom não se aplica aos itens do carrinho.' }
-  }
-
-  const minOrderCents = couponMoneyCents(coupon, 'minOrderCents', 'minOrder')
-  if (minOrderCents > 0 && eligibleSubtotalCents < minOrderCents) {
-    return { valid: false, message: 'Subtotal elegível abaixo do pedido mínimo do cupom.' }
-  }
-
-  const type = coupon.type === 'fixed' ? 'fixed' : 'percent'
-  let discountCents
-
-  if (type === 'percent') {
-    const percent = Math.max(0, Number(coupon.value || 0))
-    discountCents = Math.round(eligibleSubtotalCents * (percent / 100))
-    const maxDiscountCents = couponMoneyCents(coupon, 'maxDiscountCents', 'maxDiscount')
-    if (maxDiscountCents > 0) discountCents = Math.min(discountCents, maxDiscountCents)
-  } else {
-    discountCents = couponMoneyCents(coupon, 'valueCents', 'value')
-  }
-
-  discountCents = Math.min(Math.max(0, discountCents), eligibleSubtotalCents, subtotalCents)
-  if (discountCents <= 0) return { valid: false, message: 'Cupom sem desconto aplicável.' }
-
-  return {
-    valid: true,
-    type,
-    discountCents,
-    eligibleSubtotalCents,
-    minOrderCents,
-  }
-}
-
-exports.getPublicStoreProfile = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
-  async (request) => {
-    const storeRecord = await findStoreForCallable(request.data || {})
-    if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
-      throw new HttpsError('not-found', 'Loja não encontrada.')
-    }
-
-    return {
-      ok: true,
-      store: normalizeStorePayload(storeRecord.id, storeRecord.data),
-    }
-  }
-)
-
-exports.getPublicCatalog = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '512MiB', maxInstances: 10 },
-  async (request) => {
-    const storeRecord = await findStoreForCallable(request.data || {})
-    if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
-      throw new HttpsError('not-found', 'Loja não encontrada.')
-    }
-
-    const [categories, products] = await Promise.all([
-      loadPublicSubcollection(storeRecord, 'categories', PUBLIC_CATEGORY_FIELDS),
-      loadPublicSubcollection(storeRecord, 'products', PUBLIC_PRODUCT_FIELDS),
-    ])
-
-    return {
-      ok: true,
-      store: normalizeStorePayload(storeRecord.id, storeRecord.data),
-      categories,
-      products,
-    }
-  }
-)
-
-exports.validatePublicCoupon = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 20 },
-  async (request) => {
-    const data = request.data || {}
-    const storeRecord = await findStoreForCallable(data)
-    if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
-      return { valid: false, message: 'Loja indisponível.' }
-    }
-
-    const couponDoc = await findPublicCoupon(storeRecord, data.couponCode)
-    if (!couponDoc) return { valid: false, message: 'Cupom inválido ou não encontrado.' }
-
-    const coupon = couponDoc.data
-    const subtotalCents = Math.max(0, toCents(data.subtotalCents))
-    const items = Array.isArray(data.items)
-      ? data.items.slice(0, 200).map((item) => ({
-        id: String(item?.id || '').trim(),
-        productId: String(item?.productId || item?.id || '').trim(),
-        categoryId: String(item?.categoryId || '').trim(),
-        totalCents: Math.max(0, toCents(item?.totalCents)),
-        acceptsCoupons: item?.acceptsCoupons,
-        acceptsCoupon: item?.acceptsCoupon,
-        couponEligible: item?.couponEligible,
-      }))
-      : []
-
-    if (subtotalCents <= 0 || items.length === 0) {
-      return { valid: false, message: 'Carrinho inválido para cupom.' }
-    }
-
-    const validation = validateCouponForPublicResponse(coupon, items, subtotalCents)
-    if (!validation.valid) return validation
-
-    const publicCoupon = pickPublicFields(coupon, [
-      'code', 'type', 'value', 'valueCents', 'maxDiscount', 'maxDiscountCents',
-      'minOrder', 'minOrderCents', 'startsAt', 'expiresAt', 'appliesTo',
-      'targetId', 'productIds', 'active', 'usageLimit', 'usedCount',
-    ])
-
-    return {
-      valid: true,
-      message: 'Cupom aplicado.',
-      coupon: {
-        ...publicCoupon,
-        id: couponDoc.id,
-        code: String(coupon.code || data.couponCode || '').trim().toUpperCase(),
-        discountCents: validation.discountCents,
-        eligibleSubtotalCents: validation.eligibleSubtotalCents,
-      },
-      discountCents: validation.discountCents,
-      eligibleSubtotalCents: validation.eligibleSubtotalCents,
-    }
-  }
-)
-
-exports.updateStoreSettings = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
-  async (request) => {
-    const uid = request.auth?.uid
-    if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
-
-    const data = request.data || {}
-    const storeId = String(data.storeId || '').trim()
-    if (!storeId) throw new HttpsError('invalid-argument', 'Loja obrigatória.')
-
-    const userSnapshot = await db.collection('users').doc(uid).get()
-    if (!userSnapshot.exists) throw new HttpsError('permission-denied', 'Usuário não encontrado.')
-
-    const storeRef = db.collection('stores').doc(storeId)
-    const storeSnapshot = await storeRef.get()
-    if (!storeSnapshot.exists) throw new HttpsError('not-found', 'Loja não encontrada.')
-
-    const storeData = storeSnapshot.data() || {}
-    assertStoreOwnerOrAdmin(storeData, uid, userSnapshot.data() || {})
-
-    const patch = sanitizeStoreSettingsPayload(data.payload || {})
-    if (Object.keys(patch).length === 0) {
-      return { ok: true, updatedFields: [] }
-    }
-
-    patch.updatedAt = admin.firestore.FieldValue.serverTimestamp()
-    patch.updatedBy = uid
-    patch.lastUpdatedBy = uid
-
-    await storeRef.update(patch)
-
-    await createAuditLog({
-      action: 'store_settings_updated',
-      entity: 'store',
-      entityId: storeId,
-      storeId,
-      storeSlug: storeData.storeSlug || storeData.slug || '',
-      actorUid: uid,
-      changedFields: Object.keys(patch).filter((field) => field !== 'updatedAt'),
-    })
-
-    return {
-      ok: true,
-      updatedFields: Object.keys(patch).filter((field) => field !== 'updatedAt'),
-    }
-  }
 )
 
 function getChangedFields(beforeData, afterData, fields) {
@@ -869,7 +349,7 @@ function calculateSelectedChoicesCents(item, product) {
     })
 
     if (!match) {
-      warnings.push(`Adicional/opção não encontrado no produto: ${selectedChoice.name || selectedChoice.id}`)
+      warnings.push(`Adicional/op├º├úo n├úo encontrado no produto: ${selectedChoice.name || selectedChoice.id}`)
       return
     }
 
@@ -975,12 +455,12 @@ exports.validateOrderPricing = onDocumentCreated(
       const product = await getProduct(productId, order)
 
       if (!product) {
-        errors.push(`Produto não encontrado: ${productId}`)
+        errors.push(`Produto n├úo encontrado: ${productId}`)
         continue
       }
 
       if (!isSameStore(order, product)) {
-        errors.push(`Produto de outra loja ou storeId incompatível: ${productId}`)
+        errors.push(`Produto de outra loja ou storeId incompat├¡vel: ${productId}`)
         continue
       }
 
@@ -990,7 +470,7 @@ exports.validateOrderPricing = onDocumentCreated(
         product.isVisible === false ||
         product.deletedAt
       ) {
-        errors.push(`Produto indisponível: ${product.name || productId}`)
+        errors.push(`Produto indispon├¡vel: ${product.name || productId}`)
         continue
       }
 
@@ -1323,7 +803,7 @@ function generateOtpCode() {
 function hashOtpCode(uid, phoneE164, code) {
   const secret = process.env.OTP_SECRET
   if (!secret && !getIsMockOtpAllowed()) {
-    throw new HttpsError('failed-precondition', 'Serviço de configuração pendente.')
+    throw new HttpsError('failed-precondition', 'Servi├ºo de configura├º├úo pendente.')
   }
   const useSecret = secret || 'mock-secret-for-dev-only'
   return crypto.createHmac('sha256', useSecret).update(`${uid}:${phoneE164}:${code}`).digest('hex')
@@ -1357,7 +837,7 @@ exports.precheckFirebasePhoneClaim = onCall(PHONE_CALLABLE_OPTIONS, async (reque
     : ''
 
   if ((claimUid && claimUid !== uid) || (legacyClaimUid && legacyClaimUid !== uid)) {
-    throw new HttpsError('already-exists', 'Este telefone já está vinculado a outra conta.')
+    throw new HttpsError('already-exists', 'Este telefone j├í est├í vinculado a outra conta.')
   }
 
   await assertFirebasePhonePrecheckRateLimit(uid, phoneHash)
@@ -1446,11 +926,11 @@ const _requestPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
   if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
 
   const { phone } = request.data
-  if (!phone) throw new HttpsError('invalid-argument', 'Telefone obrigatório.')
+  if (!phone) throw new HttpsError('invalid-argument', 'Telefone obrigat├│rio.')
 
   const normalized = normalizeBrazilianPhone(phone)
   if (!normalized) {
-    throw new HttpsError('invalid-argument', 'Formato de telefone inválido. Use DDD + Número.')
+    throw new HttpsError('invalid-argument', 'Formato de telefone inv├ílido. Use DDD + N├║mero.')
   }
   const { phoneDigits, phoneE164 } = normalized
 
@@ -1458,12 +938,12 @@ const _requestPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
   const userDoc = await userRef.get()
   
   if (!userDoc.exists) {
-    throw new HttpsError('failed-precondition', 'Perfil não encontrado.')
+    throw new HttpsError('failed-precondition', 'Perfil n├úo encontrado.')
   }
   
   const userData = userDoc.data()
   if (userData.role !== 'merchant') {
-    throw new HttpsError('permission-denied', 'Permissão negada.')
+    throw new HttpsError('permission-denied', 'Permiss├úo negada.')
   }
   if (userData.phoneVerified === true) {
     return { ok: true, alreadyVerified: true }
@@ -1478,7 +958,7 @@ const _requestPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
     ? (hashedClaimDoc.data().ownerUid || hashedClaimDoc.data().uid || '')
     : ''
   if ((claimUid && claimUid !== uid) || (hashedClaimUid && hashedClaimUid !== uid)) {
-    throw new HttpsError('already-exists', 'Este WhatsApp já está vinculado a outra conta.')
+    throw new HttpsError('already-exists', 'Este WhatsApp j├í est├í vinculado a outra conta.')
   }
 
   const verificationsRef = db.collection('phoneVerifications').doc(uid)
@@ -1513,16 +993,16 @@ const _requestPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
   if (!isMockAllowed && !isRealEnabled) {
     throw new HttpsError(
       'failed-precondition',
-      'A confirmação automática de WhatsApp ainda está em implantação. Fale com o suporte para ativar sua loja.'
+      'A confirma├º├úo autom├ítica de WhatsApp ainda est├í em implanta├º├úo. Fale com o suporte para ativar sua loja.'
     )
   }
 
   if (isRealEnabled) {
     if (!process.env.OTP_SECRET) {
-      logger.error('Falta OTP_SECRET em produção com OTP_PROVIDER_ENABLED=true.')
-      throw new HttpsError('failed-precondition', 'Serviço de configuração pendente.')
+      logger.error('Falta OTP_SECRET em produ├º├úo com OTP_PROVIDER_ENABLED=true.')
+      throw new HttpsError('failed-precondition', 'Servi├ºo de configura├º├úo pendente.')
     }
-    // TODO: Em produção integrar envio real (ex: Twilio, WhatsApp Cloud API) aqui.
+    // TODO: Em produ├º├úo integrar envio real (ex: Twilio, WhatsApp Cloud API) aqui.
   }
 
   const code = generateOtpCode()
@@ -1579,12 +1059,12 @@ const _confirmPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
 
   const { code } = request.data
   if (!code || typeof code !== 'string') {
-    throw new HttpsError('invalid-argument', 'Código inválido.')
+    throw new HttpsError('invalid-argument', 'C├│digo inv├ílido.')
   }
 
   const cleanCode = code.replace(/\D/g, '')
   if (cleanCode.length !== 6) {
-    throw new HttpsError('invalid-argument', 'Código deve ter 6 dígitos.')
+    throw new HttpsError('invalid-argument', 'C├│digo deve ter 6 d├¡gitos.')
   }
 
   const userRef = db.collection('users').doc(uid)
@@ -1593,31 +1073,31 @@ const _confirmPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
   return await db.runTransaction(async (transaction) => {
     const userDoc = await transaction.get(userRef)
     if (!userDoc.exists) {
-      throw new HttpsError('failed-precondition', 'Perfil não encontrado.')
+      throw new HttpsError('failed-precondition', 'Perfil n├úo encontrado.')
     }
     
     const userData = userDoc.data()
     if (userData.role !== 'merchant') {
-      throw new HttpsError('permission-denied', 'Permissão negada.')
+      throw new HttpsError('permission-denied', 'Permiss├úo negada.')
     }
     
     const vDoc = await transaction.get(verificationsRef)
     if (!vDoc.exists) {
-      throw new HttpsError('failed-precondition', 'Nenhuma verificação pendente.')
+      throw new HttpsError('failed-precondition', 'Nenhuma verifica├º├úo pendente.')
     }
 
     const vData = vDoc.data()
     if (vData.status !== 'pending') {
-      throw new HttpsError('failed-precondition', 'Nenhuma verificação pendente.')
+      throw new HttpsError('failed-precondition', 'Nenhuma verifica├º├úo pendente.')
     }
 
     const now = admin.firestore.Timestamp.now()
     if (vData.expiresAt.toMillis() < now.toMillis()) {
-      throw new HttpsError('deadline-exceeded', 'Código expirado. Envie um novo código.')
+      throw new HttpsError('deadline-exceeded', 'C├│digo expirado. Envie um novo c├│digo.')
     }
 
     if (vData.attempts >= 5) {
-      throw new HttpsError('resource-exhausted', 'Muitas tentativas. Solicite um novo código mais tarde.')
+      throw new HttpsError('resource-exhausted', 'Muitas tentativas. Solicite um novo c├│digo mais tarde.')
     }
 
     const expectedHash = vData.codeHash
@@ -1639,7 +1119,7 @@ const _confirmPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
         attempts: admin.firestore.FieldValue.increment(1),
         updatedAt: now
       })
-      throw new HttpsError('invalid-argument', 'Código incorreto.')
+      throw new HttpsError('invalid-argument', 'C├│digo incorreto.')
     }
 
     const claimRef = db.collection('phoneClaims').doc(vData.phoneE164)
@@ -1653,7 +1133,7 @@ const _confirmPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-ea
       : ''
 
     if ((claimUid && claimUid !== uid) || (hashedClaimUid && hashedClaimUid !== uid)) {
-      throw new HttpsError('already-exists', 'Este WhatsApp já está vinculado a outra conta.')
+      throw new HttpsError('already-exists', 'Este WhatsApp j├í est├í vinculado a outra conta.')
     }
 
     transaction.set(claimRef, {
@@ -1720,20 +1200,20 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
 
   return await db.runTransaction(async (transaction) => {
     const userDoc = await transaction.get(userRef)
-    if (!userDoc.exists) throw new HttpsError('failed-precondition', 'Usuário não encontrado.')
+    if (!userDoc.exists) throw new HttpsError('failed-precondition', 'Usu├írio n├úo encontrado.')
 
     const userData = userDoc.data()
     const now = admin.firestore.Timestamp.now()
 
-    if (userData.role !== 'merchant') throw new HttpsError('permission-denied', 'Permissão negada.')
+    if (userData.role !== 'merchant') throw new HttpsError('permission-denied', 'Permiss├úo negada.')
 
     // 1. Se phoneVerified !== true:
     if (userData.phoneVerified !== true) {
-      logger.warn(`[startFreeTrial] Bloqueado: Telefone não confirmado para o usuário ${uid}.`)
-      throw new HttpsError('failed-precondition', 'Verifique seu telefone antes de ativar o teste grátis.')
+      logger.warn(`[startFreeTrial] Bloqueado: Telefone n├úo confirmado para o usu├írio ${uid}.`)
+      throw new HttpsError('failed-precondition', 'Verifique seu telefone antes de ativar o teste gr├ítis.')
     }
 
-    // 4. Se o usuário já tem storeId/storeIds:
+    // 4. Se o usu├írio j├í tem storeId/storeIds:
     const existingStoreId = userData.storeId || (Array.isArray(userData.storeIds) && userData.storeIds[0])
 
     // Fazer todas as leituras primeiro
@@ -1743,11 +1223,11 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
     }
 
     if (existingStoreId) {
-      logger.info(`[startFreeTrial] Usuário ${uid} já possui loja ${existingStoreId}. Retornando loja existente.`)
+      logger.info(`[startFreeTrial] Usu├írio ${uid} j├í possui loja ${existingStoreId}. Retornando loja existente.`)
 
       if (!storeDoc || !storeDoc.exists) {
-        logger.error(`[startFreeTrial] Loja vinculada não foi encontrada para o usuário ${uid} (storeId: ${existingStoreId}).`)
-        throw new HttpsError('failed-precondition', 'Loja vinculada não foi encontrada. Entre em contato com o suporte.')
+        logger.error(`[startFreeTrial] Loja vinculada n├úo foi encontrada para o usu├írio ${uid} (storeId: ${existingStoreId}).`)
+        throw new HttpsError('failed-precondition', 'Loja vinculada n├úo foi encontrada. Entre em contato com o suporte.')
       }
 
       const storeData = storeDoc.data() || {}
@@ -1797,13 +1277,13 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
 
     const onboardingStatus = userData.onboardingStatus || ''
     if (!allowedStatus.includes(onboardingStatus)) {
-      logger.error(`[startFreeTrial] Status de onboarding inválido para o usuário ${uid}: ${onboardingStatus}`)
-      throw new HttpsError('failed-precondition', 'Status de onboarding inválido.')
+      logger.error(`[startFreeTrial] Status de onboarding inv├ílido para o usu├írio ${uid}: ${onboardingStatus}`)
+      throw new HttpsError('failed-precondition', 'Status de onboarding inv├ílido.')
     }
 
     // 3. Se onboardingStatus estiver em pending ou phone_pending, mas phoneVerified === true:
     if (onboardingStatus === 'pending' || onboardingStatus === 'phone_pending') {
-      logger.warn(`[startFreeTrial] Status inconsistente detectado para o usuário ${uid}: onboardingStatus="${onboardingStatus}", mas phoneVerified=true. Permitindo criação da loja.`)
+      logger.warn(`[startFreeTrial] Status inconsistente detectado para o usu├írio ${uid}: onboardingStatus="${onboardingStatus}", mas phoneVerified=true. Permitindo cria├º├úo da loja.`)
     }
 
     const storeName = userData.signup?.storeName || 'Minha Loja'
@@ -1824,7 +1304,7 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
     }
 
     if (!finalSlug) {
-      throw new HttpsError('resource-exhausted', 'Não foi possível gerar uma URL única para a loja. Tente novamente.')
+      throw new HttpsError('resource-exhausted', 'N├úo foi poss├¡vel gerar uma URL ├║nica para a loja. Tente novamente.')
     }
 
     const storeRef = db.collection('stores').doc()
@@ -1898,10 +1378,10 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
   if (!callerUid) throw new HttpsError('unauthenticated', 'Acesso negado.')
 
   const callerDoc = await db.collection('users').doc(callerUid).get()
-  if (!callerDoc.exists) throw new HttpsError('permission-denied', 'Usuário não encontrado.')
+  if (!callerDoc.exists) throw new HttpsError('permission-denied', 'Usu├írio n├úo encontrado.')
   const callerData = callerDoc.data()
   if (!['admin', 'developer', 'dev'].includes(callerData.role)) {
-    throw new HttpsError('permission-denied', 'Permissão negada.')
+    throw new HttpsError('permission-denied', 'Permiss├úo negada.')
   }
 
   const vData = request.data || {}
@@ -1916,25 +1396,25 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
   const customSlug = String(vData.customSlug || '').trim()
 
   const normalizedPhone = normalizeBrazilianPhone(whatsappRaw)
-  if (!normalizedPhone) throw new HttpsError('invalid-argument', 'WhatsApp inválido.')
+  if (!normalizedPhone) throw new HttpsError('invalid-argument', 'WhatsApp inv├ílido.')
   const { phoneE164, phoneDigits } = normalizedPhone
 
-  if (!email || !/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError('invalid-argument', 'E-mail inválido.')
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError('invalid-argument', 'E-mail inv├ílido.')
   if (!password || password.length < 8) throw new HttpsError('invalid-argument', 'A senha precisa ter pelo menos 8 caracteres.')
   if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-    throw new HttpsError('invalid-argument', 'A senha precisa misturar letras e números.')
+    throw new HttpsError('invalid-argument', 'A senha precisa misturar letras e n├║meros.')
   }
-  if (!name) throw new HttpsError('invalid-argument', 'Nome da loja obrigatório.')
-  if (!ownerName) throw new HttpsError('invalid-argument', 'Nome do proprietário obrigatório.')
+  if (!name) throw new HttpsError('invalid-argument', 'Nome da loja obrigat├│rio.')
+  if (!ownerName) throw new HttpsError('invalid-argument', 'Nome do propriet├írio obrigat├│rio.')
 
   if (!['essential', 'professional', 'premium'].includes(plan)) {
-    throw new HttpsError('invalid-argument', 'Plano inválido. Use essential, professional ou premium.')
+    throw new HttpsError('invalid-argument', 'Plano inv├ílido. Use essential, professional ou premium.')
   }
   if (!['monthly', 'annual'].includes(billingCycle)) {
-    throw new HttpsError('invalid-argument', 'Ciclo de pagamento inválido.')
+    throw new HttpsError('invalid-argument', 'Ciclo de pagamento inv├ílido.')
   }
   if (!['trialing', 'active', 'blocked'].includes(subscriptionStatus)) {
-    throw new HttpsError('invalid-argument', 'Status de assinatura inválido. Use apenas trialing, active ou blocked.')
+    throw new HttpsError('invalid-argument', 'Status de assinatura inv├ílido. Use apenas trialing, active ou blocked.')
   }
 
   const normalizedPlan = plan
@@ -1942,7 +1422,7 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
 
   try {
     await admin.auth().getUserByEmail(email)
-    throw new HttpsError('already-exists', 'Já existe uma conta com este e-mail.')
+    throw new HttpsError('already-exists', 'J├í existe uma conta com este e-mail.')
   } catch (err) {
     if (err.code !== 'auth/user-not-found' && err.code !== 'already-exists') {
       throw new HttpsError('internal', 'Erro ao verificar e-mail.')
@@ -1983,7 +1463,7 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
       }
 
       if (!finalSlug) {
-        throw new HttpsError('resource-exhausted', 'Não foi possível gerar slug. Tente novamente.')
+        throw new HttpsError('resource-exhausted', 'N├úo foi poss├¡vel gerar slug. Tente novamente.')
       }
 
       const now = admin.firestore.Timestamp.now()
@@ -2086,28 +1566,28 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
     }
     
     logger.error('Error in adminCreateStore:', error)
-    throw new HttpsError('internal', 'Erro interno ao criar loja e usuário.')
+    throw new HttpsError('internal', 'Erro interno ao criar loja e usu├írio.')
   }
 })
 
-// ─── Callable: updateMyProfile ───────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Callable: updateMyProfile ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 exports.acceptLatestTerms = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
     if (!request.auth?.uid) {
-      throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+      throw new HttpsError('unauthenticated', 'Usu├írio n├úo autenticado.')
     }
 
     const allowedKeys = []
     const dataKeys = Object.keys(request.data || {})
     if (dataKeys.some((key) => !allowedKeys.includes(key))) {
-      throw new HttpsError('invalid-argument', 'Payload inválido.')
+      throw new HttpsError('invalid-argument', 'Payload inv├ílido.')
     }
 
     const userRef = db.collection('users').doc(request.auth.uid)
     const userSnapshot = await userRef.get()
     if (!userSnapshot.exists) {
-      throw new HttpsError('failed-precondition', 'Perfil do usuário não encontrado.')
+      throw new HttpsError('failed-precondition', 'Perfil do usu├írio n├úo encontrado.')
     }
 
     await userRef.update({
@@ -2130,7 +1610,7 @@ exports.updateBillingNotificationPreferences = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
     if (!request.auth?.uid) {
-      throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+      throw new HttpsError('unauthenticated', 'Usu├írio n├úo autenticado.')
     }
 
     const data = request.data || {}
@@ -2140,13 +1620,13 @@ exports.updateBillingNotificationPreferences = onCall(
       dataKeys.some((key) => !allowedKeys.includes(key)) ||
       typeof data.trialReminderEmailOptIn !== 'boolean'
     ) {
-      throw new HttpsError('invalid-argument', 'Preferência inválida.')
+      throw new HttpsError('invalid-argument', 'Prefer├¬ncia inv├ílida.')
     }
 
     const userRef = db.collection('users').doc(request.auth.uid)
     const userSnapshot = await userRef.get()
     if (!userSnapshot.exists) {
-      throw new HttpsError('failed-precondition', 'Perfil do usuário não encontrado.')
+      throw new HttpsError('failed-precondition', 'Perfil do usu├írio n├úo encontrado.')
     }
 
     await userRef.update({
@@ -2166,7 +1646,7 @@ exports.updateMyProfile = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
     if (!request.auth?.uid) {
-      throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+      throw new HttpsError('unauthenticated', 'Usu├írio n├úo autenticado.')
     }
 
     const uid = request.auth.uid
@@ -2184,7 +1664,7 @@ exports.updateMyProfile = onCall(
       if (request.data?.[field] !== undefined) {
         throw new HttpsError(
           'permission-denied',
-          `Campo "${field}" não pode ser alterado por esta função.`
+          `Campo "${field}" n├úo pode ser alterado por esta fun├º├úo.`
         )
       }
     }
@@ -2208,10 +1688,10 @@ exports.updateMyProfile = onCall(
     }
 
     if (photoURL && !isCloudinaryUrl(photoURL)) {
-      throw new HttpsError('invalid-argument', 'URL de foto inválida. Use o Cloudinary.')
+      throw new HttpsError('invalid-argument', 'URL de foto inv├ílida. Use o Cloudinary.')
     }
     if (avatarUrl && !isCloudinaryUrl(avatarUrl)) {
-      throw new HttpsError('invalid-argument', 'URL de avatar inválida. Use o Cloudinary.')
+      throw new HttpsError('invalid-argument', 'URL de avatar inv├ílida. Use o Cloudinary.')
     }
 
     const patch = {}
@@ -2237,7 +1717,7 @@ exports.updateMyProfile = onCall(
 )
 
 // ---------------------------------------------------------------------------
-// Audit: registra alterações de status da loja (isOpen, isActive, etc.)
+// Audit: registra altera├º├Áes de status da loja (isOpen, isActive, etc.)
 // Permite rastrear quando o lojista abriu/fechou a loja em disputas.
 // ---------------------------------------------------------------------------
 exports.auditStoreChanges = onDocumentUpdated(
@@ -2291,9 +1771,9 @@ exports.auditStoreChanges = onDocumentUpdated(
 )
 
 // ---------------------------------------------------------------------------
-// Scheduler: limpa usuários anônimos do Firebase Auth com mais de 30 dias.
-// Evita acumulação ilimitada de contas fantasmas de visitantes da storefront.
-// Roda diariamente às 03:00 (horário de Brasília = 06:00 UTC).
+// Scheduler: limpa usu├írios an├┤nimos do Firebase Auth com mais de 30 dias.
+// Evita acumula├º├úo ilimitada de contas fantasmas de visitantes da storefront.
+// Roda diariamente ├ás 03:00 (hor├írio de Bras├¡lia = 06:00 UTC).
 // ---------------------------------------------------------------------------
 exports.cleanupAnonymousUsers = onSchedule(
   {
@@ -2343,85 +1823,10 @@ exports.cleanupAnonymousUsers = onSchedule(
         }
       } while (nextPageToken)
 
-      logger.info('[cleanupAnonymousUsers] Concluído.', { totalScanned, totalDeleted })
+      logger.info('[cleanupAnonymousUsers] Conclu├¡do.', { totalScanned, totalDeleted })
     } catch (error) {
       logger.error('[cleanupAnonymousUsers] Erro durante limpeza:', error)
       throw error
     }
-  }
-)
-
-exports.materializePublicStoreProfile = onDocumentWritten(
-  { document: 'stores/{storeId}', region: REGION, maxInstances: 3 },
-  async (event) => {
-    const data = event.data.after.data()
-    const storeId = event.params.storeId
-    if (!data || !isPublicStoreVisible(data)) {
-      await db.collection('publicStores').doc(storeId).delete()
-    } else {
-      await db.collection('publicStores').doc(storeId).set({
-        ...sanitizePublicStore(data),
-        id: storeId,
-        storeId
-      }, { merge: true })
-    }
-  }
-)
-
-exports.materializePublicProduct = onDocumentWritten(
-  { document: 'products/{productId}', region: REGION, maxInstances: 3 },
-  async (event) => {
-    const data = event.data.after.data()
-    const productId = event.params.productId
-    if (!data || !data.storeId) return
-    const storeId = data.storeId
-    
-    if (!publicProductIsVisible(data)) {
-      await db.collection('publicStores').doc(storeId).collection('products').doc(productId).delete()
-    } else {
-      await db.collection('publicStores').doc(storeId).collection('products').doc(productId).set({
-        ...sanitizePublicProduct(data),
-        id: productId,
-        productId,
-        storeId
-      }, { merge: true })
-    }
-  }
-)
-
-exports.materializePublicCategory = onDocumentWritten(
-  { document: 'categories/{categoryId}', region: REGION, maxInstances: 3 },
-  async (event) => {
-    const data = event.data.after.data()
-    const categoryId = event.params.categoryId
-    if (!data || !data.storeId) return
-    const storeId = data.storeId
-    
-    if (!publicCategoryIsVisible(data)) {
-      await db.collection('publicStores').doc(storeId).collection('categories').doc(categoryId).delete()
-    } else {
-      await db.collection('publicStores').doc(storeId).collection('categories').doc(categoryId).set({
-        ...sanitizePublicCategory(data),
-        id: categoryId,
-        categoryId,
-        storeId
-      }, { merge: true })
-    }
-  }
-)
-
-exports.aggregateStorePresence = onValueWritten(
-  { ref: '/storePresence/{storeId}/{userId}', region: 'us-central1' },
-  async (event) => {
-    const storeId = event.params.storeId
-    const presenceRef = admin.database().ref(`/storePresence/${storeId}`)
-    const snapshot = await presenceRef.once('value')
-    let activeUsers = 0
-    snapshot.forEach((child) => {
-      const val = child.val()
-      if (val === true || val?.state === 'online') activeUsers++
-    })
-    
-    await db.collection('publicStores').doc(storeId).set({ activeViewers: activeUsers }, { merge: true })
   }
 )
