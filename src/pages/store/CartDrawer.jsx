@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from 'firebase/firestore' 
 import { httpsCallable } from 'firebase/functions'
 
 import {
@@ -30,7 +24,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
-import { db, functions } from '../../services/firebase'
+import { functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
@@ -1697,31 +1691,29 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     setCouponLoading(true)
 
     try {
-      const couponsQuery =
-        storeKeys.length === 1
-          ? query(
-              collection(db, 'coupons'),
-              where('storeId', '==', storeKeys[0]),
-              where('code', '==', code)
-            )
-          : query(
-              collection(db, 'coupons'),
-              where('storeId', 'in', storeKeys.slice(0, 10)),
-              where('code', '==', code)
-            )
+      const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
+      const response = await validatePublicCoupon({
+        storeId: store?.id || storeKeys[0],
+        storeSlug: store?.storeSlug || store?.slug || storeKeys[1],
+        couponCode: code,
+        subtotalCents: Math.round(subtotal * 100),
+        items: cartItems.map((item) => ({
+          id: item.id || item.productId,
+          productId: item.productId || item.id,
+          categoryId: item.categoryId,
+          totalCents: Math.round(getItemTotal(item) * 100),
+          acceptsCoupons: item.acceptsCoupons,
+          acceptsCoupon: item.acceptsCoupon,
+          couponEligible: item.couponEligible,
+        })),
+      })
 
-      const snapshot = await getDocs(couponsQuery)
-
-      if (snapshot.empty) {
-        setCouponError('Cupom inválido ou não encontrado.')
+      if (!response.data?.valid || !response.data?.coupon) {
+        setCouponError(response.data?.message || 'Cupom invalido ou nao encontrado.')
         return
       }
 
-      const couponDoc = snapshot.docs[0]
-      const coupon = {
-        id: couponDoc.id,
-        ...couponDoc.data(),
-      }
+      const coupon = response.data.coupon
 
       if (coupon.isDeleted) {
         setCouponError('Este cupom não está mais disponível.')
@@ -1768,7 +1760,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     } finally {
       setCouponLoading(false)
     }
-  }, [cartItems, couponCode, couponLoading, storeKeys, subtotal])
+  }, [cartItems, couponCode, couponLoading, store, storeKeys, subtotal])
 
   const validateCheckout = useCallback(() => {
     if (!storeIsOpen) return 'A loja está fechada no momento.'

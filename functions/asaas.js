@@ -2985,6 +2985,7 @@ function createAsaasFunctions({ db, admin, logger }) {
       region: REGION,
       timeoutSeconds: 60,
       memory: '256MiB',
+      maxInstances: 10,
       secrets: [ASAAS_WEBHOOK_AUTH_TOKEN],
     },
     async (request, response) => {

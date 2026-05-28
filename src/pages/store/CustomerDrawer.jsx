@@ -5,8 +5,8 @@ import {
   getDocs,
   onSnapshot,
   query,
-  where,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import { Link, useParams } from 'react-router-dom'
 
 import {
@@ -29,7 +29,7 @@ import {
   FiXCircle,
 } from 'react-icons/fi'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import { useCart } from '../../contexts/CartContext'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
@@ -499,16 +499,25 @@ const greeting = useMemo(() => {
       if (!orderStoreId) return []
 
       const productsQuery = query(
-        collection(db, 'products'),
-        where('storeId', '==', orderStoreId)
+        collection(db, 'publicStores', orderStoreId, 'products')
       )
 
       const snapshot = await getDocs(productsQuery)
 
-      return snapshot.docs.map((productDoc) => ({
+      const publicProducts = snapshot.docs.map((productDoc) => ({
         id: productDoc.id,
         ...productDoc.data(),
       }))
+
+      if (publicProducts.length > 0) return publicProducts
+
+      try {
+        const getPublicCatalog = httpsCallable(functions, 'getPublicCatalog')
+        const response = await getPublicCatalog({ storeId: orderStoreId })
+        return response.data?.products || []
+      } catch {
+        return []
+      }
     },
     [products, slug]
   )

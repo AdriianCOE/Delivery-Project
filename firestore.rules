@@ -104,6 +104,12 @@ function orderStoreKeys(data) {
         && isPublicStoreData(get(storePath(storeId)).data);
     }
 
+    function publicStoreProfileExists(storeId) {
+      return storeId is string
+        && exists(/databases/$(database)/documents/publicStores/$(storeId))
+        && isPublicStoreData(get(/databases/$(database)/documents/publicStores/$(storeId)).data);
+    }
+
     function storeFieldUnchanged(field) {
       return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
@@ -448,14 +454,29 @@ function publicOrderUpdateAllowed(orderId) {
 }
 
     match /stores/{storeId} {
-      allow get, list: if isPublicStoreData(resource.data) || canManageStoreData(resource.data);
+      allow get, list: if canManageStoreData(resource.data);
       allow create: if isAdmin();
       allow update: if isAdmin() || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
       allow delete: if isAdmin();
     }
 
+    match /publicStores/{storeId} {
+      allow get, list: if isPublicStoreData(resource.data);
+      allow create, update, delete: if false;
+
+      match /categories/{categoryId} {
+        allow read: if publicStoreProfileExists(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /products/{productId} {
+        allow read: if publicStoreProfileExists(storeId);
+        allow create, update, delete: if false;
+      }
+    }
+
     match /categories/{categoryId} {
-      allow read: if publicStoreExists(resource.data.get('storeId', '')) || canManageStoreId(resource.data.get('storeId', ''));
+      allow read: if canManageStoreId(resource.data.get('storeId', ''));
       allow create: if canManageStoreId(request.resource.data.get('storeId', ''));
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
         && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
@@ -463,7 +484,7 @@ function publicOrderUpdateAllowed(orderId) {
     }
 
     match /products/{productId} {
-      allow read: if publicStoreExists(resource.data.get('storeId', '')) || canManageStoreId(resource.data.get('storeId', ''));
+      allow read: if canManageStoreId(resource.data.get('storeId', ''));
       allow create: if canManageStoreId(request.resource.data.get('storeId', ''));
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
         && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
@@ -471,7 +492,7 @@ function publicOrderUpdateAllowed(orderId) {
     }
 
     match /coupons/{couponId} {
-      allow read: if publicStoreExists(resource.data.get('storeId', '')) || canManageStoreId(resource.data.get('storeId', ''));
+      allow read: if canManageStoreId(resource.data.get('storeId', ''));
       allow create: if canManageStoreId(request.resource.data.get('storeId', ''));
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
         && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');

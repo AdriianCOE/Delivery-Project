@@ -1,8 +1,10 @@
 const {
     onDocumentCreated,
+    onDocumentWritten,
     onDocumentUpdated,
   } = require('firebase-functions/v2/firestore')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
+const { onValueWritten } = require('firebase-functions/v2/database')
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
@@ -10,12 +12,23 @@ const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
 const { createAsaasFunctions } = require('./asaas')
 
+const { setGlobalOptions } = require('firebase-functions/v2')
+
+setGlobalOptions({
+  region: 'southamerica-east1',
+  minInstances: 0,
+  maxInstances: 3,
+  cpu: 'gcf_gen1'
+})
+
 admin.initializeApp()
 
 const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
 const TERMS_VERSION = '2026-05-24'
 const PRIVACY_VERSION = '2026-05-24'
+const REGION = 'southamerica-east1'
+const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
 
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
 exports.getSubscriptionManagementData = asaasFunctions.getSubscriptionManagementData
@@ -31,6 +44,8 @@ exports.createPublicOrder = onCall(
     region: 'southamerica-east1',
     timeoutSeconds: 60,
     memory: '256MiB',
+    maxInstances: 10,
+    enforceAppCheck: ENFORCE_APP_CHECK,
   },
   createPublicOrderHandler({
     db,
@@ -39,6 +54,520 @@ exports.createPublicOrder = onCall(
     logger,
     maxOrderCents: 100000000,
   })
+)
+
+const BILLING_BLOCKED_PUBLIC_STATUSES = new Set(['blocked', 'canceled'])
+
+const PUBLIC_STORE_FIELDS = [
+  'name', 'storeName', 'description', 'segment', 'category',
+  'logoUrl', 'logo', 'bannerUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
+  'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
+  'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
+  'openingHours', 'businessHours', 'hours', 'settings', 'deliveryTime', 'estimatedDeliveryTime',
+  'minOrder', 'minOrderCents', 'minimumOrder', 'minimumOrderCents', 'deliveryFee',
+  'deliveryFeeCents', 'deliveryFees', 'acceptDelivery', 'acceptPickup', 'acceptDineIn',
+  'paymentMethods', 'pix', 'pixKey', 'pixKeyType', 'address', 'cep', 'street', 'number',
+  'neighborhood', 'city', 'state', 'rating', 'promoBanner', 'promotionBanner',
+  'marketingBanner', 'adBanner', 'promoBanners', 'banners',
+]
+
+const PUBLIC_CATEGORY_FIELDS = [
+  'name', 'description', 'order', 'sortOrder', 'position', 'slug', 'icon', 'imageUrl',
+  'isActive', 'active', 'isVisible', 'visible', 'isDeleted', 'deletedAt',
+]
+
+const PUBLIC_PRODUCT_FIELDS = [
+  'name', 'description', 'price', 'priceCents', 'priceInCents', 'oldPrice', 'oldPriceCents',
+  'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'categoryId', 'category',
+  'categoryName', 'order', 'sortOrder', 'position', 'isActive', 'active', 'isVisible',
+  'visible', 'isDeleted', 'deletedAt', 'isAvailable', 'available', 'status',
+  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isPromotion',
+  'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
+  'unit', 'tags', 'availableDays', 'availability', 'stock',
+]
+
+const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+  'name', 'storeName', 'description', 'segment', 'category',
+  'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+  'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
+  'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+  'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+  'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
+  'number', 'neighborhood', 'city', 'state',
+])
+
+const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
+  'ownerId', 'ownerUid', 'owner', 'ownerEmail', 'ownerName',
+  'role', 'allowedUserIds', 'merchantUids',
+  'subscriptionStatus', 'subscription', 'billingProvider', 'billingCycle',
+  'plan', 'trialStartedAt', 'trialEndsAt', 'currentPeriodEnd',
+  'isBillingBlocked', 'asaasCustomerId', 'asaasSubscriptionId',
+  'asaasPaymentId', 'asaasCheckoutUrl', 'billingMethodConfigured',
+  'lastPaymentId', 'lastPaymentStatus',
+  'createdAt', 'createdBy', 'deletedAt', 'isDeleted',
+])
+
+function uniqueTruthy(values) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+function timestampToMillis(value) {
+  if (!value) return null
+  if (typeof value.toMillis === 'function') return value.toMillis()
+  if (typeof value.toDate === 'function') return value.toDate().getTime()
+  if (value.seconds) return Number(value.seconds) * 1000
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+function cleanCallableFirestoreValue(value, depth = 0) {
+  if (value === undefined || typeof value === 'function') return undefined
+  if (value === null) return null
+  if (typeof value === 'string') return value.trim().slice(0, 5000)
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (value instanceof Date) return admin.firestore.Timestamp.fromDate(value)
+  if (typeof value.toDate === 'function' || typeof value.toMillis === 'function') return value
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 200)
+      .map((item) => cleanCallableFirestoreValue(item, depth + 1))
+      .filter((item) => item !== undefined)
+  }
+
+  if (typeof value === 'object') {
+    if (depth > 8) return undefined
+    return Object.entries(value).reduce((acc, [key, entry]) => {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) return acc
+      const cleanValue = cleanCallableFirestoreValue(entry, depth + 1)
+      if (cleanValue !== undefined) acc[key] = cleanValue
+      return acc
+    }, {})
+  }
+
+  return undefined
+}
+
+function pickPublicFields(data, fields) {
+  return fields.reduce((acc, field) => {
+    const cleanValue = cleanCallableFirestoreValue(data?.[field])
+    if (cleanValue !== undefined) acc[field] = cleanValue
+    return acc
+  }, {})
+}
+
+function normalizeStorePayload(storeId, data) {
+  const storeSlug = data.storeSlug || data.slug || storeId
+  return {
+    ...pickPublicFields(data, PUBLIC_STORE_FIELDS),
+    id: storeId,
+    docId: data.storeDocId || storeId,
+    storeId: data.storeId || storeId,
+    storeSlug,
+    slug: data.slug || storeSlug,
+  }
+}
+
+function isStorePubliclyReadable(data) {
+  if (!data) return false
+  if (data.isDeleted === true || data.deletedAt) return false
+  if (data.isActive === false || data.isBlocked === true || data.isBillingBlocked === true) return false
+  const subscriptionStatus = String(data.subscriptionStatus || data.subscription?.status || '').trim()
+  return !BILLING_BLOCKED_PUBLIC_STATUSES.has(subscriptionStatus)
+}
+
+async function findStoreForCallable(input = {}) {
+  const keys = uniqueTruthy([
+    input.storeId,
+    input.storeSlug,
+    input.slug,
+    input.storeDocId,
+  ]).slice(0, 8)
+
+  for (const key of keys) {
+    for (const collectionName of ['publicStores', 'stores']) {
+      const snapshot = await db.collection(collectionName).doc(key).get()
+      if (snapshot.exists) {
+        return {
+          id: snapshot.id,
+          collectionName,
+          data: snapshot.data() || {},
+        }
+      }
+    }
+  }
+
+  for (const key of keys) {
+    for (const collectionName of ['publicStores', 'stores']) {
+      for (const field of ['storeSlug', 'slug']) {
+        const snapshot = await db.collection(collectionName)
+          .where(field, '==', key)
+          .limit(1)
+          .get()
+        if (!snapshot.empty) {
+          const docSnapshot = snapshot.docs[0]
+          return {
+            id: docSnapshot.id,
+            collectionName,
+            data: docSnapshot.data() || {},
+          }
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function getStoreLookupKeys(storeRecord) {
+  if (!storeRecord) return []
+  const data = storeRecord.data || {}
+  return uniqueTruthy([
+    storeRecord.id,
+    data.storeId,
+    data.storeDocId,
+    data.storeSlug,
+    data.slug,
+    ...(Array.isArray(data.storeKeys) ? data.storeKeys : []),
+  ]).slice(0, 12)
+}
+
+function sortPublicItems(a, b) {
+  const orderA = Number(a.order ?? a.sortOrder ?? a.position ?? 9999)
+  const orderB = Number(b.order ?? b.sortOrder ?? b.position ?? 9999)
+  if (orderA !== orderB) return orderA - orderB
+  return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')
+}
+
+function isPublicItemVisible(item) {
+  return item?.isDeleted !== true &&
+    !item?.deletedAt &&
+    item?.isActive !== false &&
+    item?.active !== false &&
+    item?.isVisible !== false &&
+    item?.visible !== false &&
+    item?.showInStorefront !== false
+}
+
+async function loadPublicSubcollection(storeRecord, subcollection, publicFields) {
+  const results = new Map()
+  const lookupKeys = getStoreLookupKeys(storeRecord)
+
+  for (const key of lookupKeys.slice(0, 4)) {
+    const publicSnapshot = await db.collection('publicStores').doc(key).collection(subcollection).get()
+    publicSnapshot.docs.forEach((docSnapshot) => {
+      const data = docSnapshot.data() || {}
+      results.set(docSnapshot.id, {
+        ...pickPublicFields(data, publicFields),
+        id: docSnapshot.id,
+      })
+    })
+  }
+
+  if (results.size === 0) {
+    for (const key of lookupKeys) {
+      const snapshot = await db.collection(subcollection)
+        .where('storeId', '==', key)
+        .limit(500)
+        .get()
+      snapshot.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data() || {}
+        results.set(docSnapshot.id, {
+          ...pickPublicFields(data, publicFields),
+          id: docSnapshot.id,
+          storeId: data.storeId || key,
+        })
+      })
+    }
+  }
+
+  return Array.from(results.values())
+    .filter(isPublicItemVisible)
+    .sort(sortPublicItems)
+}
+
+function assertStoreOwnerOrAdmin(storeData, uid, userData) {
+  const role = String(userData?.role || '').toLowerCase()
+  if (['admin', 'developer', 'dev'].includes(role)) return
+
+  const allowedUserIds = Array.isArray(storeData.allowedUserIds) ? storeData.allowedUserIds : []
+  const merchantUids = Array.isArray(storeData.merchantUids) ? storeData.merchantUids : []
+  const isOwner =
+    storeData.ownerUid === uid ||
+    storeData.ownerId === uid ||
+    allowedUserIds.includes(uid) ||
+    merchantUids.includes(uid)
+
+  if (!isOwner) {
+    throw new HttpsError('permission-denied', 'Permissão negada para esta loja.')
+  }
+}
+
+function hasForbiddenSettingsKeyDeep(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 8) return false
+  return Object.entries(value).some(([key, entry]) => (
+    STORE_SETTINGS_FORBIDDEN_FIELDS.has(key) ||
+    hasForbiddenSettingsKeyDeep(entry, depth + 1)
+  ))
+}
+
+function sanitizeStoreSettingsPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new HttpsError('invalid-argument', 'Payload de configurações inválido.')
+  }
+
+  return Object.entries(payload).reduce((acc, [key, value]) => {
+    if (STORE_SETTINGS_FORBIDDEN_FIELDS.has(key)) {
+      throw new HttpsError('permission-denied', `Campo "${key}" não pode ser alterado por esta função.`)
+    }
+    if (!STORE_SETTINGS_ALLOWED_FIELDS.has(key)) return acc
+    if (hasForbiddenSettingsKeyDeep(value)) {
+      throw new HttpsError('permission-denied', `Campo "${key}" contém dados restritos.`)
+    }
+
+    const cleanValue = cleanCallableFirestoreValue(value)
+    if (cleanValue !== undefined) acc[key] = cleanValue
+    return acc
+  }, {})
+}
+
+async function findPublicCoupon(storeRecord, couponCode) {
+  const code = String(couponCode || '').trim().toUpperCase().slice(0, 80)
+  if (!code) return null
+
+  for (const storeKey of getStoreLookupKeys(storeRecord)) {
+    const snapshot = await db.collection('coupons')
+      .where('storeId', '==', storeKey)
+      .where('code', '==', code)
+      .limit(1)
+      .get()
+    if (!snapshot.empty) {
+      const docSnapshot = snapshot.docs[0]
+      return { id: docSnapshot.id, data: docSnapshot.data() || {} }
+    }
+  }
+
+  return null
+}
+
+function couponMoneyCents(coupon, centsField, moneyField) {
+  if (coupon?.[centsField] !== undefined && coupon?.[centsField] !== null) {
+    return toCents(coupon[centsField])
+  }
+  if (coupon?.[moneyField] !== undefined && coupon?.[moneyField] !== null) {
+    return moneyToCents(coupon[moneyField])
+  }
+  return 0
+}
+
+function publicCouponAppliesToItem(coupon, item) {
+  if (item?.acceptsCoupons === false || item?.acceptsCoupon === false || item?.couponEligible === false) {
+    return false
+  }
+
+  const productId = String(item?.productId || item?.id || '').trim()
+  const productIds = Array.isArray(coupon.productIds) ? coupon.productIds.map((id) => String(id)) : []
+  const appliesTo = coupon.appliesTo || 'all'
+
+  if (coupon.targetId && coupon.targetId !== 'all') return productId === String(coupon.targetId)
+  if (appliesTo === 'includeProducts') return productIds.includes(productId)
+  if (appliesTo === 'excludeProducts') return !productIds.includes(productId)
+  return true
+}
+
+function validateCouponForPublicResponse(coupon, items, subtotalCents) {
+  const now = Date.now()
+  const startsAt = timestampToMillis(coupon.startsAt)
+  const expiresAt = timestampToMillis(coupon.expiresAt)
+
+  if (coupon.isDeleted === true || coupon.deletedAt || coupon.active === false) {
+    return { valid: false, message: 'Cupom inativo ou indisponível.' }
+  }
+  if (startsAt && now < startsAt) return { valid: false, message: 'Cupom ainda não está vigente.' }
+  if (expiresAt && now > expiresAt) return { valid: false, message: 'Cupom expirado.' }
+
+  const usageLimit = Number(coupon.usageLimit || 0)
+  const usedCount = Number(coupon.usedCount || 0)
+  if (usageLimit > 0 && usedCount >= usageLimit) {
+    return { valid: false, message: 'Cupom esgotado.' }
+  }
+
+  const eligibleSubtotalCents = items
+    .filter((item) => publicCouponAppliesToItem(coupon, item))
+    .reduce((acc, item) => acc + toCents(item.totalCents), 0)
+
+  if (eligibleSubtotalCents <= 0) {
+    return { valid: false, message: 'Cupom não se aplica aos itens do carrinho.' }
+  }
+
+  const minOrderCents = couponMoneyCents(coupon, 'minOrderCents', 'minOrder')
+  if (minOrderCents > 0 && eligibleSubtotalCents < minOrderCents) {
+    return { valid: false, message: 'Subtotal elegível abaixo do pedido mínimo do cupom.' }
+  }
+
+  const type = coupon.type === 'fixed' ? 'fixed' : 'percent'
+  let discountCents
+
+  if (type === 'percent') {
+    const percent = Math.max(0, Number(coupon.value || 0))
+    discountCents = Math.round(eligibleSubtotalCents * (percent / 100))
+    const maxDiscountCents = couponMoneyCents(coupon, 'maxDiscountCents', 'maxDiscount')
+    if (maxDiscountCents > 0) discountCents = Math.min(discountCents, maxDiscountCents)
+  } else {
+    discountCents = couponMoneyCents(coupon, 'valueCents', 'value')
+  }
+
+  discountCents = Math.min(Math.max(0, discountCents), eligibleSubtotalCents, subtotalCents)
+  if (discountCents <= 0) return { valid: false, message: 'Cupom sem desconto aplicável.' }
+
+  return {
+    valid: true,
+    type,
+    discountCents,
+    eligibleSubtotalCents,
+    minOrderCents,
+  }
+}
+
+exports.getPublicStoreProfile = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
+  async (request) => {
+    const storeRecord = await findStoreForCallable(request.data || {})
+    if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
+      throw new HttpsError('not-found', 'Loja não encontrada.')
+    }
+
+    return {
+      ok: true,
+      store: normalizeStorePayload(storeRecord.id, storeRecord.data),
+    }
+  }
+)
+
+exports.getPublicCatalog = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '512MiB', maxInstances: 10 },
+  async (request) => {
+    const storeRecord = await findStoreForCallable(request.data || {})
+    if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
+      throw new HttpsError('not-found', 'Loja não encontrada.')
+    }
+
+    const [categories, products] = await Promise.all([
+      loadPublicSubcollection(storeRecord, 'categories', PUBLIC_CATEGORY_FIELDS),
+      loadPublicSubcollection(storeRecord, 'products', PUBLIC_PRODUCT_FIELDS),
+    ])
+
+    return {
+      ok: true,
+      store: normalizeStorePayload(storeRecord.id, storeRecord.data),
+      categories,
+      products,
+    }
+  }
+)
+
+exports.validatePublicCoupon = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 20 },
+  async (request) => {
+    const data = request.data || {}
+    const storeRecord = await findStoreForCallable(data)
+    if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
+      return { valid: false, message: 'Loja indisponível.' }
+    }
+
+    const couponDoc = await findPublicCoupon(storeRecord, data.couponCode)
+    if (!couponDoc) return { valid: false, message: 'Cupom inválido ou não encontrado.' }
+
+    const coupon = couponDoc.data
+    const subtotalCents = Math.max(0, toCents(data.subtotalCents))
+    const items = Array.isArray(data.items)
+      ? data.items.slice(0, 200).map((item) => ({
+        id: String(item?.id || '').trim(),
+        productId: String(item?.productId || item?.id || '').trim(),
+        categoryId: String(item?.categoryId || '').trim(),
+        totalCents: Math.max(0, toCents(item?.totalCents)),
+        acceptsCoupons: item?.acceptsCoupons,
+        acceptsCoupon: item?.acceptsCoupon,
+        couponEligible: item?.couponEligible,
+      }))
+      : []
+
+    if (subtotalCents <= 0 || items.length === 0) {
+      return { valid: false, message: 'Carrinho inválido para cupom.' }
+    }
+
+    const validation = validateCouponForPublicResponse(coupon, items, subtotalCents)
+    if (!validation.valid) return validation
+
+    const publicCoupon = pickPublicFields(coupon, [
+      'code', 'type', 'value', 'valueCents', 'maxDiscount', 'maxDiscountCents',
+      'minOrder', 'minOrderCents', 'startsAt', 'expiresAt', 'appliesTo',
+      'targetId', 'productIds', 'active', 'usageLimit', 'usedCount',
+    ])
+
+    return {
+      valid: true,
+      message: 'Cupom aplicado.',
+      coupon: {
+        ...publicCoupon,
+        id: couponDoc.id,
+        code: String(coupon.code || data.couponCode || '').trim().toUpperCase(),
+        discountCents: validation.discountCents,
+        eligibleSubtotalCents: validation.eligibleSubtotalCents,
+      },
+      discountCents: validation.discountCents,
+      eligibleSubtotalCents: validation.eligibleSubtotalCents,
+    }
+  }
+)
+
+exports.updateStoreSettings = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
+  async (request) => {
+    const uid = request.auth?.uid
+    if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
+
+    const data = request.data || {}
+    const storeId = String(data.storeId || '').trim()
+    if (!storeId) throw new HttpsError('invalid-argument', 'Loja obrigatória.')
+
+    const userSnapshot = await db.collection('users').doc(uid).get()
+    if (!userSnapshot.exists) throw new HttpsError('permission-denied', 'Usuário não encontrado.')
+
+    const storeRef = db.collection('stores').doc(storeId)
+    const storeSnapshot = await storeRef.get()
+    if (!storeSnapshot.exists) throw new HttpsError('not-found', 'Loja não encontrada.')
+
+    const storeData = storeSnapshot.data() || {}
+    assertStoreOwnerOrAdmin(storeData, uid, userSnapshot.data() || {})
+
+    const patch = sanitizeStoreSettingsPayload(data.payload || {})
+    if (Object.keys(patch).length === 0) {
+      return { ok: true, updatedFields: [] }
+    }
+
+    patch.updatedAt = admin.firestore.FieldValue.serverTimestamp()
+    patch.updatedBy = uid
+    patch.lastUpdatedBy = uid
+
+    await storeRef.update(patch)
+
+    await createAuditLog({
+      action: 'store_settings_updated',
+      entity: 'store',
+      entityId: storeId,
+      storeId,
+      storeSlug: storeData.storeSlug || storeData.slug || '',
+      actorUid: uid,
+      changedFields: Object.keys(patch).filter((field) => field !== 'updatedAt'),
+    })
+
+    return {
+      ok: true,
+      updatedFields: Object.keys(patch).filter((field) => field !== 'updatedAt'),
+    }
+  }
 )
 
 function getChangedFields(beforeData, afterData, fields) {

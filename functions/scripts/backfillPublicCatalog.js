@@ -1,0 +1,440 @@
+#!/usr/bin/env node
+
+const admin = require('firebase-admin')
+
+admin.initializeApp({
+  projectId:
+    process.env.GCLOUD_PROJECT ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.FIREBASE_PROJECT_ID ||
+    'borapedir-f529a',
+})
+
+const db = admin.firestore()
+const FieldValue = admin.firestore.FieldValue
+
+const args = new Set(process.argv.slice(2))
+const dryRun = args.has('--dry-run')
+const storeIdArg = process.argv
+  .slice(2)
+  .find((arg) => arg.startsWith('--storeId='))
+const onlyStoreId = storeIdArg ? storeIdArg.split('=').slice(1).join('=').trim() : ''
+
+function uniqueArray(values) {
+  return [...new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+function stripUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefinedDeep(item))
+      .filter((item) => item !== undefined)
+  }
+
+  if (value && typeof value === 'object' && typeof value.toDate !== 'function') {
+    return Object.entries(value).reduce((acc, [key, item]) => {
+      const nextValue = stripUndefinedDeep(item)
+      if (nextValue !== undefined) acc[key] = nextValue
+      return acc
+    }, {})
+  }
+
+  return value === undefined ? undefined : value
+}
+
+function pickFields(source, fields) {
+  return fields.reduce((acc, field) => {
+    if (source?.[field] !== undefined) acc[field] = source[field]
+    return acc
+  }, {})
+}
+
+function sanitizeString(value, maxLength = 240) {
+  if (value === undefined || value === null) return ''
+  return String(value)
+    .split('')
+    .filter((char) => {
+      const code = char.charCodeAt(0)
+      return code > 31 && code !== 127
+    })
+    .join('')
+    .trim()
+    .slice(0, maxLength)
+}
+
+function isStorePubliclyAvailable(data = {}) {
+  return data.isActive !== false &&
+    data.isBlocked !== true &&
+    data.isBillingBlocked !== true &&
+    data.isDeleted !== true
+}
+
+function sanitizePublicAddress(data = {}) {
+  const address = data.address && typeof data.address === 'object' ? data.address : data
+  return stripUndefinedDeep({
+    street: sanitizeString(address.street, 120),
+    number: sanitizeString(address.number, 20),
+    neighborhood: sanitizeString(address.neighborhood, 80),
+    city: sanitizeString(address.city, 80),
+    state: sanitizeString(address.state, 2).toUpperCase(),
+  })
+}
+
+function sanitizePublicStoreSettings(settings = {}) {
+  if (!settings || typeof settings !== 'object') return undefined
+  return stripUndefinedDeep(pickFields(settings, [
+    'themeColor',
+    'primaryColor',
+    'openingHours',
+    'businessHours',
+    'acceptDelivery',
+    'acceptPickup',
+    'acceptDineIn',
+    'deliveryTime',
+    'instagram',
+    'whatsapp',
+  ]))
+}
+
+function buildPublicStoreProfile(data = {}, storeId) {
+  const profile = {
+    ...pickFields(data, [
+      'name',
+      'storeName',
+      'slug',
+      'storeSlug',
+      'logoUrl',
+      'bannerUrl',
+      'coverUrl',
+      'description',
+      'theme',
+      'themeColor',
+      'primaryColor',
+      'secondaryColor',
+      'city',
+      'state',
+      'neighborhood',
+      'deliveryTime',
+      'minOrder',
+      'minOrderCents',
+      'deliveryFees',
+      'deliveryAreas',
+      'deliveryNeighborhoods',
+      'neighborhoods',
+      'openingHours',
+      'businessHours',
+      'hoursOpen',
+      'hoursClose',
+      'activeDays',
+      'acceptDelivery',
+      'acceptPickup',
+      'acceptDineIn',
+      'isOpen',
+      'isActive',
+      'isBlocked',
+      'isBillingBlocked',
+      'isDeleted',
+      'ratingSummary',
+      'averageRating',
+      'reviewCount',
+      'paymentMethods',
+      'socialLinks',
+      'social',
+      'instagram',
+      'phone',
+      'whatsapp',
+      'whatsapp1',
+      'updatedAt',
+      'createdAt',
+    ]),
+    id: storeId,
+    storeId,
+    docId: storeId,
+    isOpen: data.isOpen !== false,
+    isActive: data.isActive !== false,
+    isBlocked: data.isBlocked === true,
+    isBillingBlocked: data.isBillingBlocked === true,
+    isDeleted: data.isDeleted === true,
+    address: sanitizePublicAddress(data),
+    settings: sanitizePublicStoreSettings(data.settings),
+  }
+
+  if (data.pix && typeof data.pix === 'object') {
+    profile.pix = { enabled: data.pix.enabled === true }
+  }
+
+  return stripUndefinedDeep(profile)
+}
+
+function isPublicCategoryData(data = {}) {
+  return data.isDeleted !== true &&
+    !data.deletedAt &&
+    data.isActive !== false &&
+    data.isVisible !== false
+}
+
+function isPublicProductData(data = {}) {
+  return data.isDeleted !== true &&
+    !data.deletedAt &&
+    data.isActive !== false &&
+    data.isVisible !== false &&
+    data.hidden !== true
+}
+
+function buildPublicCategory(data = {}, categoryId, storeId) {
+  return stripUndefinedDeep({
+    ...pickFields(data, [
+      'name',
+      'description',
+      'order',
+      'position',
+      'isActive',
+      'isVisible',
+      'updatedAt',
+      'createdAt',
+    ]),
+    id: categoryId,
+    categoryId,
+    storeId,
+    isActive: data.isActive !== false,
+    isVisible: data.isVisible !== false,
+    isDeleted: false,
+    publicUpdatedAt: FieldValue.serverTimestamp(),
+  })
+}
+
+function buildPublicProduct(data = {}, productId, storeId) {
+  return stripUndefinedDeep({
+    ...pickFields(data, [
+      'name',
+      'description',
+      'categoryId',
+      'categoryName',
+      'price',
+      'priceCents',
+      'oldPrice',
+      'oldPriceCents',
+      'imageUrl',
+      'isAvailable',
+      'isFeatured',
+      'isPromotion',
+      'acceptsCoupons',
+      'acceptsCoupon',
+      'couponEligible',
+      'order',
+      'position',
+      'preparationTime',
+      'optionGroups',
+      'optionsGroups',
+      'customizationGroups',
+      'extras',
+      'tags',
+      'updatedAt',
+      'createdAt',
+    ]),
+    id: productId,
+    productId,
+    storeId,
+    isActive: data.isActive !== false,
+    isVisible: data.isVisible !== false,
+    isDeleted: false,
+    publicUpdatedAt: FieldValue.serverTimestamp(),
+  })
+}
+
+function storeKeysFromSnapshot(storeId, data = {}) {
+  return uniqueArray([
+    storeId,
+    data.storeId,
+    data.docId,
+    data.slug,
+    data.storeSlug,
+    ...(Array.isArray(data.storeKeys) ? data.storeKeys : []),
+  ])
+}
+
+async function getDocsByStoreKeys(collectionName, keys) {
+  const safeKeys = uniqueArray(keys).slice(0, 30)
+  const docs = new Map()
+
+  for (let index = 0; index < safeKeys.length; index += 10) {
+    const chunk = safeKeys.slice(index, index + 10)
+    const ref = chunk.length === 1
+      ? db.collection(collectionName).where('storeId', '==', chunk[0])
+      : db.collection(collectionName).where('storeId', 'in', chunk)
+    const snapshot = await ref.get()
+    snapshot.docs.forEach((doc) => docs.set(doc.id, doc))
+  }
+
+  return [...docs.values()]
+}
+
+async function commitBatch(actions, summary) {
+  if (dryRun || actions.length === 0) return
+
+  for (let index = 0; index < actions.length; index += 450) {
+    const batch = db.batch()
+    actions.slice(index, index + 450).forEach((action) => {
+      if (action.type === 'set') batch.set(action.ref, action.data, { merge: false })
+      if (action.type === 'delete') batch.delete(action.ref)
+    })
+    await batch.commit()
+    summary.batchesCommitted += 1
+  }
+}
+
+async function syncPublicSubcollection({ storeId, collectionName, sourceDocs, isPublic, buildPublic, summaryKey, summary }) {
+  const publicRef = db.collection('publicStores').doc(storeId).collection(collectionName)
+  const publicSnapshot = await publicRef.get()
+  const sourceIds = new Set(sourceDocs.map((doc) => doc.id))
+  const actions = []
+
+  for (const sourceDoc of sourceDocs) {
+    const data = sourceDoc.data() || {}
+    const targetRef = publicRef.doc(sourceDoc.id)
+
+    if (isPublic(data)) {
+      actions.push({
+        type: 'set',
+        ref: targetRef,
+        data: buildPublic(data, sourceDoc.id, storeId),
+      })
+      summary[`${summaryKey}Written`] += 1
+    } else {
+      actions.push({ type: 'delete', ref: targetRef })
+      summary[`${summaryKey}Removed`] += 1
+    }
+  }
+
+  publicSnapshot.docs.forEach((publicDoc) => {
+    if (!sourceIds.has(publicDoc.id)) {
+      actions.push({ type: 'delete', ref: publicDoc.ref })
+      summary[`${summaryKey}Removed`] += 1
+    }
+  })
+
+  await commitBatch(actions, summary)
+}
+
+async function deletePublicStoreTree(storeId, summary) {
+  const publicRef = db.collection('publicStores').doc(storeId)
+  const [productsSnapshot, categoriesSnapshot] = await Promise.all([
+    publicRef.collection('products').get(),
+    publicRef.collection('categories').get(),
+  ])
+
+  const actions = [
+    ...productsSnapshot.docs.map((doc) => ({ type: 'delete', ref: doc.ref })),
+    ...categoriesSnapshot.docs.map((doc) => ({ type: 'delete', ref: doc.ref })),
+    { type: 'delete', ref: publicRef },
+  ]
+
+  summary.publicStoresRemoved += 1
+  summary.productsRemoved += productsSnapshot.size
+  summary.categoriesRemoved += categoriesSnapshot.size
+  await commitBatch(actions, summary)
+}
+
+async function backfillStore(storeDoc, summary) {
+  const storeId = storeDoc.id
+  const store = storeDoc.data() || {}
+  summary.storesScanned += 1
+
+  if (!isStorePubliclyAvailable(store)) {
+    await deletePublicStoreTree(storeId, summary)
+    console.log(`[publicCatalogBackfill] removed non-public store ${storeId}`)
+    return
+  }
+
+  const keys = storeKeysFromSnapshot(storeId, store)
+  const [productDocs, categoryDocs] = await Promise.all([
+    getDocsByStoreKeys('products', keys),
+    getDocsByStoreKeys('categories', keys),
+  ])
+
+  const profile = {
+    ...buildPublicStoreProfile(store, storeId),
+    publicUpdatedAt: FieldValue.serverTimestamp(),
+  }
+
+  await commitBatch([
+    {
+      type: 'set',
+      ref: db.collection('publicStores').doc(storeId),
+      data: profile,
+    },
+  ], summary)
+
+  summary.publicStoresWritten += 1
+
+  await Promise.all([
+    syncPublicSubcollection({
+      storeId,
+      collectionName: 'products',
+      sourceDocs: productDocs,
+      isPublic: isPublicProductData,
+      buildPublic: buildPublicProduct,
+      summaryKey: 'products',
+      summary,
+    }),
+    syncPublicSubcollection({
+      storeId,
+      collectionName: 'categories',
+      sourceDocs: categoryDocs,
+      isPublic: isPublicCategoryData,
+      buildPublic: buildPublicCategory,
+      summaryKey: 'categories',
+      summary,
+    }),
+  ])
+
+  console.log(`[publicCatalogBackfill] synced ${storeId}: ${productDocs.length} products, ${categoryDocs.length} categories`)
+}
+
+async function main() {
+  const summary = {
+    dryRun,
+    onlyStoreId: onlyStoreId || null,
+    storesScanned: 0,
+    publicStoresWritten: 0,
+    publicStoresRemoved: 0,
+    productsWritten: 0,
+    productsRemoved: 0,
+    categoriesWritten: 0,
+    categoriesRemoved: 0,
+    batchesCommitted: 0,
+  }
+
+  if (onlyStoreId) {
+    const storeDoc = await db.collection('stores').doc(onlyStoreId).get()
+    if (!storeDoc.exists) {
+      throw new Error(`Store not found: ${onlyStoreId}`)
+    }
+    await backfillStore(storeDoc, summary)
+  } else {
+    let query = db.collection('stores').orderBy(admin.firestore.FieldPath.documentId()).limit(100)
+    let lastDoc = null
+
+    while (true) {
+      const snapshot = await (lastDoc ? query.startAfter(lastDoc).get() : query.get())
+      if (snapshot.empty) break
+
+      for (const storeDoc of snapshot.docs) {
+        await backfillStore(storeDoc, summary)
+      }
+
+      lastDoc = snapshot.docs[snapshot.docs.length - 1]
+      if (snapshot.size < 100) break
+    }
+  }
+
+  console.log('[publicCatalogBackfill] summary')
+  console.log(JSON.stringify(summary, null, 2))
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('[publicCatalogBackfill] failed', error)
+    process.exit(1)
+  })

@@ -6,11 +6,11 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   query,
   where,
   limit,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
 import {
   FiAlertCircle,
@@ -33,7 +33,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCart } from '../../contexts/CartContext'
 import { usePresence } from '../../hooks/usePresence'
@@ -161,11 +161,12 @@ async function findStoreBySlug(db, slugParam) {
   const publicConstraints = [
     where('isActive', '==', true),
     where('isBlocked', '==', false),
-    where('isDeleted', '==', false)
+    where('isDeleted', '==', false),
+    where('isBillingBlocked', '==', false)
   ]
 
   try {
-    const directRef = doc(db, 'stores', cleanSlug)
+    const directRef = doc(db, 'publicStores', cleanSlug)
     const directSnap = await getDoc(directRef)
 
     if (import.meta.env.DEV) {
@@ -189,7 +190,7 @@ async function findStoreBySlug(db, slugParam) {
   }
 
   try {
-    const byStoreSlug = query(collection(db, 'stores'), where('storeSlug', '==', cleanSlug), ...publicConstraints, limit(1))
+    const byStoreSlug = query(collection(db, 'publicStores'), where('storeSlug', '==', cleanSlug), ...publicConstraints, limit(1))
     const storeSlugSnap = await getDocs(byStoreSlug)
     
     if (import.meta.env.DEV) {
@@ -214,7 +215,7 @@ async function findStoreBySlug(db, slugParam) {
   }
 
   try {
-    const bySlug = query(collection(db, 'stores'), where('slug', '==', cleanSlug), ...publicConstraints, limit(1))
+    const bySlug = query(collection(db, 'publicStores'), where('slug', '==', cleanSlug), ...publicConstraints, limit(1))
     const slugSnap = await getDocs(bySlug)
 
     if (import.meta.env.DEV) {
@@ -236,6 +237,25 @@ async function findStoreBySlug(db, slugParam) {
     }
   } catch (error) {
     if (import.meta.env.DEV) console.log('[StoreFront] getDocs slug ignorado:', error.message)
+  }
+
+  try {
+    const getPublicStoreProfile = httpsCallable(functions, 'getPublicStoreProfile')
+    const response = await getPublicStoreProfile({ slug: cleanSlug })
+    const data = response.data?.store
+
+    if (data?.id) {
+      return {
+        ...data,
+        id: data.id,
+        docId: data.docId || data.id,
+        storeId: data.storeId || data.id,
+        storeSlug: data.storeSlug || data.slug || cleanSlug,
+        slug: data.slug || data.storeSlug || cleanSlug,
+      }
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.log('[StoreFront] callable publicStores fallback ignorado:', error.message)
   }
 
   return null
@@ -1956,9 +1976,6 @@ const handleToggleFavorite = useCallback(() => {
       return
     }
 
-    const categoriesQuery = query(collection(db, 'categories'), where('storeId', '==', targetStoreId))
-    const productsQuery = query(collection(db, 'products'), where('storeId', '==', targetStoreId))
-
     if (import.meta.env.DEV) {
       console.log(`[StoreFront] Iniciando buscas com targetStoreId:`, targetStoreId)
     }
@@ -1966,17 +1983,18 @@ const handleToggleFavorite = useCallback(() => {
     setMenuError('')
     setLoadingMenu(true)
 
-    let pendingListeners = 2
+    let isMounted = true
 
-    const markLoaded = () => {
-      pendingListeners -= 1
-      if (pendingListeners <= 0) setLoadingMenu(false)
-    }
+    async function loadPublicCatalog() {
+      try {
+        const categoriesQuery = query(collection(db, 'publicStores', targetStoreId, 'categories'))
+        const productsQuery = query(collection(db, 'publicStores', targetStoreId, 'products'))
+        const [categorySnapshot, productSnapshot] = await Promise.all([
+          getDocs(categoriesQuery),
+          getDocs(productsQuery),
+        ])
 
-    const unsubscribeCategories = onSnapshot(
-      categoriesQuery,
-      (snapshot) => {
-        const nextCategories = snapshot.docs
+        let nextCategories = categorySnapshot.docs
           .map((categoryDoc) => ({
             id: categoryDoc.id,
             ...categoryDoc.data(),
@@ -1986,42 +2004,45 @@ const handleToggleFavorite = useCallback(() => {
           .filter((category) => category.isDeleted !== true && !category.deletedAt)
           .sort(sortByOrderThenName)
 
+        let nextProducts = productSnapshot.docs.map(normalizeProduct)
+
+        if (!nextCategories.length && !nextProducts.length) {
+          const getPublicCatalog = httpsCallable(functions, 'getPublicCatalog')
+          const response = await getPublicCatalog({
+            storeId: targetStoreId,
+            storeSlug: getStorePublicSlug(store),
+          })
+          nextCategories = (response.data?.categories || [])
+            .filter((category) => category.isVisible !== false)
+            .filter((category) => category.isActive !== false)
+            .filter((category) => category.isDeleted !== true && !category.deletedAt)
+            .sort(sortByOrderThenName)
+          nextProducts = (response.data?.products || []).map(normalizeProduct)
+        }
+
+        if (!isMounted) return
+
         if (import.meta.env.DEV) {
-          console.log(`[StoreFront] Categorias: ${snapshot.docs.length} docs -> ${nextCategories.length} visíveis`)
+          console.log(`[StoreFront] Catalogo publico: ${nextCategories.length} categorias / ${nextProducts.length} produtos`)
         }
 
         setCategories(nextCategories)
-        markLoaded()
-      },
-      (err) => {
-        if (import.meta.env.DEV) console.error('[StoreFront] Erro nas categorias:', err)
-        setCategories([])
-        setMenuError('Não foi possível carregar as categorias.')
-        markLoaded()
-      }
-    )
-
-    const unsubscribeProducts = onSnapshot(
-      productsQuery,
-      (snapshot) => {
-        const nextProducts = snapshot.docs.map(normalizeProduct)
-        if (import.meta.env.DEV) {
-          console.log(`[StoreFront] Produtos: ${snapshot.docs.length} docs -> ${nextProducts.length} mapeados`)
-        }
         setProducts(nextProducts)
-        markLoaded()
-      },
-      (err) => {
-        if (import.meta.env.DEV) console.error('[StoreFront] Erro nos produtos:', err)
+      } catch (err) {
+        if (import.meta.env.DEV) console.error('[StoreFront] Erro no catalogo publico:', err)
+        if (!isMounted) return
+        setCategories([])
         setProducts([])
-        setMenuError('Não foi possível carregar os produtos.')
-        markLoaded()
+        setMenuError('Nao foi possivel carregar o cardapio.')
+      } finally {
+        if (isMounted) setLoadingMenu(false)
       }
-    )
+    }
+
+    loadPublicCatalog()
 
     return () => {
-      unsubscribeCategories()
-      unsubscribeProducts()
+      isMounted = false
     }
     }, [canPreviewUnavailableStore, slug, store])
 

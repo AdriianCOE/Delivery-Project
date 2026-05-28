@@ -3,13 +3,11 @@ import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
 import {
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
 import {
   FiAlertCircle,
@@ -37,7 +35,7 @@ import {
 } from 'react-icons/fi'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { uploadImageToCloudinary } from '../../services/cloudinary'
 
@@ -1086,8 +1084,6 @@ export default function Settings() {
         neighborhood: sanitizeTextField(form.neighborhood, 80),
         city: sanitizeTextField(form.city, 80),
         state: sanitizeTextField(form.state, 2).toUpperCase() || 'SE',
-
-        updatedAt: serverTimestamp(),
       }
 
       const ALLOWED_KEYS = [
@@ -1097,7 +1093,7 @@ export default function Settings() {
         'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
         'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
-        'number', 'neighborhood', 'city', 'state', 'updatedAt'
+        'number', 'neighborhood', 'city', 'state'
       ]
 
       const finalPayload = Object.keys(payload).reduce((acc, key) => {
@@ -1108,8 +1104,11 @@ export default function Settings() {
         return acc
       }, {})
 
-      // TODO: migrar este updateDoc para Cloud Function com audit log server-side.
-      await updateDoc(doc(db, 'stores', selectedStore.id), finalPayload)
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId: selectedStore.id,
+        payload: finalPayload,
+      })
 
       safeSetLocalStorage(SELECTED_STORE_KEY, selectedStore.id)
       showToast('success', 'Configurações da loja salvas.')

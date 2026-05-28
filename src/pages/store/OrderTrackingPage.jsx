@@ -10,6 +10,7 @@ import {
   updateDoc,
   setDoc,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
 import {
   FiAlertCircle,
@@ -32,7 +33,7 @@ import {
   FiXCircle,
 } from 'react-icons/fi'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import StoreFooter from '../../components/layouts/StoreFooter'
 
 const DELIVERY_STATUS_STEPS = [
@@ -1549,9 +1550,19 @@ export default function OrderTrackingPage() {
     }
 
     const unsubscribe = onSnapshot(
-      doc(db, 'stores', storeKey),
-      (snapshot) => {
+      doc(db, 'publicStores', storeKey),
+      async (snapshot) => {
         if (!snapshot.exists()) {
+          try {
+            const getPublicStoreProfile = httpsCallable(functions, 'getPublicStoreProfile')
+            const response = await getPublicStoreProfile({ storeId: storeKey })
+            if (response.data?.store) {
+              setStore(response.data.store)
+              return
+            }
+          } catch {
+            // Store tracking can continue without public store branding.
+          }
           setStore(null)
           return
         }
