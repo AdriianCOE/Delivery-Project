@@ -47,10 +47,6 @@ const EMPTY_CUSTOMER = {
   cepValidated: false,
 }
 
-function uniqueArray(values) {
-  return [...new Set(values.filter(Boolean))]
-}
-
 function hasValue(value) {
   return value !== undefined && value !== null && value !== ''
 }
@@ -403,16 +399,6 @@ function getStoreSlug(store, fallbackSlug) {
 
 function getStoreDocId(store, fallbackSlug) {
   return store?.id || store?.storeId || store?.storeSlug || store?.slug || fallbackSlug
-}
-
-function getStoreKeys(store, fallbackSlug) {
-  return uniqueArray([
-    store?.storeSlug,
-    store?.slug,
-    store?.storeId,
-    store?.id,
-    fallbackSlug,
-  ])
 }
 
 function getStoreMinOrder(store) {
@@ -823,39 +809,48 @@ function buildSelectedOptionGroupsSnapshot(item) {
   }))
 }
 
-function toDate(value) {
-  if (!value) return null
-  if (value?.toDate) return value.toDate()
-  if (value?.seconds) return new Date(value.seconds * 1000)
-
-  const date = new Date(value)
-
-  return Number.isNaN(date.getTime()) ? null : date
+function sanitizeSelectedOptionForOrder(option) {
+  return {
+    id: option?.id || option?.optionId || option?.name || '',
+    optionId: option?.optionId || option?.id || '',
+    name: option?.name || option?.title || '',
+    groupId: option?.groupId || '',
+    groupTitle: option?.groupTitle || option?.groupName || '',
+    quantity: Number(option?.quantity || option?.qty || 1),
+  }
 }
 
-function isCouponValidByDate(coupon) {
-  const now = new Date()
-  const startsAt = toDate(coupon.startsAt)
-  const expiresAt = toDate(coupon.expiresAt)
+function buildPublicOrderItems(cartItems) {
+  return cartItems.map((item) => {
+    const selectedOptionGroups = buildSelectedOptionGroupsSnapshot(item).map((group) => ({
+      groupId: group.groupId || group.id || group.title || '',
+      id: group.id || group.groupId || group.title || '',
+      title: group.title || group.groupTitle || group.name || '',
+      name: group.name || group.title || group.groupTitle || '',
+      options: Array.isArray(group.options)
+        ? group.options.map((option) => sanitizeSelectedOptionForOrder({
+            ...option,
+            groupId: option.groupId || group.groupId || group.id,
+            groupTitle: option.groupTitle || group.title || group.groupTitle,
+          }))
+        : [],
+    }))
 
-  if (startsAt && now < startsAt) {
+    const selectedOptions = getOptionItems(item).map(sanitizeSelectedOptionForOrder)
+    const addons = getAdditionalItems(item).map(sanitizeSelectedOptionForOrder)
+
     return {
-      valid: false,
-      message: 'Este cupom ainda não está disponível.',
+      productId: item.originalProductId || item.productId || item.id,
+      quantity: getItemQuantity(item),
+      observation: item.observation || '',
+      itemObservation: item.observation || '',
+      selectedOptions,
+      selectedOptionGroups,
+      selectedOptionsFlat: selectedOptions,
+      optionGroupsSnapshot: selectedOptionGroups,
+      addons,
     }
-  }
-
-  if (expiresAt && now > expiresAt) {
-    return {
-      valid: false,
-      message: 'Este cupom expirou.',
-    }
-  }
-
-  return {
-    valid: true,
-    message: '',
-  }
+  })
 }
 
 function getCouponMinOrder(coupon) {
@@ -1463,7 +1458,6 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const storeSlug = getStoreSlug(store, slug)
   const storeDocId = getStoreDocId(store, slug)
   const finalStoreId = store?.storeId || storeDocId
-  const storeKeys = useMemo(() => getStoreKeys(store, slug), [store, slug])
 
   const storeIsOpen =
     store?.isDeleted || store?.isBlocked || store?.isActive === false
@@ -1692,76 +1686,34 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
     try {
       const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
-      const response = await validatePublicCoupon({
-        storeId: store?.id || storeKeys[0],
-        storeSlug: store?.storeSlug || store?.slug || storeKeys[1],
+      const result = await validatePublicCoupon({
+        storeId: finalStoreId,
+        storeSlug,
+        storeDocId,
         couponCode: code,
-        subtotalCents: Math.round(subtotal * 100),
-        items: cartItems.map((item) => ({
-          id: item.id || item.productId,
-          productId: item.productId || item.id,
-          categoryId: item.categoryId,
-          totalCents: Math.round(getItemTotal(item) * 100),
-          acceptsCoupons: item.acceptsCoupons,
-          acceptsCoupon: item.acceptsCoupon,
-          couponEligible: item.couponEligible,
-        })),
+        items: buildPublicOrderItems(cartItems),
       })
+      const data = result?.data || {}
 
-      if (!response.data?.valid || !response.data?.coupon) {
-        setCouponError(response.data?.message || 'Cupom invalido ou nao encontrado.')
+      if (!data.valid) {
+        setAppliedCoupon(null)
+        setCouponError(data.message || 'Cupom invalido ou nao encontrado.')
         return
       }
 
-      const coupon = response.data.coupon
-
-      if (coupon.isDeleted) {
-        setCouponError('Este cupom não está mais disponível.')
-        return
-      }
-
-      if (coupon.active === false) {
-        setCouponError('Este cupom está inativo.')
-        return
-      }
-
-      const dateValidation = isCouponValidByDate(coupon)
-
-      if (!dateValidation.valid) {
-        setCouponError(dateValidation.message)
-        return
-      }
-
-      const couponEligibleSubtotal = cartItems
-        .filter((item) => couponAppliesToItem(coupon, item))
-        .reduce((acc, item) => acc + getItemTotal(item), 0)
-
-      if (couponEligibleSubtotal <= 0) {
-        setCouponError('Este cupom não se aplica a nenhum item do seu carrinho.')
-        return
-      }
-
-      const couponMinOrder = getCouponMinOrder(coupon)
-
-      if (couponMinOrder > 0 && couponEligibleSubtotal < couponMinOrder) {
-        setCouponError(
-          `O subtotal elegível de ${formatMoney(
-            couponEligibleSubtotal
-          )} não atinge o pedido mínimo de ${formatMoney(couponMinOrder)}.`
-        );
-        return
-      }
-
-      setAppliedCoupon(coupon)
+      setAppliedCoupon({
+        id: data.coupon?.code || code,
+        ...(data.coupon || {}),
+        code: data.coupon?.code || code,
+      })
       setCouponCode('')
     } catch (error) {
       console.error(error)
-      setCouponError('Erro ao validar cupom. Tente novamente.')
+      setCouponError(error?.message || 'Erro ao validar cupom. Tente novamente.')
     } finally {
       setCouponLoading(false)
     }
-  }, [cartItems, couponCode, couponLoading, store, storeKeys, subtotal])
-
+  }, [cartItems, couponCode, couponLoading, finalStoreId, storeDocId, storeSlug])
   const validateCheckout = useCallback(() => {
     if (!storeIsOpen) return 'A loja está fechada no momento.'
     if (cartItems.length === 0) return 'Seu carrinho está vazio.'
@@ -1917,45 +1869,7 @@ if (orderType === 'delivery') {
             }
           : null
 
-      const sanitizeSelectedOption = (option) => ({
-        id: option?.id || option?.optionId || option?.name || '',
-        optionId: option?.optionId || option?.id || '',
-        name: option?.name || option?.title || '',
-        groupId: option?.groupId || '',
-        groupTitle: option?.groupTitle || option?.groupName || '',
-        quantity: Number(option?.quantity || option?.qty || 1),
-      })
-
-      const items = cartItems.map((item) => {
-        const selectedOptionGroups = buildSelectedOptionGroupsSnapshot(item).map((group) => ({
-          groupId: group.groupId || group.id || group.title || '',
-          id: group.id || group.groupId || group.title || '',
-          title: group.title || group.groupTitle || group.name || '',
-          name: group.name || group.title || group.groupTitle || '',
-          options: Array.isArray(group.options)
-            ? group.options.map((option) => sanitizeSelectedOption({
-                ...option,
-                groupId: option.groupId || group.groupId || group.id,
-                groupTitle: option.groupTitle || group.title || group.groupTitle,
-              }))
-            : [],
-        }))
-
-        const selectedOptions = getOptionItems(item).map(sanitizeSelectedOption)
-        const addons = getAdditionalItems(item).map(sanitizeSelectedOption)
-
-        return {
-          productId: item.originalProductId || item.productId || item.id,
-          quantity: getItemQuantity(item),
-          observation: item.observation || '',
-          itemObservation: item.observation || '',
-          selectedOptions,
-          selectedOptionGroups,
-          selectedOptionsFlat: selectedOptions,
-          optionGroupsSnapshot: selectedOptionGroups,
-          addons,
-        }
-      })
+      const items = buildPublicOrderItems(cartItems)
 
       const createPublicOrder = httpsCallable(functions, 'createPublicOrder')
       const result = await createPublicOrder({

@@ -6,6 +6,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAnonymousAuth() {
+      return signedIn()
+        && request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous';
+    }
+
+    function signedInNonAnonymous() {
+      return signedIn() && !isAnonymousAuth();
+    }
+
     function userPath(uid) {
       return /databases/$(database)/documents/users/$(uid);
     }
@@ -14,8 +23,12 @@ service cloud.firestore {
       return /databases/$(database)/documents/stores/$(storeId);
     }
 
+    function publicStorePath(storeId) {
+      return /databases/$(database)/documents/publicStores/$(storeId);
+    }
+
     function hasProfile() {
-      return signedIn() && exists(userPath(request.auth.uid));
+      return signedInNonAnonymous() && exists(userPath(request.auth.uid));
     }
 
     function me() {
@@ -59,7 +72,7 @@ function orderStoreKeys(data) {
       // When called from users/{userId} allow get, this branch is only
       // reached when request.auth.uid != userId (admin reading someone
       // else's doc), so there is no circular read.
-      return signedIn()
+      return signedInNonAnonymous()
         && exists(userPath(request.auth.uid))
         && get(userPath(request.auth.uid)).data.get('role', '') in ['admin', 'developer', 'dev'];
     }
@@ -72,7 +85,7 @@ function orderStoreKeys(data) {
     }
 
     function isStoreOwnerData(data) {
-      return signedIn() && (
+      return signedInNonAnonymous() && (
         data.get('ownerId', '') == request.auth.uid ||
         data.get('ownerUid', '') == request.auth.uid ||
         request.auth.uid in data.get('allowedUserIds', []) ||
@@ -100,14 +113,8 @@ function orderStoreKeys(data) {
 
     function publicStoreExists(storeId) {
       return storeId is string
-        && exists(storePath(storeId))
-        && isPublicStoreData(get(storePath(storeId)).data);
-    }
-
-    function publicStoreProfileExists(storeId) {
-      return storeId is string
-        && exists(/databases/$(database)/documents/publicStores/$(storeId))
-        && isPublicStoreData(get(/databases/$(database)/documents/publicStores/$(storeId)).data);
+        && exists(publicStorePath(storeId))
+        && isPublicStoreData(get(publicStorePath(storeId)).data);
     }
 
     function storeFieldUnchanged(field) {
@@ -442,10 +449,10 @@ function publicOrderUpdateAllowed(orderId) {
 }
 
   match /users/{userId} {
-  allow get: if (signedIn() && request.auth.uid == userId) || isAdmin();
+  allow get: if (signedInNonAnonymous() && request.auth.uid == userId) || isAdmin();
   allow list: if isAdmin();
 
-  allow create: if signedIn()
+  allow create: if signedInNonAnonymous()
     && request.auth.uid == userId
     && !exists(userPath(userId))
     && validSignupUserCreate(request.resource.data);
@@ -464,13 +471,13 @@ function publicOrderUpdateAllowed(orderId) {
       allow get, list: if isPublicStoreData(resource.data);
       allow create, update, delete: if false;
 
-      match /categories/{categoryId} {
-        allow read: if publicStoreProfileExists(storeId);
+      match /products/{productId} {
+        allow get, list: if publicStoreExists(storeId);
         allow create, update, delete: if false;
       }
 
-      match /products/{productId} {
-        allow read: if publicStoreProfileExists(storeId);
+      match /categories/{categoryId} {
+        allow get, list: if publicStoreExists(storeId);
         allow create, update, delete: if false;
       }
     }

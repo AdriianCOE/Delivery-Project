@@ -498,12 +498,8 @@ const greeting = useMemo(() => {
 
       if (!orderStoreId) return []
 
-      const productsQuery = query(
-        collection(db, 'publicStores', orderStoreId, 'products')
-      )
-
+      const productsQuery = query(collection(db, 'publicStores', orderStoreId, 'products'))
       const snapshot = await getDocs(productsQuery)
-
       const publicProducts = snapshot.docs.map((productDoc) => ({
         id: productDoc.id,
         ...productDoc.data(),
@@ -511,13 +507,13 @@ const greeting = useMemo(() => {
 
       if (publicProducts.length > 0) return publicProducts
 
-      try {
-        const getPublicCatalog = httpsCallable(functions, 'getPublicCatalog')
-        const response = await getPublicCatalog({ storeId: orderStoreId })
-        return response.data?.products || []
-      } catch {
-        return []
-      }
+      const getPublicCatalog = httpsCallable(functions, 'getPublicCatalog')
+      const result = await getPublicCatalog({
+        storeId: orderStoreId,
+        storeSlug: order?.storeSlug || slug,
+      })
+
+      return Array.isArray(result?.data?.products) ? result.data.products : []
     },
     [products, slug]
   )

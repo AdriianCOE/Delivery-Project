@@ -1549,33 +1549,29 @@ export default function OrderTrackingPage() {
       return undefined
     }
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'publicStores', storeKey),
-      async (snapshot) => {
-        if (!snapshot.exists()) {
-          try {
-            const getPublicStoreProfile = httpsCallable(functions, 'getPublicStoreProfile')
-            const response = await getPublicStoreProfile({ storeId: storeKey })
-            if (response.data?.store) {
-              setStore(response.data.store)
-              return
-            }
-          } catch {
-            // Store tracking can continue without public store branding.
-          }
-          setStore(null)
-          return
-        }
+    let isMounted = true
 
-        setStore({
-          id: snapshot.id,
-          ...snapshot.data(),
+    async function loadPublicStore() {
+      try {
+        const getPublicStoreProfile = httpsCallable(functions, 'getPublicStoreProfile')
+        const result = await getPublicStoreProfile({
+          storeId: order?.storeId,
+          storeDocId: order?.storeDocId,
+          storeSlug: storeKey,
         })
-      },
-      () => setStore(null)
-    )
+        const publicStore = result?.data?.store || null
 
-    return () => unsubscribe()
+        if (isMounted) setStore(publicStore)
+      } catch {
+        if (isMounted) setStore(null)
+      }
+    }
+
+    loadPublicStore()
+
+    return () => {
+      isMounted = false
+    }
   }, [order, slug])
 
 

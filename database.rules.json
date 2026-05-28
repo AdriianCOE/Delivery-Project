@@ -27,9 +27,16 @@
 
       "presenceCounts": {
         "$storeId": {
-          ".read": true,
-          ".write": false,
-          ".validate": "newData.hasChildren(['activeCount', 'updatedAt']) && newData.child('activeCount').isNumber() && newData.child('activeCount').val() >= 0"
+          "activeCount": {
+            ".read": true,
+            ".write": false,
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+
+          "$other": {
+            ".read": false,
+            ".write": false
+          }
         }
       }
     }

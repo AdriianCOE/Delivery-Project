@@ -79,6 +79,16 @@ export default function ProtectedRoute({
     )
   }
 
+  if (auth?.firebaseUser?.isAnonymous === true) {
+    return (
+      <Navigate
+        to={redirectTo}
+        replace
+        state={{ from: location }}
+      />
+    )
+  }
+
   // Redirect pending merchants to onboarding (never blocks admin/developer/active merchants)
   if (auth?.role === 'merchant') {
     const onboardingStatus =
@@ -109,6 +119,10 @@ export default function ProtectedRoute({
       location.pathname === '/dashboard/billing' ||
       location.pathname === '/dashboard/assinatura'
 
+    if (!hasMerchantStore && isDashboardRoute) {
+      return <Navigate to="/onboarding" replace state={{ reason: 'store_required' }} />
+    }
+
     if (isBillingPending && isDashboardRoute && !isBillingRoute) {
       return (
         <Navigate
@@ -117,10 +131,6 @@ export default function ProtectedRoute({
           state={{ reason: 'billing_required', from: location.pathname }}
         />
       )
-    }
-
-    if (!hasMerchantStore && isDashboardRoute && !isBillingRoute) {
-      return <Navigate to="/onboarding" replace state={{ reason: 'store_required' }} />
     }
 
     const isPendingMerchant =

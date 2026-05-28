@@ -763,10 +763,10 @@ function EmptyState() {
         </p>
 
         <Link
-          to="/dashboard"
+          to="/onboarding"
           className="mt-6 inline-flex items-center justify-center rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]"
         >
-          Voltar ao dashboard
+          Finalizar cadastro
         </Link>
       </div>
     </main>
@@ -1082,6 +1082,7 @@ export default function Settings() {
         street: sanitizeTextField(form.street, 120),
         number: sanitizeTextField(form.number, 20),
         neighborhood: sanitizeTextField(form.neighborhood, 80),
+        complement: sanitizeTextField(form.complement, 120),
         city: sanitizeTextField(form.city, 80),
         state: sanitizeTextField(form.state, 2).toUpperCase() || 'SE',
       }
@@ -1093,7 +1094,7 @@ export default function Settings() {
         'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
         'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
-        'number', 'neighborhood', 'city', 'state'
+        'number', 'neighborhood', 'complement', 'city', 'state'
       ]
 
       const finalPayload = Object.keys(payload).reduce((acc, key) => {
@@ -1107,7 +1108,7 @@ export default function Settings() {
       const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
       await updateStoreSettings({
         storeId: selectedStore.id,
-        payload: finalPayload,
+        updates: finalPayload,
       })
 
       safeSetLocalStorage(SELECTED_STORE_KEY, selectedStore.id)

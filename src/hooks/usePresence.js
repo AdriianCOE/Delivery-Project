@@ -16,18 +16,12 @@ import {
 import { auth, rtdb } from '../services/firebase'
 
 async function getPresenceUser() {
-  if (typeof auth.authStateReady === 'function') {
-    await auth.authStateReady()
-  }
-
   // Guard: if ANY authenticated user is active (merchant or previous anon session),
   // skip setPersistence entirely. Calling it here could downgrade a merchant's
   // localStorage-based session to sessionStorage, logging them out on the next tab.
   if (auth.currentUser) return auth.currentUser
 
-  // Only change persistence when we are certain no real authenticated user is active.
-  // TODO(anonymous-auth-cleanup): prefer Firebase Console automatic anonymous user cleanup;
-  // if unavailable, implement a reviewed scheduler with pagination and anonymous-only filters.
+  // Only change persistence when we are certain no user is active.
   await setPersistence(auth, browserSessionPersistence)
   const credential = await signInAnonymously(auth)
   return credential.user
@@ -80,7 +74,7 @@ export function usePresence(storeId, isMerchant = false) {
 
     unsubscribePresence = onValue(storePresenceCountRef, (snapshot) => {
       const value = Number(snapshot.val() || 0)
-      setActiveUsers(Number.isFinite(value) && value > 0 ? value : 0)
+      setActiveUsers(Number.isFinite(value) ? Math.max(0, value) : 0)
     })
 
     return () => {

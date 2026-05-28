@@ -17,6 +17,11 @@ const trustFeatures = [
     title: 'LGPD',
     description: 'Dados protegidos',
   },
+  {
+    icon: CheckCircle,
+    title: 'Monitoramento 24h',
+    description: 'Ambiente seguro',
+  },
 ];
 
 export function TrustSection() {

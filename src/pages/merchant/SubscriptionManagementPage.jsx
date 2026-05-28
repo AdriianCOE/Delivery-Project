@@ -832,7 +832,7 @@ export default function SubscriptionManagementPage() {
                 disabled={!subscriptionActions.canChangePlan}
                 className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-orange-950/20"
               >
-                Escolher outro plano
+                Solicitar alteração de plano
               </button>
             </motion.div>
 
@@ -892,7 +892,7 @@ export default function SubscriptionManagementPage() {
                 disabled={!subscriptionActions.canRequestDueDateChange}
                 className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-orange-950/20"
               >
-                Mudar vencimento
+                Solicitar mudança de vencimento
               </button>
             </motion.div>
 
@@ -926,7 +926,7 @@ export default function SubscriptionManagementPage() {
                 disabled={!subscriptionActions.canCancel}
                 className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/20"
               >
-                Encerrar contrato
+                Solicitar cancelamento
               </button>
             </motion.div>
 

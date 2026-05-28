@@ -4,7 +4,6 @@ import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import {
   collection,
-  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -251,7 +250,6 @@ function ProgressBar({ label, value, total, colorClass, bgClass = 'bg-gray-100' 
 }
 
 const SELECTED_STATISTICS_STORE_KEY = 'pratoby:selected_statistics_store'
-const FIRESTORE_IN_LIMIT = 30
 
 function safeGetLocalStorage(key) {
   try {
@@ -267,18 +265,6 @@ function safeSetLocalStorage(key, value) {
   } catch {
     // localStorage indisponível
   }
-}
-
-function uniqueArray(values) {
-  return [...new Set(values.filter(Boolean).map(String))]
-}
-
-function chunkArray(values, size = FIRESTORE_IN_LIMIT) {
-  const chunks = []
-  for (let i = 0; i < values.length; i += size) {
-    chunks.push(values.slice(i, i + size))
-  }
-  return chunks
 }
 
 function normalizeStoreDoc(storeDoc) {
@@ -305,7 +291,7 @@ function getStoreKeys(store) {
 }
 
 export default function Statistics() {
-  const { user, userData, role, loading: authLoading, storeId: authStoreId, storeIds: authStoreIds } = useAuth()
+  const { user, userData, role, loading: authLoading, storeIds: authStoreIds } = useAuth()
   const [orders, setOrders] = useState([])
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -336,7 +322,6 @@ export default function Statistics() {
 
     setLoading(true)
     const uid = user.uid
-    let isCancelled = false
     const storesMap = new Map()
     const unsubscribers = []
 
@@ -359,7 +344,6 @@ export default function Statistics() {
     }
 
     function handleStoresError(error) {
-      if (isCancelled) return
       console.error('Erro ao carregar lojas nas estatísticas:', error)
       setStores([])
       setOrders([])
@@ -375,54 +359,31 @@ export default function Statistics() {
       unsubscribers.push(unsubscribe)
     }
 
-    const profileStoreIds = uniqueArray([
-      authStoreId,
-      ...(Array.isArray(authStoreIds) ? authStoreIds : []),
-      userData?.storeId,
-      ...(Array.isArray(userData?.storeIds) ? userData.storeIds : []),
-    ])
+    // Optimization: if AuthContext already has storeIds from the user profile,
+    // subscribe to only those stores (1 query per storeId). This eliminates
+    // 5 broad parallel queries, which were opened on every Statistics mount.
+    const profileStoreIds = Array.isArray(authStoreIds)
+      ? authStoreIds.filter(Boolean).slice(0, 30)
+      : []
 
     if (profileStoreIds.length > 0) {
-      chunkArray(profileStoreIds).forEach((storeIdChunk) => {
-        subscribeStores(query(collection(db, 'stores'), where('__name__', 'in', storeIdChunk)))
-      })
+      // Fast path: subscribe to the exact stores we know the user owns.
+      // Firestore `in` allows up to 30 values; profile rarely has > 10.
+      subscribeStores(query(collection(db, 'stores'), where('__name__', 'in', profileStoreIds)))
     } else {
-      const fallbackQueries = [
-        query(collection(db, 'stores'), where('ownerId', '==', uid)),
-        query(collection(db, 'stores'), where('ownerUid', '==', uid)),
-        query(collection(db, 'stores'), where('owner.uid', '==', uid)),
-        query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)),
-        query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)),
-      ]
-
-      Promise.allSettled(fallbackQueries.map((storesQuery) => getDocs(storesQuery)))
-        .then((results) => {
-          if (isCancelled) return
-
-          results.forEach((result) => {
-            if (result.status !== 'fulfilled') {
-              console.warn('Fallback pontual de lojas ignorado nas estatísticas:', result.reason?.message || result.reason)
-              return
-            }
-
-            result.value.docs.forEach((storeDoc) => {
-              storesMap.set(storeDoc.id, normalizeStoreDoc(storeDoc))
-            })
-          })
-
-          publishStores()
-        })
-        .catch((error) => {
-          if (isCancelled) return
-          handleStoresError(error)
-        })
+      // Fallback path: user profile doesn't have storeIds yet — use broad queries.
+      // This covers legacy accounts or incomplete onboarding.
+      subscribeStores(query(collection(db, 'stores'), where('ownerId', '==', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('ownerUid', '==', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('owner.uid', '==', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('allowedUserIds', 'array-contains', uid)))
+      subscribeStores(query(collection(db, 'stores'), where('merchantUids', 'array-contains', uid)))
     }
 
     return () => {
-      isCancelled = true
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [user?.uid, authStoreId, authStoreIds, userData?.storeId, userData?.storeIds])
+  }, [user?.uid, authStoreIds])
 
   useEffect(() => {
     if (!stores.length) {
@@ -470,10 +431,7 @@ export default function Statistics() {
 
     setLoading(true)
     const cutoffDate = Timestamp.fromDate(new Date(Date.now() - 31 * 86400000))
-    if (storeKeys.length > FIRESTORE_IN_LIMIT) {
-      console.warn('Statistics storeKeys excedeu limite de query in; usando os primeiros 30 identificadores.')
-    }
-    const baseKeys = storeKeys.slice(0, FIRESTORE_IN_LIMIT)
+    const baseKeys = storeKeys.slice(0, 10)
 
     const ordersMap = new Map()
     const unsubscribers = []
