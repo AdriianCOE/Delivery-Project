@@ -32,30 +32,30 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', sub: 'Vis├úo geral da opera├º├úo', active: true },
+  { icon: LayoutDashboard, label: 'Dashboard', sub: 'Visão geral da operação', active: true },
   { icon: ShoppingBag, label: 'Pedidos', sub: 'Kanban e comandas' },
-  { icon: Store, label: 'Card├ípio', sub: 'Produtos e categorias' },
-  { icon: BarChart2, label: 'Estat├¡sticas', sub: 'Resumo de vendas' },
-  { icon: Star, label: 'Avalia├º├Áes', sub: 'Feedback dos clientes' },
-  { icon: Settings, label: 'Configura├º├Áes', sub: 'Loja, hor├írios e Pix' },
-  { icon: CreditCard, label: 'Assinatura', sub: 'Plano, teste e cobran├ºa' },
-  { icon: User, label: 'Perfil', sub: 'Conta e seguran├ºa' },
+  { icon: Store, label: 'Cardápio', sub: 'Produtos e categorias' },
+  { icon: BarChart2, label: 'Estatísticas', sub: 'Resumo de vendas' },
+  { icon: Star, label: 'Avaliações', sub: 'Feedback dos clientes' },
+  { icon: Settings, label: 'Configurações', sub: 'Loja, horários e Pix' },
+  { icon: CreditCard, label: 'Assinatura', sub: 'Plano, teste e cobrança' },
+  { icon: User, label: 'Perfil', sub: 'Conta e segurança' },
 ]
 
 const METRICS = [
-  { label: 'Faturamento', value: 'R$ 847,80', sub: '+12% vs per├¡odo ant...', icon: TrendingUp, color: 'text-orange-400', bg: 'bg-orange-400/10' },
-  { label: 'Pedidos', value: '18', sub: '+5 vs per├¡odo ant...', icon: ShoppingBag, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-  { label: 'Ticket M├®dio', value: 'R$ 47,10', sub: 'pico ├ás 19h', icon: BarChart2, color: 'text-violet-400', bg: 'bg-violet-400/10' },
-  { label: 'Clientes', value: '14', sub: 'clientes ├║nicos', icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
-  { label: 'Conclus├úo', value: '94%', sub: 'pedidos entregues', icon: Zap, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
-  { label: 'Economia', value: 'R$ 89,00', sub: 'promo├º├Áes + cupons', icon: MessageSquare, color: 'text-pink-400', bg: 'bg-pink-400/10' },
+  { label: 'Faturamento', value: 'R$ 847,80', sub: '+12% vs período ant...', icon: TrendingUp, color: 'text-orange-400', bg: 'bg-orange-400/10' },
+  { label: 'Pedidos', value: '18', sub: '+5 vs período ant...', icon: ShoppingBag, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+  { label: 'Ticket Médio', value: 'R$ 47,10', sub: 'pico às 19h', icon: BarChart2, color: 'text-violet-400', bg: 'bg-violet-400/10' },
+  { label: 'Clientes', value: '14', sub: 'clientes únicos', icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
+  { label: 'Conclusão', value: '94%', sub: 'pedidos entregues', icon: Zap, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+  { label: 'Economia', value: 'R$ 89,00', sub: 'promoções + cupons', icon: MessageSquare, color: 'text-pink-400', bg: 'bg-pink-400/10' },
 ]
 
 const RECENT_ORDERS = [
-  { id: '#2847', customer: 'Jo├úo Silva', items: '2x Capivara Cl├íssico + Batata R├║stica', value: 'R$ 72,00', payment: 'Pix', neighborhood: 'Atalaia', time: 'Agora', status: 'Novo' as const },
-  { id: '#2846', customer: 'Maria Costa', items: '1x Combo Capivara + Refri', value: 'R$ 42,00', payment: 'Cart├úo', neighborhood: 'Farol├óndia', time: '5 min', status: 'Preparo' as const },
-  { id: '#2845', customer: 'Carlos Andrade', items: '3x Batata R├║stica + 2x Refri', value: 'R$ 60,00', payment: 'Pix', neighborhood: 'Jardins', time: '12 min', status: 'Entrega' as const },
-  { id: '#2844', customer: 'Ana Beatriz', items: '1x Capivara Cl├íssico', value: 'R$ 28,00', payment: 'Dinheiro', neighborhood: 'Centro', time: '18 min', status: 'Entregue' as const },
+  { id: '#2847', customer: 'João Silva', items: '2x Capivara Clássico + Batata Rústica', value: 'R$ 72,00', payment: 'Pix', neighborhood: 'Atalaia', time: 'Agora', status: 'Novo' as const },
+  { id: '#2846', customer: 'Maria Costa', items: '1x Combo Capivara + Refri', value: 'R$ 42,00', payment: 'Cartão', neighborhood: 'Farolândia', time: '5 min', status: 'Preparo' as const },
+  { id: '#2845', customer: 'Carlos Andrade', items: '3x Batata Rústica + 2x Refri', value: 'R$ 60,00', payment: 'Pix', neighborhood: 'Jardins', time: '12 min', status: 'Entrega' as const },
+  { id: '#2844', customer: 'Ana Beatriz', items: '1x Capivara Clássico', value: 'R$ 28,00', payment: 'Dinheiro', neighborhood: 'Centro', time: '18 min', status: 'Entregue' as const },
   { id: '#2843', customer: 'Lucas Mendes', items: '2x Combo Capivara', value: 'R$ 78,00', payment: 'Pix', neighborhood: 'Luzia', time: '25 min', status: 'Entregue' as const },
 ]
 
@@ -147,7 +147,7 @@ function DashboardScreen() {
         <header className="flex shrink-0 items-center justify-between border-b border-white/[0.07] bg-[#0b1120]/80 px-4 py-2 backdrop-blur-sm">
           <div>
             <p className="text-[10px] font-black text-white">Bom dia, Pedro Alcantara</p>
-            <p className="text-[8px] font-semibold text-slate-500">Qua, 28 de Mai ┬À 18:29 ┬À /capivaras-lanches</p>
+            <p className="text-[8px] font-semibold text-slate-500">Qua, 28 de Mai · 18:29 · /capivaras-lanches</p>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[8px] font-black text-slate-300 hover:bg-white/10 transition">
@@ -191,11 +191,11 @@ function DashboardScreen() {
               <div className="flex items-center gap-2.5">
                 <img src={CAPIVARA_LOGO} alt="Logo" className="h-9 w-9 shrink-0 rounded-xl bg-white object-cover" />
                 <div>
-                  <p className="text-[8px] font-semibold text-slate-500">Ol├í, capivara</p>
+                  <p className="text-[8px] font-semibold text-slate-500">Olá, capivara</p>
                   <p className="text-sm font-black text-white leading-tight">Capivara&apos;s Lanches</p>
                   <p className="text-[8px] text-slate-400 mt-0.5">
                     <span className="text-[#f97316]">/capivaras-lanches</span>
-                    {' '}┬À  Hoje: 15:00 ├ás 20:00
+                    {' '}·  Hoje: 15:00 às 20:00
                   </p>
                 </div>
               </div>
@@ -209,16 +209,16 @@ function DashboardScreen() {
               </div>
             </div>
             <p className="mt-2 text-[8px] font-semibold text-slate-500">
-              Acompanhe pedidos, faturamento, clientes online e os principais pontos da opera├º├úo em tempo real.
+              Acompanhe pedidos, faturamento, clientes online e os principais pontos da operação em tempo real.
             </p>
           </div>
 
           {/* Quick status */}
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: 'Aten├º├úo Agora', val: '1', sub: 'Pedido aguardando confirma├º├úo', color: 'text-orange-300', ring: 'ring-orange-400/20 bg-orange-400/5' },
-              { label: 'Revis├úo', val: '0', sub: 'Pedidos com alerta de pre├ºo', color: 'text-yellow-300', ring: 'ring-yellow-400/20 bg-yellow-400/5' },
-              { label: 'Opera├º├úo', val: '3', sub: 'Pedidos em andamento agora', color: 'text-cyan-300', ring: 'ring-cyan-400/20 bg-cyan-400/5' },
+              { label: 'Atenção Agora', val: '1', sub: 'Pedido aguardando confirmação', color: 'text-orange-300', ring: 'ring-orange-400/20 bg-orange-400/5' },
+              { label: 'Revisão', val: '0', sub: 'Pedidos com alerta de preço', color: 'text-yellow-300', ring: 'ring-yellow-400/20 bg-yellow-400/5' },
+              { label: 'Operação', val: '3', sub: 'Pedidos em andamento agora', color: 'text-cyan-300', ring: 'ring-cyan-400/20 bg-cyan-400/5' },
             ].map((s) => (
               <div key={s.label} className={`rounded-xl p-2.5 ring-1 ${s.ring}`}>
                 <p className="text-[7px] font-black uppercase tracking-wider text-slate-500">{s.label}</p>
@@ -273,11 +273,11 @@ function DashboardScreen() {
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.04] overflow-hidden">
             <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.06]">
               <div>
-                <p className="text-[7px] font-black uppercase tracking-wider text-slate-500">Insights R├ípidos</p>
+                <p className="text-[7px] font-black uppercase tracking-wider text-slate-500">Insights Rápidos</p>
                 <p className="text-[10px] font-black text-white">Resumo do dia</p>
               </div>
               <button type="button" className="flex items-center gap-1 text-[8px] font-black text-[#f97316]">
-                Ver estat├¡sticas <ChevronRight size={9} />
+                Ver estatísticas <ChevronRight size={9} />
               </button>
             </div>
 
@@ -400,9 +400,9 @@ export function ProductDemoSection() {
             >
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-                <span className="text-[10px] font-black text-white">Gest├úo em tempo real</span>
+                <span className="text-[10px] font-black text-white">Gestão em tempo real</span>
               </div>
-              <p className="mt-0.5 text-[9px] text-slate-400">Atualiza├º├Áes instant├óneas</p>
+              <p className="mt-0.5 text-[9px] text-slate-400">Atualizações instantâneas</p>
             </motion.div>
           </motion.div>
 

@@ -2028,7 +2028,7 @@ const handleToggleFavorite = useCallback(() => {
         if (isMounted) {
           setCategories([])
           setProducts([])
-          setMenuError('NÃ£o foi possÃ­vel carregar o cardÃ¡pio.')
+          setMenuError('Não foi possível carregar o cardápio.')
         }
       } finally {
         if (isMounted) setLoadingMenu(false)
