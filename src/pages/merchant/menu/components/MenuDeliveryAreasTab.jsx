@@ -137,72 +137,24 @@ export default function MenuDeliveryAreasTab({
 
   return (
     <div className="space-y-6">
-      {/* ── METRIC CARDS ── */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        {/* Ativos */}
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-          <p className="text-xs font-black uppercase tracking-wider text-[#6b7280]">
-            Bairros Ativos
-          </p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[#111827]">
-              {stats.activeCount}
-            </span>
-            <span className="text-xs font-bold text-emerald-600">
-              Entrega disponível
-            </span>
-          </div>
-        </div>
-
-        {/* Customizados */}
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-          <p className="text-xs font-black uppercase tracking-wider text-[#6b7280]">
-            Bairros Customizados
-          </p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[#111827]">
-              {stats.customActiveCount}
-            </span>
-            <span className="text-xs font-bold text-[#6b7280]">
-              Criados manualmente
-            </span>
-          </div>
-        </div>
-
-        {/* Frete Grátis */}
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-          <p className="text-xs font-black uppercase tracking-wider text-[#6b7280]">
-            Entrega Grátis (R$ 0,00)
-          </p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[#111827]">
-              {stats.freeCount}
-            </span>
-            <span className="text-xs font-bold text-[#f97316]">
-              Bairros com taxa zero
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* ── BARRA DE CONTROLE E FILTROS ── */}
-      <div className="flex flex-col gap-3 rounded-[2rem] border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-[2rem] border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between transition-all">
         {/* Busca e Status */}
-        <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
           {/* Input Busca */}
           <div className="relative flex-1">
-            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Buscar bairro..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-xl border border-gray-100 bg-[#f9fafb] pl-11 pr-4 text-xs font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:bg-white"
+              className="h-11 md:h-10 w-full rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 pl-11 pr-4 text-sm font-bold text-[#111827] dark:text-slate-50 outline-none transition-all duration-200 focus:border-[#f97316] dark:focus:border-[#f97316] focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-900/30 placeholder-slate-400"
             />
           </div>
 
           {/* Filtros Status */}
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-50 p-1 sm:flex">
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-50 dark:bg-slate-800 p-1 sm:flex shrink-0">
             {[
               { id: 'all', label: 'Todos' },
               { id: 'active', label: 'Ativos' },
@@ -212,10 +164,10 @@ export default function MenuDeliveryAreasTab({
                 key={f.id}
                 type="button"
                 onClick={() => setStatusFilter(f.id)}
-                className={`rounded-lg px-3.5 py-2 text-xs font-black transition sm:py-1.5 ${
+                className={`rounded-lg px-3.5 py-2 text-xs font-black transition-all duration-200 active:scale-95 sm:py-1.5 ${
                   statusFilter === f.id
-                    ? 'bg-white text-[#111827] shadow-sm'
-                    : 'text-[#6b7280] hover:text-[#f97316]'
+                    ? 'bg-white dark:bg-slate-700 text-[#111827] dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-[#f97316] dark:hover:text-[#f97316]'
                 }`}
               >
                 {f.label}
@@ -228,7 +180,7 @@ export default function MenuDeliveryAreasTab({
         <button
           type="button"
           onClick={onAddArea}
-          className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] sm:w-auto"
+          className="flex h-11 md:h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#f97316] to-[#ea580c] px-4 text-sm md:text-xs font-black text-white shadow-md shadow-orange-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-orange-500/40 active:translate-y-0 active:scale-95 sm:w-auto"
         >
           <FiPlus size={14} /> Adicionar bairro
         </button>
@@ -237,32 +189,32 @@ export default function MenuDeliveryAreasTab({
       {/* ── LISTAGEM DE BAIRROS ── */}
       {filteredAreas.length === 0 ? (
         /* Empty State */
-        <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white py-12 text-center">
-          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-orange-50 text-[#f97316]">
+        <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 py-12 text-center transition-all">
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-orange-50 dark:bg-orange-500/10 text-[#f97316]">
             <FiMapPin size={24} />
           </div>
-          <h3 className="mt-4 text-base font-black text-[#111827]">
+          <h3 className="mt-4 text-base font-black text-[#111827] dark:text-slate-50">
             Nenhum bairro encontrado
           </h3>
-          <p className="mx-auto mt-2 max-w-xs text-xs font-bold text-[#6b7280]">
+          <p className="mx-auto mt-2 max-w-xs text-xs font-bold text-slate-500 dark:text-slate-400">
             Não encontramos bairros correspondentes à busca ou filtros selecionados.
           </p>
         </div>
       ) : (
         <>
           {/* Layout Mobile (Card list) */}
-          <div className="grid grid-cols-1 gap-3 sm:hidden">
+          <div className="grid grid-cols-1 gap-4 sm:hidden">
             {filteredAreas.map((area) => (
               <div
                 key={area.neighborhood}
-                className="flex flex-col justify-between gap-3 rounded-[2rem] border border-gray-100 bg-white p-4 shadow-sm"
+                className="group flex flex-col justify-between gap-3 rounded-3xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:shadow-md hover:border-orange-100 dark:hover:border-slate-700"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h4 className="text-sm font-black text-[#111827]">
+                    <h4 className="text-base font-black text-[#111827] dark:text-slate-50">
                       {area.neighborhood}
                     </h4>
-                    <span className="mt-1 inline-block rounded-md bg-gray-50 px-2 py-0.5 text-[10px] font-black text-gray-400 uppercase tracking-wide">
+                    <span className="mt-1 inline-block rounded-md bg-gray-50 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide">
                       {area.isCustom ? 'Customizado' : 'Padrão Cidade'}
                     </span>
                   </div>
@@ -275,19 +227,21 @@ export default function MenuDeliveryAreasTab({
                       checked={area.isActive}
                       onChange={() => handleToggleActive(area)}
                     />
-                    <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none" />
+                    <div className={`h-6 w-11 rounded-full transition-colors duration-300 ${area.isActive ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-700 shadow-inner'}`}>
+                      <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${area.isActive ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </div>
                   </label>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-gray-50 pt-3">
+                <div className="flex items-center justify-between border-t border-gray-50 dark:border-slate-800/50 pt-4">
                   <div>
-                    <span className="text-[10px] font-black uppercase tracking-wide text-[#6b7280]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       Taxa
                     </span>
-                    <p className="text-sm font-black text-[#111827]">
+                    <p className="text-sm font-black text-[#111827] dark:text-slate-50">
                       {area.isActive
                         ? formatMoneyBrl(area.fee)
-                        : 'Sem taxa (Inativo)'}
+                        : <span className="text-slate-400 dark:text-slate-500 italic font-medium">Sem taxa (Inativo)</span>}
                     </p>
                   </div>
 
@@ -295,19 +249,19 @@ export default function MenuDeliveryAreasTab({
                     <button
                       type="button"
                       onClick={() => onEditArea(area)}
-                      className="grid h-8 w-8 place-items-center rounded-lg bg-gray-50 text-[#6b7280] transition hover:bg-orange-50 hover:text-[#f97316]"
+                      className="grid h-10 w-10 place-items-center rounded-xl bg-gray-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition-all hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:text-[#f97316] dark:hover:text-[#f97316] active:scale-90"
                       title="Editar Taxa"
                     >
-                      <FiEdit size={14} />
+                      <FiEdit size={16} />
                     </button>
                     {area.isCustom && (
                       <button
                         type="button"
                         onClick={() => handleDeleteCustom(area)}
-                        className="grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-red-500 transition hover:bg-red-100"
+                        className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 transition-all hover:bg-red-100 dark:hover:bg-red-500/20 active:scale-90"
                         title="Excluir Bairro"
                       >
-                        <FiTrash2 size={14} />
+                        <FiTrash2 size={16} />
                       </button>
                     )}
                   </div>
@@ -317,32 +271,32 @@ export default function MenuDeliveryAreasTab({
           </div>
 
           {/* Layout Desktop (Table view) */}
-          <div className="hidden overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm sm:block">
+          <div className="hidden overflow-hidden rounded-3xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm sm:block transition-all">
             <table className="w-full border-collapse text-left">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-[#6b7280]">
+                <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/50">
+                  <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Bairro
                   </th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-[#6b7280]">
+                  <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Origem
                   </th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-[#6b7280]">
+                  <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Taxa
                   </th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-[#6b7280]">
+                  <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-wider text-[#6b7280]">
+                  <th className="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Ações
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
                 {filteredAreas.map((area) => (
-                  <tr key={area.neighborhood} className="hover:bg-gray-50/20">
+                  <tr key={area.neighborhood} className="transition-colors hover:bg-orange-50/30 dark:hover:bg-slate-800/50 group">
                     <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-[#111827]">
+                      <span className="text-sm font-bold text-[#111827] dark:text-slate-50">
                         {area.neighborhood}
                       </span>
                     </td>
@@ -350,18 +304,18 @@ export default function MenuDeliveryAreasTab({
                       <span
                         className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
                           area.isCustom
-                            ? 'bg-purple-50 text-purple-600'
-                            : 'bg-gray-100 text-gray-500'
+                            ? 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400'
+                            : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
                         }`}
                       >
                         {area.isCustom ? 'Customizado' : 'Padrão Cidade'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-black text-[#111827]">
+                      <span className="text-sm font-black text-[#111827] dark:text-slate-50">
                         {area.isActive
                           ? formatMoneyBrl(area.fee)
-                          : 'Sem taxa configurada'}
+                          : <span className="text-slate-400 dark:text-slate-500 font-medium italic">Sem taxa configurada</span>}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -374,11 +328,13 @@ export default function MenuDeliveryAreasTab({
                             checked={area.isActive}
                             onChange={() => handleToggleActive(area)}
                           />
-                          <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none" />
+                          <div className={`h-6 w-11 rounded-full transition-colors duration-300 ${area.isActive ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-700 shadow-inner'}`}>
+                            <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300 ${area.isActive ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          </div>
                         </label>
                         <span
                           className={`text-xs font-bold ${
-                            area.isActive ? 'text-emerald-600' : 'text-gray-400'
+                            area.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
                           }`}
                         >
                           {area.isActive ? 'Ativo' : 'Inativo'}
@@ -386,11 +342,11 @@ export default function MenuDeliveryAreasTab({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2 opacity-80 transition-opacity group-hover:opacity-100">
                         <button
                           type="button"
                           onClick={() => onEditArea(area)}
-                          className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-orange-50 hover:text-[#f97316]"
+                          className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition-all hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:text-[#f97316] dark:hover:text-[#f97316] active:scale-90"
                           title="Editar Taxa"
                         >
                           <FiEdit size={14} />
@@ -399,7 +355,7 @@ export default function MenuDeliveryAreasTab({
                           <button
                             type="button"
                             onClick={() => handleDeleteCustom(area)}
-                            className="grid h-9 w-9 place-items-center rounded-xl bg-red-50 text-red-500 transition hover:bg-red-100"
+                            className="grid h-9 w-9 place-items-center rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 transition-all hover:bg-red-100 dark:hover:bg-red-500/20 active:scale-90"
                             title="Excluir Bairro"
                           >
                             <FiTrash2 size={14} />

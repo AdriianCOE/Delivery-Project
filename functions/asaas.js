@@ -2,6 +2,15 @@ const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https')
 const { defineSecret } = require('firebase-functions/params')
 const crypto = require('crypto')
 
+const {
+  BREVO_API_KEY,
+  BREVO_TEMPLATES,
+  sendBrevoTransactionalEmail,
+  firstNameFrom,
+  formatDatePtBr,
+  getSupportWhatsappUrl,
+} = require('./brevo')
+
 const ASAAS_API_KEY = defineSecret('ASAAS_API_KEY')
 const ASAAS_WEBHOOK_AUTH_TOKEN = defineSecret('ASAAS_WEBHOOK_AUTH_TOKEN')
 
@@ -2084,8 +2093,100 @@ async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, e
       checkoutId,
       subscriptionId: localSubscriptionId,
       nextStatus: 'trialing',
+      uid: subscriptionData.uid || null,
+      storeId: subscriptionData.storeId || null,
     }
   })
+}
+
+async function sendTrialStartedEmailOnce({ db, admin, logger, uid, storeId, checkoutId }) {
+  if (!uid || !storeId || !checkoutId) return { ignored: true, reason: 'missing_params' }
+
+  const logId = `trial_started_${safeDocId(checkoutId)}`
+  const logRef = db.collection('notificationLogs').doc(logId)
+
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const logDoc = await transaction.get(logRef)
+      if (logDoc.exists) {
+        const status = logDoc.data().status
+        if (['sent', 'sending'].includes(status)) {
+          return { skipped: true, reason: `already_${status}` }
+        }
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp()
+      transaction.set(logRef, {
+        type: 'trial_started',
+        provider: 'brevo',
+        templateId: BREVO_TEMPLATES.trialStarted.id,
+        tag: BREVO_TEMPLATES.trialStarted.tag,
+        uid,
+        storeId,
+        checkoutId,
+        status: 'sending',
+        createdAt: logDoc.exists ? logDoc.data().createdAt : now,
+        updatedAt: now,
+      }, { merge: true })
+
+      return { proceed: true }
+    })
+
+    if (!result.proceed) return result
+
+    const [userDoc, storeDoc] = await Promise.all([
+      db.collection('users').doc(uid).get(),
+      db.collection('stores').doc(storeId).get(),
+    ])
+
+    const userData = userDoc.data() || {}
+    const storeData = storeDoc.data() || {}
+    const email = userData.email
+
+    if (!email) {
+      await logRef.set({ status: 'skipped', reason: 'missing_email', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+      return { skipped: true, reason: 'missing_email' }
+    }
+
+    const appBaseUrl = getPublicAppBaseUrl()
+    const supportWhatsappUrl = getSupportWhatsappUrl()
+    const trialEndsAt = storeData.trialEndsAt || userData.trialEndsAt
+    
+    const params = {
+      firstName: firstNameFrom(userData.displayName || userData.signup?.storeName || email),
+      storeName: storeData.storeName || userData.signup?.storeName || 'sua loja',
+      dashboardUrl: `${appBaseUrl}/dashboard/billing`,
+      trialEndsAt: formatDatePtBr(trialEndsAt),
+      supportWhatsappUrl,
+    }
+
+    const brevoResponse = await sendBrevoTransactionalEmail({
+      to: email,
+      name: userData.displayName || undefined,
+      templateId: BREVO_TEMPLATES.trialStarted.id,
+      params,
+      tags: [BREVO_TEMPLATES.trialStarted.tag],
+      idempotencyKey: logId,
+    })
+
+    await logRef.set({
+      status: 'sent',
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      brevoMessageId: brevoResponse?.messageId || null,
+      email,
+    }, { merge: true })
+
+    return { sent: true }
+  } catch (error) {
+    logger.error('Failed to send trial started email', { checkoutId, uid, storeId, error: error.message })
+    await logRef.set({
+      status: 'failed',
+      error: error.message,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+    return { failed: true, error: error.message }
+  }
 }
 
 function createAsaasFunctions({ db, admin, logger }) {
@@ -2986,7 +3087,7 @@ function createAsaasFunctions({ db, admin, logger }) {
       timeoutSeconds: 60,
       memory: '256MiB',
       maxInstances: 10,
-      secrets: [ASAAS_WEBHOOK_AUTH_TOKEN],
+      secrets: [ASAAS_WEBHOOK_AUTH_TOKEN, BREVO_API_KEY],
     },
     async (request, response) => {
       if (request.method !== 'POST') {
@@ -3018,6 +3119,22 @@ function createAsaasFunctions({ db, admin, logger }) {
             eventId,
             event,
           })
+
+          if (checkoutResult.processed && checkoutResult.nextStatus === 'trialing' && checkoutResult.uid && checkoutResult.storeId) {
+            try {
+              await sendTrialStartedEmailOnce({
+                db,
+                admin,
+                logger,
+                uid: checkoutResult.uid,
+                storeId: checkoutResult.storeId,
+                checkoutId: checkoutResult.checkoutId,
+              })
+            } catch (emailError) {
+              logger.error('Unhandled error in sendTrialStartedEmailOnce', { error: emailError.message })
+            }
+          }
+
           response.status(200).json({ ok: true, ...checkoutResult })
         } catch (error) {
           logger.error('Asaas checkout webhook failed', {

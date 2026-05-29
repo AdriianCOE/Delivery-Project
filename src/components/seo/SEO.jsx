@@ -62,7 +62,7 @@ export default function SEO({
 
       <meta
         property="og:image:alt"
-        content="PratoBy - Cardápio digital e delivery sem comissão"
+        content="PratoBy - Cardápio digital sem comissão"
       />
 
       <meta name="twitter:card" content="summary_large_image" />

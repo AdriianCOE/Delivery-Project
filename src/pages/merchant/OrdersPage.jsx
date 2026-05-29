@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
@@ -14,9 +14,9 @@ import {
   orderBy,
   query,
   Timestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
 import {
   FiAlertTriangle,
@@ -49,7 +49,7 @@ import {
   FiPlay,
 } from 'react-icons/fi'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
@@ -97,41 +97,41 @@ const STATUS_META = {
     label: 'Pendente',
     description: 'Aguardando aceite',
     icon: FiClock,
-    badgeClass: 'bg-amber-50 text-amber-700 ring-amber-200',
+    badgeClass: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/25',
     dotClass: 'bg-amber-500',
-    buttonClass: 'border-amber-200 bg-amber-50 text-amber-700',
+    buttonClass: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
   },
   preparando: {
     label: 'Preparando',
     description: 'Pedido em produção',
     icon: FiPackage,
-    badgeClass: 'bg-purple-50 text-purple-700 ring-purple-200',
+    badgeClass: 'bg-purple-50 text-purple-700 ring-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-purple-500/25',
     dotClass: 'bg-purple-500',
-    buttonClass: 'border-purple-200 bg-purple-50 text-purple-700',
+    buttonClass: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300',
   },
   em_rota: {
     label: 'Em rota',
     description: 'Saiu para entrega',
     icon: FiTruck,
-    badgeClass: 'bg-sky-50 text-sky-700 ring-sky-200',
+    badgeClass: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/25',
     dotClass: 'bg-sky-500',
-    buttonClass: 'border-sky-200 bg-sky-50 text-sky-700',
+    buttonClass: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300',
   },
   entregue: {
     label: 'Entregue',
     description: 'Pedido finalizado',
     icon: FiCheckCircle,
-    badgeClass: 'bg-orange-50 text-orange-700 ring-green-200',
+    badgeClass: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25',
     dotClass: 'bg-[#f97316]',
-    buttonClass: 'border-green-200 bg-orange-50 text-orange-700',
+    buttonClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
   },
   cancelado: {
     label: 'Cancelado',
     description: 'Pedido cancelado',
     icon: FiXCircle,
-    badgeClass: 'bg-red-50 text-red-700 ring-red-200',
+    badgeClass: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/25',
     dotClass: 'bg-red-500',
-    buttonClass: 'border-red-200 bg-red-50 text-red-700',
+    buttonClass: 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300',
   },
 }
 
@@ -220,7 +220,7 @@ function getOrderDate(order) {
 function formatDate(order) {
   const date = getOrderDate(order)
 
-  if (!date) return '—'
+  if (!date) return 'â€”'
 
   return date.toLocaleString('pt-BR', {
     day: '2-digit',
@@ -259,7 +259,7 @@ function getOrderDisplayNumber(order) {
 function timeAgo(order) {
   const date = getOrderDate(order)
 
-  if (!date) return '—'
+  if (!date) return 'â€”'
 
   const diff = Math.floor((Date.now() - date.getTime()) / 1000)
 
@@ -335,7 +335,7 @@ function getPaymentMethod(order) {
     pix_manual: 'Pix manual',
     card: 'Cartão',
     cartao: 'Cartão',
-    cartão: 'Cartão',
+    'cartão': 'Cartão',
     card_on_delivery: 'Maquininha',
     credit: 'Cartão de crédito',
     debit: 'Cartão de débito',
@@ -760,7 +760,7 @@ function getItemOptionsSummary(item) {
     return `+ ${prefix}${getOptionName(extra)}`
   })
 
-  return [...groupText, ...additionalText].join(' · ')
+  return [...groupText, ...additionalText].join(' Â· ')
 }
 
 function getOrderItemsSummary(order) {
@@ -969,7 +969,7 @@ function getPaymentLine(order) {
   ''
   const payment = getPaymentMethod(order)
 
-  return changeForLabel ? `${payment} · ${changeForLabel}` : payment
+  return changeForLabel ? `${payment} Â· ${changeForLabel}` : payment
 }
 
 function getFirstName(name) {
@@ -1049,7 +1049,7 @@ function buildWhatsAppMessage(order, store) {
     return [
       `Olá, *${customerName}*! Aqui é da *${storeName}*.`,
       '',
-      `✅ *Pedido confirmado*`,
+      `âœ… *Pedido confirmado*`,
       '',
       `Confirmamos o seu pedido *${orderCode}* e já estamos cuidando dele com atenção.`,
       '',
@@ -1101,7 +1101,7 @@ cancelado: {
       ? `\nAcompanhe por aqui:\n${trackingLink}`
       : '',
     '',
-    `— ${storeName}`,
+    `â€” ${storeName}`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -1119,9 +1119,9 @@ function buildCustomerThanksMessage(order, store) {
     '',
     `Passando só para agradecer pelo pedido *${orderCode}*.`,
     '',
-    'Ficamos felizes em te atender e esperamos que tenha chegado tudo certinho. 😊',
+    'Ficamos felizes em te atender e esperamos que tenha chegado tudo certinho. ðŸ˜Š',
     '',
-    `— ${storeName}`,
+    `â€” ${storeName}`,
   ].join('\n')
 }
 
@@ -1540,22 +1540,22 @@ function Toast({ toast, onClose }) {
   const Icon = isSuccess ? FiCheckCircle : FiAlertTriangle
 
   return (
-    <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50">
+    <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40">
       <div className="flex gap-3">
         <div
           className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-            isSuccess ? 'bg-orange-50 text-[#f97316]' : 'bg-red-50 text-red-600'
+            isSuccess ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300' : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'
           }`}
         >
           <Icon size={17} />
         </div>
 
         <div>
-          <p className="text-sm font-bold text-[#111827]">
+          <p className="text-sm font-bold text-[#111827] dark:text-zinc-100">
             {isSuccess ? 'Tudo certo' : 'Atenção'}
           </p>
 
-          <p className="mt-0.5 text-sm text-[#6b7280]">
+          <p className="mt-0.5 text-sm text-[#6b7280] dark:text-zinc-400">
             {toast.message}
           </p>
         </div>
@@ -1563,7 +1563,7 @@ function Toast({ toast, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="ml-2 text-gray-400 transition hover:text-gray-700"
+          className="ml-2 text-gray-400 transition hover:text-gray-700 dark:text-zinc-500 dark:hover:text-zinc-200"
           aria-label="Fechar aviso"
         >
           <FiX />
@@ -1575,27 +1575,27 @@ function Toast({ toast, onClose }) {
 
 function StatCard({ icon: Icon, label, value, description, tone = 'green' }) {
   const tones = {
-    green: 'bg-orange-50 text-[#f97316]',
-    amber: 'bg-amber-50 text-amber-600',
-    blue: 'bg-blue-50 text-blue-600',
-    red: 'bg-red-50 text-red-600',
-    purple: 'bg-purple-50 text-purple-600',
+    green: 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300',
+    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300',
+    red: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300',
+    purple: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-300',
   }
 
   return (
-    <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
+          <p className="text-xs font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-400">
             {label}
           </p>
 
-          <p className="mt-2 text-2xl font-black text-[#111827]">
+          <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
             {value}
           </p>
 
           {description && (
-            <p className="mt-1 text-xs text-[#6b7280]">
+            <p className="mt-1 text-xs text-[#6b7280] dark:text-zinc-500">
               {description}
             </p>
           )}
@@ -1615,17 +1615,17 @@ function StatCard({ icon: Icon, label, value, description, tone = 'green' }) {
 
 function EmptyState({ icon: Icon, title, description }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-gray-200 bg-white p-8 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
+    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-gray-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 text-gray-400 dark:bg-zinc-800 dark:text-zinc-500">
         <Icon size={24} />
       </div>
 
-      <h3 className="mt-4 text-base font-black text-[#111827]">
+      <h3 className="mt-4 text-base font-black text-[#111827] dark:text-zinc-100">
         {title}
       </h3>
 
       {description && (
-        <p className="mt-2 max-w-md text-sm leading-6 text-[#6b7280]">
+        <p className="mt-2 max-w-md text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
           {description}
         </p>
       )}
@@ -1638,10 +1638,10 @@ function PricingValidationBadge({ order }) {
 
   const className = [
     'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1',
-    pricing.tone === 'success' && 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-    pricing.tone === 'warning' && 'bg-amber-50 text-amber-700 ring-amber-100',
-    pricing.tone === 'danger' && 'bg-red-50 text-red-700 ring-red-100',
-    pricing.tone === 'neutral' && 'bg-gray-50 text-gray-600 ring-gray-100',
+    pricing.tone === 'success' && 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20',
+    pricing.tone === 'warning' && 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20',
+    pricing.tone === 'danger' && 'bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20',
+    pricing.tone === 'neutral' && 'bg-gray-50 text-gray-600 ring-gray-100 dark:bg-white/[0.06] dark:text-zinc-400 dark:ring-zinc-700',
   ]
     .filter(Boolean)
     .join(' ')
@@ -1660,9 +1660,9 @@ function PricingValidationAlert({ order }) {
 
   const className = [
     'mt-3 rounded-2xl border p-3 text-sm font-bold leading-6 md:col-span-2',
-    pricing.tone === 'warning' && 'border-amber-100 bg-amber-50 text-amber-800',
-    pricing.tone === 'danger' && 'border-red-100 bg-red-50 text-red-700',
-    pricing.tone === 'neutral' && 'border-gray-100 bg-gray-50 text-gray-600',
+    pricing.tone === 'warning' && 'border-amber-100 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200',
+    pricing.tone === 'danger' && 'border-red-100 bg-red-50 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200',
+    pricing.tone === 'neutral' && 'border-gray-100 bg-gray-50 text-gray-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400',
   ]
     .filter(Boolean)
     .join(' ')
@@ -1674,7 +1674,8 @@ function PricingValidationAlert({ order }) {
   )
 }
 
-function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
+
+function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus }) {
   const status = normalizeStatus(order.status)
   const meta = STATUS_META[status] || STATUS_META.pendente
   const nextStatus = getNextStatus(status)
@@ -1683,55 +1684,68 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
   const promotionSavings = getOrderPromotionSavings(order)
   const discount = getOrderDiscount(order)
   const cancellationReason = getCancellationReason(order)
+  const customerName = getCustomerName(order)
+  const phone = getCustomerPhone(order)
+  const savings = promotionSavings + discount
 
   const isFinalStatus = status === 'entregue' || status === 'cancelado'
   const isUpdatingThisOrder = updatingStatus === order.id
+  const customerInitials = customerName
+    .split(/\\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'CL'
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl ${
+      className={`group relative overflow-hidden rounded-[1.6rem] border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl ${
         late && !isFinalStatus
-          ? 'border-red-300 bg-red-50/80 shadow-red-100/80 ring-2 ring-red-200 dark:border-red-800 dark:bg-red-950/40 dark:shadow-red-950/20'
-          : 'border-gray-100 bg-white hover:shadow-gray-200/60 dark:border-zinc-800 dark:bg-zinc-900'
-      } ${isFinalStatus ? 'opacity-70 grayscale-[0.35]' : ''}`}
+          ? 'border-red-300 bg-red-50/90 shadow-red-100/80 ring-2 ring-red-200 dark:border-red-500/35 dark:bg-red-950/20 dark:shadow-red-950/20 dark:ring-red-500/20'
+          : isFinalStatus
+            ? 'border-gray-100 bg-white/95 hover:shadow-gray-200/60 dark:border-white/10 dark:bg-zinc-900/80 dark:ring-1 dark:ring-white/[0.03] dark:hover:border-white/15'
+            : 'border-gray-100 bg-white hover:shadow-gray-200/60 dark:border-white/10 dark:bg-zinc-900/90 dark:ring-1 dark:ring-white/[0.03] dark:hover:border-white/15 dark:hover:shadow-black/30'
+      }`}
     >
+      {/* Status color bar */}
+      <div className={`absolute inset-y-0 left-0 w-1 ${late && !isFinalStatus ? 'bg-red-500' : meta.dotClass}`} />
+
       {late && !isFinalStatus && (
         <div className="mb-3 flex flex-col gap-2 rounded-2xl bg-red-600 px-4 py-3 text-white sm:flex-row sm:items-center sm:justify-between dark:bg-red-800">
           <div className="flex items-center gap-2">
             <FiAlertTriangle className="shrink-0 animate-pulse" size={18} />
-
             <span className="text-sm font-black">
               Pedido pendente há {getPendingMinutes(order)} min
             </span>
           </div>
-
           <span className="text-xs font-bold text-white/85">
             Aceite ou cancele para não deixar o cliente esperando.
           </span>
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[92px_minmax(0,1fr)_140px_120px_145px_160px] lg:items-center">
-        <div>
-          <p className="mb-1 text-xs font-bold text-[#6b7280] dark:text-zinc-500 lg:hidden">
+      {/* DESKTOP GRID LAYOUT */}
+      <div className="hidden lg:grid lg:gap-4 lg:pl-1 lg:grid-cols-[92px_minmax(0,1fr)_140px_120px_145px_160px] lg:items-center">
+        <div className="block">
+          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
             Pedido
           </p>
-
-          <span className="inline-flex rounded-xl bg-gray-100 px-2.5 py-1 font-mono text-[13px] font-black text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <span className="inline-flex font-mono text-[13px] font-black text-gray-700 dark:text-zinc-200">
             {getOrderDisplayNumber(order)}
           </span>
         </div>
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#f97316] dark:bg-zinc-800 dark:text-orange-400 lg:hidden">
-              {getCustomerName(order).substring(0, 2).toUpperCase()}
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#9a3412] ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20 lg:hidden">
+              {customerInitials}
             </div>
 
             <div className={`h-2.5 w-2.5 rounded-full ${meta.dotClass}`} />
 
-            <p className="min-w-0 truncate text-sm font-black text-[#111827] dark:text-zinc-100">
-              {getCustomerName(order)}
+            <p className="min-w-0 truncate text-base font-black text-[#111827] dark:text-zinc-100 lg:text-sm">
+              {customerName}
             </p>
 
             <StatusBadge status={order.status} />
@@ -1744,17 +1758,17 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
             )}
           </div>
 
-          <p className="mt-2 truncate text-sm text-[#6b7280] dark:text-zinc-400">
+          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-[#6b7280] dark:text-zinc-400 lg:truncate">
             {getOrderItemsSummary(order)}
           </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6b7280] dark:text-zinc-500">
-            <span className="inline-flex items-center gap-1">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b7280] dark:text-zinc-400 lg:mt-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1.5 dark:bg-zinc-950/60 lg:bg-transparent lg:px-0 lg:py-0 lg:dark:bg-transparent">
               <FiPhone size={13} />
-              {formatDisplayPhone(getCustomerPhone(order)) || 'Sem telefone'}
+              {formatDisplayPhone(phone) || 'Sem telefone'}
             </span>
 
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1.5 dark:bg-zinc-950/60 lg:bg-transparent lg:px-0 lg:py-0 lg:dark:bg-transparent">
               <FiMapPin size={13} />
               {address.isPickup
                 ? 'Retirada'
@@ -1763,65 +1777,59 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
           </div>
 
           {status === 'cancelado' && cancellationReason && (
-            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-400">
+            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
               <span className="font-black">Motivo:</span> {cancellationReason}
             </div>
           )}
         </div>
 
         <div>
-          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-550 lg:hidden">
+          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
             Status
           </p>
-
-          <p className="text-sm font-bold text-[#111827] dark:text-zinc-100">
+          <p className="mt-1 text-sm font-black text-[#111827] dark:text-zinc-100 lg:mt-0 lg:font-bold">
             {meta.description}
           </p>
         </div>
 
         <div>
-          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-550 lg:hidden">
+          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
             Total
           </p>
-
-          <p className="text-base font-black text-[#111827] dark:text-zinc-100">
+          <p className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100 lg:mt-0 lg:text-base">
             {formatMoney(getOrderTotal(order))}
           </p>
-
-          <p className="text-xs text-[#6b7280] dark:text-zinc-400">
+          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400 lg:font-normal">
             {getPaymentMethod(order)}
           </p>
-
-          {(promotionSavings > 0 || discount > 0) && (
+          {savings > 0 && (
             <p className="mt-1 text-[11px] font-black text-[#f97316] dark:text-orange-400">
-              Economia {formatMoney(promotionSavings + discount)}
+              Economia {formatMoney(savings)}
             </p>
           )}
         </div>
 
         <div>
-          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-550 lg:hidden">
+          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
             Horário
           </p>
-
-          <p className="text-sm font-bold text-[#111827] dark:text-zinc-100">
+          <p className="mt-1 text-sm font-bold text-[#111827] dark:text-zinc-100 lg:mt-0">
             {formatDate(order)}
           </p>
-
-          <p className="text-xs text-[#6b7280] dark:text-zinc-500">
+          <p className="text-xs font-semibold text-[#6b7280] dark:text-zinc-400 lg:font-normal">
             {timeAgo(order)}
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+        <div className="flex flex-col gap-1.5">
           {nextStatus && (
             <button
               type="button"
               onClick={() => onQuickStatus(order, nextStatus)}
               disabled={Boolean(updatingStatus)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2.5 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70 shadow-sm shadow-orange-500/20"
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-3 py-1.5 text-xs font-black text-white shadow-lg shadow-orange-600/15 transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-75"
             >
-              <FiZap size={15} />
+              <FiZap size={13} />
               {isUpdatingThisOrder
                 ? 'Atualizando...'
                 : updatingStatus
@@ -1830,13 +1838,151 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
             </button>
           )}
 
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => onOpen(order)}
+              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-gray-100 bg-white px-2 py-1.5 text-xs font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10 dark:hover:text-orange-300"
+            >
+              Abrir
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenWhatsApp(order)}
+              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-green-100 bg-green-50 px-2 py-1.5 text-xs font-black text-green-700 transition hover:bg-green-100/50 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/15"
+              title="WhatsApp"
+            >
+              <FiMessageCircle size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* MOBILE: PREMIUM CARD LAYOUT */}
+      <div className="flex flex-col gap-3 pl-1 lg:hidden">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#9a3412] ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20">
+              {customerInitials}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <div className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} />
+                <p className="truncate text-sm font-black text-gray-900 dark:text-zinc-100">
+                  {customerName}
+                </p>
+              </div>
+              <p className="mt-0.5 font-mono text-[11px] font-black text-gray-500 dark:text-zinc-400">
+                {getOrderDisplayNumber(order)}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <StatusBadge status={order.status} />
+            <PricingValidationBadge order={order} />
+          </div>
+        </div>
+
+        {/* Item summary */}
+        <p className="line-clamp-2 text-xs font-semibold leading-5 text-gray-600 dark:text-zinc-400">
+          {getOrderItemsSummary(order)}
+        </p>
+
+        {/* Info Chips */}
+        <div className="flex flex-wrap gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400">
+            <FiPhone size={11} />
+            {formatDisplayPhone(phone) || 'Sem telefone'}
+          </span>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+            address.isPickup
+              ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400'
+              : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'
+          }`}>
+            {address.isPickup ? <FiShoppingBag size={11} /> : <FiTruck size={11} />}
+            {address.isPickup ? 'Retirada' : address.neighborhood || 'Bairro n/i'}
+          </span>
+        </div>
+
+        {/* Cancellation reason box */}
+        {status === 'cancelado' && cancellationReason && (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[11px] font-bold leading-4 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
+            <span className="font-black">Motivo:</span> {cancellationReason}
+          </div>
+        )}
+
+        <div className="my-1 border-t border-gray-100 dark:border-white/10" />
+
+        {/* Footer data grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+              Total
+            </p>
+            <p className="mt-0.5 text-sm font-black text-gray-900 dark:text-zinc-100">
+              {formatMoney(getOrderTotal(order))}
+            </p>
+            <p className="text-[10px] font-semibold text-gray-500 dark:text-zinc-400">
+              {getPaymentMethod(order)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+              Horário
+            </p>
+            <p className="mt-0.5 text-xs font-bold text-gray-900 dark:text-zinc-100">
+              {formatDate(order)}
+            </p>
+            <p className="text-[10px] font-semibold text-gray-500 dark:text-zinc-500">
+              {timeAgo(order)}
+            </p>
+          </div>
+        </div>
+
+        {/* Savings pill */}
+        {savings > 0 && (
+          <div className="self-start inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+            Economia {formatMoney(savings)}
+          </div>
+        )}
+
+        {/* Action button row */}
+        <div className="grid grid-cols-3 gap-2">
+          {nextStatus && (
+            <button
+              type="button"
+              onClick={() => onQuickStatus(order, nextStatus)}
+              disabled={Boolean(updatingStatus)}
+              className="col-span-3 flex h-10 items-center justify-center gap-1.5 rounded-xl bg-orange-500 text-xs font-black text-white shadow-sm shadow-orange-500/20 transition active:scale-95"
+            >
+              <FiZap size={13} />
+              {isUpdatingThisOrder ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status)}
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => onOpen(order)}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-2.5 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+            className="flex h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-gray-50 text-xs font-black text-gray-900 transition active:scale-95 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-100"
           >
-            Abrir
-            <FiChevronRight size={16} />
+            Abrir <FiChevronRight size={13} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenWhatsApp(order)}
+            className="flex h-10 items-center justify-center gap-1 rounded-xl border border-green-200 bg-green-50 text-xs font-black text-green-700 transition active:scale-95 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-400"
+          >
+            <FiMessageCircle size={13} /> WhatsApp
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onCopyOrder(order)}
+            className="flex h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white text-xs font-black text-gray-500 transition active:scale-95 dark:border-zinc-700 dark:bg-white/[0.06] dark:text-zinc-400"
+          >
+            <FiCopy size={12} /> Copiar
           </button>
         </div>
       </div>
@@ -1847,14 +1993,14 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
 function OrderItemsList({ items }) {
   if (!items.length) {
     return (
-      <p className="mt-3 text-sm leading-6 text-[#6b7280]">
+      <p className="mt-3 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
         Itens não disponíveis.
       </p>
     )
   }
 
   return (
-    <div className="mt-4 divide-y divide-gray-100">
+    <div className="mt-4 divide-y divide-gray-100 dark:divide-zinc-800">
       {items.map((item, index) => {
         const optionGroups = getItemDisplayOptionGroups(item)
         const additionals = getItemAdditionals(item)
@@ -1865,24 +2011,24 @@ function OrderItemsList({ items }) {
             key={`${item.cartItemId || item.id || getItemName(item)}-${index}`}
             className="flex gap-3 py-3"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-sm font-black text-[#f97316]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-sm font-black text-[#f97316] dark:bg-orange-500/10">
               {getItemQty(item)}x
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-[#111827]">
+              <p className="font-bold text-[#111827] dark:text-zinc-100">
                 {getItemName(item)}
               </p>
 
               {promo.active && (
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-600">
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-600 dark:bg-red-500/10 dark:text-red-300">
                     Promoção
                   </span>
 
                   {promo.oldPrice > promo.currentPrice && (
                     <>
-                      <span className="text-xs font-bold text-gray-400 line-through">
+                      <span className="text-xs font-bold text-gray-400 line-through dark:text-zinc-500">
                         {formatMoney(promo.oldPrice)}
                       </span>
 
@@ -1901,36 +2047,36 @@ function OrderItemsList({ items }) {
               )}
 
               {optionGroups.length > 0 && (
-    <div className="mt-3 rounded-2xl bg-gray-50 p-3">
-      {optionGroups.map((group) => (
-        <div key={group.id} className="mb-3 last:mb-0">
-          <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">
-            {group.name}
-          </p>
+                <div className="mt-3 rounded-2xl bg-gray-50 p-3 dark:bg-zinc-950/60">
+                  {optionGroups.map((group) => (
+                    <div key={group.id} className="mb-3 last:mb-0">
+                      <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-zinc-400">
+                        {group.name}
+                      </p>
 
-          <div className="mt-2 space-y-1">
-            {group.options.map((option) => (
-              <div
-                key={`${group.id}-${option.id}`}
-                className="flex items-center justify-between gap-3 text-sm text-gray-600"
-              >
-                <span>
-                  {option.quantity > 1 ? `${option.quantity}x ` : ''}
-                  {option.name}
-                </span>
+                      <div className="mt-2 space-y-1">
+                        {group.options.map((option) => (
+                          <div
+                            key={`${group.id}-${option.id}`}
+                            className="flex items-center justify-between gap-3 text-sm text-gray-600 dark:text-zinc-300"
+                          >
+                            <span>
+                              {option.quantity > 1 ? `${option.quantity}x ` : ''}
+                              {option.name}
+                            </span>
 
-                {option.totalCents > 0 && (
-                  <span className="font-bold text-gray-900">
-                    + {formatMoney(option.totalCents / 100)}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )}
+                            {option.totalCents > 0 && (
+                              <span className="font-bold text-gray-900 dark:text-zinc-100">
+                                + {formatMoney(option.totalCents / 100)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {additionals.length > 0 && (
                 <div className="mt-2 space-y-1">
@@ -1941,12 +2087,12 @@ function OrderItemsList({ items }) {
                     return (
                       <p
                         key={`${getOptionName(extra)}-${extraIndex}`}
-                        className="text-xs leading-5 text-[#6b7280]"
+                        className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400"
                       >
                         <strong>Adicional:</strong>{' '}
                         {quantity > 1 ? `${quantity}x ` : ''}
                         {getOptionName(extra)}
-                        {totalExtraPrice > 0 ? ` · + ${formatMoney(totalExtraPrice)}` : ''}
+                        {totalExtraPrice > 0 ? ` Â· + ${formatMoney(totalExtraPrice)}` : ''}
                       </p>
                     )
                   })}
@@ -1954,13 +2100,13 @@ function OrderItemsList({ items }) {
               )}
 
               {(item?.observation || item?.itemObservation || item?.notes) && (
-                <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
                   Obs: {item.observation || item.itemObservation || item.notes}
                 </p>
               )}
             </div>
 
-            <p className="text-sm font-black text-[#111827]">
+            <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
               {formatMoney(getItemTotal(item))}
             </p>
           </div>
@@ -1979,34 +2125,34 @@ function FinancialSummary({ order }) {
   const total = getOrderTotal(order)
 
   return (
-    <div className="mt-4 space-y-3 text-sm">
+    <div className="space-y-3 text-sm">
       {promotionSavings > 0 ? (
         <>
           <div className="flex justify-between gap-3">
-            <span className="text-[#6b7280]">Itens sem promoção</span>
-            <span className="font-bold text-[#111827]">
+            <span className="text-[#6b7280] dark:text-zinc-400">Itens sem promoção</span>
+            <span className="font-bold text-[#111827] dark:text-zinc-100">
               {formatMoney(subtotalWithoutPromotions)}
             </span>
           </div>
 
           <div className="flex justify-between gap-3">
-            <span className="text-[#6b7280]">Economia em promoções</span>
-            <span className="font-bold text-red-600">
+            <span className="text-[#6b7280] dark:text-zinc-400">Economia em promoções</span>
+            <span className="font-bold text-red-600 dark:text-red-300">
               -{formatMoney(promotionSavings)}
             </span>
           </div>
 
           <div className="flex justify-between gap-3">
-            <span className="text-[#6b7280]">Subtotal com promoções</span>
-            <span className="font-bold text-[#111827]">
+            <span className="text-[#6b7280] dark:text-zinc-400">Subtotal com promoções</span>
+            <span className="font-bold text-[#111827] dark:text-zinc-100">
               {formatMoney(subtotal)}
             </span>
           </div>
         </>
       ) : (
         <div className="flex justify-between gap-3">
-          <span className="text-[#6b7280]">Subtotal</span>
-          <span className="font-bold text-[#111827]">
+          <span className="text-[#6b7280] dark:text-zinc-400">Subtotal</span>
+          <span className="font-bold text-[#111827] dark:text-zinc-100">
             {formatMoney(subtotal)}
           </span>
         </div>
@@ -2014,8 +2160,8 @@ function FinancialSummary({ order }) {
 
       {order?.orderType === 'delivery' && (
         <div className="flex justify-between gap-3">
-          <span className="text-[#6b7280]">Entrega</span>
-          <span className="font-bold text-[#111827]">
+          <span className="text-[#6b7280] dark:text-zinc-400">Entrega</span>
+          <span className="font-bold text-[#111827] dark:text-zinc-100">
             {formatMoney(deliveryFee)}
           </span>
         </div>
@@ -2023,19 +2169,19 @@ function FinancialSummary({ order }) {
 
       {discount > 0 && (
         <div className="flex justify-between gap-3">
-          <span className="text-[#6b7280]">
+          <span className="text-[#6b7280] dark:text-zinc-400">
             Cupom {order?.couponCode ? `(${order.couponCode})` : ''}
           </span>
 
-          <span className="font-bold text-red-600">
+          <span className="font-bold text-red-600 dark:text-red-300">
             -{formatMoney(discount)}
           </span>
         </div>
       )}
 
-      <div className="border-t border-gray-100 pt-3">
+      <div className="border-t border-gray-100 pt-3 dark:border-white/10">
         <div className="flex justify-between gap-3">
-          <span className="font-black text-[#111827]">Total</span>
+          <span className="font-black text-[#111827] dark:text-zinc-100">Total</span>
           <span className="font-black text-[#f97316]">
             {formatMoney(total)}
           </span>
@@ -2087,6 +2233,24 @@ function OrderModal({
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   const variants = isMobile ? {
     initial: { y: '100%' },
     animate: { y: 0 },
@@ -2108,16 +2272,16 @@ function OrderModal({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
     >
       <motion.div
         initial={variants.initial}
         animate={variants.animate}
         exit={variants.exit}
         transition={variants.transition}
-        className="flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-gray-100 bg-white shadow-2xl shadow-black/20 dark:border-zinc-800 dark:bg-zinc-950 sm:h-[90vh] sm:rounded-3xl"
+        className="flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-gray-100 bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5 dark:border-white/10 dark:bg-[#0f0f11] dark:shadow-black/60 dark:ring-white/[0.03] sm:h-[90vh] sm:rounded-3xl"
       >
-        <header className="shrink-0 border-b border-gray-100 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-950 animate-fade-in">
+        <header className="animate-fade-in shrink-0 border-b border-gray-100 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#111114]">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -2145,17 +2309,17 @@ function OrderModal({
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-xs font-semibold text-gray-450 dark:text-zinc-500">
-                {formatDate(order)} · {store?.name || 'Loja'} · {items.length} item{items.length === 1 ? '' : 's'}
+              <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-zinc-500">
+                {formatDate(order)} Â· {store?.name || 'Loja'} Â· {items.length} item{items.length === 1 ? '' : 's'}
               </p>
             </div>
-            <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700">
+            <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
               <FiX size={18} />
             </button>
           </div>
         </header>
 
-        <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-5 py-3 dark:border-white/10 dark:bg-[#151518]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Left: financial pills */}
             <div className="flex flex-wrap items-center gap-2">
@@ -2165,7 +2329,7 @@ function OrderModal({
               <span className="rounded-2xl bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
                 {getPaymentMethod(order)}
               </span>
-              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-zinc-400' }`}>
+              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
                 {getPaymentStatus(order)}
               </span>
             </div>
@@ -2183,11 +2347,11 @@ function OrderModal({
                 </button>
               ) : null}
               <button onClick={() => printComanda(order, store)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-black text-white transition hover:bg-black dark:bg-zinc-700 dark:hover:bg-zinc-600">
+                className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-black text-white transition hover:bg-black dark:bg-white/12 dark:text-zinc-50 dark:ring-1 dark:ring-white/10 dark:hover:bg-white/16">
                 <FiPrinter size={16}/> Comanda
               </button>
               <button onClick={() => onCopyOrder(order)}
-                className="hidden sm:inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-800 transition hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+                className="hidden items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-800 transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:bg-white/[0.08] sm:inline-flex">
                 <FiCopy size={16}/> Copiar
               </button>
             </div>
@@ -2207,12 +2371,12 @@ function OrderModal({
           )}
         </div>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-5 bg-gray-50 dark:bg-zinc-950 xl:overflow-hidden">
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-4 dark:bg-[#0b0b0d] sm:p-5 xl:overflow-hidden">
           <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[320px_1fr_280px] xl:h-full xl:overflow-hidden">
             {/* Left Column: Customer & Delivery & Payment */}
             <div className="min-h-0 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {/* Customer card */}
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
@@ -2236,7 +2400,7 @@ function OrderModal({
               </section>
 
               {/* Delivery card */}
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-center justify-between gap-3">
                   <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
                     {address.isPickup ? (
@@ -2272,7 +2436,7 @@ function OrderModal({
                       address.reference ? `Ref: ${address.reference}` : '',
                     ]
                       .filter(Boolean)
-                      .join(' · ')}
+                      .join(' Â· ')}
                   </p>
                 )}
               </section>
@@ -2290,10 +2454,10 @@ function OrderModal({
               )}
 
               {/* Payment details card */}
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-550">
+                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
                       <FiCreditCard className="text-orange-500" /> Meio de pagamento
                     </p>
                     <p className="mt-3 text-base font-black text-gray-900 dark:text-zinc-100">
@@ -2313,7 +2477,7 @@ function OrderModal({
                       </div>
                     )}
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-zinc-800 dark:text-zinc-450' }`}>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
                     {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : getPaymentMethod(order)}
                   </span>
                 </div>
@@ -2333,7 +2497,7 @@ function OrderModal({
               {isPixManualOrder(order) && (
                 <section className={`rounded-2xl border p-4 shadow-sm ${ pixPaid ? 'border-green-100 bg-green-50 dark:border-green-900 dark:bg-green-950/20' : 'border-orange-100 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20' }`}>
                   <div className="flex items-center justify-between gap-3">
-                    <p className={`text-xs font-black uppercase tracking-wider ${pixPaid ? 'text-green-800 dark:text-green-400' : 'text-orange-850 dark:text-orange-400'}`}>
+                    <p className={`text-xs font-black uppercase tracking-wider ${pixPaid ? 'text-green-800 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
                       Pix manual
                     </p>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${ pixPaid ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' }`}>
@@ -2359,12 +2523,12 @@ function OrderModal({
             </div>
 
             {/* Middle Column: Items List */}
-            <section className="flex min-h-0 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 xl:h-full xl:overflow-hidden">
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 p-4 dark:border-zinc-800">
+            <section className="flex min-h-0 flex-col rounded-[1.35rem] border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03] xl:h-full xl:overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 p-4 dark:border-white/10">
                 <p className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-zinc-100">
                   <FiShoppingBag className="text-orange-500" /> Itens do Pedido
                 </p>
-                <span className="rounded-full bg-gray-50 px-2.5 py-1 text-xs font-black text-gray-500 dark:bg-zinc-800 dark:text-zinc-400">
+                <span className="rounded-full bg-gray-50 px-2.5 py-1 text-xs font-black text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400">
                   {items.length} item{items.length === 1 ? '' : 's'}
                 </span>
               </div>
@@ -2376,10 +2540,10 @@ function OrderModal({
             {/* Right Column: Status & Resumo Financeiro & Forçar Alteração */}
             <aside className="min-h-0 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:h-full xl:overflow-hidden">
               {/* Status card */}
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-center gap-2">
                   <div className={`h-2.5 w-2.5 rounded-full ${meta.dotClass}`} />
-                  <p className="text-xs font-black uppercase tracking-wider text-gray-450 dark:text-zinc-500">
+                  <p className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-500">
                     Status atual
                   </p>
                 </div>
@@ -2392,17 +2556,17 @@ function OrderModal({
               </section>
 
               {/* Resumo Financeiro */}
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-black uppercase tracking-wider text-gray-450 dark:text-zinc-400 mb-3">
+              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+                <p className="mb-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                   Resumo financeiro
                 </p>
                 <FinancialSummary order={order} />
               </section>
 
               {/* Forçar alteração */}
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wider text-gray-455 dark:text-zinc-400">
+                  <p className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                     Forçar alteração
                   </p>
                   <p className="mt-0.5 text-[11px] font-semibold leading-4 text-gray-400 dark:text-zinc-500">
@@ -2431,7 +2595,7 @@ function OrderModal({
                         className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
                           active
                             ? optionMeta.buttonClass
-                            : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                            : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-white/[0.06] dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
                         }`}
                       >
                         <Icon size={14} />
@@ -2524,9 +2688,12 @@ export default function OrdersPage() {
 
     try {
       setStoreActionLoading(true)
-      await updateDoc(doc(db, 'stores', storeDocId), {
-        isOpen: nextStatus,
-        updatedAt: Timestamp.now(),
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId: storeDocId,
+        payload: {
+          isOpen: nextStatus,
+        },
       })
       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
     } catch (error) {
@@ -2611,22 +2778,8 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       }
     }
 
-    const now = Timestamp.now()
-    const statusField = getStatusField(nextStatus)
-
-    const paymentPatch =
-      nextStatus === 'entregue'
-        ? {
-            'payment.status': 'paid',
-            'payment.confirmedAt': now,
-            'payment.paidAt': now,
-            'payment.confirmedBy': user?.uid || null,
-            paymentStatus: 'paid',
-            paidAt: now,
-          }
-        : {}
-
-    let notificationPatch = {}
+    let shouldNotifyCustomer = false
+    let whatsappUrl = ''
 
     if (['preparando', 'em_rota', 'entregue', 'cancelado'].includes(nextStatus)) {
       const phone = normalizePhoneForWhatsApp(getCustomerPhone(order))
@@ -2643,6 +2796,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         )
 
         if (shouldNotify) {
+          shouldNotifyCustomer = true
           const orderWithNewStatus = {
             ...order,
             status: nextStatus,
@@ -2650,58 +2804,58 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
           }
 
           const message = buildWhatsAppMessage(orderWithNewStatus, selectedStore)
-          const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-
-          const openedWindow = window.open(
-            whatsappUrl,
-            '_blank',
-            'noopener,noreferrer'
-          )
-
-          if (!openedWindow) {
-            showToast(
-              'error',
-              'O navegador bloqueou o WhatsApp. Permita pop-ups para o PratoBy.'
-            )
-          }
-
-          const notifiedAt = Timestamp.now()
-
-          notificationPatch = {
-            customerLastNotifiedAt: notifiedAt,
-            customerLastNotifiedStatus: nextStatus,
-            ...(nextStatus === 'preparando'
-              ? {
-                  customerConfirmationMessageSentAt: notifiedAt,
-                  customerConfirmationMessageSentBy: user?.uid || null,
-                }
-              : {}),
-          }
+          whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
         }
       }
+    }
+
+    const pendingWhatsAppWindow = shouldNotifyCustomer && whatsappUrl
+      ? window.open('about:blank', '_blank')
+      : null
+
+    if (pendingWhatsAppWindow) {
+      pendingWhatsAppWindow.opener = null
     }
 
     try {
       setUpdatingStatus(order.id)
 
-      await updateDoc(doc(db, 'orders', order.id), {
+      const updateMerchantOrder = httpsCallable(functions, 'updateMerchantOrder')
+      await updateMerchantOrder({
+        orderId: order.id,
+        action: 'updateStatus',
         status: nextStatus,
-        updatedAt: now,
-      
-        statusUpdatedBy: user?.uid || null,
-        statusUpdatedAt: now,
-        statusUpdatedFrom: currentStatus,
-        statusUpdatedTo: nextStatus,
-      
-        ...(statusField ? { [statusField]: now } : {}),
-        ...paymentPatch,
-        ...cancellationPatch,
-        ...notificationPatch,
+        cancellationReason: cancellationPatch.cancellationReason || undefined,
       })
 
       const statusLabel = STATUS_META[nextStatus]?.label || 'Atualizado'
 
       showToast('success', `Pedido atualizado para "${statusLabel}".`)
+
+      if (shouldNotifyCustomer && whatsappUrl) {
+        if (pendingWhatsAppWindow) {
+          pendingWhatsAppWindow.location.href = whatsappUrl
+        }
+
+        const openedWindow = pendingWhatsAppWindow || window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+
+        if (!openedWindow) {
+          showToast(
+            'error',
+            'O navegador bloqueou o WhatsApp. Permita pop-ups para o PratoBy.'
+          )
+        } else {
+          try {
+            await updateMerchantOrder({
+              orderId: order.id,
+              action: 'markCustomerNotified',
+              status: nextStatus,
+            })
+          } catch (notificationError) {
+            console.warn('Pedido atualizado, mas o aviso ao cliente não foi marcado:', notificationError)
+          }
+        }
+      }
 
       if (nextStatus === 'preparando') {
         setTimeout(() => {
@@ -2716,6 +2870,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         }, 500)
       }
     } catch (error) {
+      if (pendingWhatsAppWindow && !pendingWhatsAppWindow.closed) {
+        pendingWhatsAppWindow.close()
+      }
       console.error(error)
       showToast('error', 'Erro ao atualizar o status do pedido.')
     } finally {
@@ -2768,6 +2925,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     try {
       setUpdatingStatus(order.id)
 
+      const updateMerchantOrder = httpsCallable(functions, 'updateMerchantOrder')
       const nextOrder = {
         ...order,
         status: shouldStartPreparing ? 'preparando' : order.status,
@@ -2785,31 +2943,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         paidAt: now,
       }
 
-      await updateDoc(doc(db, 'orders', order.id), {
-        updatedAt: now,
-      
-        statusUpdatedBy: user?.uid || null,
-        statusUpdatedAt: now,
-        statusUpdatedFrom: currentStatus,
-        statusUpdatedTo: shouldStartPreparing ? 'preparando' : currentStatus,
-      
-        'payment.method': getPaymentMethodId(order) || 'pix_manual',
-        'payment.status': 'paid',
-        'payment.paidAt': now,
-        'payment.confirmedAt': now,
-        'payment.confirmedBy': user?.uid || null,
-        'payment.requiresConfirmation': false,
-      
-        paymentStatus: 'paid',
-        paymentRequiresConfirmation: false,
-        paidAt: now,
-      
-        ...(shouldStartPreparing
-          ? {
-              status: 'preparando',
-              preparingAt: now,
-            }
-          : {}),
+      await updateMerchantOrder({
+        orderId: order.id,
+        action: 'confirmPixPayment',
       })
 
       showToast(
@@ -2841,15 +2977,15 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             'noopener,noreferrer'
           )
 
-          const notifiedAt = Timestamp.now()
-
-          await updateDoc(doc(db, 'orders', order.id), {
-            customerLastNotifiedAt: notifiedAt,
-            customerLastNotifiedStatus: 'preparando',
-            customerConfirmationMessageSentAt: notifiedAt,
-            customerConfirmationMessageSentBy: user?.uid || null,
-            updatedAt: notifiedAt,
-          })
+          try {
+            await updateMerchantOrder({
+              orderId: order.id,
+              action: 'markCustomerNotified',
+              status: 'preparando',
+            })
+          } catch (notificationError) {
+            console.warn('Pix confirmado, mas o aviso ao cliente não foi marcado:', notificationError)
+          }
         }
       }
     } catch (error) {
@@ -2884,12 +3020,10 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         'noopener,noreferrer'
       )
 
-      const now = Timestamp.now()
-
-      await updateDoc(doc(db, 'orders', order.id), {
-        storeThankedCustomerAt: now,
-        storeThankedCustomerBy: user?.uid || null,
-        updatedAt: now,
+      const updateMerchantOrder = httpsCallable(functions, 'updateMerchantOrder')
+      await updateMerchantOrder({
+        orderId: order.id,
+        action: 'markCustomerThanked',
       })
 
       showToast('success', 'Mensagem de agradecimento aberta no WhatsApp.')
@@ -3300,7 +3434,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               <select
                 value={selectedStoreId}
                 onChange={(event) => handleSelectStore(event.target.value)}
-                className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-orange-500/10"
               >
                 {stores.map((store) => (
                   <option key={store.id} value={getStoreKeys(store)[0] || store.id}>
@@ -3356,7 +3490,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             {[1, 2, 3, 4].map((item) => (
               <div
                 key={item}
-                className="h-28 animate-pulse rounded-[1.5rem] bg-white"
+                className="h-28 animate-pulse rounded-[1.5rem] bg-white dark:bg-zinc-900"
               />
             ))}
           </div>
@@ -3420,7 +3554,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             </div>
 
             {summary.latePendingCount > 0 && (
-  <div className="mb-6 rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-red-700 shadow-lg shadow-red-100/70">
+  <div className="mb-6 rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-red-700 shadow-lg shadow-red-100/70 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200 dark:shadow-red-950/20">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white">
@@ -3434,7 +3568,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             {summary.latePendingCount > 1 ? 's' : ''} há mais de 3 minutos
           </p>
 
-          <p className="mt-1 text-xs font-bold leading-5 text-red-600">
+          <p className="mt-1 text-xs font-bold leading-5 text-red-600 dark:text-red-300">
             Priorize esses pedidos para não deixar o cliente esperando sem confirmação.
           </p>
         </div>
@@ -3493,22 +3627,22 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               />
             </div>
 
-            <div className="mb-5 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="mb-5 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="relative flex-1">
-                  <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280]" />
+                  <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280] dark:text-zinc-500" />
 
                   <input
                     type="text"
                     placeholder="Buscar por cliente, telefone, endereço, produto, opção ou código..."
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] pl-12 pr-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] pl-12 pr-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:ring-orange-500/10"
                   />
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
-                  <span className="hidden items-center gap-2 text-sm font-black text-[#6b7280] xl:flex">
+                  <span className="hidden items-center gap-2 text-sm font-black text-[#6b7280] dark:text-zinc-400 xl:flex">
                     <FiFilter />
                     Filtros
                   </span>
@@ -3521,7 +3655,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                       className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black transition ${
                         statusFilter === tab.key
                           ? 'bg-[#f97316] text-white shadow-sm'
-                          : 'bg-gray-50 text-[#6b7280] hover:bg-orange-50 hover:text-[#f97316]'
+                          : 'bg-gray-50 text-[#6b7280] hover:bg-orange-50 hover:text-[#f97316] dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-orange-500/10 dark:hover:text-orange-300'
                       }`}
                     >
                       {tab.label}
@@ -3530,7 +3664,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                         className={`rounded-full px-2 py-0.5 text-xs ${
                           statusFilter === tab.key
                             ? 'bg-white/20 text-white'
-                            : 'bg-white text-[#6b7280]'
+                            : 'bg-white text-[#6b7280] dark:bg-zinc-900 dark:text-zinc-400'
                         }`}
                       >
                         {statusCounts[tab.key] || 0}
@@ -3541,7 +3675,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               </div>
             </div>
 
-            <div className="hidden rounded-[1.5rem] border border-gray-100 bg-white px-4 py-3 text-xs font-black uppercase tracking-wide text-[#6b7280] shadow-sm lg:grid lg:grid-cols-[100px_1fr_160px_150px_180px_auto] lg:gap-4">
+            <div className="hidden rounded-[1.5rem] border border-gray-100 bg-white px-4 py-3 text-xs font-black uppercase tracking-wide text-[#6b7280] shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 lg:grid lg:grid-cols-[100px_1fr_160px_150px_180px_auto] lg:gap-4">
               <div>ID</div>
               <div>Cliente e itens</div>
               <div>Status</div>
@@ -3555,7 +3689,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                 [1, 2, 3, 4, 5].map((item) => (
                   <div
                     key={item}
-                    className="h-28 animate-pulse rounded-[1.5rem] bg-white"
+                    className="h-28 animate-pulse rounded-[1.5rem] bg-white dark:bg-zinc-900"
                   />
                 ))
               ) : filteredOrders.length === 0 ? (
@@ -3575,6 +3709,8 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     order={order}
                     onOpen={(nextOrder) => setSelectedOrderId(nextOrder.id)}
                     onQuickStatus={handleUpdateStatus}
+                    onOpenWhatsApp={handleOpenWhatsApp}
+                    onCopyOrder={handleCopyOrder}
                     updatingStatus={updatingStatus}
                   />
                 ))
@@ -3607,4 +3743,3 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     </main>
   )
 }
-

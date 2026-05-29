@@ -17,6 +17,16 @@ const {
   validateBrazilianMobilePhone,
 } = require('./shared/phone')
 
+const {
+  BREVO_API_KEY,
+  BREVO_TEMPLATES,
+  sendBrevoTransactionalEmail,
+  firstNameFrom,
+  formatDatePtBr,
+  getPublicAppBaseUrl,
+  getSupportWhatsappUrl,
+} = require('./brevo')
+
 const { setGlobalOptions } = require('firebase-functions/v2')
 
 setGlobalOptions({
@@ -39,6 +49,18 @@ const merchantOrderFunctions = createMerchantOrderFunctions({ db, admin, HttpsEr
 
 if (!ENFORCE_APP_CHECK && process.env.FUNCTIONS_EMULATOR !== 'true') {
   logger.warn('[appCheck] Public callables are running without App Check enforcement. Use monitor mode first, then set ENFORCE_APP_CHECK=true after validating public store, coupon and order flows.')
+}
+
+if (process.env.FUNCTIONS_EMULATOR !== 'true') {
+  if (!BREVO_TEMPLATES.trialEnding.id) {
+    logger.warn('[brevo] BREVO_TRIAL_ENDING_TEMPLATE_ID is not configured; trial ending emails will be skipped.')
+  }
+  if (!BREVO_TEMPLATES.weeklyReport.id) {
+    logger.warn('[brevo] BREVO_WEEKLY_REPORT_TEMPLATE_ID is not configured; weekly performance emails will be skipped.')
+  }
+  if (!process.env.SUPPORT_WHATSAPP_URL) {
+    logger.warn('[brevo] SUPPORT_WHATSAPP_URL is not configured; support WhatsApp links will be omitted from transactional email params.')
+  }
 }
 
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
@@ -768,15 +790,15 @@ function getChangedFields(beforeData, afterData, fields) {
       const beforeValue = field
         .split('.')
         .reduce((acc, key) => acc?.[key], beforeData)
-  
+
       const afterValue = field
         .split('.')
         .reduce((acc, key) => acc?.[key], afterData)
-  
+
       return JSON.stringify(beforeValue ?? null) !== JSON.stringify(afterValue ?? null)
     })
   }
-  
+
   function pickActorUid(beforeData, afterData) {
     return (
       afterData.statusUpdatedBy ||
@@ -789,7 +811,7 @@ function getChangedFields(beforeData, afterData, fields) {
       null
     )
   }
-  
+
   async function createAuditLog(data) {
     await db.collection('auditLogs').add({
       ...data,
@@ -1347,7 +1369,7 @@ exports.auditOrderChanges = onDocumentUpdated(
       const beforeData = event.data?.before?.data() || {}
       const afterData = event.data?.after?.data() || {}
       const productId = event.params.productId
-  
+
       const changedFields = getChangedFields(beforeData, afterData, [
         'price',
         'priceCents',
@@ -1357,9 +1379,9 @@ exports.auditOrderChanges = onDocumentUpdated(
         'isVisible',
         'deletedAt',
       ])
-  
+
       if (!changedFields.length) return
-  
+
       await createAuditLog({
         action: changedFields.includes('price') || changedFields.includes('priceCents')
           ? 'product_price_changed'
@@ -1667,10 +1689,10 @@ exports.startFreeTrial = onCall({ region: 'southamerica-east1' }, async (request
 
     const storeName = userData.signup?.storeName || 'Minha Loja'
     const baseSlug = normalizeText(storeName).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'loja'
-    
+
     let finalSlug = null
     let candidateSlug = baseSlug
-    
+
     for (let i = 0; i < 5; i++) {
       const claimRef = db.collection('storeSlugClaims').doc(candidateSlug)
       const claimDoc = await transaction.get(claimRef)
@@ -1939,11 +1961,11 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
     } catch (cleanupError) {
       logger.error(`Failed to cleanup Auth user ${merchantUid}:`, cleanupError)
     }
-    
+
     if (error instanceof HttpsError) {
       throw error
     }
-    
+
     logger.error('Error in adminCreateStore:', error)
     throw new HttpsError('internal', 'Erro interno ao criar loja e usuário.')
   }
@@ -2553,10 +2575,389 @@ exports.aggregateStorePresence = onValueWritten(
     const activeCount = Object.values(presence).filter((session) => {
       return session && typeof session === 'object' && session.online === true
     }).length
+    const calculatedAt = Date.now()
 
-    await admin.database().ref(`presenceCounts/${storeId}`).set({
-      activeCount,
-      updatedAt: admin.database.ServerValue.TIMESTAMP,
+    await admin.database().ref(`presenceCounts/${storeId}`).transaction((current) => {
+      const currentUpdatedAt = Number(current?.updatedAt || 0)
+      if (currentUpdatedAt > calculatedAt) return
+
+      return {
+        activeCount,
+        updatedAt: calculatedAt,
+      }
     })
+  }
+)
+
+function safeDocId(value) {
+  return String(value || '').replace(/\//g, '_')
+}
+
+exports.sendWelcomeEmailOnUserCreate = onDocumentCreated(
+  {
+    document: 'users/{uid}',
+    region: 'southamerica-east1',
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    secrets: [BREVO_API_KEY],
+  },
+  async (event) => {
+    const userData = event.data.data()
+    const uid = event.params.uid
+
+    if (userData.role !== 'merchant' || !userData.email) return
+    const isAnonymousAuth = userData.provider === 'anonymous' || !userData.email
+    if (isAnonymousAuth) return
+
+    const logId = `welcome_${safeDocId(uid)}`
+    const logRef = db.collection('notificationLogs').doc(logId)
+
+    const result = await db.runTransaction(async (transaction) => {
+      const logDoc = await transaction.get(logRef)
+      if (logDoc.exists) {
+        const data = logDoc.data()
+        if (data.status === 'sent') return { proceed: false }
+        if (data.status === 'sending') {
+          const updatedMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : Date.now()
+          if (Date.now() - updatedMs < 15 * 60 * 1000) return { proceed: false }
+        }
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp()
+      transaction.set(logRef, {
+        type: 'welcome',
+        provider: 'brevo',
+        templateId: BREVO_TEMPLATES.welcome.id,
+        tag: BREVO_TEMPLATES.welcome.tag,
+        uid,
+        email: userData.email,
+        status: 'sending',
+        createdAt: logDoc.exists ? logDoc.data().createdAt : now,
+        updatedAt: now,
+      }, { merge: true })
+
+      return { proceed: true }
+    })
+
+    if (!result.proceed) return
+
+    try {
+      const appBaseUrl = getPublicAppBaseUrl()
+      const params = {
+        firstName: firstNameFrom(userData.displayName || userData.signup?.storeName || userData.email),
+        storeName: userData.signup?.storeName || 'sua loja',
+        onboardingUrl: `${appBaseUrl}/dashboard/billing`,
+        supportWhatsappUrl: getSupportWhatsappUrl(),
+      }
+
+      const brevoResponse = await sendBrevoTransactionalEmail({
+        to: userData.email,
+        name: userData.displayName || undefined,
+        templateId: BREVO_TEMPLATES.welcome.id,
+        params,
+        tags: [BREVO_TEMPLATES.welcome.tag],
+        idempotencyKey: logId,
+      })
+
+      await logRef.set({
+        status: 'sent',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        brevoMessageId: brevoResponse?.messageId || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true })
+    } catch (error) {
+      logger.error('Failed to send welcome email', { uid, error: error.message })
+      await logRef.set({
+        status: 'failed',
+        error: error.message,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true })
+    }
+  }
+)
+
+exports.sendTrialEndingAlerts = onSchedule(
+  {
+    schedule: 'every day 09:00',
+    timeZone: 'America/Sao_Paulo',
+    region: 'southamerica-east1',
+    secrets: [BREVO_API_KEY],
+  },
+  async () => {
+    const templateId = BREVO_TEMPLATES.trialEnding.id
+    if (!templateId) {
+      logger.warn('Skipping sendTrialEndingAlerts because BREVO_TRIAL_ENDING_TEMPLATE_ID is not configured.')
+      return
+    }
+
+    const storesSnapshot = await db.collection('stores')
+      .where('subscriptionStatus', '==', 'trialing')
+      .get()
+
+    if (storesSnapshot.empty) return
+
+    const now = new Date()
+    const spNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+
+    const appBaseUrl = getPublicAppBaseUrl()
+    const supportWhatsappUrl = getSupportWhatsappUrl()
+
+    for (const doc of storesSnapshot.docs) {
+      const storeData = doc.data()
+      if (!storeData.trialEndsAt) continue
+
+      const trialEndsAtDate = typeof storeData.trialEndsAt.toDate === 'function' ? storeData.trialEndsAt.toDate() : new Date(storeData.trialEndsAt)
+      if (Number.isNaN(trialEndsAtDate.getTime())) continue
+
+      const spTrialEndsAt = new Date(trialEndsAtDate.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+
+      // Fix date differences properly without time parts
+      const normalizeDateToStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      const spNowStart = normalizeDateToStartOfDay(spNow)
+      const spTrialEndsStart = normalizeDateToStartOfDay(spTrialEndsAt)
+
+      const diffMs = spTrialEndsStart.getTime() - spNowStart.getTime()
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+      if (diffDays !== 3 && diffDays !== 1) continue
+
+      const storeId = doc.id
+      const uid = storeData.ownerUid || storeData.ownerId
+      if (!uid) continue
+
+      const userDoc = await db.collection('users').doc(uid).get()
+      if (!userDoc.exists) continue
+
+      const userData = userDoc.data()
+      const email = userData.email
+      if (!email) {
+        logger.info(`Skipping trial ending email for store ${storeId}: missing email.`)
+        continue
+      }
+
+      const logId = `trial_ending_${safeDocId(storeId)}_${diffDays}`
+      const logRef = db.collection('notificationLogs').doc(logId)
+
+      const result = await db.runTransaction(async (transaction) => {
+        const logDoc = await transaction.get(logRef)
+        if (logDoc.exists && ['sent', 'sending'].includes(logDoc.data().status)) {
+          return { proceed: false }
+        }
+
+        const nowTs = admin.firestore.FieldValue.serverTimestamp()
+        transaction.set(logRef, {
+          type: 'trial_ending',
+          provider: 'brevo',
+          templateId,
+          tag: BREVO_TEMPLATES.trialEnding.tag,
+          uid,
+          storeId,
+          email,
+          status: 'sending',
+          createdAt: logDoc.exists ? logDoc.data().createdAt : nowTs,
+          updatedAt: nowTs,
+        }, { merge: true })
+
+        return { proceed: true }
+      })
+
+      if (!result.proceed) continue
+
+      try {
+        const params = {
+          firstName: firstNameFrom(userData.displayName || userData.signup?.storeName || email),
+          storeName: storeData.storeName || userData.signup?.storeName || 'sua loja',
+          daysLeftText: diffDays === 1 ? '1 dia' : `${diffDays} dias`,
+          trialEndsAt: formatDatePtBr(trialEndsAtDate),
+          planName: storeData.plan === 'premium' ? 'Premium' : storeData.plan === 'professional' ? 'Profissional' : 'Essencial',
+          billingUrl: `${appBaseUrl}/dashboard/billing`,
+          supportWhatsappUrl,
+        }
+
+        const brevoResponse = await sendBrevoTransactionalEmail({
+          to: email,
+          name: userData.displayName || undefined,
+          templateId,
+          params,
+          tags: [BREVO_TEMPLATES.trialEnding.tag],
+          idempotencyKey: logId,
+        })
+
+        await logRef.set({
+          status: 'sent',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          brevoMessageId: brevoResponse?.messageId || null,
+        }, { merge: true })
+      } catch (error) {
+        logger.error('Failed to send trial ending email', { storeId, diffDays, error: error.message })
+        await logRef.set({
+          status: 'failed',
+          error: error.message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true })
+      }
+    }
+  }
+)
+
+exports.sendWeeklyPerformanceReports = onSchedule(
+  {
+    schedule: 'every monday 08:00',
+    timeZone: 'America/Sao_Paulo',
+    region: 'southamerica-east1',
+    secrets: [BREVO_API_KEY],
+  },
+  async () => {
+    const templateId = BREVO_TEMPLATES.weeklyReport.id
+    if (!templateId) {
+      logger.warn('Skipping sendWeeklyPerformanceReports because BREVO_WEEKLY_REPORT_TEMPLATE_ID is not configured.')
+      return
+    }
+
+    const COMMISSION_REFERENCE_PERCENT = 12
+
+    const storesSnapshot = await db.collection('stores')
+      .where('subscriptionStatus', 'in', ['trialing', 'active'])
+      .get()
+
+    if (storesSnapshot.empty) return
+
+    const now = new Date()
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const yyyy_mm_dd = now.toISOString().split('T')[0]
+
+    const appBaseUrl = getPublicAppBaseUrl()
+    const supportWhatsappUrl = getSupportWhatsappUrl()
+
+    for (const doc of storesSnapshot.docs) {
+      const storeData = doc.data()
+      if (storeData.isDeleted || storeData.isBlocked || storeData.isBillingBlocked) continue
+
+      const storeId = doc.id
+      const uid = storeData.ownerUid || storeData.ownerId
+      if (!uid) continue
+
+      const userDoc = await db.collection('users').doc(uid).get()
+      if (!userDoc.exists) continue
+
+      const userData = userDoc.data()
+      const email = userData.email
+      if (!email) continue
+
+      const logId = `weekly_report_${safeDocId(storeId)}_${yyyy_mm_dd}`
+      const logRef = db.collection('notificationLogs').doc(logId)
+
+      const result = await db.runTransaction(async (transaction) => {
+        const logDoc = await transaction.get(logRef)
+        if (logDoc.exists && ['sent', 'sending'].includes(logDoc.data().status)) {
+          return { proceed: false }
+        }
+
+        const nowTs = admin.firestore.FieldValue.serverTimestamp()
+        transaction.set(logRef, {
+          type: 'weekly_report',
+          provider: 'brevo',
+          templateId,
+          tag: BREVO_TEMPLATES.weeklyReport.tag,
+          uid,
+          storeId,
+          email,
+          status: 'sending',
+          createdAt: logDoc.exists ? logDoc.data().createdAt : nowTs,
+          updatedAt: nowTs,
+        }, { merge: true })
+
+        return { proceed: true }
+      })
+
+      if (!result.proceed) continue
+
+      try {
+        const ordersSnapshot = await db.collection('orders')
+          .where('storeId', '==', storeId)
+          .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(oneWeekAgo))
+          .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(now))
+          .orderBy('createdAt', 'desc')
+          .limit(1000)
+          .get()
+
+        let totalOrders = 0
+        let grossRevenueCents = 0
+        let itemsMap = {}
+        let phonesSet = new Set()
+
+        ordersSnapshot.docs.forEach(orderDoc => {
+          const order = orderDoc.data()
+          if (['canceled', 'cancelado'].includes(String(order.status).toLowerCase())) return
+
+          totalOrders++
+          grossRevenueCents += Number(order.totalCents || 0)
+
+          if (order.customerPhone) phonesSet.add(order.customerPhone)
+
+          if (Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              const name = item.name || 'Produto'
+              const qty = Number(item.quantity || 1)
+              itemsMap[name] = (itemsMap[name] || 0) + qty
+            })
+          }
+        })
+
+        const averageTicketCents = totalOrders > 0 ? Math.round(grossRevenueCents / totalOrders) : 0
+        // Estimativa de economia em comparação com marketplaces (12%)
+        const commissionSavedCents = Math.round(grossRevenueCents * (COMMISSION_REFERENCE_PERCENT / 100))
+
+        let topProduct = 'Nenhum'
+        let maxQty = 0
+        for (const [name, qty] of Object.entries(itemsMap)) {
+          if (qty > maxQty) {
+            maxQty = qty
+            topProduct = name
+          }
+        }
+
+        const formatCurrency = (cents) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
+
+        const params = {
+          firstName: firstNameFrom(userData.displayName || userData.signup?.storeName || email),
+          storeName: storeData.storeName || userData.signup?.storeName || 'sua loja',
+          weekStart: formatDatePtBr(oneWeekAgo),
+          weekEnd: formatDatePtBr(now),
+          totalOrders,
+          grossRevenue: formatCurrency(grossRevenueCents),
+          averageTicket: formatCurrency(averageTicketCents),
+          commissionSaved: formatCurrency(commissionSavedCents),
+          topProduct,
+          newCustomers: phonesSet.size,
+          dashboardUrl: `${appBaseUrl}/dashboard`,
+          supportWhatsappUrl,
+        }
+
+        const brevoResponse = await sendBrevoTransactionalEmail({
+          to: email,
+          name: userData.displayName || undefined,
+          templateId,
+          params,
+          tags: [BREVO_TEMPLATES.weeklyReport.tag],
+          idempotencyKey: logId,
+        })
+
+        await logRef.set({
+          status: 'sent',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          brevoMessageId: brevoResponse?.messageId || null,
+        }, { merge: true })
+      } catch (error) {
+        logger.error('Failed to send weekly report email', { storeId, error: error.message })
+        await logRef.set({
+          status: 'failed',
+          error: error.message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true })
+      }
+    }
   }
 )

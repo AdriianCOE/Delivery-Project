@@ -2,7 +2,7 @@
   "id": "/",
   "name": "PratoBy",
   "short_name": "PratoBy",
-  "description": "Cardápio digital e delivery sem comissão por pedido.",
+  "description": "Cardápio digital sem comissão por pedido.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

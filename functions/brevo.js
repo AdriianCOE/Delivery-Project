@@ -11,6 +11,14 @@ const BREVO_TEMPLATES = {
     id: 1,
     tag: 'trial_started',
   },
+  weeklyReport: {
+    id: process.env.BREVO_WEEKLY_REPORT_TEMPLATE_ID ? Number(process.env.BREVO_WEEKLY_REPORT_TEMPLATE_ID) : null,
+    tag: 'weekly_report',
+  },
+  trialEnding: {
+    id: process.env.BREVO_TRIAL_ENDING_TEMPLATE_ID ? Number(process.env.BREVO_TRIAL_ENDING_TEMPLATE_ID) : null,
+    tag: 'trial_ending_alert',
+  },
 }
 
 function getSecretValue(secret, envName) {
@@ -101,10 +109,32 @@ function formatDatePtBr(value) {
   }).format(date)
 }
 
+function safeEmail(value) {
+  const email = String(value || '').trim().toLowerCase()
+  if (!email || !/\S+@\S+\.\S+/.test(email)) return null
+  return email
+}
+
+function getPublicAppBaseUrl() {
+  return String(
+    process.env.PUBLIC_APP_URL ||
+      process.env.APP_BASE_URL ||
+      process.env.FRONTEND_BASE_URL ||
+      'https://pratoby.com'
+  ).replace(/\/+$/, '')
+}
+
+function getSupportWhatsappUrl() {
+  return String(process.env.SUPPORT_WHATSAPP_URL || '').trim()
+}
+
 module.exports = {
   BREVO_API_KEY,
   BREVO_TEMPLATES,
   sendBrevoTransactionalEmail,
   firstNameFrom,
   formatDatePtBr,
+  safeEmail,
+  getPublicAppBaseUrl,
+  getSupportWhatsappUrl,
 }

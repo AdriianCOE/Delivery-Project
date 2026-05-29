@@ -43,7 +43,7 @@ function formatDateTime(value) {
 
 // Analisa a vigência do cupom em tempo real
 function getCouponVigencyStatus(coupon) {
-  if (!coupon.active) return { code: 'inactive', label: 'Inativo', color: 'bg-gray-100 text-gray-600' }
+  if (!coupon.active) return { code: 'inactive', label: 'Inativo', color: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 border' }
   
   const now = new Date()
   let start = null
@@ -57,12 +57,12 @@ function getCouponVigencyStatus(coupon) {
   else if (coupon.expiresAt) expire = new Date(coupon.expiresAt)
 
   if (start && now < start) {
-    return { code: 'scheduled', label: 'Agendado', color: 'bg-blue-50 text-blue-600 border border-blue-100' }
+    return { code: 'scheduled', label: 'Agendado', color: 'bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' }
   }
   if (expire && now > expire) {
-    return { code: 'expired', label: 'Expirado', color: 'bg-red-50 text-red-600 border border-red-100' }
+    return { code: 'expired', label: 'Expirado', color: 'bg-red-50 text-red-600 border border-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' }
   }
-  return { code: 'valid', label: 'Vigente', color: 'bg-emerald-50 text-emerald-700 border border-emerald-100' }
+  return { code: 'valid', label: 'Ativo', color: 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' }
 }
 
 /**
@@ -95,12 +95,12 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
   }, [coupons, search, filter])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Top Filter and Search Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-[2rem] border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm transition-all sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
         <div className="relative w-full sm:max-w-md sm:flex-1">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500">
             <FiSearch size={16} />
           </span>
           <input
@@ -108,23 +108,23 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código ou descrição..."
-            className="h-11 w-full rounded-2xl border border-gray-100 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none shadow-sm transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100/50"
+            className="h-11 md:h-10 w-full rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 pl-11 pr-4 text-sm font-bold text-[#111827] dark:text-slate-50 outline-none transition-all duration-200 focus:border-[#f97316] dark:focus:border-[#f97316] focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-900/30 placeholder-slate-400"
           />
         </div>
 
         {/* Buttons / Actions */}
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           {/* Status Selectors */}
-          <div className="grid grid-cols-3 rounded-xl bg-gray-50 p-1 sm:flex">
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-50 dark:bg-slate-800 p-1 sm:flex shrink-0">
             {COUPON_STATUS_FILTERS.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setFilter(s.id)}
-                className={`rounded-lg px-3 py-2 text-xs font-black transition sm:py-1.5 ${
+                className={`rounded-lg px-3.5 py-2 text-xs font-black transition-all duration-200 active:scale-95 sm:py-1.5 ${
                   filter === s.id
-                    ? 'bg-white text-[#f97316] shadow-sm'
-                    : 'text-[#6b7280] hover:text-[#111827]'
+                    ? 'bg-white dark:bg-slate-700 text-[#f97316] shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-[#111827] dark:hover:text-slate-50'
                 }`}
               >
                 {s.label}
@@ -136,7 +136,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
           <button
             type="button"
             onClick={onCreateCoupon}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c] sm:w-auto"
+            className="inline-flex h-11 md:h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#f97316] to-[#ea580c] px-4 text-sm md:text-xs font-black text-white shadow-md shadow-orange-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-orange-500/40 active:translate-y-0 active:scale-95 sm:w-auto shrink-0"
           >
             <FiPlus size={15} /> Novo cupom
           </button>
@@ -156,17 +156,18 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                     layout
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm space-y-4 transition hover:shadow-md hover:border-orange-100"
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="group rounded-3xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm space-y-4 transition-all hover:shadow-md hover:border-orange-100 dark:hover:border-slate-700"
                   >
                     {/* Header: Code & Active Switch */}
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-[#f97316]">
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 dark:bg-orange-500/10 text-[#f97316]">
                           <FiTag size={16} />
                         </div>
                         <div>
-                          <p className="text-sm font-black text-[#111827] tracking-wider">{coupon.code}</p>
+                          <p className="text-base font-black text-[#111827] dark:text-slate-50 tracking-wider">{coupon.code}</p>
                           <span className={`inline-block rounded-full px-2 py-0.5 mt-0.5 text-[10px] font-black ${status.color}`}>
                             {status.label}
                           </span>
@@ -179,17 +180,17 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                           type="checkbox"
                           checked={Boolean(coupon.active)}
                           onChange={() => onToggleActive(coupon.id, coupon.active !== false)}
-                          className="sr-only"
+                          className="peer sr-only"
                           id={`toggle-mob-${coupon.id}`}
                         />
                         <label
                           htmlFor={`toggle-mob-${coupon.id}`}
-                          className={`block h-6 w-11 cursor-pointer rounded-full transition-colors ${
-                            coupon.active ? 'bg-[#f97316]' : 'bg-gray-300'
+                          className={`block h-6 w-11 cursor-pointer rounded-full transition-colors duration-300 ${
+                            coupon.active ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-700 shadow-inner'
                           }`}
                         >
                           <span
-                            className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                            className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
                               coupon.active ? 'translate-x-5' : 'translate-x-0'
                             }`}
                           />
@@ -199,76 +200,76 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
 
                     {/* Description */}
                     {coupon.description && (
-                      <p className="text-xs font-bold text-gray-500 bg-gray-50/50 rounded-2xl p-3 border border-gray-50">
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-gray-50/50 dark:bg-slate-800/30 rounded-2xl p-3 border border-gray-50 dark:border-slate-800/50">
                         {coupon.description}
                       </p>
                     )}
 
                     {/* Promo Values */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="grid grid-cols-2 gap-4 text-xs">
                       <div>
-                        <p className="font-bold text-gray-400 uppercase tracking-wide text-[9px]">Desconto</p>
-                        <p className="font-black text-gray-800 text-sm mt-0.5">
+                        <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Desconto</p>
+                        <p className="font-black text-[#111827] dark:text-slate-50 text-sm mt-0.5">
                           {coupon.type === 'percent' ? `${coupon.value}%` : formatMoney(coupon.value)}
                         </p>
                       </div>
                       <div>
-                        <p className="font-bold text-gray-400 uppercase tracking-wide text-[9px]">Pedido Mínimo</p>
-                        <p className="font-bold text-gray-800 text-sm mt-0.5">
+                        <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Pedido Mínimo</p>
+                        <p className="font-bold text-[#111827] dark:text-slate-50 text-sm mt-0.5">
                           {coupon.minOrder ? formatMoney(coupon.minOrder) : 'Nenhum'}
                         </p>
                       </div>
                     </div>
 
                     {/* Secondary rules: limit and validity */}
-                    <div className="border-t border-gray-100 pt-3 space-y-2 text-xs">
+                    <div className="border-t border-gray-100 dark:border-slate-800 pt-3 space-y-2 text-xs">
                       {(coupon.maxDiscount || coupon.usageLimit || coupon.startsAt || coupon.expiresAt) ? (
                         <>
                           {coupon.type === 'percent' && coupon.maxDiscount && (
-                            <div className="flex justify-between font-bold text-gray-500">
+                            <div className="flex justify-between font-bold text-slate-500 dark:text-slate-400">
                               <span>Teto desconto:</span>
-                              <span className="text-gray-800 font-extrabold">{formatMoney(coupon.maxDiscount)}</span>
+                              <span className="text-[#111827] dark:text-slate-50 font-extrabold">{formatMoney(coupon.maxDiscount)}</span>
                             </div>
                           )}
                           {coupon.usageLimit && (
-                            <div className="flex justify-between font-bold text-gray-500">
+                            <div className="flex justify-between font-bold text-slate-500 dark:text-slate-400">
                               <span>Usos:</span>
-                              <span className="text-gray-800 font-extrabold">
+                              <span className="text-[#111827] dark:text-slate-50 font-extrabold">
                                 {coupon.usedCount || 0} / {coupon.usageLimit}
                               </span>
                             </div>
                           )}
                           {coupon.startsAt && (
-                            <div className="flex justify-between font-bold text-gray-400 text-[10px]">
+                            <div className="flex justify-between font-bold text-slate-400 text-[10px]">
                               <span>Vigência inicia:</span>
-                              <span className="text-gray-600 font-bold">{formatDateTime(coupon.startsAt)}</span>
+                              <span className="text-slate-600 dark:text-slate-300 font-bold">{formatDateTime(coupon.startsAt)}</span>
                             </div>
                           )}
                           {coupon.expiresAt && (
-                            <div className="flex justify-between font-bold text-gray-400 text-[10px]">
+                            <div className="flex justify-between font-bold text-slate-400 text-[10px]">
                               <span>Expira em:</span>
-                              <span className="text-gray-600 font-bold">{formatDateTime(coupon.expiresAt)}</span>
+                              <span className="text-slate-600 dark:text-slate-300 font-bold">{formatDateTime(coupon.expiresAt)}</span>
                             </div>
                           )}
                         </>
                       ) : (
-                        <p className="text-[10px] text-gray-400 font-bold">Sem regras adicionais ou vigência.</p>
+                        <p className="text-[10px] text-slate-400 font-bold">Sem regras adicionais ou vigência.</p>
                       )}
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="flex gap-2 border-t border-gray-100 pt-3">
+                    <div className="flex gap-2 border-t border-gray-100 dark:border-slate-800 pt-3">
                       <button
                         type="button"
                         onClick={() => onEdit(coupon)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-blue-50 py-2.5 text-xs font-black text-blue-600 transition hover:bg-blue-100"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 py-3 text-xs font-black text-blue-600 dark:text-blue-400 transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20 active:scale-95"
                       >
                         <FiEdit2 size={13} /> Editar
                       </button>
                       <button
                         type="button"
                         onClick={() => onDelete(coupon.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-red-50 py-2.5 text-xs font-black text-red-500 transition hover:bg-red-100"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-red-50 dark:bg-red-500/10 py-3 text-xs font-black text-red-500 dark:text-red-400 transition-all hover:bg-red-100 dark:hover:bg-red-500/20 active:scale-95"
                       >
                         <FiTrash2 size={13} /> Arquivar
                       </button>
@@ -280,10 +281,10 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
           </div>
 
           {/* ────────────────── VIEW DESKTOP (TABLE) ────────────────── */}
-          <div className="hidden md:block overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+          <div className="hidden md:block overflow-hidden rounded-3xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-50 bg-gray-50/50 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/50 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="py-4 px-6">Código / Descrição</th>
                   <th className="py-4 px-4">Desconto</th>
                   <th className="py-4 px-4">Pedido Mínimo</th>
@@ -293,7 +294,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                   <th className="py-4 px-6 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-sm font-bold text-[#111827]">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 text-sm font-bold text-[#111827] dark:text-slate-50">
                 <AnimatePresence mode="popLayout">
                   {filteredCoupons.map((coupon) => {
                     const status = getCouponVigencyStatus(coupon)
@@ -304,18 +305,18 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="transition hover:bg-orange-50/10"
+                        className="transition-colors group hover:bg-orange-50/30 dark:hover:bg-slate-800/50"
                       >
                         {/* Código & Descrição */}
                         <td className="py-4 px-6 max-w-xs">
                           <div className="flex items-center gap-3">
-                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange-50 text-[#f97316]">
-                              <FiTag size={15} />
+                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 dark:bg-orange-500/10 text-[#f97316]">
+                              <FiTag size={16} />
                             </div>
                             <div className="min-w-0">
                               <p className="font-black tracking-wider text-sm">{coupon.code}</p>
                               {coupon.description && (
-                                <p className="mt-0.5 text-xs font-semibold text-[#9ca3af] truncate" title={coupon.description}>
+                                <p className="mt-0.5 text-xs font-semibold text-slate-400 dark:text-slate-500 truncate" title={coupon.description}>
                                   {coupon.description}
                                 </p>
                               )}
@@ -325,54 +326,54 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
 
                         {/* Desconto */}
                         <td className="py-4 px-4">
-                          <p className="font-extrabold text-gray-800">
+                          <p className="font-extrabold text-[#111827] dark:text-slate-50">
                             {coupon.type === 'percent' ? `${coupon.value}%` : formatMoney(coupon.value)}
                           </p>
                           {coupon.type === 'percent' && coupon.maxDiscount && (
-                            <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">
                               Teto: {formatMoney(coupon.maxDiscount)}
                             </p>
                           )}
                         </td>
 
                         {/* Pedido Mínimo */}
-                        <td className="py-4 px-4 text-[#6b7280]">
+                        <td className="py-4 px-4 text-slate-500 dark:text-slate-400">
                           {coupon.minOrder ? formatMoney(coupon.minOrder) : '—'}
                         </td>
 
                         {/* Vigência */}
-                        <td className="py-4 px-4 text-xs font-bold text-[#6b7280] space-y-0.5">
+                        <td className="py-4 px-4 text-xs font-bold text-slate-500 dark:text-slate-400 space-y-0.5">
                           {coupon.startsAt || coupon.expiresAt ? (
                             <>
                               {coupon.startsAt && (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[9px] font-black uppercase text-gray-400">Início:</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500">Início:</span>
                                   <span>{formatDateTime(coupon.startsAt)}</span>
                                 </div>
                               )}
                               {coupon.expiresAt && (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[9px] font-black uppercase text-gray-400">Fim:</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500">Fim:</span>
                                   <span>{formatDateTime(coupon.expiresAt)}</span>
                                 </div>
                               )}
                             </>
                           ) : (
-                            <span className="text-gray-400 italic">Sem expiração</span>
+                            <span className="text-slate-400 dark:text-slate-500 italic font-medium">Sem expiração</span>
                           )}
                         </td>
 
                         {/* Usos */}
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
-                            <span className="font-black text-gray-800">{coupon.usedCount || 0}</span>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="font-black text-[#111827] dark:text-slate-50">{coupon.usedCount || 0}</span>
                             {coupon.usageLimit ? (
                               <>
                                 <span>/</span>
                                 <span className="font-bold">{coupon.usageLimit}</span>
                               </>
                             ) : (
-                              <span className="text-[10px] font-bold text-gray-400">(ilimitado)</span>
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">(ilimitado)</span>
                             )}
                           </div>
                         </td>
@@ -380,7 +381,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                         {/* Status Toggle Switch */}
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-black ${status.color}`}>
+                            <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${status.color}`}>
                               {status.label}
                             </span>
                             
@@ -395,12 +396,12 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                               />
                               <label
                                 htmlFor={`toggle-dt-${coupon.id}`}
-                                className={`block h-6 w-11 cursor-pointer rounded-full transition-colors ${
-                                  coupon.active ? 'bg-[#f97316]' : 'bg-gray-300'
+                                className={`block h-6 w-11 cursor-pointer rounded-full transition-colors duration-300 ${
+                                  coupon.active ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-700 shadow-inner'
                                 }`}
                               >
                                 <span
-                                  className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                                  className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300 ${
                                     coupon.active ? 'translate-x-5' : 'translate-x-0'
                                   }`}
                                 />
@@ -411,22 +412,22 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
 
                         {/* Action buttons */}
                         <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-2 opacity-80 transition-opacity group-hover:opacity-100">
                             <button
                               type="button"
                               title="Editar cupom"
                               onClick={() => onEdit(coupon)}
-                              className="grid h-8 w-8 place-items-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+                              className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20 active:scale-90"
                             >
-                              <FiEdit2 size={13} />
+                              <FiEdit2 size={14} />
                             </button>
                             <button
                               type="button"
                               title="Arquivar/Deletar cupom"
                               onClick={() => onDelete(coupon.id)}
-                              className="grid h-8 w-8 place-items-center rounded-xl bg-red-50 text-red-500 transition hover:bg-red-100"
+                              className="grid h-9 w-9 place-items-center rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 transition-all hover:bg-red-100 dark:hover:bg-red-500/20 active:scale-90"
                             >
-                              <FiTrash2 size={13} />
+                              <FiTrash2 size={14} />
                             </button>
                           </div>
                         </td>

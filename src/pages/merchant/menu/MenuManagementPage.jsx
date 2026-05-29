@@ -294,6 +294,7 @@ export default function MenuManagementPage() {
 
         {/* ── STATS ── */}
         <MenuStatsCards
+          store={store}
           stats={stats}
           activeTab={activeTab}
           filterStatus={filterStatus}
@@ -330,60 +331,67 @@ export default function MenuManagementPage() {
           ))}
         </div>
 
-        {/* ── PRODUCTS TAB ── */}
-        {activeTab === 'products' && (
-          <MenuProductsTab
-            products={activeProducts}
-            categories={sortedCategories}
-            search={search}
-            setSearch={setSearch}
-            filterCategoryId={filterCategoryId}
-            setFilterCategoryId={setFilterCategoryId}
-            filterStatus={filterStatus}
-            setFilterStatus={setFilterStatus}
-            onEdit={openProductDrawer}
-            onDuplicate={onDuplicate}
-            onDelete={onDeleteProduct}
-            onToggle={onToggle}
-            onCreateProduct={() => openProductDrawer()}
-          />
-        )}
+        {/* ── TAB CONTENT WITH ANIMATION ── */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            {activeTab === 'products' && (
+              <MenuProductsTab
+                products={activeProducts}
+                categories={sortedCategories}
+                search={search}
+                setSearch={setSearch}
+                filterCategoryId={filterCategoryId}
+                setFilterCategoryId={setFilterCategoryId}
+                filterStatus={filterStatus}
+                setFilterStatus={setFilterStatus}
+                onEdit={openProductDrawer}
+                onDuplicate={onDuplicate}
+                onDelete={onDeleteProduct}
+                onToggle={onToggle}
+                onCreateProduct={() => openProductDrawer()}
+              />
+            )}
 
-        {/* ── CATEGORIES TAB ── */}
-        {activeTab === 'categories' && (
-          <MenuCategoriesTab
-            categories={sortedCategories}
-            productCountByCategory={productCountByCategory}
-            onEdit={openCategoryDrawer}
-            onDelete={onDeleteCategory}
-            onToggleActive={onToggleCat}
-            onMoveUp={onMoveUp}
-            onMoveDown={onMoveDown}
-            onCreateCategory={() => openCategoryDrawer()}
-          />
-        )}
+            {activeTab === 'categories' && (
+              <MenuCategoriesTab
+                categories={sortedCategories}
+                productCountByCategory={productCountByCategory}
+                onEdit={openCategoryDrawer}
+                onDelete={onDeleteCategory}
+                onToggleActive={onToggleCat}
+                onMoveUp={onMoveUp}
+                onMoveDown={onMoveDown}
+                onCreateCategory={() => openCategoryDrawer()}
+              />
+            )}
 
-        {/* ── COUPONS TAB ── */}
-        {activeTab === 'coupons' && (
-          <MenuCouponsTab
-            coupons={activeCoupons}
-            onEdit={openCouponDrawer}
-            onDelete={onDeleteCoupon}
-            onToggleActive={onToggleCoupon}
-            onCreateCoupon={() => openCouponDrawer()}
-          />
-        )}
+            {activeTab === 'coupons' && (
+              <MenuCouponsTab
+                coupons={activeCoupons}
+                onEdit={openCouponDrawer}
+                onDelete={onDeleteCoupon}
+                onToggleActive={onToggleCoupon}
+                onCreateCoupon={() => openCouponDrawer()}
+              />
+            )}
 
-        {/* ── DELIVERY AREAS TAB ── */}
-        {activeTab === 'delivery' && (
-          <MenuDeliveryAreasTab
-            store={store}
-            onSaveFees={handleSaveDeliveryFees}
-            onEditArea={openDeliveryDrawer}
-            onAddArea={() => openDeliveryDrawer()}
-            onToast={showToast}
-          />
-        )}
+            {activeTab === 'delivery' && (
+              <MenuDeliveryAreasTab
+                store={store}
+                onSaveFees={handleSaveDeliveryFees}
+                onEditArea={openDeliveryDrawer}
+                onAddArea={() => openDeliveryDrawer()}
+                onToast={showToast}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* ── DRAWERS ── */}
