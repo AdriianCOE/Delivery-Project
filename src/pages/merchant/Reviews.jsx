@@ -19,7 +19,8 @@ import {
   FiSmile,
   FiX,
   FiHeart,
-  FiCalendar
+  FiCalendar,
+  FiHome
 } from 'react-icons/fi'
 
 import { db } from '../../services/firebase'
@@ -429,6 +430,12 @@ export default function Reviews() {
               <div key={item} className="h-32 animate-pulse rounded-[2rem] bg-white shadow-sm" />
             ))}
           </div>
+        ) : !selectedStore ? (
+          <EmptyState
+            icon={FiHome}
+            title="Nenhuma loja vinculada"
+            description="Nenhuma loja vinculada à sua conta. Conclua o onboarding ou fale com o suporte."
+          />
         ) : (
           <>
             {/* FILTRO DE TEMPO */}

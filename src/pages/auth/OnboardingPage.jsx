@@ -35,6 +35,10 @@ import {
 
 import { useAuth } from '../../contexts/AuthContext'
 import { auth as firebaseAuth, functions } from '../../services/firebase'
+import {
+  normalizeBrazilianPhoneE164,
+  validateBrazilianMobilePhone,
+} from '../../utils/phone'
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -107,50 +111,6 @@ const floatAnimation = {
 // VALIDAÇÃO DE TELEFONE BRASILEIRO
 // ─────────────────────────────────────────────────────────────
 
-function validateBrazilianMobilePhone(value) {
-  const rawDigits = String(value || '').replace(/\D/g, '')
-  let nationalDigits = ''
-
-  if (rawDigits.length === 13 && rawDigits.startsWith('55')) {
-    nationalDigits = rawDigits.slice(2)
-  } else if (rawDigits.length === 11) {
-    nationalDigits = rawDigits
-  } else {
-    return { ok: false }
-  }
-
-  const ddd = nationalDigits.slice(0, 2)
-  const localNumber = nationalDigits.slice(2)
-  const localTail = localNumber.slice(1)
-
-  if (ddd.startsWith('0') || localNumber.length !== 9 || localNumber[0] !== '9') {
-    return { ok: false }
-  }
-
-  const repeatedRun = /(\d)\1{4,}/
-  const obviousLocalNumbers = new Set([
-    '999999999',
-    '999111111',
-    '900000000',
-    '911111111',
-  ])
-
-  if (
-    /^(\d)\1+$/.test(nationalDigits) ||
-    repeatedRun.test(localNumber) ||
-    obviousLocalNumbers.has(localNumber) ||
-    ['12345678', '87654321', '11111111', '00000000'].some((pattern) => localTail.includes(pattern))
-  ) {
-    return { ok: false }
-  }
-
-  return {
-    ok: true,
-    phoneDigits: `55${nationalDigits}`,
-    phoneE164: `+55${nationalDigits}`,
-  }
-}
-
 function getBrazilianPhoneInputDigits(value) {
   const digits = String(value || '').replace(/\D/g, '')
 
@@ -171,11 +131,6 @@ function formatBrazilianPhoneInput(value) {
   if (digits.length <= 2) return `(${digits}`
   if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
-}
-
-function normalizeBrazilianPhoneE164(value) {
-  const validatedPhone = validateBrazilianMobilePhone(value)
-  return validatedPhone.ok ? validatedPhone.phoneE164 : null
 }
 
 function toBrazilianPhoneInput(value) {

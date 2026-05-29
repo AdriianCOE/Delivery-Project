@@ -4,6 +4,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl';
 
+const formatPriceBR = (val: number | string) => {
+  const parts = Number(val || 0).toFixed(2).split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return parts.join(',');
+};
+
 const plans = [
   {
     id: 'essential',
@@ -184,19 +190,33 @@ export function PricingSection() {
               <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                 <p className="text-sm text-gray-600 mb-4">{plan.description}</p>
-                <div className="flex items-baseline justify-center gap-1 mb-2">
-                  <span className="text-5xl font-black text-gray-900">R$ {displayPrice}</span>
+                 <div className="flex items-baseline justify-center gap-1 mb-2 overflow-hidden">
+                  <motion.span
+                    key={`${plan.id}-${billingCycle}-price`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    className="inline-block text-5xl font-black text-gray-900"
+                  >
+                    R$ {formatPriceBR(displayPrice)}
+                  </motion.span>
                   <span className="text-gray-600">{plan.period}</span>
                 </div>
                 {isAnnual && (
-                  <div className="mb-2">
+                  <motion.div
+                    key={`${plan.id}-annual-details`}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className="mb-2"
+                  >
                     <span className="inline-block rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700 ring-1 ring-green-100">
                       2 meses grátis
                     </span>
                     <p className="mt-1 text-xs text-gray-500">
-                      R$ {plan.priceAnnual} cobrados ao ano
+                      R$ {formatPriceBR(plan.priceAnnual)} cobrados ao ano
                     </p>
-                  </div>
+                  </motion.div>
                 )}
                 <div className="text-sm text-green-600 font-semibold">
                   + 0% de comissão por venda

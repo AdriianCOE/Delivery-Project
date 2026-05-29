@@ -429,8 +429,7 @@ export default function MenuManagementPage() {
         onToast={showToast}
       />
 
-    <Toast toast={toast} onClose={() => setToast(null)} />
-    <DashboardFooter store={store} />
+      <DashboardFooter store={store} />
 
       {/* ── TOAST ── */}
       <AnimatePresence>

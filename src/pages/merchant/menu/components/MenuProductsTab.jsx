@@ -54,71 +54,75 @@ function ProductRow({ product, categories, onEdit, onDuplicate, onDelete, onTogg
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:border-orange-100 hover:shadow-md"
+      className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:border-orange-100 hover:shadow-md sm:flex-row sm:items-center sm:gap-4"
     >
-      {/* Thumbnail */}
-      <div className="relative h-16 w-16 shrink-0">
-        {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name}
-            className="h-full w-full rounded-2xl object-cover" loading="lazy" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center rounded-2xl bg-gray-100 text-gray-300">
-            <FiImage size={22} />
-          </div>
-        )}
-        {product.isFeatured && (
-          <div className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-yellow-400 text-[10px]">⭐</div>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <p className="truncate text-sm font-black text-[#111827]">{product.name}</p>
-          {catName && <span className="text-xs font-bold text-[#9ca3af]">{catName}</span>}
-        </div>
-        {product.description && (
-          <p className="mt-0.5 line-clamp-1 text-xs text-[#9ca3af]">{product.description}</p>
-        )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-black text-[#f97316]">{formatMoney(price)}</span>
-          {product.oldPrice != null && normalizeMoney(product.oldPrice, product.oldPriceCents) > 0 && (
-            <span className="text-xs font-bold text-gray-400 line-through">
-              {formatMoney(normalizeMoney(product.oldPrice, product.oldPriceCents))}
-            </span>
+      <div className="flex w-full min-w-0 gap-3 sm:flex-1 sm:items-center sm:gap-4">
+        {/* Thumbnail */}
+        <div className="relative h-16 w-16 shrink-0">
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt={product.name}
+              className="h-full w-full rounded-2xl object-cover" loading="lazy" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center rounded-2xl bg-gray-100 text-gray-300">
+              <FiImage size={22} />
+            </div>
           )}
-          <ProductBadges product={product} />
+          {product.isFeatured && (
+            <div className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-yellow-400 text-[10px]">⭐</div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <p className="line-clamp-2 text-sm font-black text-[#111827] sm:truncate">{product.name}</p>
+            {catName && <span className="text-xs font-bold text-[#9ca3af]">{catName}</span>}
+          </div>
+          {product.description && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-[#9ca3af] sm:line-clamp-1">{product.description}</p>
+          )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-black text-[#f97316]">{formatMoney(price)}</span>
+            {product.oldPrice != null && normalizeMoney(product.oldPrice, product.oldPriceCents) > 0 && (
+              <span className="text-xs font-bold text-gray-400 line-through">
+                {formatMoney(normalizeMoney(product.oldPrice, product.oldPriceCents))}
+              </span>
+            )}
+            <ProductBadges product={product} />
+          </div>
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="grid w-full grid-cols-5 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1">
         <button type="button" title={product.isAvailable !== false ? 'Marcar indisponível' : 'Marcar disponível'}
+          aria-label={product.isAvailable !== false ? 'Marcar produto indisponível' : 'Marcar produto disponível'}
           onClick={() => onToggle(product.id, 'isAvailable', product.isAvailable !== false)}
-          className={`grid h-8 w-8 place-items-center rounded-xl transition ${
+          className={`grid h-10 w-full place-items-center rounded-xl transition sm:h-8 sm:w-8 ${
             product.isAvailable !== false ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
           }`}>
           {product.isAvailable !== false ? <FiCheck size={14} /> : <FiX size={14} />}
         </button>
 
         <button type="button" title={product.isVisible !== false ? 'Ocultar' : 'Exibir'}
+          aria-label={product.isVisible !== false ? 'Ocultar produto do cardápio' : 'Exibir produto no cardápio'}
           onClick={() => onToggle(product.id, 'isVisible', product.isVisible !== false)}
-          className="grid h-8 w-8 place-items-center rounded-xl bg-gray-50 text-gray-500 transition hover:bg-gray-100">
+          className="grid h-10 w-full place-items-center rounded-xl bg-gray-50 text-gray-500 transition hover:bg-gray-100 sm:h-8 sm:w-8">
           {product.isVisible !== false ? <FiEye size={14} /> : <FiEyeOff size={14} />}
         </button>
 
-        <button type="button" title="Editar" onClick={() => onEdit(product)}
-          className="grid h-8 w-8 place-items-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100">
+        <button type="button" title="Editar" aria-label="Editar produto" onClick={() => onEdit(product)}
+          className="grid h-10 w-full place-items-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100 sm:h-8 sm:w-8">
           <FiEdit2 size={14} />
         </button>
 
-        <button type="button" title="Duplicar" onClick={() => onDuplicate(product)}
-          className="grid h-8 w-8 place-items-center rounded-xl bg-gray-50 text-gray-500 transition hover:bg-gray-100">
+        <button type="button" title="Duplicar" aria-label="Duplicar produto" onClick={() => onDuplicate(product)}
+          className="grid h-10 w-full place-items-center rounded-xl bg-gray-50 text-gray-500 transition hover:bg-gray-100 sm:h-8 sm:w-8">
           <FiCopy size={14} />
         </button>
 
-        <button type="button" title="Excluir" onClick={() => onDelete(product.id)}
-          className="grid h-8 w-8 place-items-center rounded-xl bg-red-50 text-red-500 transition hover:bg-red-100">
+        <button type="button" title="Excluir" aria-label="Excluir produto" onClick={() => onDelete(product.id)}
+          className="grid h-10 w-full place-items-center rounded-xl bg-red-50 text-red-500 transition hover:bg-red-100 sm:h-8 sm:w-8">
           <FiTrash2 size={14} />
         </button>
       </div>
@@ -190,7 +194,7 @@ export default function MenuProductsTab({
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         {/* Search */}
         <div className="relative flex-1">
           <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -209,7 +213,7 @@ export default function MenuProductsTab({
 
         {/* Category filter */}
         <select value={filterCategoryId} onChange={(e) => setFilterCategoryId(e.target.value)}
-          className="h-11 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] sm:w-48">
+          className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] lg:w-56">
           <option value="all">Todas as categorias</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -217,10 +221,10 @@ export default function MenuProductsTab({
         </select>
 
         {/* Status filter pills */}
-        <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] lg:mx-0 lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
           {STATUS_FILTERS.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterStatus(f.id)}
-              className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-black transition ${
+              className={`h-10 shrink-0 rounded-xl px-3 text-xs font-black transition lg:h-auto lg:py-1.5 ${
                 filterStatus === f.id ? 'bg-[#f97316] text-white' : 'bg-white border border-gray-200 text-[#6b7280] hover:border-orange-200'
               }`}>
               {f.label}

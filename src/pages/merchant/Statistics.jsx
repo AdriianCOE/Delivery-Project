@@ -5,6 +5,7 @@ import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedContr
 import {
   collection,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -430,8 +431,25 @@ export default function Statistics() {
       return undefined
     }
 
-    const storeKeys = getStoreKeys(selectedStore)
-    if (!storeKeys.length) {
+    const storeIdKeys = [
+      selectedStore?.id,
+      selectedStore?.storeId,
+      selectedStore?.storeDocId,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .filter((value, index, array) => array.indexOf(value) === index)
+      .slice(0, 10)
+    const slugKeys = [
+      selectedStore?.storeSlug,
+      selectedStore?.slug,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .filter((value, index, array) => array.indexOf(value) === index && !storeIdKeys.includes(value))
+      .slice(0, 10)
+
+    if (!storeIdKeys.length) {
       setOrders([])
       setLoading(false)
       return undefined
@@ -439,12 +457,12 @@ export default function Statistics() {
 
     setLoading(true)
     const cutoffDate = Timestamp.fromDate(new Date(Date.now() - 31 * 86400000))
-    const baseKeys = storeKeys.slice(0, 10)
-
     const ordersMap = new Map()
-    const unsubscribers = []
+    let didLoadSlugFallback = false
+    let isMounted = true
 
     function publishOrders() {
+      if (!isMounted) return
       const data = Array.from(ordersMap.values()).sort((a, b) => {
         const dateA = getOrderDate(a)?.getTime?.() || 0
         const dateB = getOrderDate(b)?.getTime?.() || 0
@@ -454,10 +472,39 @@ export default function Statistics() {
       setLoading(false)
     }
 
+    async function loadSlugFallbackOnce(reason) {
+      if (didLoadSlugFallback || !slugKeys.length) return
+      didLoadSlugFallback = true
+
+      try {
+        const qOrdersSlug = query(
+          collection(db, 'orders'),
+          where('storeSlug', 'in', slugKeys),
+          where('createdAt', '>=', cutoffDate),
+          orderBy('createdAt', 'desc')
+        )
+        const ordersSnap = await getDocs(qOrdersSlug)
+        ordersSnap.docs.forEach((orderDoc) => {
+          if (!ordersMap.has(orderDoc.id)) {
+            ordersMap.set(orderDoc.id, {
+              id: orderDoc.id,
+              ...orderDoc.data(),
+            })
+          }
+        })
+      } catch (error) {
+        if (error?.code !== 'permission-denied') {
+          console.warn('Fallback pontual por storeSlug ignorado nas estatisticas:', reason, error.message)
+        }
+      } finally {
+        publishOrders()
+      }
+    }
+
     // 1. Query Principal por storeId
     const qOrdersId = query(
       collection(db, 'orders'),
-      where('storeId', 'in', baseKeys),
+      where('storeId', 'in', storeIdKeys),
       where('createdAt', '>=', cutoffDate),
       orderBy('createdAt', 'desc')
     )
@@ -471,6 +518,10 @@ export default function Statistics() {
             ...orderDoc.data(),
           })
         })
+        if (slugKeys.length && !didLoadSlugFallback) {
+          void loadSlugFallbackOnce('compatibilidade storeSlug')
+          if (ordersSnap.empty) return
+        }
         publishOrders()
       },
       (error) => {
@@ -479,46 +530,14 @@ export default function Statistics() {
         } else {
           console.error('Erro ao carregar pedidos por storeId:', error)
         }
+        void loadSlugFallbackOnce('erro no listener por storeId')
         publishOrders()
       }
     )
-    unsubscribers.push(unsubId)
-
-    // 2. Query Fallback por storeSlug (silenciosa e opcional)
-    try {
-      const qOrdersSlug = query(
-        collection(db, 'orders'),
-        where('storeSlug', 'in', baseKeys),
-        where('createdAt', '>=', cutoffDate),
-        orderBy('createdAt', 'desc')
-      )
-
-      const unsubSlug = onSnapshot(
-        qOrdersSlug,
-        (ordersSnap) => {
-          ordersSnap.docs.forEach((orderDoc) => {
-            if (!ordersMap.has(orderDoc.id)) {
-              ordersMap.set(orderDoc.id, {
-                id: orderDoc.id,
-                ...orderDoc.data(),
-              })
-            }
-          })
-          publishOrders()
-        },
-        (error) => {
-          if (error?.code !== 'permission-denied') {
-            console.warn('Query opcional por storeSlug ignorada (pode requerer indice/permissao):', error.message)
-          }
-        }
-      )
-      unsubscribers.push(unsubSlug)
-    } catch (e) {
-      console.warn('Erro ao criar query de storeSlug opcional:', e)
-    }
 
     return () => {
-      unsubscribers.forEach((unsubscribe) => unsubscribe())
+      isMounted = false
+      unsubId()
     }
   }, [authLoading, canReadOrders, selectedStore])
 

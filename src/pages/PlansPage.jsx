@@ -19,6 +19,12 @@ import {
 } from 'react-icons/fi'
 import AnimatedSegmentedControl from '../components/ui/AnimatedSegmentedControl'
 
+function formatPriceBR(val) {
+  const parts = Number(val || 0).toFixed(2).split('.')
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return parts.join(',')
+}
+
 const planShortDescriptions = {
   essential: 'Para começar com loja própria, cardápio online e pedidos organizados.',
   professional: 'Para lojas que querem vender mais com cupons, alertas e uma operação mais completa.',
@@ -242,10 +248,16 @@ function PlanCard({ plan, index, cycle }) {
       </div>
 
       <div className="mt-5">
-        <div className="flex items-end gap-1">
-          <span className="text-4xl font-black tracking-tight text-[#111827] dark:text-white">
-            R$ {displayPrice}
-          </span>
+        <div className="flex items-end gap-1 overflow-hidden">
+          <motion.span
+            key={`${plan.id}-${cycle}-price`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="inline-block text-4xl font-black tracking-tight text-[#111827] dark:text-white"
+          >
+            R$ {formatPriceBR(displayPrice)}
+          </motion.span>
 
           <span className="pb-1 text-sm font-bold text-[#6b7280] dark:text-zinc-400">
             /mês
@@ -253,14 +265,20 @@ function PlanCard({ plan, index, cycle }) {
         </div>
 
         {isAnnual && (
-          <div className="mt-1">
+          <motion.div
+            key={`${plan.id}-annual-details`}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="mt-1"
+          >
             <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100/50 dark:bg-green-500/10 dark:text-green-300 dark:ring-green-500/20">
               2 meses grátis
             </span>
             <p className="mt-1.5 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
-              R$ {plan.priceAnnual} cobrados ao ano
+              R$ {formatPriceBR(plan.priceAnnual)} cobrados ao ano
             </p>
-          </div>
+          </motion.div>
         )}
 
         <p className="mt-2 text-xs font-black text-[#43A047] dark:text-emerald-400">

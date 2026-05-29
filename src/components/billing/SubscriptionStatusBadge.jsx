@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { formatBillingStatus, getBillingStatusTone } from '../../utils/billingStatus'
 
 export default function SubscriptionStatusBadge({ status }) {

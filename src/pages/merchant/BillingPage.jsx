@@ -1353,7 +1353,7 @@ export default function BillingPage() {
                           Economia de 2 meses grátis
                         </span>
                         <p className="mt-1 text-[10px] font-semibold text-[#6b7280] dark:text-zinc-500">
-                          R$ {option.priceAnnual} cobrados ao ano
+                          {formatCurrency(option.priceAnnual)} cobrados ao ano
                         </p>
                       </motion.div>
                     )}

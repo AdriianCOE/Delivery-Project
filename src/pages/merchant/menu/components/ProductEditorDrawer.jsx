@@ -2,6 +2,7 @@
 // Drawer lateral para criação e edição de produto.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   addDoc,
   collection,
@@ -219,6 +220,16 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
     return () => { if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview) }
   }, [imagePreview])
 
+  useEffect(() => {
+    if (open) {
+      const prevOverflow = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = prevOverflow
+      }
+    }
+  }, [open])
+
   const setField = useCallback((field, value) => setForm((p) => ({ ...p, [field]: value })), [])
 
   const handleImageSelect = (e) => {
@@ -311,7 +322,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
 
   const visibleImage = imagePreview || form.imageUrl
 
-  return (
+  const drawerContent = (
     <AnimatePresence>
       {open && (
         <>
@@ -531,4 +542,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
       )}
     </AnimatePresence>
   )
+
+  if (typeof window === 'undefined') return null
+  return createPortal(drawerContent, document.body)
 }

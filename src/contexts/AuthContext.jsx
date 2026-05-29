@@ -62,6 +62,7 @@ async function loadUserData(uid) {
   try {
     const snapshot = await getDoc(userRef)
     return snapshot.exists() ? snapshot.data() : null
+
   } catch (serverError) {
     console.warn('[Auth] Firestore indisponível. Tentando cache local...', serverError)
 
@@ -97,8 +98,6 @@ export function AuthProvider({ children }) {
     let unsubscribeAuth = null
 
     function bootAuth() {
-
-
       unsubscribeAuth = onAuthStateChanged(auth, async (currentFirebaseUser) => {
         if (!isMounted) return
         const loadId = authLoadIdRef.current + 1
@@ -188,11 +187,16 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(async () => {
-    await signOut(auth)
-    setFirebaseUser(null)
-    setUser(null)
-    setUserData(null)
-    setSentryUser(null)
+    try {
+      await signOut(auth)
+    } catch (error) {
+      console.warn('Erro ao executar signOut do Firebase:', error)
+    } finally {
+      setFirebaseUser(null)
+      setUser(null)
+      setUserData(null)
+      setSentryUser(null)
+    }
   }, [])
 
   const refreshUserData = useCallback(async () => {

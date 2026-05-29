@@ -1796,14 +1796,14 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     type="button"
                     disabled={storeActionLoading}
                     onClick={handleToggleStoreOpen}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[13px] font-black text-white shadow-md shadow-emerald-500/20 ring-1 ring-inset ring-white/10 transition hover:-translate-y-0.5 hover:bg-emerald-400 active:scale-95 disabled:opacity-70 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:w-auto bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40"
                   >
                     {storeActionLoading ? (
                       <FiLoader size={16} className="animate-spin" />
                     ) : (
-                      <FiPlay size={16} className="fill-current" />
+                      <FiPower size={16} />
                     )}
-                    {storeActionLoading ? 'Atualizando...' : recommendedAction.cta}
+                    {storeActionLoading ? 'Atualizando...' : 'Abrir loja'}
                   </button>
                 ) : (
                   <a

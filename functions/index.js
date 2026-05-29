@@ -11,6 +11,11 @@ const admin = require('firebase-admin')
 const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
 const { createAsaasFunctions } = require('./asaas')
+const { createMerchantOrderFunctions } = require('./merchantOrder')
+const {
+  normalizeBrazilianPhone,
+  validateBrazilianMobilePhone,
+} = require('./shared/phone')
 
 const { setGlobalOptions } = require('firebase-functions/v2')
 
@@ -25,10 +30,16 @@ admin.initializeApp()
 
 const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
+// Keep these aligned with Firestore Rules until docs/legal-version-rollout.md is executed.
 const TERMS_VERSION = '2026-05-24'
 const PRIVACY_VERSION = '2026-05-24'
 const REGION = 'southamerica-east1'
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
+const merchantOrderFunctions = createMerchantOrderFunctions({ db, admin, HttpsError, logger, region: REGION })
+
+if (!ENFORCE_APP_CHECK && process.env.FUNCTIONS_EMULATOR !== 'true') {
+  logger.warn('[appCheck] Public callables are running without App Check enforcement. Use monitor mode first, then set ENFORCE_APP_CHECK=true after validating public store, coupon and order flows.')
+}
 
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
 exports.getSubscriptionManagementData = asaasFunctions.getSubscriptionManagementData
@@ -39,6 +50,7 @@ exports.syncAsaasSubscriptionStatus = asaasFunctions.syncAsaasSubscriptionStatus
 exports.createPaymentMethodUpdateCheckout = asaasFunctions.createPaymentMethodUpdateCheckout
 exports.asaasWebhook = asaasFunctions.asaasWebhook
 exports.adminUpdateSubscriptionRequestStatus = asaasFunctions.adminUpdateSubscriptionRequestStatus
+exports.updateMerchantOrder = merchantOrderFunctions.updateMerchantOrder
 
 exports.createPublicOrder = onCall(
   {
@@ -151,6 +163,7 @@ function getCallableIp(request) {
       'unknown'
   ).split(',')[0].trim() || 'unknown'
 }
+
 
 function buildPublicRateLimitId(operation, request) {
   const ip = getCallableIp(request)
@@ -328,10 +341,24 @@ function sanitizePublicCategory(data) {
 
 
 async function findStoreForCallable(input = {}) {
+  const explicitStoreId = String(input.storeId || input.storeDocId || '').trim()
+  if (explicitStoreId) {
+    for (const collectionName of ['publicStores', 'stores']) {
+      const snapshot = await db.collection(collectionName).doc(explicitStoreId).get()
+      if (snapshot.exists) {
+        return {
+          id: snapshot.id,
+          collectionName,
+          data: snapshot.data() || {},
+        }
+      }
+    }
+  }
+
   const keys = uniqueTruthy([
-    input.storeId,
     input.storeSlug,
     input.slug,
+    input.storeId,
     input.storeDocId,
   ]).slice(0, 8)
 
@@ -349,6 +376,10 @@ async function findStoreForCallable(input = {}) {
   }
 
   for (const key of keys) {
+    logger.warn('[publicCallable] Falling back to slug query for store lookup.', {
+      hasStoreId: Boolean(explicitStoreId),
+      key,
+    })
     for (const collectionName of ['publicStores', 'stores']) {
       for (const field of ['storeSlug', 'slug']) {
         const snapshot = await db.collection(collectionName)
@@ -393,6 +424,7 @@ function sortPublicItems(a, b) {
 function isPublicItemVisible(item) {
   return item?.isDeleted !== true &&
     !item?.deletedAt &&
+    item?.hidden !== true &&
     item?.isActive !== false &&
     item?.active !== false &&
     item?.isVisible !== false &&
@@ -1360,64 +1392,6 @@ exports.auditOrderChanges = onDocumentUpdated(
     }
   )
 
-function normalizeBrazilianPhone(phone) {
-  let digits = String(phone).replace(/\D/g, '')
-  if (!digits.startsWith('55')) {
-    if (digits.length === 10 || digits.length === 11) {
-      digits = '55' + digits
-    }
-  }
-  if (digits.length !== 12 && digits.length !== 13) {
-    return null
-  }
-  return { phoneDigits: digits, phoneE164: '+' + digits }
-}
-
-function validateBrazilianMobilePhone(phone) {
-  const rawDigits = String(phone || '').replace(/\D/g, '')
-  let nationalDigits = ''
-
-  if (rawDigits.length === 13 && rawDigits.startsWith('55')) {
-    nationalDigits = rawDigits.slice(2)
-  } else if (rawDigits.length === 11) {
-    nationalDigits = rawDigits
-  } else {
-    return { ok: false }
-  }
-
-  const ddd = nationalDigits.slice(0, 2)
-  const localNumber = nationalDigits.slice(2)
-  const localTail = localNumber.slice(1)
-
-  if (ddd.startsWith('0') || localNumber.length !== 9 || localNumber[0] !== '9') {
-    return { ok: false }
-  }
-
-  const repeatedRun = /(\d)\1{4,}/
-  const obviousLocalNumbers = new Set([
-    '999999999',
-    '999111111',
-    '900000000',
-    '911111111',
-  ])
-
-  if (
-    /^(\d)\1+$/.test(nationalDigits) ||
-    /(\d)\1{3}$/.test(localNumber) ||
-    repeatedRun.test(localNumber) ||
-    obviousLocalNumbers.has(localNumber) ||
-    ['12345678', '87654321', '11111111', '00000000'].some((pattern) => localTail.includes(pattern))
-  ) {
-    return { ok: false }
-  }
-
-  return {
-    ok: true,
-    phoneDigits: `55${nationalDigits}`,
-    phoneE164: `+55${nationalDigits}`,
-  }
-}
-
 function hashPhoneE164(phoneE164) {
   return crypto.createHash('sha256').update(String(phoneE164 || '')).digest('hex')
 }
@@ -1466,27 +1440,6 @@ function getNextPhoneVerifiedOnboardingStatus(userData) {
   }
 
   return 'phone_verified'
-}
-
-function getIsMockOtpAllowed() {
-  return process.env.FUNCTIONS_EMULATOR === 'true'
-}
-
-function getIsRealOtpProviderEnabled() {
-  return process.env.OTP_PROVIDER_ENABLED === 'true'
-}
-
-function generateOtpCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString()
-}
-
-function hashOtpCode(uid, phoneE164, code) {
-  const secret = process.env.OTP_SECRET
-  if (!secret && !getIsMockOtpAllowed()) {
-    throw new HttpsError('failed-precondition', 'Serviço de configuração pendente.')
-  }
-  const useSecret = secret || 'mock-secret-for-dev-only'
-  return crypto.createHmac('sha256', useSecret).update(`${uid}:${phoneE164}:${code}`).digest('hex')
 }
 
 // Firebase callable only. The frontend must use httpsCallable so Firebase handles auth and CORS.
@@ -1596,260 +1549,6 @@ exports.confirmFirebasePhoneVerified = onCall(PHONE_CALLABLE_OPTIONS, async (req
       verified: true,
       phoneE164,
       onboardingStatus: nextOnboarding,
-    }
-  })
-})
-
-// Legacy verification flow. Firebase Phone Auth is the active onboarding verification path.
-const _requestPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-east1' }, async (request) => {
-  const uid = request.auth?.uid
-  if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
-
-  const { phone } = request.data
-  if (!phone) throw new HttpsError('invalid-argument', 'Telefone obrigatório.')
-
-  const normalized = normalizeBrazilianPhone(phone)
-  if (!normalized) {
-    throw new HttpsError('invalid-argument', 'Formato de telefone inválido. Use DDD + Número.')
-  }
-  const { phoneDigits, phoneE164 } = normalized
-
-  const userRef = db.collection('users').doc(uid)
-  const userDoc = await userRef.get()
-  
-  if (!userDoc.exists) {
-    throw new HttpsError('failed-precondition', 'Perfil não encontrado.')
-  }
-  
-  const userData = userDoc.data()
-  if (userData.role !== 'merchant') {
-    throw new HttpsError('permission-denied', 'Permissão negada.')
-  }
-  if (userData.phoneVerified === true) {
-    return { ok: true, alreadyVerified: true }
-  }
-
-  const claimRef = db.collection('phoneClaims').doc(phoneE164)
-  const hashedClaimRef = db.collection('phoneClaims').doc(hashPhoneE164(phoneE164))
-  const claimDoc = await claimRef.get()
-  const hashedClaimDoc = await hashedClaimRef.get()
-  const claimUid = claimDoc.exists ? (claimDoc.data().ownerUid || claimDoc.data().uid || '') : ''
-  const hashedClaimUid = hashedClaimDoc.exists
-    ? (hashedClaimDoc.data().ownerUid || hashedClaimDoc.data().uid || '')
-    : ''
-  if ((claimUid && claimUid !== uid) || (hashedClaimUid && hashedClaimUid !== uid)) {
-    throw new HttpsError('already-exists', 'Este WhatsApp já está vinculado a outra conta.')
-  }
-
-  const verificationsRef = db.collection('phoneVerifications').doc(uid)
-  const verificationsDoc = await verificationsRef.get()
-  
-  const now = admin.firestore.Timestamp.now()
-  let hourlyCount = 0
-  let hourlyWindowStart = now
-  let resendAvailableAt = now
-
-  if (verificationsDoc.exists) {
-    const vData = verificationsDoc.data()
-    const diffHours = (now.toMillis() - vData.hourlyWindowStart.toMillis()) / (1000 * 60 * 60)
-    
-    if (diffHours < 1) {
-      hourlyCount = vData.hourlyCount || 0
-      hourlyWindowStart = vData.hourlyWindowStart
-    }
-    
-    if (hourlyCount >= 5) {
-      throw new HttpsError('resource-exhausted', 'Muitas tentativas. Aguarde alguns minutos.')
-    }
-    
-    if (vData.resendAvailableAt && now.toMillis() < vData.resendAvailableAt.toMillis()) {
-      throw new HttpsError('resource-exhausted', 'Aguarde o tempo de reenvio.')
-    }
-  }
-
-  const isMockAllowed = getIsMockOtpAllowed()
-  const isRealEnabled = getIsRealOtpProviderEnabled()
-
-  if (!isMockAllowed && !isRealEnabled) {
-    throw new HttpsError(
-      'failed-precondition',
-      'A confirmação automática de WhatsApp ainda está em implantação. Fale com o suporte para ativar sua loja.'
-    )
-  }
-
-  if (isRealEnabled) {
-    if (!process.env.OTP_SECRET) {
-      logger.error('Falta OTP_SECRET em produção com OTP_PROVIDER_ENABLED=true.')
-      throw new HttpsError('failed-precondition', 'Serviço de configuração pendente.')
-    }
-    // TODO: Em produção integrar envio real (ex: Twilio, WhatsApp Cloud API) aqui.
-  }
-
-  const code = generateOtpCode()
-  const codeHash = hashOtpCode(uid, phoneE164, code)
-
-  const expiresAtMillis = now.toMillis() + 10 * 60 * 1000 // 10 minutos
-  const resendAtMillis = now.toMillis() + 60 * 1000 // 60 segundos
-
-  await verificationsRef.set({
-    uid,
-    phoneE164,
-    phoneDigits,
-    codeHash,
-    expiresAt: admin.firestore.Timestamp.fromMillis(expiresAtMillis),
-    createdAt: now,
-    updatedAt: now,
-    attempts: 0,
-    resendAvailableAt: admin.firestore.Timestamp.fromMillis(resendAtMillis),
-    hourlyWindowStart,
-    hourlyCount: hourlyCount + 1,
-    status: 'pending'
-  })
-
-  const updateData = {
-    phone: phoneDigits,
-    phoneE164,
-    phoneVerified: false,
-    updatedAt: now
-  }
-  if (!userData.onboardingStatus) {
-    updateData.onboardingStatus = 'phone_pending'
-  }
-  await userRef.update(updateData)
-
-  const response = {
-    ok: true,
-    sent: true,
-    expiresInSeconds: 600,
-    resendInSeconds: 60
-  }
-
-  if (isMockAllowed) {
-    logger.info(`[MOCK OTP] code=${code} para uid=${uid} phone=${phoneE164}`)
-    response.debugCode = code
-  }
-
-  return response
-})
-
-// Legacy verification flow. Firebase Phone Auth is the active onboarding verification path.
-const _confirmPhoneVerificationLegacyHandler = onCall({ region: 'southamerica-east1' }, async (request) => {
-  const uid = request.auth?.uid
-  if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
-
-  const { code } = request.data
-  if (!code || typeof code !== 'string') {
-    throw new HttpsError('invalid-argument', 'Código inválido.')
-  }
-
-  const cleanCode = code.replace(/\D/g, '')
-  if (cleanCode.length !== 6) {
-    throw new HttpsError('invalid-argument', 'Código deve ter 6 dígitos.')
-  }
-
-  const userRef = db.collection('users').doc(uid)
-  const verificationsRef = db.collection('phoneVerifications').doc(uid)
-
-  return await db.runTransaction(async (transaction) => {
-    const userDoc = await transaction.get(userRef)
-    if (!userDoc.exists) {
-      throw new HttpsError('failed-precondition', 'Perfil não encontrado.')
-    }
-    
-    const userData = userDoc.data()
-    if (userData.role !== 'merchant') {
-      throw new HttpsError('permission-denied', 'Permissão negada.')
-    }
-    
-    const vDoc = await transaction.get(verificationsRef)
-    if (!vDoc.exists) {
-      throw new HttpsError('failed-precondition', 'Nenhuma verificação pendente.')
-    }
-
-    const vData = vDoc.data()
-    if (vData.status !== 'pending') {
-      throw new HttpsError('failed-precondition', 'Nenhuma verificação pendente.')
-    }
-
-    const now = admin.firestore.Timestamp.now()
-    if (vData.expiresAt.toMillis() < now.toMillis()) {
-      throw new HttpsError('deadline-exceeded', 'Código expirado. Envie um novo código.')
-    }
-
-    if (vData.attempts >= 5) {
-      throw new HttpsError('resource-exhausted', 'Muitas tentativas. Solicite um novo código mais tarde.')
-    }
-
-    const expectedHash = vData.codeHash
-    const providedHash = hashOtpCode(uid, vData.phoneE164, cleanCode)
-
-    let isMatch = false
-    try {
-      const expectedBuffer = Buffer.from(expectedHash, 'hex')
-      const providedBuffer = Buffer.from(providedHash, 'hex')
-      if (expectedBuffer.length === providedBuffer.length) {
-        isMatch = crypto.timingSafeEqual(expectedBuffer, providedBuffer)
-      }
-    } catch (err) {
-      isMatch = false
-    }
-
-    if (!isMatch) {
-      transaction.update(verificationsRef, {
-        attempts: admin.firestore.FieldValue.increment(1),
-        updatedAt: now
-      })
-      throw new HttpsError('invalid-argument', 'Código incorreto.')
-    }
-
-    const claimRef = db.collection('phoneClaims').doc(vData.phoneE164)
-    const hashedClaimRef = db.collection('phoneClaims').doc(hashPhoneE164(vData.phoneE164))
-    const claimDoc = await transaction.get(claimRef)
-    const hashedClaimDoc = await transaction.get(hashedClaimRef)
-
-    const claimUid = claimDoc.exists ? (claimDoc.data().ownerUid || claimDoc.data().uid || '') : ''
-    const hashedClaimUid = hashedClaimDoc.exists
-      ? (hashedClaimDoc.data().ownerUid || hashedClaimDoc.data().uid || '')
-      : ''
-
-    if ((claimUid && claimUid !== uid) || (hashedClaimUid && hashedClaimUid !== uid)) {
-      throw new HttpsError('already-exists', 'Este WhatsApp já está vinculado a outra conta.')
-    }
-
-    transaction.set(claimRef, {
-      ownerUid: uid,
-      claimedAt: now
-    }, { merge: true })
-    transaction.set(hashedClaimRef, {
-      uid,
-      ownerUid: uid,
-      phoneHash: hashPhoneE164(vData.phoneE164),
-      provider: 'legacy_otp',
-      createdAt: hashedClaimDoc.exists ? hashedClaimDoc.data().createdAt || now : now,
-      updatedAt: now,
-    }, { merge: true })
-
-    const currentOnboarding = userData.onboardingStatus || ''
-    const nextOnboarding = currentOnboarding === 'completed' ? 'completed' : 'phone_verified'
-
-    transaction.update(userRef, {
-      phoneVerified: true,
-      phone: vData.phoneDigits,
-      phoneE164: vData.phoneE164,
-      onboardingStatus: nextOnboarding,
-      updatedAt: now
-    })
-
-    transaction.update(verificationsRef, {
-      status: 'verified',
-      verifiedAt: now,
-      updatedAt: now
-    })
-
-    return {
-      ok: true,
-      verified: true,
-      onboardingStatus: nextOnboarding
     }
   })
 })
@@ -2250,7 +1949,7 @@ exports.adminCreateStore = onCall({ region: 'southamerica-east1' }, async (reque
   }
 })
 
-// ─── Callable: updateMyProfile ───────────────────────────────────────────────
+// Callable: acceptLatestTerms
 exports.acceptLatestTerms = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
@@ -2464,11 +2163,14 @@ exports.cleanupAnonymousUsers = onSchedule(
     memory: '256MiB',
   },
   async () => {
+    const cleanupEnabled = String(process.env.CLEANUP_ANONYMOUS_USERS_ENABLED || '').toLowerCase() === 'true'
+    const dryRun = String(process.env.CLEANUP_ANONYMOUS_USERS_DRY_RUN || 'true').toLowerCase() !== 'false'
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
     const cutoff = new Date(Date.now() - THIRTY_DAYS_MS)
 
     let nextPageToken = undefined
     let totalDeleted = 0
+    let totalEligible = 0
     let totalScanned = 0
 
     try {
@@ -2492,8 +2194,9 @@ exports.cleanupAnonymousUsers = onSchedule(
           .map((u) => u.uid)
 
         totalScanned += listResult.users.length
+        totalEligible += toDelete.length
 
-        if (toDelete.length > 0) {
+        if (toDelete.length > 0 && cleanupEnabled && !dryRun) {
           // deleteUsers accepts up to 1000 UIDs per call
           for (let i = 0; i < toDelete.length; i += 1000) {
             const chunk = toDelete.slice(i, i + 1000)
@@ -2503,7 +2206,13 @@ exports.cleanupAnonymousUsers = onSchedule(
         }
       } while (nextPageToken)
 
-      logger.info('[cleanupAnonymousUsers] Concluído.', { totalScanned, totalDeleted })
+      logger.info('[cleanupAnonymousUsers] completed', {
+        cleanupEnabled,
+        dryRun,
+        totalScanned,
+        totalEligible,
+        totalDeleted,
+      })
     } catch (error) {
       logger.error('[cleanupAnonymousUsers] Erro durante limpeza:', error)
       throw error
@@ -2518,6 +2227,207 @@ async function deleteDocsInChunks(docs, chunkSize = 450) {
     await batch.commit()
   }
 }
+
+async function commitPublicCatalogActions(actions, summary) {
+  for (let i = 0; i < actions.length; i += 450) {
+    const batch = db.batch()
+    actions.slice(i, i + 450).forEach((action) => {
+      if (action.type === 'set') batch.set(action.ref, action.data, { merge: false })
+      if (action.type === 'delete') batch.delete(action.ref)
+    })
+    await batch.commit()
+    summary.batchesCommitted += 1
+  }
+}
+
+async function deletePublicStoreTree(storeId, summary) {
+  const publicRef = db.collection('publicStores').doc(storeId)
+  const [productsSnap, categoriesSnap] = await Promise.all([
+    publicRef.collection('products').get(),
+    publicRef.collection('categories').get(),
+  ])
+
+  await commitPublicCatalogActions([
+    ...productsSnap.docs.map((docSnapshot) => ({ type: 'delete', ref: docSnapshot.ref })),
+    ...categoriesSnap.docs.map((docSnapshot) => ({ type: 'delete', ref: docSnapshot.ref })),
+    { type: 'delete', ref: publicRef },
+  ], summary)
+
+  summary.publicStoresRemoved += 1
+  summary.productsRemoved += productsSnap.size
+  summary.categoriesRemoved += categoriesSnap.size
+}
+
+async function loadSourceDocsByStoreKeys(collectionName, keys) {
+  const docs = new Map()
+  const safeKeys = uniqueTruthy(keys).slice(0, 30)
+
+  for (let i = 0; i < safeKeys.length; i += 10) {
+    const chunk = safeKeys.slice(i, i + 10)
+    const sourceQuery = chunk.length === 1
+      ? db.collection(collectionName).where('storeId', '==', chunk[0])
+      : db.collection(collectionName).where('storeId', 'in', chunk)
+    const snapshot = await sourceQuery.get()
+    snapshot.docs.forEach((docSnapshot) => docs.set(docSnapshot.id, docSnapshot))
+  }
+
+  return Array.from(docs.values())
+}
+
+async function reconcilePublicSubcollection({
+  storeId,
+  collectionName,
+  sourceDocs,
+  isPublic,
+  sanitizePublic,
+  idField,
+  summaryPrefix,
+  summary,
+}) {
+  const publicRef = db.collection('publicStores').doc(storeId).collection(collectionName)
+  const publicSnapshot = await publicRef.get()
+  const sourceIds = new Set(sourceDocs.map((docSnapshot) => docSnapshot.id))
+  const actions = []
+
+  sourceDocs.forEach((docSnapshot) => {
+    const data = docSnapshot.data() || {}
+    const targetRef = publicRef.doc(docSnapshot.id)
+
+    if (isPublic(data)) {
+      actions.push({
+        type: 'set',
+        ref: targetRef,
+        data: {
+          ...sanitizePublic(data),
+          id: docSnapshot.id,
+          [idField]: docSnapshot.id,
+          storeId,
+        },
+      })
+      summary[`${summaryPrefix}Written`] += 1
+    } else {
+      actions.push({ type: 'delete', ref: targetRef })
+      summary[`${summaryPrefix}Removed`] += 1
+    }
+  })
+
+  publicSnapshot.docs.forEach((publicDoc) => {
+    if (!sourceIds.has(publicDoc.id)) {
+      actions.push({ type: 'delete', ref: publicDoc.ref })
+      summary[`${summaryPrefix}Removed`] += 1
+    }
+  })
+
+  await commitPublicCatalogActions(actions, summary)
+}
+
+async function reconcilePublicCatalogStore(storeDoc, summary) {
+  const storeId = storeDoc.id
+  const storeData = storeDoc.data() || {}
+  summary.storesProcessed += 1
+
+  if (!isPublicStoreVisible(storeData)) {
+    await deletePublicStoreTree(storeId, summary)
+    return
+  }
+
+  const storeRecord = { id: storeId, data: storeData }
+  const storeKeys = getStoreLookupKeys(storeRecord)
+  const [productDocs, categoryDocs] = await Promise.all([
+    loadSourceDocsByStoreKeys('products', storeKeys),
+    loadSourceDocsByStoreKeys('categories', storeKeys),
+  ])
+
+  await commitPublicCatalogActions([
+    {
+      type: 'set',
+      ref: db.collection('publicStores').doc(storeId),
+      data: {
+        ...sanitizePublicStore(storeData),
+        id: storeId,
+        storeId,
+      },
+    },
+  ], summary)
+  summary.publicStoresWritten += 1
+
+  await Promise.all([
+    reconcilePublicSubcollection({
+      storeId,
+      collectionName: 'products',
+      sourceDocs: productDocs,
+      isPublic: publicProductIsVisible,
+      sanitizePublic: sanitizePublicProduct,
+      idField: 'productId',
+      summaryPrefix: 'products',
+      summary,
+    }),
+    reconcilePublicSubcollection({
+      storeId,
+      collectionName: 'categories',
+      sourceDocs: categoryDocs,
+      isPublic: publicCategoryIsVisible,
+      sanitizePublic: sanitizePublicCategory,
+      idField: 'categoryId',
+      summaryPrefix: 'categories',
+      summary,
+    }),
+  ])
+}
+
+exports.reconcilePublicCatalog = onSchedule(
+  {
+    schedule: 'every sunday 04:00',
+    timeZone: 'America/Sao_Paulo',
+    region: REGION,
+    timeoutSeconds: 540,
+    memory: '512MiB',
+    minInstances: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const summary = {
+      storesProcessed: 0,
+      publicStoresWritten: 0,
+      publicStoresRemoved: 0,
+      productsWritten: 0,
+      productsRemoved: 0,
+      categoriesWritten: 0,
+      categoriesRemoved: 0,
+      batchesCommitted: 0,
+      errors: [],
+    }
+
+    let lastDoc = null
+    while (true) {
+      let storesQuery = db.collection('stores')
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(50)
+
+      if (lastDoc) storesQuery = storesQuery.startAfter(lastDoc)
+
+      const snapshot = await storesQuery.get()
+      if (snapshot.empty) break
+
+      for (const storeDoc of snapshot.docs) {
+        try {
+          await reconcilePublicCatalogStore(storeDoc, summary)
+        } catch (error) {
+          summary.errors.push({
+            storeId: storeDoc.id,
+            message: error?.message || String(error),
+          })
+          logger.error('[reconcilePublicCatalog] store failed', { storeId: storeDoc.id, error })
+        }
+      }
+
+      lastDoc = snapshot.docs[snapshot.docs.length - 1]
+      if (snapshot.size < 50) break
+    }
+
+    logger.info('[reconcilePublicCatalog] summary', summary)
+  }
+)
 
 exports.materializePublicStoreProfile = onDocumentWritten(
   { document: 'stores/{storeId}', region: REGION, maxInstances: 3 },
@@ -2638,11 +2548,15 @@ exports.aggregateStorePresence = onValueWritten(
     const storeId = String(event.params.storeId || '').trim()
     if (!storeId) return
 
-    const presence = event.data?.after?.val?.() || {}
+    const presenceSnapshot = await admin.database().ref(`presence/${storeId}`).get()
+    const presence = presenceSnapshot.val() || {}
     const activeCount = Object.values(presence).filter((session) => {
       return session && typeof session === 'object' && session.online === true
     }).length
 
-    await admin.database().ref(`presenceCounts/${storeId}/activeCount`).set(activeCount)
+    await admin.database().ref(`presenceCounts/${storeId}`).set({
+      activeCount,
+      updatedAt: admin.database.ServerValue.TIMESTAMP,
+    })
   }
 )

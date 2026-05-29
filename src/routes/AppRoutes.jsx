@@ -13,7 +13,7 @@ import ScrollToTop from '../utils/ScrollToTop'
 // Públicas
 import AboutPage from '../pages/AboutPage'
 import ContactPage from '../pages/ContactPage'
-import LandingPage from "../pages/landing/LandingPage";
+import LandingPage from "../pages/landing/LandingPage"
 import NotFoundPage from '../pages/NotFoundPage'
 import StoreFrontPage from '../pages/store/StoreFrontPage'
 import OrderTrackingPage from '../pages/store/OrderTrackingPage'
@@ -27,6 +27,7 @@ import TermsPage from '../pages/TermsPage'
 import AdminLayout from '../components/layouts/AdminLayout'
 import AdminDashboard from '../pages/admin/AdminDashboard'
 import CreateStorePage from '../pages/admin/CreateStorePage'
+import AdminSubscriptionsPage from '../pages/admin/AdminSubscriptionsPage'
 
 // Lojista
 import MerchantDashboard from '../pages/merchant/MerchantDashboard'
@@ -38,7 +39,6 @@ import MenuManagementPage from '../pages/merchant/menu/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 import BillingPage from '../pages/merchant/BillingPage'
 import SubscriptionManagementPage from '../pages/merchant/SubscriptionManagementPage'
-import AdminSubscriptionsPage from '../pages/admin/AdminSubscriptionsPage'
 
 // Layouts / Proteção
 import ProtectedRoute from '../components/auth/ProtectedRoute'
@@ -47,7 +47,6 @@ import DashboardLayout from '../components/layouts/DashboardLayout'
 
 // Ícones dos placeholders
 import {
-  FiArchive,
   FiCreditCard,
   FiDollarSign,
   FiGrid,
@@ -197,4 +196,3 @@ export default function AppRoutes() {
     </>
   )
 }
-

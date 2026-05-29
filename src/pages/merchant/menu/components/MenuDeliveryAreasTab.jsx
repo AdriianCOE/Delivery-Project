@@ -138,7 +138,7 @@ export default function MenuDeliveryAreasTab({
   return (
     <div className="space-y-6">
       {/* ── METRIC CARDS ── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {/* Ativos */}
         <div className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
           <p className="text-xs font-black uppercase tracking-wider text-[#6b7280]">
@@ -202,7 +202,7 @@ export default function MenuDeliveryAreasTab({
           </div>
 
           {/* Filtros Status */}
-          <div className="flex gap-1 rounded-xl bg-gray-50 p-1">
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-50 p-1 sm:flex">
             {[
               { id: 'all', label: 'Todos' },
               { id: 'active', label: 'Ativos' },
@@ -212,7 +212,7 @@ export default function MenuDeliveryAreasTab({
                 key={f.id}
                 type="button"
                 onClick={() => setStatusFilter(f.id)}
-                className={`rounded-lg px-3.5 py-1.5 text-xs font-black transition ${
+                className={`rounded-lg px-3.5 py-2 text-xs font-black transition sm:py-1.5 ${
                   statusFilter === f.id
                     ? 'bg-white text-[#111827] shadow-sm'
                     : 'text-[#6b7280] hover:text-[#f97316]'
@@ -228,7 +228,7 @@ export default function MenuDeliveryAreasTab({
         <button
           type="button"
           onClick={onAddArea}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] sm:w-auto"
+          className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] sm:w-auto"
         >
           <FiPlus size={14} /> Adicionar bairro
         </button>

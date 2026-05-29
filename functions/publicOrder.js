@@ -1,4 +1,5 @@
 const crypto = require('crypto')
+const { normalizeBrazilianPhone } = require('./shared/phone')
 
 class PublicOrderError extends Error {
   constructor(code, message) {
@@ -83,17 +84,6 @@ function formatCep(value) {
   const digits = onlyDigits(value).slice(0, 8)
   if (digits.length <= 5) return digits
   return `${digits.slice(0, 5)}-${digits.slice(5)}`
-}
-
-function normalizeBrazilianPhone(phone) {
-  let digits = String(phone || '').replace(/\D/g, '')
-
-  if (!digits.startsWith('55')) {
-    if (digits.length === 10 || digits.length === 11) digits = `55${digits}`
-  }
-
-  if (digits.length !== 12 && digits.length !== 13) return null
-  return { phoneDigits: digits, phoneE164: `+${digits}` }
 }
 
 function getPriceCents(data) {

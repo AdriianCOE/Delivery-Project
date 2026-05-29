@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore'
 import { FiVolume2, FiShoppingBag, FiX, FiChevronRight } from 'react-icons/fi'
@@ -27,18 +27,6 @@ function getStartOfTodayTimestamp() {
   return Timestamp.fromDate(startOfToday)
 }
 
-function getStoreSearchKeys(storeDoc) {
-  const data = storeDoc.data()
-  return [
-    storeDoc.id,
-    data?.id,
-    data?.storeId,
-    data?.storeSlug,
-    data?.slug,
-    data?.finalStoreId,
-  ].filter(Boolean)
-}
-
 function isNewOrderStatus(status) {
   if (!status) return false
   return NEW_ORDER_STATUSES.has(String(status).toLowerCase())
@@ -48,7 +36,16 @@ function isNewOrderStatus(status) {
 export function GlobalOrderAlert() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, userData, storeId, storeIds } = useAuth()
+  const { user, storeId, storeIds } = useAuth()
+  const storeIdsKey = Array.isArray(storeIds) ? storeIds.filter(Boolean).join('|') : ''
+  const alertStoreKeys = useMemo(() => {
+    return [
+      ...new Set([
+        storeId,
+        ...storeIdsKey.split('|'),
+      ].filter(Boolean)),
+    ]
+  }, [storeId, storeIdsKey])
 
   // 1. Estados (Lendo do Cache do Navegador)
   const [enabled, setEnabled] = useState(() => {
@@ -62,6 +59,7 @@ export function GlobalOrderAlert() {
   const orderUnsubscribersRef = useRef([])
   const initialSnapshotsPendingRef = useRef(0)
   const isBootingOrdersRef = useRef(true)
+  const latestOrderTimerRef = useRef(null)
 
   // 3. Efeito de Inicialização Simples
   useEffect(() => {
@@ -70,6 +68,11 @@ export function GlobalOrderAlert() {
     audioRef.current.volume = 1
 
     return () => {
+      if (latestOrderTimerRef.current) {
+        clearTimeout(latestOrderTimerRef.current)
+        latestOrderTimerRef.current = null
+      }
+
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current = null
@@ -88,7 +91,15 @@ export function GlobalOrderAlert() {
 
     const notifyNewOrder = async (order) => {
       setLatestOrder(order)
-      setTimeout(() => setLatestOrder(null), 8000)
+
+      if (latestOrderTimerRef.current) {
+        clearTimeout(latestOrderTimerRef.current)
+      }
+
+      latestOrderTimerRef.current = setTimeout(() => {
+        setLatestOrder(null)
+        latestOrderTimerRef.current = null
+      }, 8000)
 
       try {
         if (audioRef.current) {
@@ -116,9 +127,7 @@ export function GlobalOrderAlert() {
     // Simplifica a busca para usar apenas o storeId principal (docId).
     // Como novos pedidos exigem validPublicOrderCreate(publicStoreExists),
     // o storeId salvo no pedido sempre será o docId real, tornando a busca por slugs desnecessária e evitando falhas de permissão nas regras.
-    const safeKeys = [storeId].filter(Boolean)
-
-    const deduplicatedKeys = [...new Set(safeKeys)]
+    const deduplicatedKeys = alertStoreKeys
 
     if (deduplicatedKeys.length === 0) {
       seenOrderIdsRef.current = new Set()
@@ -177,7 +186,7 @@ export function GlobalOrderAlert() {
     return () => {
       clearOrderListeners()
     }
-  }, [user?.uid])
+  }, [alertStoreKeys, user?.uid])
 
   // 5. Função de Ação do Botão Verde
   const handleEnable = async () => {

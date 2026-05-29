@@ -99,7 +99,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
       {/* Top Filter and Search Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
-        <div className="relative flex-1 max-w-md">
+        <div className="relative w-full sm:max-w-md sm:flex-1">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
             <FiSearch size={16} />
           </span>
@@ -113,15 +113,15 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
         </div>
 
         {/* Buttons / Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           {/* Status Selectors */}
-          <div className="flex rounded-xl bg-gray-50 p-1">
+          <div className="grid grid-cols-3 rounded-xl bg-gray-50 p-1 sm:flex">
             {COUPON_STATUS_FILTERS.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setFilter(s.id)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${
+                className={`rounded-lg px-3 py-2 text-xs font-black transition sm:py-1.5 ${
                   filter === s.id
                     ? 'bg-white text-[#f97316] shadow-sm'
                     : 'text-[#6b7280] hover:text-[#111827]'
@@ -136,7 +136,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
           <button
             type="button"
             onClick={onCreateCoupon}
-            className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f97316] px-4 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c] sm:w-auto"
           >
             <FiPlus size={15} /> Novo cupom
           </button>

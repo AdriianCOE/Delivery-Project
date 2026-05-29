@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate, useOutlet } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'motion/react'
+import { doc, onSnapshot, updateDoc, Timestamp } from 'firebase/firestore'
 
-import { auth } from '../../services/firebase'
+import { auth, db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
 import ProfilePanel from '../merchant/ProfilePanel'
 import { DashboardPageSkeleton } from '../shared/Skeletons'
 import DashboardNotificationBell from '../notifications/DashboardNotificationBell'
 import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
 
 import {
-  FiArchive,
   FiBarChart2,
   FiChevronRight,
   FiClock,
@@ -26,13 +27,19 @@ import {
   FiLogOut,
   FiMenu,
   FiMonitor,
+  FiMoon,
+  FiPhone,
   FiPieChart,
+  FiSearch,
   FiSettings,
   FiShoppingBag,
   FiStar,
+  FiSun,
   FiTruck,
   FiUser,
   FiUsers,
+  FiVolume2,
+  FiVolumeX,
   FiX,
   FiZap,
 } from 'react-icons/fi'
@@ -167,50 +174,57 @@ function isPathActive(pathname, item) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`)
 }
 
-function PratoByMark({ compact = false }) {
+function PratoByMark({ compact = false, collapsed = false }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <img
         src="/icons/icon-192.png"
         alt="PratoBy"
         className={cn(
-          compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-3xl',
+          compact || collapsed ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-3xl',
           'shrink-0 object-cover shadow-lg shadow-orange-600/15'
         )}
       />
 
-      <div className="min-w-0">
-        <p
-          className={cn(
-            compact ? 'text-base' : 'text-lg',
-            'truncate font-black tracking-tight text-[#111827] dark:text-white'
-          )}
-        >
-          Prato<span className="text-[#f97316]">By</span>
-        </p>
+      {!collapsed && (
+        <div className="min-w-0">
+          <p
+            className={cn(
+              compact ? 'text-base' : 'text-lg',
+              'truncate font-black tracking-tight text-[#111827] dark:text-white'
+            )}
+          >
+            Prato<span className="text-[#f97316]">By</span>
+          </p>
 
-        <p className="truncate text-xs font-bold text-[#6b7280] dark:text-zinc-400">
-          Painel do lojista
-        </p>
-      </div>
+          <p className="truncate text-xs font-bold text-[#6b7280] dark:text-zinc-400">
+            Painel do lojista
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-function SidebarSection({ title, children }) {
+function SidebarSection({ title, children, collapsed = false }) {
   return (
     <section className="min-w-0">
-      <p className="mb-2 px-3 text-[11px] font-black uppercase tracking-[0.16em] text-[#9ca3af]">
-        {title}
-      </p>
+      {!collapsed ? (
+        <p className="mb-2 px-3 text-[11px] font-black uppercase tracking-[0.16em] text-[#9ca3af]">
+          {title}
+        </p>
+      ) : (
+        <div className="my-3 h-[1px] bg-gray-100 dark:bg-zinc-800 mx-2" />
+      )}
 
       <div className="space-y-1">{children}</div>
     </section>
   )
 }
 
-function MainNavItem({ item, onNavigate, onCustomAction }) {
+function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false }) {
   const Icon = item.icon
+  const [isHovered, setIsHovered] = useState(false)
 
   const handleClick = (e) => {
     if (item.action) {
@@ -227,9 +241,12 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
       to={item.to}
       end={item.end}
       onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={({ isActive }) =>
         cn(
-          'group relative flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
+          'group relative flex min-w-0 items-center rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
+          collapsed ? 'justify-center px-1' : 'gap-3',
           isActive
             ? 'text-white'
             : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white'
@@ -256,36 +273,53 @@ function MainNavItem({ item, onNavigate, onCustomAction }) {
             <Icon size={18} />
           </span>
 
-          <span className="relative z-10 min-w-0 flex-1">
-            <span className="block truncate">{item.label}</span>
+          {!collapsed && (
+            <span className="relative z-10 min-w-0 flex-1 animate-[fadeIn_0.2s_ease-out]">
+              <span className="block truncate">{item.label}</span>
 
-            <span
-              className={cn(
-                'mt-0.5 block truncate text-[11px] font-bold',
-                isActive ? 'text-white/75' : 'text-[#9ca3af]'
-              )}
-            >
-              {item.description}
+              <span
+                className={cn(
+                  'mt-0.5 block truncate text-[11px] font-bold',
+                  isActive ? 'text-white/75' : 'text-[#9ca3af]'
+                )}
+              >
+                {item.description}
+              </span>
             </span>
-          </span>
+          )}
 
-          {isActive && <FiChevronRight className="relative z-10 shrink-0" size={16} />}
+          {!collapsed && isActive && <FiChevronRight className="relative z-10 shrink-0" size={16} />}
+
+          {/* Tooltip para sidebar colapsada */}
+          {collapsed && isHovered && (
+            <div className="absolute left-20 z-[9999] pointer-events-none flex items-center">
+              <div className="h-0 w-0 border-y-6 border-y-transparent border-r-6 border-r-zinc-900/95 dark:border-r-white/95" />
+              <div className="rounded-xl border border-white/10 bg-zinc-900/95 dark:bg-white/95 px-3 py-2 text-xs font-black text-white dark:text-zinc-900 shadow-xl backdrop-blur-md whitespace-nowrap">
+                <p className="font-black">{item.label}</p>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 mt-0.5">{item.description}</p>
+              </div>
+            </div>
+          )}
         </>
       )}
     </NavLink>
   )
 }
 
-function ComingSoonNavItem({ item, onNavigate }) {
+function ComingSoonNavItem({ item, onNavigate, collapsed = false }) {
   const Icon = item.icon
+  const [isHovered, setIsHovered] = useState(false)
 
   return (
     <NavLink
       to={item.to}
       onClick={onNavigate}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={({ isActive }) =>
         cn(
-          'group flex min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-black transition active:scale-[0.99] cursor-pointer',
+          'group relative flex min-w-0 items-center rounded-2xl px-3 py-3 text-left text-sm font-black transition active:scale-[0.99] cursor-pointer',
+          collapsed ? 'justify-center px-1' : 'gap-3',
           isActive
             ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-950/20 dark:ring-orange-900/30'
             : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white'
@@ -305,27 +339,42 @@ function ComingSoonNavItem({ item, onNavigate }) {
             <Icon size={18} />
           </span>
 
-          <span className="min-w-0 flex-1">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate">{item.label}</span>
+          {!collapsed && (
+            <span className="min-w-0 flex-1 animate-[fadeIn_0.2s_ease-out]">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{item.label}</span>
 
-              <span className="shrink-0 rounded-full bg-[#111827] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white dark:bg-zinc-800 dark:text-zinc-300">
-                Em breve
+                <span className="shrink-0 rounded-full bg-[#111827] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white dark:bg-zinc-800 dark:text-zinc-300">
+                  Em breve
+                </span>
+              </span>
+
+              <span className="mt-0.5 block truncate text-[11px] font-bold text-[#9ca3af] dark:text-zinc-500">
+                {item.description}
               </span>
             </span>
+          )}
 
-            <span className="mt-0.5 block truncate text-[11px] font-bold text-[#9ca3af] dark:text-zinc-500">
-              {item.description}
-            </span>
-          </span>
+          {!collapsed && (
+            <FiLock
+              className={cn(
+                'shrink-0',
+                isActive ? 'text-[#f97316]' : 'text-gray-300 dark:text-zinc-600'
+              )}
+              size={15}
+            />
+          )}
 
-          <FiLock
-            className={cn(
-              'shrink-0',
-              isActive ? 'text-[#f97316]' : 'text-gray-300 dark:text-zinc-600'
-            )}
-            size={15}
-          />
+          {/* Tooltip para sidebar colapsada */}
+          {collapsed && isHovered && (
+            <div className="absolute left-20 z-[9999] pointer-events-none flex items-center">
+              <div className="h-0 w-0 border-y-6 border-y-transparent border-r-6 border-r-zinc-900/95 dark:border-r-white/95" />
+              <div className="rounded-xl border border-white/10 bg-zinc-900/95 dark:bg-white/95 px-3 py-2 text-xs font-black text-white dark:text-zinc-900 shadow-xl backdrop-blur-md whitespace-nowrap">
+                <p className="font-black">{item.label} (Em breve)</p>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 mt-0.5">{item.description}</p>
+              </div>
+            </div>
+          )}
         </>
       )}
     </NavLink>
@@ -396,7 +445,19 @@ function SoonToast({ feature, onClose }) {
   )
 }
 
-function MobileMoreSheet({ open, onClose, onLogout, isLoggingOut, user, userData, onOpenProfileModal }) {
+function MobileMoreSheet({
+  open,
+  onClose,
+  onLogout,
+  isLoggingOut,
+  user,
+  userData,
+  onOpenProfileModal,
+  soundMuted,
+  onToggleSound,
+  theme,
+  onSetTheme
+}) {
   if (!open) return null
 
   const name =
@@ -429,16 +490,30 @@ function MobileMoreSheet({ open, onClose, onLogout, isLoggingOut, user, userData
         transition={{ type: 'spring', damping: 26, stiffness: 300 }}
         className="absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 dark:bg-zinc-900 dark:ring-zinc-800"
       >
-        <div className="shrink-0 border-b border-orange-100/70 bg-[#fffaf5] px-4 pb-4 pt-4 dark:bg-zinc-950 dark:border-zinc-800/80">
+        <div className="shrink-0 border-b border-orange-100/30 bg-gradient-to-b from-[#fffaf5] to-white px-4 pb-4 pt-4 dark:from-zinc-950 dark:to-zinc-900/40">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#f97316] shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-zinc-800">
-                Painel do lojista
-              </span>
-              <p className="mt-2 text-xl font-black leading-tight text-[#111827] dark:text-white">
-                Menu do painel
-              </p>
-              <p className="mt-1 max-w-[17rem] text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/icons/icon-192.png"
+                  alt="PratoBy"
+                  className="h-10 w-10 rounded-2xl shrink-0 object-cover shadow-md shadow-orange-600/10"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-black tracking-tight text-[#111827] dark:text-white">
+                      Prato<span className="text-[#f97316]">By</span>
+                    </p>
+                    <span className="rounded-full bg-orange-50 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-[#f97316] dark:text-zinc-400 ring-1 ring-orange-100/50 dark:ring-zinc-700/50 shadow-sm">
+                      {import.meta.env.VITE_APP_VERSION || 'v0.0.7'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold text-[#6b7280] dark:text-zinc-500 uppercase tracking-wider">
+                    Painel do lojista
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400 whitespace-nowrap">
                 Acesse sua conta, recursos e próximas áreas do PratoBy.
               </p>
             </div>
@@ -446,10 +521,10 @@ function MobileMoreSheet({ open, onClose, onLogout, isLoggingOut, user, userData
             <button
               type="button"
               onClick={onClose}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-[#111827] shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-50 active:scale-[0.98] dark:bg-zinc-800 dark:text-white dark:ring-zinc-700 dark:hover:bg-zinc-700"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-gray-500 shadow-sm border border-gray-100 transition hover:bg-orange-50 active:scale-95 dark:bg-zinc-800 dark:text-white dark:border-zinc-700 cursor-pointer"
               aria-label="Fechar menu"
             >
-              <FiX />
+              <FiX size={14} />
             </button>
           </div>
         </div>
@@ -477,6 +552,47 @@ function MobileMoreSheet({ open, onClose, onLogout, isLoggingOut, user, userData
               {email && <p className="truncate text-xs font-semibold text-[#6b7280] dark:text-zinc-400">{email}</p>}
             </div>
             <FiChevronRight size={16} className="text-gray-300 transition group-hover:text-[#f97316]" />
+          </button>
+        </div>
+
+        {/* Preferências do Painel no Mobile (Som e Tema) */}
+        <div className="shrink-0 px-4 pt-3 pb-1 grid grid-cols-2 gap-3">
+          {/* Som / Mudo */}
+          <button
+            type="button"
+            onClick={onToggleSound}
+            className="flex items-center justify-center gap-2.5 rounded-2xl border border-gray-100 bg-white py-3 px-4 shadow-sm transition active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-950 cursor-pointer"
+          >
+            {soundMuted ? (
+              <>
+                <FiVolumeX size={18} className="text-red-500 shrink-0" />
+                <span className="text-xs font-black text-gray-700 dark:text-zinc-300">Som Mudo</span>
+              </>
+            ) : (
+              <>
+                <FiVolume2 size={18} className="text-emerald-500 shrink-0" />
+                <span className="text-xs font-black text-gray-700 dark:text-zinc-300">Som Ativo</span>
+              </>
+            )}
+          </button>
+
+          {/* Tema Dark / Light */}
+          <button
+            type="button"
+            onClick={() => onSetTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="flex items-center justify-center gap-2.5 rounded-2xl border border-gray-100 bg-white py-3 px-4 shadow-sm transition active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-950 cursor-pointer"
+          >
+            {theme === 'dark' ? (
+              <>
+                <FiSun size={18} className="text-amber-500 shrink-0" />
+                <span className="text-xs font-black text-gray-700 dark:text-zinc-300">Modo Claro</span>
+              </>
+            ) : (
+              <>
+                <FiMoon size={18} className="text-indigo-500 shrink-0" />
+                <span className="text-xs font-black text-gray-700 dark:text-zinc-300">Modo Escuro</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -536,7 +652,7 @@ function MobileMoreSheet({ open, onClose, onLogout, isLoggingOut, user, userData
 
 // ─── Profile Modal ──────────────────────────────────────────────────────────
 
-function ProfileModal({ open, onClose, onLogout, isLoggingOut, user, userData }) {
+function ProfileModal({ open, onClose, onLogout, isLoggingOut, _user, _userData }) {
   if (!open) return null
 
   return (
@@ -607,7 +723,7 @@ function ProfileModal({ open, onClose, onLogout, isLoggingOut, user, userData })
 
 // ─── User card (sidebar footer) ──────────────────────────────────────────────
 
-function SidebarUserCard({ user, userData, onOpenProfileModal }) {
+function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false }) {
   const name =
     userData?.displayName ||
     userData?.name ||
@@ -618,6 +734,7 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
   const email = user?.email || ''
   const photoURL = userData?.photoURL || userData?.avatarUrl || user?.photoURL || null
   const initial = (name[0] || 'L').toUpperCase()
+  const [isHovered, setIsHovered] = useState(false)
 
   return (
     <div className="mt-4">
@@ -625,7 +742,12 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
       <button
         type="button"
         onClick={onOpenProfileModal}
-        className="group flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40 dark:hover:border-orange-500/30 cursor-pointer"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={cn(
+          'group relative flex items-center rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40 dark:hover:border-orange-500/30 cursor-pointer',
+          collapsed ? 'w-12 h-12 justify-center p-0 mx-auto' : 'w-full px-3 py-2.5 gap-3'
+        )}
       >
         {/* Avatar */}
         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl">
@@ -639,41 +761,78 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
         </div>
 
         {/* Texto */}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black text-[#111827] dark:text-white">{name}</p>
-          {email && (
-            <p className="truncate text-[11px] font-semibold text-[#9ca3af] dark:text-zinc-500">{email}</p>
-          )}
-        </div>
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black text-[#111827] dark:text-white">{name}</p>
+            {email && (
+              <p className="truncate text-[11px] font-semibold text-[#9ca3af] dark:text-zinc-500">{email}</p>
+            )}
+          </div>
+        )}
 
         {/* Ícone de perfil */}
-        <FiUser
-          size={14}
-          className="shrink-0 text-gray-300 transition group-hover:text-[#f97316] dark:text-zinc-600"
-        />
+        {!collapsed && (
+          <FiUser
+            size={14}
+            className="shrink-0 text-gray-300 transition group-hover:text-[#f97316] dark:text-zinc-600"
+          />
+        )}
+
+        {/* Tooltip para sidebar colapsada */}
+        {collapsed && isHovered && (
+          <div className="absolute left-20 z-[9999] pointer-events-none flex items-center">
+            <div className="h-0 w-0 border-y-6 border-y-transparent border-r-6 border-r-zinc-900/95 dark:border-r-white/95" />
+            <div className="rounded-xl border border-white/10 bg-zinc-900/95 dark:bg-white/95 px-3 py-2 text-xs font-black text-white dark:text-zinc-900 shadow-xl backdrop-blur-md whitespace-nowrap">
+              <p className="font-black">{name}</p>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 mt-0.5">Ver perfil da conta</p>
+            </div>
+          </div>
+        )}
       </button>
     </div>
   )
 }
 
-function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal }) {
-  const location = useLocation()
+function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, collapsed = false, onToggle }) {
+  return (
+    <motion.aside
+      animate={{ width: collapsed ? 80 : 296 }}
+      transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+      className="relative hidden h-[100dvh] shrink-0 border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)] overflow-hidden"
+    >
+      {/* Botão de colapso absolutizado na borda direita */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute right-[6px] top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-md transition hover:scale-110 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 cursor-pointer"
+        aria-label={collapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+      >
+        <FiChevronRight
+          className={cn('transition-transform duration-300', !collapsed && 'rotate-180')}
+          size={12}
+        />
+      </button>
 
-  return ( <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)]">
       <div className="flex h-full min-h-0 flex-col">
-        <div className="relative rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-3 shadow-sm ring-1 ring-white dark:from-zinc-800 dark:to-zinc-900 dark:border-zinc-700/50 dark:ring-zinc-800">
-          <PratoByMark />
-          <div className="absolute right-3 top-3 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-black tracking-wide text-gray-500 shadow-sm dark:bg-zinc-800 dark:text-zinc-400">
-            {import.meta.env.VITE_APP_VERSION || 'v0.0.7'}
-          </div>
+        <div className={cn(
+          'relative rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 shadow-sm ring-1 ring-white dark:from-zinc-800 dark:to-zinc-900 dark:border-zinc-700/50 dark:ring-zinc-800 transition-all duration-300',
+          collapsed ? 'p-1.5 flex justify-center' : 'p-3'
+        )}>
+          <PratoByMark collapsed={collapsed} />
+          {!collapsed && (
+            <div className="absolute right-3 top-3 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-black tracking-wide text-gray-500 shadow-sm dark:bg-zinc-800 dark:text-zinc-400">
+              {import.meta.env.VITE_APP_VERSION || 'v0.0.7'}
+            </div>
+          )}
         </div>
 
         <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <SidebarSection title="Principal">
+          <SidebarSection title="Principal" collapsed={collapsed}>
             {MAIN_ITEMS.map((item) => (
               <MainNavItem
                 key={item.to}
                 item={item}
+                collapsed={collapsed}
                 onCustomAction={(action) => {
                   if (action === 'PROFILE_MODAL') {
                     onOpenProfileModal()
@@ -684,16 +843,16 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal })
           </SidebarSection>
 
           {FUTURE_SECTIONS.map((section) => (
-            <SidebarSection key={section.title} title={section.title}>
+            <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
               {section.items.map((item) => (
-                <ComingSoonNavItem key={item.to} item={item} />
+                <ComingSoonNavItem key={item.to} item={item} collapsed={collapsed} />
               ))}
             </SidebarSection>
           ))}
         </nav>
 
         {/* Rodapé — card de usuário */}
-        <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} />
+        <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} collapsed={collapsed} />
 
         {/* Logout rápido no desktop */}
         <div className="mt-2 space-y-2">
@@ -701,22 +860,27 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal })
             type="button"
             disabled={isLoggingOut}
             onClick={onLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer disabled:opacity-70 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+            className={cn(
+              'flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer disabled:opacity-70 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20',
+              collapsed ? 'w-12 h-10 px-0 mx-auto' : 'w-full px-3 py-2'
+            )}
           >
             {isLoggingOut ? (
               <FiLoader size={13} className="shrink-0 animate-spin" />
             ) : (
               <FiLogOut size={13} className="shrink-0" />
             )}
-            <span>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>
+            {!collapsed && <span>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>}
           </button>
           
-          <p className="text-center text-[10px] font-bold text-gray-400 dark:text-zinc-600">
-            © 2026 PratoBy
-          </p>
+          {!collapsed && (
+            <p className="text-center text-[10px] font-bold text-gray-400 dark:text-zinc-600">
+              © 2026 PratoBy
+            </p>
+          )}
         </div>
       </div>
-    </aside>
+    </motion.aside>
   )
 }
 
@@ -748,12 +912,291 @@ function MobileBottomNav({ onOpenMore, moreActive }) {
     </nav>
   )
 }
-
 export default function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const authContext = useAuth()
   const currentOutlet = useOutlet()
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('pratoby-sidebar-collapsed') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('pratoby-sidebar-collapsed', String(next))
+      } catch (e) {
+        console.warn(e)
+      }
+      return next
+    })
+  }
+
+  const { theme, setTheme } = useDashboardTheme()
+
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+
+  const [soundMuted, setSoundMuted] = useState(() => {
+    try {
+      return localStorage.getItem('pratoby-sound-muted') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleSound = () => {
+    setSoundMuted((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('pratoby-sound-muted', String(next))
+      } catch (e) {
+        console.warn(e)
+      }
+      return next
+    })
+  }
+
+  // 1. New Order Sound Dispatcher & Global Listener
+  useEffect(() => {
+    const handlePlayNewOrderSound = () => {
+      if (soundMuted) return
+
+      try {
+        const audio = new Audio('/sounds/notification.mp3')
+        audio.volume = 0.35
+        audio.play().catch((err) => {
+          console.warn('[Sound] Autoplay impedido pelo navegador:', err)
+        })
+      } catch (err) {
+        console.error('[Sound] Erro ao instanciar ou tocar som:', err)
+      }
+    }
+
+    window.addEventListener('play-new-order-sound', handlePlayNewOrderSound)
+    return () => window.removeEventListener('play-new-order-sound', handlePlayNewOrderSound)
+  }, [soundMuted])
+
+  // 2. Sync selectedStoreId dynamically from localStorage or context
+  const { user, userData, logout, loading } = authContext || {}
+  const [currentStoreId, setCurrentStoreId] = useState(() => {
+    try {
+      return localStorage.getItem('@PratoBy:selectedStoreId') || userData?.storeId || user?.storeId || ''
+    } catch {
+      return userData?.storeId || user?.storeId || ''
+    }
+  })
+
+  useEffect(() => {
+    const handleSyncStoreId = () => {
+      try {
+        const saved = localStorage.getItem('@PratoBy:selectedStoreId')
+        const fallback = userData?.storeId || user?.storeId || ''
+        const target = saved || fallback
+        if (target !== currentStoreId) {
+          setCurrentStoreId(target)
+        }
+      } catch (e) {
+        console.warn(e)
+      }
+    }
+
+    const interval = setInterval(handleSyncStoreId, 1500)
+    window.addEventListener('storage', handleSyncStoreId)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleSyncStoreId)
+    }
+  }, [currentStoreId, userData?.storeId, user?.storeId])
+
+  // 3. Real-time store status listener
+  const [storeData, setStoreData] = useState(null)
+  const [storeLoading, setStoreLoading] = useState(true)
+  const [storeError, setStoreError] = useState(null)
+  const [storeToggleLoading, setStoreToggleLoading] = useState(false)
+  const [confirmStatusModalOpen, setConfirmStatusModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (!currentStoreId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStoreData(null)
+      setStoreLoading(false)
+      return undefined
+    }
+
+    setStoreLoading(true)
+    setStoreError(null)
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'stores', currentStoreId),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data()
+          setStoreData({
+            ...data,
+            id: snapshot.id,
+            isOpen: data.isOpen ?? true,
+          })
+        } else {
+          setStoreData(null)
+        }
+        setStoreLoading(false)
+      },
+      (err) => {
+        console.error('Erro ao escutar dados da loja no Topbar:', err)
+        setStoreError(err)
+        setStoreLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [currentStoreId])
+
+  // 4. Safe Store toggle action
+  const handleToggleStoreOpen = async () => {
+    if (!currentStoreId || !storeData || storeToggleLoading) return
+
+    const nextStatus = !storeData.isOpen
+
+    try {
+      setStoreToggleLoading(true)
+      setStoreError(null)
+      await updateDoc(doc(db, 'stores', currentStoreId), {
+        isOpen: nextStatus,
+        updatedAt: Timestamp.now(),
+      })
+      setConfirmStatusModalOpen(false)
+    } catch (err) {
+      console.error('Erro ao alternar status da loja:', err)
+      setStoreError(err)
+    } finally {
+      setStoreToggleLoading(false)
+    }
+  }
+
+  // 5. Command Palette keystrokes
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        
+        const activeEl = document.activeElement
+        const isInput = activeEl && (
+          activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.isContentEditable
+        )
+        if (isInput) return
+
+        setCommandPaletteOpen((prev) => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // 6. Command Palette options
+  const storeSlug =
+    userData?.storeSlug ||
+    userData?.slug ||
+    (Array.isArray(userData?.storeKeys) ? userData.storeKeys.find(Boolean) : '') ||
+    ''
+  const publicStoreHref = storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : ''
+
+  const COMMANDS = useMemo(() => {
+    const items = [
+      { id: 'dashboard', label: 'Dashboard', path: '/dashboard', description: 'Visão geral da operação' },
+      { id: 'orders', label: 'Pedidos', path: '/dashboard/orders', description: 'Kanban e comandas em tempo real' },
+      { id: 'menu', label: 'Cardápio', path: '/dashboard/menu', description: 'Gerenciar produtos e categorias' },
+      { id: 'stats', label: 'Estatísticas', path: '/dashboard/stats', description: 'Resumo de vendas e faturamento' },
+      { id: 'settings', label: 'Configurações', path: '/dashboard/settings', description: 'Configurações da loja, horários e Pix' },
+      { id: 'billing', label: 'Assinatura', path: '/dashboard/billing', description: 'Dados do plano, faturas e cobranças' },
+    ]
+
+    if (publicStoreHref) {
+      items.push({
+        id: 'public_store',
+        label: 'Loja pública',
+        path: publicStoreHref,
+        external: true,
+        description: 'Visualizar cardápio do cliente final',
+      })
+    }
+
+    items.push({
+      id: 'support',
+      label: 'Suporte',
+      action: 'SUPPORT',
+      description: 'Falar com o suporte técnico no WhatsApp',
+    })
+
+    items.push({
+      id: 'logout',
+      label: 'Sair',
+      action: 'LOGOUT',
+      description: 'Encerrar sessão de forma segura',
+    })
+
+    return items
+  }, [publicStoreHref])
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      await new Promise((resolve) => setTimeout(resolve, 600))
+
+      if (typeof logout === 'function') {
+        await logout()
+      } else {
+        try {
+          await signOut(auth)
+        } catch (authError) {
+          console.warn('Erro ao executar signOut do Firebase (possivelmente bloqueado pelo adblocker):', authError)
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao sair:', error)
+    } finally {
+      setIsLoggingOut(false)
+      navigate('/login', { replace: true })
+    }
+  }
+
+  const handleCommandSelect = (cmd) => {
+    setCommandPaletteOpen(false)
+    if (cmd.path) {
+      if (cmd.external) {
+        window.open(cmd.path, '_blank')
+      } else {
+        navigate(cmd.path)
+      }
+    } else if (cmd.action === 'SUPPORT') {
+      window.open('https://wa.me/5579999786984?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy.', '_blank')
+    } else if (cmd.action === 'LOGOUT') {
+      handleLogout()
+    }
+  }
+
+  // 7. Speed Dial link copy
+  const [speedDialOpen, setSpeedDialOpen] = useState(false)
+  const [copyToastOpen, setCopyToastOpen] = useState(false)
+
+  const handleCopyStoreLink = () => {
+    if (!publicStoreHref) return
+    const fullUrl = window.location.origin + publicStoreHref
+    navigator.clipboard.writeText(fullUrl)
+      .then(() => {
+        setCopyToastOpen(true)
+        setTimeout(() => setCopyToastOpen(false), 2500)
+      })
+      .catch((err) => console.error('Erro ao copiar link:', err))
+  }
 
   // Time & Greeting State
   const [now, setNow] = useState(new Date())
@@ -774,21 +1217,14 @@ export default function DashboardLayout() {
   const [soonFeature, setSoonFeature] = useState(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const { user, userData, logout, loading } = authContext || {}
   const storeName =
     userData?.storeName ||
     userData?.signup?.storeName ||
     userData?.name ||
     'Sua loja'
-  const storeSlug =
-    userData?.storeSlug ||
-    userData?.slug ||
-    (Array.isArray(userData?.storeKeys) ? userData.storeKeys.find(Boolean) : '') ||
-    ''
-  const publicStoreHref = storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : ''
+
   const avatarUrl = userData?.photoURL || userData?.avatarUrl || user?.photoURL || ''
   const avatarInitial = (userData?.displayName || userData?.name || user?.displayName || storeName || 'L')[0]?.toUpperCase() || 'L'
-
 
   const moreActive = useMemo(() => {
     const bottomItems = MAIN_ITEMS.slice(0, 4)
@@ -799,25 +1235,8 @@ export default function DashboardLayout() {
     return !isBottomItem
   }, [location.pathname])
 
-  const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true)
-      await new Promise((resolve) => setTimeout(resolve, 600))
-
-      if (typeof logout === 'function') {
-        await logout()
-      } else {
-        await signOut(auth)
-      }
-
-      navigate('/login', { replace: true })
-    } catch (error) {
-      console.error('Erro ao sair:', error)
-      setIsLoggingOut(false)
-    }
-  }
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMobileMenuOpen(false)
   }, [location.pathname])
 
@@ -835,7 +1254,15 @@ export default function DashboardLayout() {
       </div>
 
       <div className="relative flex h-[100dvh] min-h-0 overflow-hidden">
-        <Sidebar onLogout={handleLogout} isLoggingOut={isLoggingOut} user={user} userData={userData} onOpenProfileModal={() => setProfileModalOpen(true)} />
+        <Sidebar
+          onLogout={handleLogout}
+          isLoggingOut={isLoggingOut}
+          user={user}
+          userData={userData}
+          onOpenProfileModal={() => setProfileModalOpen(true)}
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+        />
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
           {/* Topbar/Header do Dashboard */}
@@ -854,10 +1281,36 @@ export default function DashboardLayout() {
                 <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-950/20 dark:ring-orange-900/30 sm:grid">
                   <FiHome size={17} />
                 </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black leading-5 text-[#111827] dark:text-white sm:text-base">
-                    {greeting}, {storeName}
-                  </p>
+                <div className="min-w-0 flex flex-col justify-center">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-black leading-5 text-[#111827] dark:text-white sm:text-base">
+                      {greeting}, {storeName}
+                    </p>
+                    
+                    {/* Badge do Status da Loja */}
+                    {storeLoading ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-bold text-gray-400 dark:bg-zinc-900/50">
+                        <FiLoader className="animate-spin" size={8} />
+                      </span>
+                    ) : storeData ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmStatusModalOpen(true)}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition hover:scale-105 active:scale-95 cursor-pointer shadow-sm shrink-0',
+                          storeData.isOpen
+                            ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:text-emerald-400 dark:ring-emerald-900/30'
+                            : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/25 dark:text-red-400 dark:ring-red-900/30'
+                        )}
+                      >
+                        <span className={cn(
+                          'h-1.5 w-1.5 rounded-full shrink-0',
+                          storeData.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                        )} />
+                        <span className="hidden xs:inline">{storeData.isOpen ? 'Aberta' : 'Fechada'}</span>
+                      </button>
+                    ) : null}
+                  </div>
                   <div className="flex items-center gap-1.5 truncate text-[11px] font-bold leading-4 text-[#6b7280] dark:text-zinc-400">
                     <span className="capitalize">{dateStr}</span>
                     <span>·</span>
@@ -882,6 +1335,56 @@ export default function DashboardLayout() {
                   Ver loja
                 </a>
               )}
+
+              {/* Botão Buscar no painel... (Ctrl + K) */}
+              <button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                className="hidden items-center gap-2 rounded-2xl border border-gray-100 bg-gray-50/50 px-3 py-1.5 text-xs font-semibold text-gray-400 transition hover:bg-gray-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-500 dark:hover:bg-zinc-800/80 md:flex cursor-pointer"
+              >
+                <FiSearch size={14} className="text-gray-400 dark:text-zinc-500" />
+                <span>Buscar...</span>
+                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border border-gray-200 bg-white px-1.5 font-mono text-[9px] font-bold text-gray-400 dark:border-zinc-700 dark:bg-zinc-800">
+                  Ctrl K
+                </kbd>
+              </button>
+
+              {/* Botão de Som/Mudo */}
+              <button
+                type="button"
+                onClick={toggleSound}
+                className="hidden lg:grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                aria-label={soundMuted ? 'Ativar som de novo pedido' : 'Silenciar som de novo pedido'}
+              >
+                {soundMuted ? (
+                  <FiVolumeX size={18} className="text-red-500" />
+                ) : (
+                  <FiVolume2 size={18} className="text-emerald-500" />
+                )}
+              </button>
+
+              {/* Botão Alternador de Tema Dark/Light */}
+              <button
+                type="button"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="relative hidden lg:grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                aria-label="Alternar tema"
+              >
+                <motion.div
+                  key={theme}
+                  initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
+                  animate={{ rotate: 0, scale: 1, opacity: 1 }}
+                  exit={{ rotate: 90, scale: 0.6, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="flex items-center justify-center"
+                >
+                  {theme === 'dark' ? (
+                    <FiSun size={18} className="text-amber-500" />
+                  ) : (
+                    <FiMoon size={18} className="text-indigo-600" />
+                  )}
+                </motion.div>
+              </button>
 
               <DashboardNotificationBell />
 
@@ -915,13 +1418,13 @@ export default function DashboardLayout() {
             {/* Trial Banner Global */}
             <DashboardTrialRibbon />
 
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={loading ? 'loading-skeleton' : location.pathname}
-                initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -15, scale: 0.98 }}
-                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                initial={{ opacity: 0, y: 8, scale: 0.99, filter: 'blur(2px)' }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -8, scale: 0.99, filter: 'blur(2px)' }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="min-h-full"
               >
                 {loading ? <DashboardPageSkeleton /> : currentOutlet}
@@ -945,6 +1448,10 @@ export default function DashboardLayout() {
               user={user}
               userData={userData}
               onOpenProfileModal={() => setProfileModalOpen(true)}
+              soundMuted={soundMuted}
+              onToggleSound={toggleSound}
+              theme={theme}
+              onSetTheme={setTheme}
             />
           )}
           {profileModalOpen && (
@@ -957,8 +1464,339 @@ export default function DashboardLayout() {
               userData={userData}
             />
           )}
+          {isLoggingOut && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md"
+            >
+              <div className="flex flex-col items-center gap-4 p-6 text-center">
+                <div className="relative flex h-16 w-16 items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border-4 border-orange-100 dark:border-zinc-800" />
+                  <div className="absolute inset-0 rounded-full border-4 border-t-[#f97316] animate-spin" />
+                </div>
+                <h3 className="text-base font-black text-[#111827] dark:text-white uppercase tracking-wider animate-pulse mt-2">
+                  Encerrando sessão...
+                </h3>
+                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400">
+                  Limpando dados e saindo com segurança da sua conta.
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Command Palette Overlay */}
+        <AnimatePresence>
+          {commandPaletteOpen && (
+            <CommandPalette
+              open={commandPaletteOpen}
+              onClose={() => setCommandPaletteOpen(false)}
+              commands={COMMANDS}
+              onSelect={handleCommandSelect}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Modal de Confirmação para Status da Loja */}
+        <AnimatePresence>
+          {confirmStatusModalOpen && storeData && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => !storeToggleLoading && setConfirmStatusModalOpen(false)}
+                className="absolute inset-0 w-full cursor-default border-none bg-black/40 backdrop-blur-sm"
+                aria-label="Fechar"
+                disabled={storeToggleLoading}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                className="relative flex w-full max-w-md flex-col overflow-hidden rounded-[2rem] bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-zinc-800"
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className={cn(
+                    'grid h-16 w-16 place-items-center rounded-full mb-4 shadow-lg',
+                    storeData.isOpen
+                      ? 'bg-red-50 text-red-500 shadow-red-500/10 dark:bg-red-950/20'
+                      : 'bg-emerald-50 text-emerald-500 shadow-emerald-500/10 dark:bg-emerald-950/20'
+                  )}>
+                    {storeData.isOpen ? <FiX size={28} /> : <FiZap size={28} />}
+                  </div>
+
+                  <h3 className="text-lg font-black text-[#111827] dark:text-white">
+                    {storeData.isOpen ? 'Fechar Loja?' : 'Abrir Loja?'}
+                  </h3>
+
+                  <p className="mt-2 text-xs font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
+                    {storeData.isOpen
+                      ? 'Ao fechar a loja, clientes no site não conseguirão enviar novos pedidos no cardápio.'
+                      : 'Ao abrir a loja, novos pedidos começarão a chegar no painel.'}
+                  </p>
+
+                  {storeError && (
+                    <p className="mt-2 text-xs font-semibold text-red-500">
+                      Ocorreu um erro ao atualizar o status. Tente novamente.
+                    </p>
+                  )}
+
+                  <div className="mt-6 flex w-full gap-3">
+                    <button
+                      type="button"
+                      disabled={storeToggleLoading}
+                      onClick={() => setConfirmStatusModalOpen(false)}
+                      className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-xs font-black text-gray-500 transition hover:bg-gray-50 active:scale-98 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 cursor-pointer disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={storeToggleLoading}
+                      onClick={handleToggleStoreOpen}
+                      className={cn(
+                        'flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black text-white transition active:scale-98 cursor-pointer disabled:opacity-50',
+                        storeData.isOpen
+                          ? 'bg-red-500 shadow-lg shadow-red-500/15 hover:bg-red-600'
+                          : 'bg-emerald-500 shadow-lg shadow-emerald-500/15 hover:bg-emerald-600'
+                      )}
+                    >
+                      {storeToggleLoading ? (
+                        <FiLoader className="animate-spin" size={14} />
+                      ) : storeData.isOpen ? (
+                        'Sim, Fechar'
+                      ) : (
+                        'Sim, Abrir'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Speed Dial de Ações Rápidas */}
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] lg:bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+          <AnimatePresence>
+            {speedDialOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 15, scale: 0.85 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 15, scale: 0.85 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="flex flex-col items-end gap-2.5"
+              >
+                {publicStoreHref && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCopyStoreLink()
+                      setSpeedDialOpen(false)
+                    }}
+                    className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white/95 px-3 py-2 text-xs font-black text-gray-700 shadow-lg ring-1 ring-white/70 backdrop-blur-md transition hover:scale-105 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900/95 dark:text-zinc-300 dark:ring-zinc-800 cursor-pointer"
+                  >
+                    <FiExternalLink size={14} className="text-[#f97316]" />
+                    <span>Copiar link da loja</span>
+                  </button>
+                )}
+                <a
+                  href="https://wa.me/5579999786984?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy."
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setSpeedDialOpen(false)}
+                  className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white/95 px-3 py-2 text-xs font-black text-gray-700 shadow-lg ring-1 ring-white/70 backdrop-blur-md transition hover:scale-105 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900/95 dark:text-zinc-300 dark:ring-zinc-800 cursor-pointer"
+                >
+                  <FiPhone size={14} className="text-emerald-500" />
+                  <span>Falar com o suporte</span>
+                </a>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <button
+            type="button"
+            onClick={() => setSpeedDialOpen((prev) => !prev)}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-600/15 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
+            aria-label="Ações rápidas"
+          >
+            <motion.div
+              animate={{ rotate: speedDialOpen ? 135 : 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex items-center justify-center"
+            >
+              <FiZap size={20} />
+            </motion.div>
+          </button>
+        </div>
+
+        {/* Toast de Cópia Sucesso */}
+        <AnimatePresence>
+          {copyToastOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.9 }}
+              className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom))] lg:bottom-20 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700 shadow-xl dark:border-emerald-950/20 dark:bg-emerald-950/40 dark:text-emerald-400"
+            >
+              <span>✓ Link da loja copiado com sucesso!</span>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </main>
+  )
+}
+
+// ─── Command Palette Component ──────────────────────────────────────────────
+
+function CommandPalette({ open, onClose, commands, onSelect }) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const inputRef = useRef(null)
+
+  const filteredCommands = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return commands
+    return commands.filter(
+      (cmd) =>
+        cmd.label.toLowerCase().includes(query) ||
+        cmd.description.toLowerCase().includes(query)
+    )
+  }, [commands, searchQuery])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIndex(0)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => inputRef.current?.focus(), 50)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSearchQuery('')
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex((prev) =>
+          prev < filteredCommands.length - 1 ? prev + 1 : 0
+        )
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex((prev) =>
+          prev > 0 ? prev - 1 : filteredCommands.length - 1
+        )
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (filteredCommands[selectedIndex]) {
+          onSelect(filteredCommands[selectedIndex])
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, filteredCommands, selectedIndex, onClose, onSelect])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] px-4">
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 w-full cursor-default border-none bg-black/45 backdrop-blur-md"
+        aria-label="Fechar busca"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: -20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -20, scale: 0.95 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+        className="relative flex w-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-gray-100 bg-white/90 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/90 dark:ring-zinc-800"
+      >
+        <div className="flex items-center gap-3 border-b border-gray-100/80 px-4 py-3 dark:border-zinc-800/80">
+          <FiSearch size={18} className="text-gray-400 dark:text-zinc-500" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="O que você está buscando hoje?"
+            className="flex-1 bg-transparent border-none text-sm font-semibold outline-none text-[#111827] dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-0"
+          />
+          <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-400 dark:bg-zinc-800 dark:text-zinc-500">
+            ESC
+          </span>
+        </div>
+
+        <div className="max-h-[350px] overflow-y-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {filteredCommands.length === 0 ? (
+            <div className="py-12 text-center text-xs font-semibold text-gray-400 dark:text-zinc-500">
+              Nenhum comando ou página encontrada.
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {filteredCommands.map((cmd, idx) => {
+                const isActive = idx === selectedIndex
+                return (
+                  <button
+                    key={cmd.id}
+                    type="button"
+                    onClick={() => onSelect(cmd)}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    className={cn(
+                      'flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition cursor-pointer',
+                      isActive
+                        ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/15'
+                        : 'hover:bg-gray-50 text-gray-700 dark:hover:bg-zinc-800/50 dark:text-zinc-300'
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className={cn('text-xs font-black', isActive ? 'text-white' : 'text-[#111827] dark:text-zinc-100')}>
+                        {cmd.label}
+                      </p>
+                      <p className={cn('text-[10px] font-bold mt-0.5', isActive ? 'text-white/85' : 'text-[#9ca3af]')}>
+                        {cmd.description}
+                      </p>
+                    </div>
+                    {isActive && (
+                      <span className="rounded bg-white/20 px-2 py-0.5 text-[9px] font-black uppercase text-white">
+                        Enter
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-gray-100/50 bg-gray-50/50 px-4 py-2.5 text-[10px] font-bold text-gray-400 dark:border-zinc-800/50 dark:bg-zinc-950/20 dark:text-zinc-500">
+          <div className="flex items-center gap-3">
+            <span>↑↓ Navegar</span>
+            <span>↵ Ir para</span>
+          </div>
+          <span>PratoBy Command Palette</span>
+        </div>
+      </motion.div>
+    </div>
   )
 }

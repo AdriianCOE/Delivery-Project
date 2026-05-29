@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createUserWithEmailAndPassword,
@@ -15,7 +15,7 @@ import { auth, db, functions, googleProvider } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import { AnimatePresence, motion } from 'motion/react'
-import { FiAlertCircle, FiCheck, FiArrowLeft, FiStar, FiCheckCircle, FiChevronDown, FiX, FiInfo, FiChevronRight, FiCreditCard, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield, FiLoader } from 'react-icons/fi'
+import { FiAlertCircle, FiCheck, FiArrowLeft, FiStar, FiCheckCircle, FiChevronDown, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield, FiLoader, FiEye, FiEyeOff } from 'react-icons/fi'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 
 // ─────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ const PLANS = PLAN_OPTIONS.map((plan) => ({
   ...plan,
   price: plan.priceMonthly,
   priceAnnual: plan.equivalentMonthly,
+  actualPriceAnnual: plan.priceAnnual,
   popular: Boolean(plan.popular || plan.highlight),
   features: plan.features.filter((feature) => feature !== '14 dias grátis inclusos'),
 }))
@@ -43,13 +44,43 @@ const SEGMENTS = [
   'Outro',
 ]
 
+const CITIES = [
+  'Aracaju, SE',
+  'Belém, PA',
+  'Belo Horizonte, MG',
+  'Brasília, DF',
+  'Curitiba, PR',
+  'Florianópolis, SC',
+  'Fortaleza, CE',
+  'Goiânia, GO',
+  'João Pessoa, PB',
+  'Maceió, AL',
+  'Manaus, AM',
+  'Natal, RN',
+  'Porto Alegre, RS',
+  'Recife, PE',
+  'Rio de Janeiro, RJ',
+  'Salvador, BA',
+  'São Luís, MA',
+  'São Paulo, SP',
+  'Teresina, PI',
+  'Vitória, ES',
+  'Outro',
+]
+
 const TERMS_VERSION = '2026-05-24'
 const PRIVACY_VERSION = '2026-05-24'
 const TERMS_REQUIRED_MESSAGE = 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para continuar.'
 
 // ─────────────────────────────────────────────────────────────
-// FUNÇÕES AUXILIARES
+// FUNÇÕES AUXILIARES E FORMATAÇÃO BRL
 // ─────────────────────────────────────────────────────────────
+
+function formatPriceBR(val) {
+  const parts = Number(val || 0).toFixed(2).split('.')
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return parts.join(',')
+}
 
 function getPasswordStrength(password) {
   const value = String(password || '')
@@ -118,11 +149,30 @@ const staggerContainer = {
   visible: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } },
 }
 
-const floatAnimation = {
+const floatAnimation1 = {
   animate: {
-    y: [0, -14, 0],
+    y: [0, -22, 0],
+    x: [0, 10, 0],
+    scale: [1, 1.04, 1],
+    transition: { duration: 8, repeat: Infinity, ease: 'easeInOut' },
+  },
+}
+
+const floatAnimation2 = {
+  animate: {
+    y: [0, 20, 0],
+    x: [0, -15, 0],
+    scale: [1, 1.06, 1],
+    transition: { duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 0.5 },
+  },
+}
+
+const floatAnimation3 = {
+  animate: {
+    y: [0, -15, 0],
+    x: [0, -10, 0],
     scale: [1, 1.03, 1],
-    transition: { duration: 6, repeat: Infinity, ease: 'easeInOut' },
+    transition: { duration: 9, repeat: Infinity, ease: 'easeInOut', delay: 1 },
   },
 }
 
@@ -195,26 +245,52 @@ function SignupMobileHeader() {
 // INPUT FIELD (idêntico ao LoginPage)
 // ─────────────────────────────────────────────────────────────
 
-function InputField({ label, icon: Icon, rightElement, className = '', ...props }) {
+function InputField({ label, icon: Icon, rightElement, success, className = '', ...props }) {
+  const [focused, setFocused] = useState(false)
   return (
     <label className={`block ${className}`} htmlFor={props.id}>
-      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+      <span
+        className={`mb-2 block text-xs font-black uppercase tracking-wide transition-colors duration-200 ${
+          focused ? 'text-[#f97316]' : 'text-[#6b7280]'
+        }`}
+      >
         {label}
       </span>
       <div className="relative">
         {Icon && (
           <Icon
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
+              focused ? 'text-[#f97316]' : 'text-gray-400'
+            }`}
             size={17}
           />
         )}
         <input
           {...props}
+          onFocus={(e) => {
+            setFocused(true)
+            props.onFocus?.(e)
+          }}
+          onBlur={(e) => {
+            setFocused(false)
+            props.onBlur?.(e)
+          }}
           className={`h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] shadow-sm outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70 ${
             Icon ? 'pl-11' : ''
-          } ${rightElement ? 'pr-12' : ''}`}
+          } ${rightElement || success ? 'pr-12' : ''}`}
         />
         {rightElement}
+        {!rightElement && success && (
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-emerald-500">
+            <motion.span
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+            >
+              <FiCheckCircle size={17} />
+            </motion.span>
+          </div>
+        )}
       </div>
     </label>
   )
@@ -225,26 +301,47 @@ function InputField({ label, icon: Icon, rightElement, className = '', ...props 
 // ─────────────────────────────────────────────────────────────
 
 function SelectField({ label, icon: Icon, className = '', ...props }) {
+  const [focused, setFocused] = useState(false)
   return (
     <label className={`block ${className}`} htmlFor={props.id}>
-      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+      <span
+        className={`mb-2 block text-xs font-black uppercase tracking-wide transition-colors duration-200 ${
+          focused ? 'text-[#f97316]' : 'text-[#6b7280]'
+        }`}
+      >
         {label}
       </span>
       <div className="relative">
         {Icon && (
           <Icon
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
+              focused ? 'text-[#f97316]' : 'text-gray-400'
+            }`}
             size={17}
           />
         )}
         <select
           {...props}
-          className={`h-12 w-full appearance-none rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-70 ${
+          onFocus={(e) => {
+            setFocused(true)
+            props.onFocus?.(e)
+          }}
+          onBlur={(e) => {
+            setFocused(false)
+            props.onBlur?.(e)
+          }}
+          className={`h-12 w-full appearance-none rounded-2xl border border-orange-100/80 bg-white px-4 pr-10 text-sm font-bold text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-70 ${
             Icon ? 'pl-11' : ''
           }`}
         >
           {props.children}
         </select>
+        <FiChevronDown
+          className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
+            focused ? 'text-[#f97316]' : 'text-gray-400'
+          }`}
+          size={16}
+        />
       </div>
     </label>
   )
@@ -265,8 +362,14 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
         aria-label={`Selecionar plano ${plan.name}`}
         aria-pressed={selected}
         whileTap={{ scale: 0.985 }}
+        whileHover={{
+          y: -4,
+          boxShadow: selected
+            ? '0 25px 50px -12px rgba(249, 115, 22, 0.15)'
+            : '0 12px 30px rgba(0, 0, 0, 0.04)',
+          borderColor: selected ? '#f97316' : '#fed7aa',
+        }}
         animate={{
-          y: selected ? -3 : 0,
           scale: selected ? 1.015 : 1,
         }}
         transition={{
@@ -275,10 +378,10 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
           damping: 26,
         }}
         className={[
-          'group relative w-full cursor-pointer rounded-[1.5rem] border-2 p-4 text-left transition-colors duration-200 sm:p-5',
+          'group relative w-full cursor-pointer rounded-[1.5rem] border-2 p-4 text-left transition-all duration-300 sm:p-5',
           selected
-            ? 'border-[#f97316] bg-orange-50/70 shadow-lg shadow-orange-100'
-            : 'border-gray-100 bg-white shadow-sm hover:border-orange-200 hover:shadow-md',
+            ? 'border-[#f97316] bg-gradient-to-b from-orange-50/70 via-white to-white shadow-xl shadow-orange-500/10 ring-1 ring-[#f97316]'
+            : 'border-gray-100 bg-white shadow-sm',
         ].join(' ')}
       >
         <AnimatePresence>
@@ -288,13 +391,13 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="pointer-events-none absolute inset-0 rounded-[1.35rem] bg-gradient-to-br from-orange-100/80 via-white/10 to-transparent"
+              className="pointer-events-none absolute inset-0 rounded-[1.35rem] bg-gradient-to-br from-orange-100/50 via-white/10 to-transparent"
             />
           )}
         </AnimatePresence>
   
         {plan.popular && (
-          <span className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-[#f97316] px-3 py-1 text-[10px] font-black text-white shadow-md shadow-orange-500/30">
+          <span className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1 text-[10px] font-black text-white shadow-md shadow-orange-500/30">
             <FiStar size={10} />
             Mais popular
           </span>
@@ -328,35 +431,40 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
             {plan.description}
           </p>
   
-          <div className="mt-3 flex items-baseline gap-1">
+          <div className="mt-4 flex items-baseline gap-1.5 leading-none">
             <motion.span
               key={`${plan.id}-${cycle}-price`}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="text-2xl font-black text-[#111827]"
+              className="text-3xl font-black text-[#111827] whitespace-nowrap"
             >
-              R$ {price}
+              R$ {formatPriceBR(price)}
             </motion.span>
   
-            <span className="text-xs font-bold text-[#9ca3af]">
-              {cycle === 'annual' ? '/mês no anual' : '/mês'}
+            <span className="text-xs font-black text-[#9ca3af] whitespace-nowrap">
+              /mês
             </span>
           </div>
   
           <AnimatePresence mode="wait">
             {cycle === 'annual' && (
-              <motion.span
-                key="annual-badge"
-                initial={{ opacity: 0, y: 5, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -4, scale: 0.96 }}
+              <motion.div
+                key="annual-details"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.18 }}
-                className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black text-[#f97316]"
+                className="mt-1 flex flex-wrap items-center gap-1.5"
               >
-                <FiZap size={9} />
-                2 meses grátis
-              </motion.span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black text-[#f97316]">
+                  <FiZap size={9} />
+                  2 meses grátis
+                </span>
+                <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
+                  (R$ {formatPriceBR(plan.actualPriceAnnual)}/ano)
+                </span>
+              </motion.div>
             )}
           </AnimatePresence>
   
@@ -368,8 +476,8 @@ function PlanCard({ plan, selected, cycle, onSelect }) {
               >
                 <FiCheckCircle
                   size={13}
-                  className={`mt-0.5 shrink-0 transition-colors ${
-                    selected ? 'text-[#f97316]' : 'text-gray-400'
+                  className={`mt-0.5 shrink-0 transition-all duration-200 ${
+                    selected ? 'text-[#f97316] drop-shadow-[0_1px_3px_rgba(249,115,22,0.15)]' : 'text-gray-300'
                   }`}
                 />
                 <span className="truncate">{feat}</span>
@@ -417,15 +525,20 @@ function SummaryCard({ plan, cycle }) {
               </div>
   
               <div className="text-left sm:text-right">
-                <p className="text-xl font-black text-[#111827]">
-                  R$ {price}
-                  <span className="text-xs font-bold text-[#9ca3af]">
+                <p className="text-xl font-black text-[#111827] whitespace-nowrap">
+                  R$ {formatPriceBR(price)}
+                  <span className="text-xs font-bold text-[#9ca3af] whitespace-nowrap">
                     {cycle === 'annual' ? '/mês no anual' : '/mês'}
                   </span>
                 </p>
                 <p className="text-[11px] font-bold text-[#f97316]">
                   {cycleLabel}
                 </p>
+                {cycle === 'annual' && (
+                  <p className="text-[10px] font-bold text-gray-500 mt-0.5 whitespace-nowrap">
+                    Total pago: R$ {formatPriceBR(plan.actualPriceAnnual)}/ano
+                  </p>
+                )}
               </div>
             </div>
   
@@ -487,8 +600,13 @@ function GoogleIcon({ size = 18 }) {
 function AlertBox({ children }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1, x: [0, -6, 6, -6, 6, 0] }}
+      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+      transition={{
+        x: { duration: 0.38, ease: 'easeInOut' },
+        default: { duration: 0.22, ease: 'easeOut' },
+      }}
       className="mb-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700"
     >
       <div className="flex items-start gap-3">
@@ -535,6 +653,22 @@ export default function SignupPage() {
   const [marketingOptIn, setMarketingOptIn] = useState(false)
   const [termsModalOpen, setTermsModalOpen] = useState(false)
   const [termsModalSubmitting, setTermsModalSubmitting] = useState(false)
+
+  // Estados de visualização de senha
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  // Estado para cidade personalizada (caso selecione 'Outro')
+  const [customCity, setCustomCity] = useState('')
+
+  // Referência para scroll suave até a caixa de erro
+  const errorRef = useRef(null)
+
+  useEffect(() => {
+    if (formError && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [formError])
 
   // ── Derivados ──────────────────────────────
   const selectedPlan = useMemo(
@@ -609,6 +743,7 @@ export default function SignupPage() {
       throw new Error('signup/existing-account');
     }
     const finalDisplayName = displayNameOverride || form.name.trim();
+    const finalCity = form.city === 'Outro' ? customCity.trim() : form.city;
     await setDoc(userRef, {
       uid: user.uid,
       role: 'merchant',
@@ -626,7 +761,7 @@ export default function SignupPage() {
       signup: {
         storeName: form.storeName || '',
         segment: form.segment || '',
-        city: form.city || '',
+        city: finalCity,
         source: 'signup_page',
         authProvider,
       },
@@ -638,7 +773,7 @@ export default function SignupPage() {
     if (refreshUserData) {
       await refreshUserData()
     }
-  }, [billingCycle, buildComplianceFields, form, marketingOptIn, refreshUserData, selectedPlanId, termsAccepted])
+  }, [billingCycle, buildComplianceFields, customCity, form, refreshUserData, selectedPlanId, termsAccepted])
 
   const handleField = useCallback((field) => (e) => {
     let value = e.target.value
@@ -755,7 +890,11 @@ export default function SignupPage() {
     } catch (error) {
       console.error(error)
       setFormError(getFriendlyError(error))
-      try { await signOut(auth) } catch (e) {}
+      try {
+        await signOut(auth)
+      } catch (err) {
+        console.warn('[Signup] Erro ao deslogar após falha no login do Google:', err)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -772,6 +911,10 @@ export default function SignupPage() {
         return setFormError('Informe um celular válido com DDD e 9 dígitos.')
       }
       if (!form.storeName.trim()) return setFormError('Informe o nome da sua loja.')
+      if (!form.city) return setFormError('Selecione sua cidade.')
+      if (form.city === 'Outro' && !customCity.trim()) {
+        return setFormError('Informe o nome da sua cidade.')
+      }
       const strength = getPasswordStrength(form.password)
       if (strength.level === 'weak') {
         return setFormError('Use uma senha mais forte, com pelo menos 8 caracteres, letras e números.')
@@ -806,12 +949,16 @@ export default function SignupPage() {
       } catch (error) {
         console.error(error)
         setFormError(getFriendlyError(error))
-        try { await signOut(auth) } catch (e) {}
+        try {
+          await signOut(auth)
+        } catch (err) {
+          console.warn('[Signup] Erro ao deslogar após falha no cadastro por e-mail:', err)
+        }
       } finally {
         setIsLoading(false)
       }
     },
-    [form, selectedPlanId, billingCycle, navigate, saveUserDocument, termsAccepted]
+    [customCity, form, navigate, saveUserDocument, termsAccepted]
   )
 
   // ─────────────────────────────────────────────────────────
@@ -825,20 +972,18 @@ export default function SignupPage() {
       {/* Blobs flutuantes — idêntico ao LoginPage */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <motion.div
-          variants={floatAnimation}
+          variants={floatAnimation1}
           animate="animate"
           className="absolute -left-40 top-20 h-[28rem] w-[28rem] rounded-full bg-orange-100/80 blur-3xl"
         />
         <motion.div
-          variants={floatAnimation}
+          variants={floatAnimation2}
           animate="animate"
-          transition={{ delay: 1 }}
           className="absolute -right-40 top-1/3 h-[32rem] w-[32rem] rounded-full bg-orange-200/50 blur-3xl"
         />
         <motion.div
-          variants={floatAnimation}
+          variants={floatAnimation3}
           animate="animate"
-          transition={{ delay: 2 }}
           className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-100/70 blur-3xl"
         />
       </div>
@@ -854,7 +999,12 @@ export default function SignupPage() {
           </div>
 
           {/* Topo */}
-          <div className="relative z-10 flex items-center justify-between gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="relative z-10 flex items-center justify-between gap-4"
+          >
             <PratoByLogo dark />
             <Link
               to="/login"
@@ -862,26 +1012,43 @@ export default function SignupPage() {
             >
               Voltar ao login
             </Link>
-          </div>
+          </motion.div>
 
           {/* Centro */}
-          <div className="relative z-10 py-12">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="relative z-10 py-12"
+          >
+            <motion.span
+              variants={fadeUp}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur"
+            >
               <FiShield className="text-[#f97316]" />
               Comece em minutos, sem comissão por pedido
-            </span>
+            </motion.span>
 
-            <h1 className="mt-8 text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl">
+            <motion.h1
+              variants={fadeUp}
+              className="mt-8 text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl"
+            >
               Sua loja online,
               <span className="block text-[#f97316]">sem comissão.</span>
-            </h1>
+            </motion.h1>
 
-            <p className="mt-6 max-w-sm text-lg font-medium leading-8 text-gray-300">
+            <motion.p
+              variants={fadeUp}
+              className="mt-6 max-w-sm text-lg font-medium leading-8 text-gray-300"
+            >
               Cardápio digital, pedidos em tempo real e link exclusivo para divulgar onde quiser.
               Sem marketplace, sem comissão por venda.
-            </p>
+            </motion.p>
 
-            <div className="mt-9 grid gap-3 text-sm font-bold text-gray-200 sm:grid-cols-2">
+            <motion.div
+              variants={fadeUp}
+              className="mt-9 grid gap-3 text-sm font-bold text-gray-200 sm:grid-cols-2"
+            >
               {[
                 '14 dias grátis',
                 '0% de comissão por pedido',
@@ -896,11 +1063,16 @@ export default function SignupPage() {
                   {item}
                 </div>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Rodapé do painel esquerdo */}
-          <div className="relative z-10 rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-5 backdrop-blur">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.35, ease: 'easeOut' }}
+            className="relative z-10 rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-5 backdrop-blur"
+          >
             <div className="flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#f97316] shadow-lg shadow-orange-950/20">
                 <FiShoppingBag size={20} />
@@ -919,7 +1091,7 @@ export default function SignupPage() {
                 </Link>
               </div>
             </div>
-          </div>
+          </motion.div>
         </section>
 
         {/* ── PAINEL DIREITO — conteúdo principal ─────────── */}
@@ -1032,16 +1204,19 @@ export default function SignupPage() {
 
               {/* Botão Google (Mobile-first placement) */}
               <motion.div variants={fadeUp} className="mb-6">
-                <button
+                <motion.button
                   type="button"
                   onClick={handleGoogleSignup}
                   disabled={isLoading}
+                  whileHover={{ y: -2, scale: 1.005, borderColor: '#d1d5db' }}
+                  whileTap={{ scale: 0.985 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   aria-label="Continuar com Google"
-                  className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                  className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <GoogleIcon size={18} />
                   Continuar com Google
-                </button>
+                </motion.button>
 
                 <div className="mt-4 flex items-center gap-3">
                   <div className="h-px flex-1 bg-gray-200" />
@@ -1052,7 +1227,11 @@ export default function SignupPage() {
 
               {/* Formulário */}
               <motion.form variants={fadeUp} onSubmit={handleContinue} noValidate>
-                {formError && <AlertBox>{formError}</AlertBox>}
+                <div ref={errorRef} className="scroll-mt-6">
+                  <AnimatePresence mode="wait">
+                    {formError && <AlertBox>{formError}</AlertBox>}
+                  </AnimatePresence>
+                </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <InputField
@@ -1064,6 +1243,7 @@ export default function SignupPage() {
                     autoComplete="name"
                     value={form.name}
                     onChange={handleField('name')}
+                    success={form.name.trim().length >= 3}
                     required
                   />
                   <InputField
@@ -1076,6 +1256,7 @@ export default function SignupPage() {
                     inputMode="email"
                     value={form.email}
                     onChange={handleField('email')}
+                    success={/\S+@\S+\.\S+/.test(form.email)}
                     required
                   />
                   <InputField
@@ -1089,6 +1270,7 @@ export default function SignupPage() {
                     maxLength={15}
                     value={form.whatsapp}
                     onChange={handleField('whatsapp')}
+                    success={isValidBrazilianMobilePhone(form.whatsapp)}
                     required
                   />
                   <InputField
@@ -1099,6 +1281,7 @@ export default function SignupPage() {
                     placeholder="Lanchonete do João"
                     value={form.storeName}
                     onChange={handleField('storeName')}
+                    success={form.storeName.trim().length >= 2}
                     required
                   />
                   <SelectField
@@ -1113,55 +1296,149 @@ export default function SignupPage() {
                       <option key={seg} value={seg}>{seg}</option>
                     ))}
                   </SelectField>
-                  <InputField
-                    label="Cidade"
+                  <SelectField
+                    label="Cidade *"
                     icon={FiMapPin}
                     id="city"
-                    type="text"
-                    placeholder="Aracaju, SE"
-                    autoComplete="address-level2"
                     value={form.city}
                     onChange={handleField('city')}
-                  />
+                    required
+                  >
+                    <option value="">Selecione sua cidade</option>
+                    {CITIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </SelectField>
+
+                  <AnimatePresence>
+                    {form.city === 'Outro' && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                        animate={{ height: 'auto', opacity: 1, marginTop: 8 }}
+                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                        transition={{ duration: 0.22, ease: 'easeOut' }}
+                        className="overflow-hidden col-span-1 sm:col-span-2"
+                      >
+                        <InputField
+                          label="Digite sua cidade *"
+                          icon={FiMapPin}
+                          id="customCity"
+                          type="text"
+                          placeholder="Cidade e UF (Ex: Campinas, SP)"
+                          value={customCity}
+                          onChange={(e) => {
+                            setCustomCity(e.target.value)
+                            setFormError('')
+                          }}
+                          success={customCity.trim().length >= 3}
+                          required
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <div className="flex flex-col">
                     <InputField
                       label="Senha *"
                       icon={FiLock}
                       id="password"
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       autoComplete="new-password"
                       value={form.password}
                       onChange={handleField('password')}
                       required
+                      rightElement={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center text-gray-400 transition hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+                          aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                          disabled={isLoading}
+                        >
+                          <motion.span
+                            whileTap={{ scale: 0.82 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                            className="block"
+                          >
+                            <AnimatePresence mode="wait" initial={false}>
+                              <motion.span
+                                key={showPassword ? 'eye-off' : 'eye-on'}
+                                initial={{ opacity: 0, scale: 0.8, rotate: -25 }}
+                                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                exit={{ opacity: 0, scale: 0.8, rotate: 25 }}
+                                transition={{ duration: 0.15 }}
+                                className="block"
+                              >
+                                {showPassword ? <FiEyeOff size={17} /> : <FiEye size={17} />}
+                              </motion.span>
+                            </AnimatePresence>
+                          </motion.span>
+                        </button>
+                      }
                     />
-                    {form.password && (
-                      <div className="mt-2 px-1">
-                        <div className="flex gap-1 h-1.5 w-full max-w-[200px] mb-1">
-                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 1 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
-                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 2 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
-                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 3 ? (getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
-                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 4 ? 'bg-green-500' : 'bg-gray-200'}`} />
-                        </div>
-                        <p className={`text-[10px] font-bold ${getPasswordStrength(form.password).level === 'weak' ? 'text-red-600' : getPasswordStrength(form.password).level === 'medium' ? 'text-amber-600' : 'text-green-600'}`}>
-                          {getPasswordStrength(form.password).label}
-                        </p>
-                        <p className="text-[9px] font-semibold text-gray-500 mt-0.5">
-                          Use pelo menos 8 caracteres, misturando letras e números.
-                        </p>
-                      </div>
-                    )}
+                    <AnimatePresence>
+                      {form.password && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                          animate={{ height: 'auto', opacity: 1, marginTop: 8 }}
+                          exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                          transition={{ duration: 0.22, ease: 'easeOut' }}
+                          className="overflow-hidden px-1"
+                        >
+                          <div className="flex gap-1 h-1.5 w-full max-w-[200px] mb-1">
+                            <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 1 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                            <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 2 ? (getPasswordStrength(form.password).level === 'weak' ? 'bg-red-500' : getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                            <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 3 ? (getPasswordStrength(form.password).level === 'medium' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-200'}`} />
+                            <div className={`h-full flex-1 rounded-full ${getPasswordStrength(form.password).score >= 4 ? 'bg-green-500' : 'bg-gray-200'}`} />
+                          </div>
+                          <p className={`text-[10px] font-bold ${getPasswordStrength(form.password).level === 'weak' ? 'text-red-600' : getPasswordStrength(form.password).level === 'medium' ? 'text-amber-600' : 'text-green-600'}`}>
+                            {getPasswordStrength(form.password).label}
+                          </p>
+                          <p className="text-[9px] font-semibold text-gray-500 mt-0.5">
+                            Use pelo menos 8 caracteres, misturando letras e números.
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                   <InputField
                     label="Confirmar senha *"
                     icon={FiLock}
                     id="confirmPassword"
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     autoComplete="new-password"
                     value={form.confirmPassword}
                     onChange={handleField('confirmPassword')}
                     required
+                    rightElement={
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center text-gray-400 transition hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+                        aria-label={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                        disabled={isLoading}
+                      >
+                        <motion.span
+                          whileTap={{ scale: 0.82 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                          className="block"
+                        >
+                          <AnimatePresence mode="wait" initial={false}>
+                            <motion.span
+                              key={showConfirmPassword ? 'eye-off' : 'eye-on'}
+                              initial={{ opacity: 0, scale: 0.8, rotate: -25 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              exit={{ opacity: 0, scale: 0.8, rotate: 25 }}
+                              transition={{ duration: 0.15 }}
+                              className="block"
+                            >
+                              {showConfirmPassword ? <FiEyeOff size={17} /> : <FiEye size={17} />}
+                            </motion.span>
+                          </AnimatePresence>
+                        </motion.span>
+                      </button>
+                    }
                   />
                 </div>
 
@@ -1208,10 +1485,13 @@ export default function SignupPage() {
                 </div>
 
                 {/* CTA principal */}
-                <button
+                <motion.button
                   type="submit"
                   disabled={!canSubmit}
-                  className="group mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-xl hover:shadow-orange-600/25 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:hover:translate-y-0"
+                  whileHover={canSubmit ? { y: -2, scale: 1.01, boxShadow: '0 20px 25px -5px rgba(234, 88, 12, 0.25)' } : {}}
+                  whileTap={canSubmit ? { scale: 0.985 } : {}}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  className="group mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none"
                 >
                   {isLoading ? (
                     <>
@@ -1227,7 +1507,7 @@ export default function SignupPage() {
                       />
                     </>
                   )}
-                </button>
+                </motion.button>
 
                 <p className="mt-4 text-center text-xs font-semibold text-[#9ca3af]">
                   Seus dados são usados para criar sua conta e proteger o acesso ao painel.

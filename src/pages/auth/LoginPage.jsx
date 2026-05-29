@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useContext, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AuthContext } from '../../contexts/AuthContext'
 import {
   browserLocalPersistence,
@@ -176,11 +176,30 @@ const staggerContainer = {
   },
 }
 
-const floatAnimation = {
+const floatAnimation1 = {
   animate: {
-    y: [0, -14, 0],
+    y: [0, -22, 0],
+    x: [0, 10, 0],
+    scale: [1, 1.04, 1],
+    transition: { duration: 8, repeat: Infinity, ease: 'easeInOut' },
+  },
+}
+
+const floatAnimation2 = {
+  animate: {
+    y: [0, 20, 0],
+    x: [0, -15, 0],
+    scale: [1, 1.06, 1],
+    transition: { duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 0.5 },
+  },
+}
+
+const floatAnimation3 = {
+  animate: {
+    y: [0, -15, 0],
+    x: [0, -10, 0],
     scale: [1, 1.03, 1],
-    transition: { duration: 6, repeat: Infinity, ease: 'easeInOut' },
+    transition: { duration: 9, repeat: Infinity, ease: 'easeInOut', delay: 1 },
   },
 }
 
@@ -272,20 +291,35 @@ function LoginMobileHeader() {
 // ─────────────────────────────────────────────────────────────
 
 function InputField({ label, icon: Icon, rightElement, className = '', ...props }) {
+  const [focused, setFocused] = useState(false)
   return (
     <label className={`block ${className}`} htmlFor={props.id}>
-      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+      <span
+        className={`mb-2 block text-xs font-black uppercase tracking-wide transition-colors duration-200 ${
+          focused ? 'text-[#f97316]' : 'text-[#6b7280]'
+        }`}
+      >
         {label}
       </span>
       <div className="relative">
         {Icon && (
           <Icon
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
+              focused ? 'text-[#f97316]' : 'text-gray-400'
+            }`}
             size={17}
           />
         )}
         <input
           {...props}
+          onFocus={(e) => {
+            setFocused(true)
+            props.onFocus?.(e)
+          }}
+          onBlur={(e) => {
+            setFocused(false)
+            props.onBlur?.(e)
+          }}
           className={`h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] shadow-sm outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70 ${
             Icon ? 'pl-11' : ''
           } ${rightElement ? 'pr-12' : ''}`}
@@ -305,9 +339,20 @@ function AlertBox({ type = 'error', children }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -8, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      animate={
+        isSuccess
+          ? { opacity: 1, y: 0, scale: 1 }
+          : { opacity: 1, y: 0, scale: 1, x: [0, -6, 6, -6, 6, 0] }
+      }
       exit={{ opacity: 0, y: -6, scale: 0.98 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
+      transition={
+        isSuccess
+          ? { duration: 0.22, ease: 'easeOut' }
+          : {
+              x: { duration: 0.38, ease: 'easeInOut' },
+              default: { duration: 0.22, ease: 'easeOut' },
+            }
+      }
       className={`mb-5 rounded-2xl border px-4 py-3 text-sm font-bold leading-6 ${
         isSuccess
           ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
@@ -332,7 +377,6 @@ function AlertBox({ type = 'error', children }) {
 
 export default function LoginPage() {
   const navigate  = useNavigate()
-  const location  = useLocation()
   const { user, userData, loading } = useContext(AuthContext)
 
   useEffect(() => {
@@ -485,20 +529,18 @@ export default function LoginPage() {
       {/* BLOBS FLUTUANTES */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <motion.div
-          variants={floatAnimation}
+          variants={floatAnimation1}
           animate="animate"
           className="absolute -left-40 top-20 h-[28rem] w-[28rem] rounded-full bg-orange-100/80 blur-3xl"
         />
         <motion.div
-          variants={floatAnimation}
+          variants={floatAnimation2}
           animate="animate"
-          transition={{ delay: 1 }}
           className="absolute -right-40 top-1/3 h-[32rem] w-[32rem] rounded-full bg-orange-200/50 blur-3xl"
         />
         <motion.div
-          variants={floatAnimation}
+          variants={floatAnimation3}
           animate="animate"
-          transition={{ delay: 2 }}
           className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-100/70 blur-3xl"
         />
       </div>
@@ -525,7 +567,12 @@ export default function LoginPage() {
           </div>
 
           {/* topo: logo + link "Voltar ao site" */}
-          <div className="relative z-10 flex items-center justify-between gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="relative z-10 flex items-center justify-between gap-4"
+          >
             <PratoByLogo dark />
             <Link
               to="/"
@@ -533,26 +580,43 @@ export default function LoginPage() {
             >
               Voltar ao site
             </Link>
-          </div>
+          </motion.div>
 
           {/* centro: headline + benefícios */}
-          <div className="relative z-10 max-w-2xl py-14">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="relative z-10 max-w-2xl py-14"
+          >
+            <motion.span
+              variants={fadeUp}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur"
+            >
               <FiShield className="text-[#f97316]" />
               Painel exclusivo para lojistas e administradores
-            </span>
+            </motion.span>
 
-            <h1 className="mt-8 max-w-xl text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl">
+            <motion.h1
+              variants={fadeUp}
+              className="mt-8 max-w-xl text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl"
+            >
               Seu delivery próprio,
               <span className="block text-[#f97316]">sem comissão.</span>
-            </h1>
+            </motion.h1>
 
-            <p className="mt-6 max-w-xl text-lg font-medium leading-8 text-gray-300">
+            <motion.p
+              variants={fadeUp}
+              className="mt-6 max-w-xl text-lg font-medium leading-8 text-gray-300"
+            >
               Entre para gerenciar pedidos, cardápio, horários, entrega e atendimento em
               uma experiência rápida, segura e feita para vender pelo link da sua loja.
-            </p>
+            </motion.p>
 
-            <div className="mt-9 grid gap-3 text-sm font-bold text-gray-200 sm:grid-cols-2">
+            <motion.div
+              variants={fadeUp}
+              className="mt-9 grid gap-3 text-sm font-bold text-gray-200 sm:grid-cols-2"
+            >
               {BENEFITS.map((benefit) => (
                 <div
                   key={benefit}
@@ -562,11 +626,16 @@ export default function LoginPage() {
                   {benefit}
                 </div>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* base: dois cards informativos */}
-          <div className="relative z-10 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.35, ease: 'easeOut' }}
+            className="relative z-10 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]"
+          >
             {/* card PratoBy Cloud */}
             <div className="rounded-[1.8rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur">
               <div className="flex items-start gap-4">
@@ -606,7 +675,7 @@ export default function LoginPage() {
                 ))}
               </div>
             </div>
-          </div>
+          </motion.div>
         </section>
 
         {/* ── LADO DIREITO — formulário de login ─── */}
@@ -668,15 +737,18 @@ export default function LoginPage() {
 
                 {/* Botão Google */}
                 <motion.div variants={fadeUp} className="mb-5">
-                  <button
+                  <motion.button
                     type="button"
                     onClick={handleGoogleLogin}
                     disabled={isLoading}
-                    className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    whileHover={{ y: -2, scale: 1.005, borderColor: '#d1d5db' }}
+                    whileTap={{ scale: 0.985 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <GoogleIcon size={18} />
                     Entrar com Google
-                  </button>
+                  </motion.button>
 
                   <div className="mt-5 flex items-center gap-3">
                     <div className="h-px flex-1 bg-gray-200" />
@@ -716,11 +788,28 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center text-gray-400 transition hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                         disabled={isLoading}
                       >
-                        {showPassword ? <FiEyeOff size={17} /> : <FiEye size={17} />}
+                        <motion.span
+                          whileTap={{ scale: 0.82 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                          className="block"
+                        >
+                          <AnimatePresence mode="wait" initial={false}>
+                            <motion.span
+                              key={showPassword ? 'eye-off' : 'eye-on'}
+                              initial={{ opacity: 0, scale: 0.8, rotate: -25 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              exit={{ opacity: 0, scale: 0.8, rotate: 25 }}
+                              transition={{ duration: 0.15 }}
+                              className="block"
+                            >
+                              {showPassword ? <FiEyeOff size={17} /> : <FiEye size={17} />}
+                            </motion.span>
+                          </AnimatePresence>
+                        </motion.span>
                       </button>
                     }
                   />
@@ -749,10 +838,13 @@ export default function LoginPage() {
                   </div>
 
                   {/* CTA principal */}
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={!canSubmit}
-                    className="group mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-xl hover:shadow-orange-600/25 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:hover:translate-y-0"
+                    whileHover={canSubmit ? { y: -2, scale: 1.01, boxShadow: '0 20px 25px -5px rgba(234, 88, 12, 0.25)' } : {}}
+                    whileTap={canSubmit ? { scale: 0.985 } : {}}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="group mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none"
                   >
                     {isLoading ? (
                       <>
@@ -768,7 +860,7 @@ export default function LoginPage() {
                         />
                       </>
                     )}
-                  </button>
+                  </motion.button>
                 </motion.form>
 
                 {/* bloco "Ainda não tem conta?" — visual mais premium */}

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
 import {
   getPricingValidation,
@@ -301,6 +303,26 @@ function getCustomerName(order) {
 
 function getCustomerPhone(order) {
   return order?.customerPhone || order?.customer?.phone || order?.phone || ''
+}
+
+function formatDisplayPhone(phone) {
+  if (!phone) return ''
+  const cleaned = String(phone).replace(/\D/g, '')
+  let target = cleaned
+  if (cleaned.startsWith('55') && cleaned.length >= 12) {
+    target = cleaned.slice(2)
+  }
+  if (target.length === 11) {
+    return `(${target.slice(0, 2)}) ${target.slice(2, 7)}-${target.slice(7)}`
+  } else if (target.length === 10) {
+    return `(${target.slice(0, 2)}) ${target.slice(2, 6)}-${target.slice(6)}`
+  }
+  if (cleaned.length === 11) {
+    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`
+  } else if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`
+  }
+  return phone
 }
 
 function getPaymentMethod(order) {
@@ -1669,12 +1691,12 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
     <div
       className={`relative overflow-hidden rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl ${
         late && !isFinalStatus
-          ? 'border-red-300 bg-red-50/80 shadow-red-100/80 ring-2 ring-red-200'
-          : 'border-gray-100 bg-white hover:shadow-gray-200/60'
+          ? 'border-red-300 bg-red-50/80 shadow-red-100/80 ring-2 ring-red-200 dark:border-red-800 dark:bg-red-950/40 dark:shadow-red-950/20'
+          : 'border-gray-100 bg-white hover:shadow-gray-200/60 dark:border-zinc-800 dark:bg-zinc-900'
       } ${isFinalStatus ? 'opacity-70 grayscale-[0.35]' : ''}`}
     >
       {late && !isFinalStatus && (
-        <div className="mb-3 flex flex-col gap-2 rounded-2xl bg-red-600 px-4 py-3 text-white sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 flex flex-col gap-2 rounded-2xl bg-red-600 px-4 py-3 text-white sm:flex-row sm:items-center sm:justify-between dark:bg-red-800">
           <div className="flex items-center gap-2">
             <FiAlertTriangle className="shrink-0 animate-pulse" size={18} />
 
@@ -1691,24 +1713,24 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
 
       <div className="grid gap-4 lg:grid-cols-[92px_minmax(0,1fr)_140px_120px_145px_160px] lg:items-center">
         <div>
-          <p className="mb-1 text-xs font-bold text-[#6b7280] lg:hidden">
+          <p className="mb-1 text-xs font-bold text-[#6b7280] dark:text-zinc-500 lg:hidden">
             Pedido
           </p>
 
-          <span className="inline-flex rounded-xl bg-gray-100 px-2.5 py-1 font-mono text-[13px] font-black text-gray-700">
+          <span className="inline-flex rounded-xl bg-gray-100 px-2.5 py-1 font-mono text-[13px] font-black text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
             {getOrderDisplayNumber(order)}
           </span>
         </div>
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#f97316] lg:hidden">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#f97316] dark:bg-zinc-800 dark:text-orange-400 lg:hidden">
               {getCustomerName(order).substring(0, 2).toUpperCase()}
             </div>
 
             <div className={`h-2.5 w-2.5 rounded-full ${meta.dotClass}`} />
 
-            <p className="min-w-0 truncate text-sm font-black text-[#111827]">
+            <p className="min-w-0 truncate text-sm font-black text-[#111827] dark:text-zinc-100">
               {getCustomerName(order)}
             </p>
 
@@ -1722,14 +1744,14 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
             )}
           </div>
 
-          <p className="mt-2 truncate text-sm text-[#6b7280]">
+          <p className="mt-2 truncate text-sm text-[#6b7280] dark:text-zinc-400">
             {getOrderItemsSummary(order)}
           </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6b7280]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6b7280] dark:text-zinc-500">
             <span className="inline-flex items-center gap-1">
               <FiPhone size={13} />
-              {getCustomerPhone(order) || 'Sem telefone'}
+              {formatDisplayPhone(getCustomerPhone(order)) || 'Sem telefone'}
             </span>
 
             <span className="inline-flex items-center gap-1">
@@ -1741,52 +1763,52 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
           </div>
 
           {status === 'cancelado' && cancellationReason && (
-            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">
+            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-400">
               <span className="font-black">Motivo:</span> {cancellationReason}
             </div>
           )}
         </div>
 
         <div>
-          <p className="text-xs font-bold text-[#6b7280] lg:hidden">
+          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-550 lg:hidden">
             Status
           </p>
 
-          <p className="text-sm font-bold text-[#111827]">
+          <p className="text-sm font-bold text-[#111827] dark:text-zinc-100">
             {meta.description}
           </p>
         </div>
 
         <div>
-          <p className="text-xs font-bold text-[#6b7280] lg:hidden">
+          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-550 lg:hidden">
             Total
           </p>
 
-          <p className="text-base font-black text-[#111827]">
+          <p className="text-base font-black text-[#111827] dark:text-zinc-100">
             {formatMoney(getOrderTotal(order))}
           </p>
 
-          <p className="text-xs text-[#6b7280]">
+          <p className="text-xs text-[#6b7280] dark:text-zinc-400">
             {getPaymentMethod(order)}
           </p>
 
           {(promotionSavings > 0 || discount > 0) && (
-            <p className="mt-1 text-[11px] font-black text-[#f97316]">
+            <p className="mt-1 text-[11px] font-black text-[#f97316] dark:text-orange-400">
               Economia {formatMoney(promotionSavings + discount)}
             </p>
           )}
         </div>
 
         <div>
-          <p className="text-xs font-bold text-[#6b7280] lg:hidden">
+          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-550 lg:hidden">
             Horário
           </p>
 
-          <p className="text-sm font-bold text-[#111827]">
+          <p className="text-sm font-bold text-[#111827] dark:text-zinc-100">
             {formatDate(order)}
           </p>
 
-          <p className="text-xs text-[#6b7280]">
+          <p className="text-xs text-[#6b7280] dark:text-zinc-500">
             {timeAgo(order)}
           </p>
         </div>
@@ -1797,7 +1819,7 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
               type="button"
               onClick={() => onQuickStatus(order, nextStatus)}
               disabled={Boolean(updatingStatus)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2.5 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-2.5 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70 shadow-sm shadow-orange-500/20"
             >
               <FiZap size={15} />
               {isUpdatingThisOrder
@@ -1811,7 +1833,7 @@ function OrderCard({ order, onOpen, onQuickStatus, updatingStatus }) {
           <button
             type="button"
             onClick={() => onOpen(order)}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-2.5 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-2.5 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
           >
             Abrir
             <FiChevronRight size={16} />
@@ -2057,222 +2079,193 @@ function OrderModal({
   const showCustomerThanksAction = shouldShowCustomerThanksAction(order)
   const cancellationReason = getCancellationReason(order)
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#111827]/70 p-0 backdrop-blur-md sm:items-center sm:p-4">
-      <div className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-t-[2rem] border border-white/10 bg-[#f9fafb] shadow-2xl shadow-black/30 sm:rounded-[2rem] xl:h-[90vh]">
-        <header className="shrink-0 border-b border-gray-100 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-5">
-          <div className="flex items-center justify-between gap-4">
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  const variants = isMobile ? {
+    initial: { y: '100%' },
+    animate: { y: 0 },
+    exit: { y: '100%' },
+    transition: { type: 'spring', damping: 25, stiffness: 280 }
+  } : {
+    initial: { opacity: 0, scale: 0.96, y: 20 },
+    animate: { opacity: 1, scale: 1, y: 0 },
+    exit: { opacity: 0, scale: 0.96, y: 20 },
+    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
+  }
+
+  if (typeof window === 'undefined') return null
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+    >
+      <motion.div
+        initial={variants.initial}
+        animate={variants.animate}
+        exit={variants.exit}
+        transition={variants.transition}
+        className="flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-gray-100 bg-white shadow-2xl shadow-black/20 dark:border-zinc-800 dark:bg-zinc-950 sm:h-[90vh] sm:rounded-3xl"
+      >
+        <header className="shrink-0 border-b border-gray-100 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-950 animate-fade-in">
+          <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-xl font-black tracking-tight text-[#111827] sm:text-2xl">
+                <h2 className="text-2xl font-black tracking-tight text-gray-900 dark:text-zinc-50">
                   Pedido {getOrderDisplayNumber(order)}
                 </h2>
-
                 <StatusBadge status={order.status} />
                 <PricingValidationBadge order={order} />
-
                 {status === 'cancelado' && cancellationReason && (
-  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200">
-    <FiAlertTriangle size={12} />
-    Motivo registrado
-  </span>
-)}
-
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200 dark:bg-red-950/50 dark:text-red-400 dark:ring-red-900">
+                    <FiAlertTriangle size={12} />
+                    Motivo registrado
+                  </span>
+                )}
                 {pixPending && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
                     <FiCreditCard size={12} />
                     Pix pendente
                   </span>
                 )}
-
                 {showCustomerThanksAction && (
-  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-200">
-    <FiMessageCircle size={12} />
-    Cliente confirmou
-  </span>
-)}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-200 dark:bg-green-950/50 dark:text-green-400 dark:ring-green-900">
+                    <FiMessageCircle size={12} />
+                    Cliente confirmou
+                  </span>
+                )}
               </div>
-
-              <p className="mt-1 truncate text-xs font-bold text-[#6b7280]">
+              <p className="mt-1 text-xs font-semibold text-gray-450 dark:text-zinc-500">
                 {formatDate(order)} · {store?.name || 'Loja'} · {items.length} item{items.length === 1 ? '' : 's'}
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 hover:text-[#111827]"
-              aria-label="Fechar pedido"
-            >
-              <FiX size={19} />
+            <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700">
+              <FiX size={18} />
             </button>
           </div>
         </header>
 
-        <section className="shrink-0 border-b border-gray-100 bg-white px-4 py-3 sm:px-5">
-          <div className="grid gap-2 md:grid-cols-[1fr_auto] md:items-center">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="rounded-2xl bg-orange-50 px-3 py-2 text-sm font-black text-[#f97316]">
+        <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left: financial pills */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-2xl bg-orange-50 px-3 py-1.5 text-sm font-black text-orange-600 dark:bg-orange-950 dark:text-orange-400">
                 Total: {formatMoney(getOrderTotal(order))}
               </span>
-
-              <span className="rounded-2xl bg-gray-50 px-3 py-2 text-sm font-black text-[#111827]">
+              <span className="rounded-2xl bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
                 {getPaymentMethod(order)}
               </span>
-
-              <span
-                className={`rounded-2xl px-3 py-2 text-sm font-black ${
-                  pixPaid
-                    ? 'bg-green-50 text-green-700'
-                    : pixPending
-                      ? 'bg-amber-50 text-amber-700'
-                      : 'bg-gray-50 text-[#6b7280]'
-                }`}
-              >
+              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-zinc-400' }`}>
                 {getPaymentStatus(order)}
               </span>
             </div>
-
-            <PricingValidationAlert order={order} />
-
-            {showCustomerThanksAction && (
-  <div className="mt-3 rounded-2xl border border-green-200 bg-green-50 p-3">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-sm font-black text-green-800">
-          Cliente confirmou o recebimento
-        </p>
-        <p className="mt-1 text-xs font-bold leading-5 text-green-700">
-          Envie uma mensagem curta de agradecimento pelo WhatsApp.
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onSendCustomerThanks(order)}
-        disabled={Boolean(updatingStatus)}
-        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        <FiMessageCircle size={15} />
-        Agradecer cliente
-      </button>
-    </div>
-  </div>
-)}
-
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            {/* Right: action buttons */}
+            <div className="flex items-center gap-2">
               {pixPending ? (
-                <button
-                  type="button"
-                  onClick={() => onConfirmPixPayment(order)}
-                  disabled={Boolean(updatingStatus)}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#3aa824] px-4 py-3 text-sm font-black text-white shadow-md transition hover:bg-[#2f8f1d] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <FiCheckCircle size={17} />
-                  {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
+                <button onClick={() => onConfirmPixPayment(order)} disabled={Boolean(updatingStatus)}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-green-700 disabled:opacity-60">
+                  <FiCheckCircle size={16}/> {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
                 </button>
               ) : nextStatus ? (
-                <button
-                  type="button"
-                  onClick={() => onUpdateStatus(order, nextStatus)}
-                  disabled={Boolean(updatingStatus)}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white shadow-md shadow-orange-600/20 transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <FiZap size={17} />
-                  {updatingStatus === order.id
-                    ? 'Atualizando...'
-                    : updatingStatus
-                      ? 'Aguarde...'
-                      : getNextStatusLabel(status)}
+                <button onClick={() => onUpdateStatus(order, nextStatus)} disabled={Boolean(updatingStatus)}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:opacity-60 animate-pulse-slow">
+                  <FiZap size={16}/> {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status)}
                 </button>
               ) : null}
-
-              <button
-                type="button"
-                onClick={() => printComanda(order, store)}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#111827] px-4 py-3 text-sm font-black text-white transition hover:bg-black"
-              >
-                <FiPrinter size={17} />
-                Comanda
+              <button onClick={() => printComanda(order, store)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-black text-white transition hover:bg-black dark:bg-zinc-700 dark:hover:bg-zinc-600">
+                <FiPrinter size={16}/> Comanda
               </button>
-
-              <button
-                type="button"
-                onClick={() => onCopyOrder(order)}
-                className="hidden items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-gray-50 sm:inline-flex"
-              >
-                <FiCopy size={17} />
-                Copiar
+              <button onClick={() => onCopyOrder(order)}
+                className="hidden sm:inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-800 transition hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+                <FiCopy size={16}/> Copiar
               </button>
             </div>
           </div>
-        </section>
+          <PricingValidationAlert order={order} />
+          {showCustomerThanksAction && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
+              <div>
+                <p className="text-sm font-black text-green-800 dark:text-green-300">Cliente confirmou o recebimento</p>
+                <p className="mt-0.5 text-xs font-semibold text-green-700 dark:text-green-400">Envie uma mensagem de agradecimento pelo WhatsApp.</p>
+              </div>
+              <button onClick={() => onSendCustomerThanks(order)} disabled={Boolean(updatingStatus)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-3 py-2 text-xs font-black text-white hover:bg-green-700">
+                <FiMessageCircle size={14}/> Agradecer
+              </button>
+            </div>
+          )}
+        </div>
 
-        <main className="min-h-0 flex-1 overflow-hidden p-4 sm:p-5">
-          <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[0.95fr_1.1fr_300px]">
-            <div className="min-h-0 space-y-4 overflow-hidden">
-              <section className="rounded-[1.4rem] border border-gray-100 bg-white p-4 shadow-sm">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-5 bg-gray-50 dark:bg-zinc-950 xl:overflow-hidden">
+          <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[320px_1fr_280px] xl:h-full xl:overflow-hidden">
+            {/* Left Column: Customer & Delivery & Payment */}
+            <div className="min-h-0 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {/* Customer card */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-sm font-black text-[#111827]">
-                      <FiUser className="text-[#f97316]" />
-                      Cliente
+                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                      <FiUser className="text-orange-500" /> Cliente
                     </p>
-
-                    <p className="mt-3 truncate text-lg font-black text-[#111827]">
+                    <p className="mt-3 truncate text-base font-black text-gray-900 dark:text-zinc-100">
                       {getCustomerName(order)}
                     </p>
-
-                    <p className="mt-1 truncate text-sm font-semibold text-[#6b7280]">
-                      {getCustomerPhone(order) || 'Telefone não informado'}
+                    <p className="mt-1 truncate text-sm font-semibold text-gray-500 dark:text-zinc-400">
+                      {formatDisplayPhone(getCustomerPhone(order)) || 'Telefone não informado'}
                     </p>
                   </div>
-
                   <button
-                    type="button"
                     onClick={() => onOpenWhatsApp(order)}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-green-50 text-[#25D366] transition hover:bg-green-100"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-green-50 text-green-600 transition hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:hover:bg-green-900"
                     title="Chamar no WhatsApp"
                   >
-                    <FiMessageCircle size={19} />
+                    <FiMessageCircle size={17} />
                   </button>
                 </div>
               </section>
 
-              <section className="rounded-[1.4rem] border border-gray-100 bg-white p-4 shadow-sm">
+              {/* Delivery card */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center justify-between gap-3">
-                <p className="flex items-center gap-2 text-sm font-black text-[#111827]">
-                  {address.isPickup ? (
-                    <>
-                      <FiShoppingBag size={14} className="text-[#f97316]" />
-                      Retirada
-                    </>
-                  ) : (
-                    <>
-                      <FiTruck size={14} className="text-[#f97316]" />
-                      Entrega
-                    </>
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                    {address.isPickup ? (
+                      <>
+                        <FiShoppingBag size={14} className="text-orange-500" /> Retirada
+                      </>
+                    ) : (
+                      <>
+                        <FiTruck size={14} className="text-orange-500" /> Entrega
+                      </>
+                    )}
+                  </p>
+
+                  {!address.isPickup && (
+                    <button
+                      onClick={() => onOpenMaps(order)}
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-500 transition hover:bg-orange-100 dark:bg-orange-950/50 dark:text-orange-400 dark:hover:bg-orange-900"
+                    >
+                      <FiNavigation size={12} /> Mapa
+                    </button>
                   )}
-                </p>
+                </div>
 
-                {!address.isPickup && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenMaps(order)}
-                    className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316] transition hover:bg-orange-100"
-                  >
-                    <FiNavigation size={14} />
-                    Mapa
-                  </button>
-                )}
-              </div>
-
-                <p className="mt-2 text-sm font-black leading-6 text-[#111827]">
+                <p className="mt-3 text-sm font-bold leading-6 text-gray-800 dark:text-zinc-200">
                   {address.full}
                 </p>
 
                 {(address.neighborhood || address.complement || address.reference) && (
-                  <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-[#6b7280]">
+                  <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
                     {[
                       address.neighborhood,
                       address.complement,
@@ -2284,119 +2277,80 @@ function OrderModal({
                 )}
               </section>
 
+              {/* Observation card */}
               {(order?.orderObservation || order?.customerObservation || order?.observation) && (
-                <section className="rounded-[1.4rem] border border-amber-200 bg-amber-50 p-4 shadow-sm">
-                  <p className="flex items-center gap-2 text-sm font-black text-amber-950">
-                    <FiAlertTriangle className="text-amber-600" />
-                    Observação
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900 dark:bg-amber-950/40">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                    <FiAlertTriangle className="text-amber-600" /> Observação
                   </p>
-
-                  <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-amber-800">
+                  <p className="mt-2 text-sm font-semibold leading-6 text-amber-800 dark:text-amber-300">
                     {order.orderObservation || order.customerObservation || order.observation}
                   </p>
                 </section>
               )}
 
-              <section className="rounded-[1.4rem] border border-gray-100 bg-white p-4 shadow-sm">
-  <div className="flex items-start justify-between gap-3">
-    <div className="min-w-0">
-      <p className="flex items-center gap-2 text-sm font-black text-[#111827]">
-        <FiCreditCard className="text-[#f97316]" />
-        Meio de pagamento
-      </p>
+              {/* Payment details card */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-550">
+                      <FiCreditCard className="text-orange-500" /> Meio de pagamento
+                    </p>
+                    <p className="mt-3 text-base font-black text-gray-900 dark:text-zinc-100">
+                      {getPaymentMethod(order)}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
+                      {getPaymentStatus(order)}
+                    </p>
+                    {changeForLabel && (
+                      <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 dark:border-orange-950 dark:bg-orange-950/20">
+                        <p className="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-400">
+                          Troco
+                        </p>
+                        <p className="mt-0.5 text-sm font-black text-gray-800 dark:text-zinc-200">
+                          {changeForLabel}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-zinc-800 dark:text-zinc-450' }`}>
+                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : getPaymentMethod(order)}
+                  </span>
+                </div>
+                {status === 'cancelado' && (
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
+                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-red-700 dark:text-red-400">
+                      <FiAlertTriangle /> Motivo do cancelamento
+                    </p>
+                    <p className="mt-2 text-sm font-bold leading-6 text-red-800 dark:text-red-300">
+                      {cancellationReason || 'Motivo não informado.'}
+                    </p>
+                  </div>
+                )}
+              </section>
 
-      <p className="mt-3 text-lg font-black text-[#111827]">
-        {getPaymentMethod(order)}
-      </p>
-
-      <p className="mt-1 text-sm font-semibold text-[#6b7280]">
-        {getPaymentStatus(order)}
-      </p>
-
-      {changeForLabel && (
-        <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-          <p className="text-xs font-black uppercase tracking-wide text-[#9a3412]">
-            Troco
-          </p>
-
-          <p className="mt-1 text-sm font-black text-[#111827]">
-            {changeForLabel}
-          </p>
-        </div>
-      )}
-    </div>
-
-    <span
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black ${
-        pixPaid
-          ? 'bg-green-50 text-green-700'
-          : pixPending
-            ? 'bg-amber-50 text-amber-700'
-            : status === 'cancelado'
-              ? 'bg-red-50 text-red-700'
-              : 'bg-gray-50 text-[#6b7280]'
-      }`}
-    >
-      {status === 'cancelado'
-        ? 'Cancelado'
-        : isPixManualOrder(order)
-          ? pixPaid
-            ? 'Pix pago'
-            : 'Pix pendente'
-          : getPaymentMethod(order)}
-    </span>
-  </div>
-
-  {status === 'cancelado' && (
-    <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
-      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-red-700">
-        <FiAlertTriangle />
-        Motivo do cancelamento
-      </p>
-
-      <p className="mt-2 text-sm font-bold leading-6 text-red-800">
-        {cancellationReason || 'Motivo não informado.'}
-      </p>
-    </div>
-  )}
-</section>
-
+              {/* Pix Manual card */}
               {isPixManualOrder(order) && (
-                <section
-                  className={`rounded-[1.4rem] border p-4 shadow-sm ${
-                    pixPaid
-                      ? 'border-green-100 bg-green-50'
-                      : 'border-orange-100 bg-orange-50'
-                  }`}
-                >
+                <section className={`rounded-2xl border p-4 shadow-sm ${ pixPaid ? 'border-green-100 bg-green-50 dark:border-green-900 dark:bg-green-950/20' : 'border-orange-100 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20' }`}>
                   <div className="flex items-center justify-between gap-3">
-                    <p className={`text-sm font-black ${pixPaid ? 'text-green-800' : 'text-[#9a3412]'}`}>
+                    <p className={`text-xs font-black uppercase tracking-wider ${pixPaid ? 'text-green-800 dark:text-green-400' : 'text-orange-850 dark:text-orange-400'}`}>
                       Pix manual
                     </p>
-
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
-                        pixPaid
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${ pixPaid ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' }`}>
                       {pixPaid ? 'Pago' : 'Aguardando'}
                     </span>
                   </div>
-
                   {paymentProofUrl ? (
                     <a
                       href={paymentProofUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-black text-[#111827] shadow-sm transition hover:text-[#f97316]"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-gray-800 shadow-sm transition hover:text-orange-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:text-orange-400"
                     >
-                      <FiExternalLink />
-                      Ver comprovante
+                      <FiExternalLink /> Ver comprovante
                     </a>
                   ) : (
-                    <p className="mt-2 text-xs font-semibold leading-5 text-[#9a3412]">
+                    <p className="mt-2 text-xs font-semibold leading-5 text-orange-700 dark:text-orange-400">
                       Confirme o comprovante no contato do cliente.
                     </p>
                   )}
@@ -2404,104 +2358,95 @@ function OrderModal({
               )}
             </div>
 
-            <section className="flex min-h-0 flex-col rounded-[1.4rem] border border-gray-100 bg-white shadow-sm">
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 p-4">
-                <p className="flex items-center gap-2 text-base font-black text-[#111827]">
-                  <FiShoppingBag className="text-[#f97316]" />
-                  Itens
+            {/* Middle Column: Items List */}
+            <section className="flex min-h-0 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 xl:h-full xl:overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 p-4 dark:border-zinc-800">
+                <p className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-zinc-100">
+                  <FiShoppingBag className="text-orange-500" /> Itens do Pedido
                 </p>
-
-                <span className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-black text-[#6b7280]">
+                <span className="rounded-full bg-gray-50 px-2.5 py-1 text-xs font-black text-gray-500 dark:bg-zinc-800 dark:text-zinc-400">
                   {items.length} item{items.length === 1 ? '' : 's'}
                 </span>
               </div>
-
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <OrderItemsList items={items} />
               </div>
             </section>
 
-            <aside className="min-h-0 space-y-4 overflow-y-auto">
-              <section className="rounded-[1.4rem] border border-gray-100 bg-white p-4 shadow-sm">
+            {/* Right Column: Status & Resumo Financeiro & Forçar Alteração */}
+            <aside className="min-h-0 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:h-full xl:overflow-hidden">
+              {/* Status card */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2">
-                  <div className={`h-3 w-3 rounded-full ${meta.dotClass}`} />
-
-                  <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                  <div className={`h-2.5 w-2.5 rounded-full ${meta.dotClass}`} />
+                  <p className="text-xs font-black uppercase tracking-wider text-gray-450 dark:text-zinc-500">
                     Status atual
                   </p>
                 </div>
-
-                <p className="mt-3 text-2xl font-black tracking-tight text-[#111827]">
+                <p className="mt-3 text-xl font-black tracking-tight text-gray-900 dark:text-zinc-100">
                   {meta.label}
                 </p>
-
-                <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-                  {pixPending
-                    ? 'Aguardando confirmação do Pix.'
-                    : meta.description}
+                <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
+                  {pixPending ? 'Aguardando confirmação do Pix.' : meta.description}
                 </p>
               </section>
 
-              <section className="rounded-[1.4rem] border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-sm font-black text-[#111827]">
+              {/* Resumo Financeiro */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs font-black uppercase tracking-wider text-gray-450 dark:text-zinc-400 mb-3">
                   Resumo financeiro
                 </p>
-
-                <div className="mt-2">
-                  <FinancialSummary order={order} />
-                </div>
+                <FinancialSummary order={order} />
               </section>
 
-              <section className="rounded-[1.4rem] border border-gray-100 bg-white p-4 shadow-sm">
-  <div className="flex items-start justify-between gap-3">
-    <div>
-      <p className="text-sm font-black text-[#111827]">
-        Forçar alteração
-      </p>
+              {/* Forçar alteração */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-gray-455 dark:text-zinc-400">
+                    Forçar alteração
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-semibold leading-4 text-gray-400 dark:text-zinc-500">
+                    Use somente para corrigir o fluxo do pedido.
+                  </p>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {STATUS_FLOW.map((statusOption) => {
+                    const optionMeta = STATUS_META[statusOption]
+                    const Icon = optionMeta.icon
+                    const active = status === statusOption
+                    const optionIndex = STATUS_FLOW.indexOf(statusOption)
+                    const isPreviousStatus = optionIndex < currentIndex
 
-      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-        Use somente para corrigir o fluxo do pedido.
-      </p>
-    </div>
-  </div>
-
-  <div className="mt-3 grid grid-cols-2 gap-2">
-    {STATUS_FLOW.map((statusOption) => {
-      const optionMeta = STATUS_META[statusOption]
-      const Icon = optionMeta.icon
-      const active = status === statusOption
-      const optionIndex = STATUS_FLOW.indexOf(statusOption)
-      const isPreviousStatus = optionIndex < currentIndex
-
-      return (
-        <button
-          key={statusOption}
-          type="button"
-          onClick={() => onUpdateStatus(order, statusOption)}
-          disabled={
-            Boolean(updatingStatus) ||
-            (isFinalStatus && !active) ||
-            isPreviousStatus ||
-            (statusOption === 'preparando' && pixPending)
-          }
-          className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[11px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
-            active
-              ? optionMeta.buttonClass
-              : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827]'
-          }`}
-        >
-          <Icon size={15} />
-          {optionMeta.label}
-        </button>
-      )
-    })}
-  </div>
-</section>
+                    return (
+                      <button
+                        key={statusOption}
+                        type="button"
+                        onClick={() => onUpdateStatus(order, statusOption)}
+                        disabled={
+                          Boolean(updatingStatus) ||
+                          (isFinalStatus && !active) ||
+                          isPreviousStatus ||
+                          (statusOption === 'preparando' && pixPending)
+                        }
+                        className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                          active
+                            ? optionMeta.buttonClass
+                            : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                        }`}
+                      >
+                        <Icon size={14} />
+                        {optionMeta.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
             </aside>
           </div>
         </main>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>,
+    document.body
   )
 }
 
@@ -3640,20 +3585,22 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         
       </section>
 
-      {selectedOrder && (
-<OrderModal
-  order={selectedOrder}
-  store={selectedStore}
-  onClose={() => setSelectedOrderId('')}
-  onUpdateStatus={handleUpdateStatus}
-  onConfirmPixPayment={handleConfirmPixPayment}
-  onSendCustomerThanks={handleSendCustomerThanks}
-  onCopyOrder={handleCopyOrder}
-  onOpenWhatsApp={handleOpenWhatsApp}
-  onOpenMaps={handleOpenMaps}
-  updatingStatus={updatingStatus}
-/>
-      )}
+      <AnimatePresence>
+        {selectedOrder && (
+          <OrderModal
+            order={selectedOrder}
+            store={selectedStore}
+            onClose={() => setSelectedOrderId('')}
+            onUpdateStatus={handleUpdateStatus}
+            onConfirmPixPayment={handleConfirmPixPayment}
+            onSendCustomerThanks={handleSendCustomerThanks}
+            onCopyOrder={handleCopyOrder}
+            onOpenWhatsApp={handleOpenWhatsApp}
+            onOpenMaps={handleOpenMaps}
+            updatingStatus={updatingStatus}
+          />
+        )}
+      </AnimatePresence>
 
       <Toast toast={toast} onClose={() => setToast(null)} />
         <DashboardFooter store={selectedStore} />
