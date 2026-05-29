@@ -57,7 +57,28 @@ exports.createPublicOrder = onCall(
   })
 )
 
-const BILLING_BLOCKED_PUBLIC_STATUSES = new Set(['blocked', 'canceled'])
+const BILLING_BLOCKED_PUBLIC_STATUSES = new Set([
+  'blocked',
+  'canceled',
+  'checkout_pending',
+  'pending_checkout',
+  'billing_pending',
+  'billing_pending_payment_method',
+])
+const BILLING_PUBLICLY_READABLE_STATUSES = new Set(['trialing', 'active', 'past_due'])
+const PUBLIC_CALLABLE_OPTIONS = {
+  region: REGION,
+  timeoutSeconds: 30,
+  memory: '256MiB',
+  maxInstances: 10,
+  enforceAppCheck: ENFORCE_APP_CHECK,
+}
+const PUBLIC_READ_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
+const PUBLIC_READ_RATE_LIMITS = {
+  getPublicStoreProfile: 120,
+  getPublicCatalog: 120,
+  validatePublicCoupon: 30,
+}
 
 const PUBLIC_STORE_FIELDS = [
   'name', 'storeName', 'description', 'segment', 'category',
@@ -94,7 +115,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
-  'number', 'neighborhood', 'city', 'state',
+  'number', 'neighborhood', 'complement', 'city', 'state',
 ])
 
 const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
@@ -119,6 +140,55 @@ function timestampToMillis(value) {
   if (value.seconds) return Number(value.seconds) * 1000
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+function getCallableIp(request) {
+  return String(
+    request.ip ||
+      request.rawRequest?.ip ||
+      request.rawRequest?.headers?.['x-forwarded-for'] ||
+      request.rawRequest?.headers?.['fastly-client-ip'] ||
+      'unknown'
+  ).split(',')[0].trim() || 'unknown'
+}
+
+function buildPublicRateLimitId(operation, request) {
+  const ip = getCallableIp(request)
+  const hash = crypto
+    .createHash('sha256')
+    .update(`${operation}:${ip}`)
+    .digest('hex')
+  return `publicCallable_${operation}_${hash}`
+}
+
+async function assertPublicCallableRateLimit(operation, request) {
+  const limit = PUBLIC_READ_RATE_LIMITS[operation] || 60
+  const now = admin.firestore.Timestamp.now()
+  const nowMs = now.toMillis()
+  const rateLimitRef = db.collection('rateLimits').doc(buildPublicRateLimitId(operation, request))
+
+  await db.runTransaction(async (transaction) => {
+    const rateLimitDoc = await transaction.get(rateLimitRef)
+    const data = rateLimitDoc.exists ? rateLimitDoc.data() || {} : {}
+    const windowStartMs = data.windowStart?.toMillis ? data.windowStart.toMillis() : 0
+    const shouldReset = !windowStartMs || nowMs - windowStartMs >= PUBLIC_READ_RATE_LIMIT_WINDOW_MS
+    const count = shouldReset ? 0 : Number(data.count || 0)
+
+    if (count >= limit) {
+      throw new HttpsError('resource-exhausted', 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.')
+    }
+
+    transaction.set(rateLimitRef, {
+      provider: 'pratoby',
+      type: 'public_callable',
+      operation,
+      count: count + 1,
+      limit,
+      windowStart: shouldReset ? now : data.windowStart || now,
+      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + PUBLIC_READ_RATE_LIMIT_WINDOW_MS),
+      updatedAt: now,
+    }, { merge: true })
+  })
 }
 
 function cleanCallableFirestoreValue(value, depth = 0) {
@@ -176,7 +246,9 @@ function isStorePubliclyReadable(data) {
   if (data.isDeleted === true || data.deletedAt) return false
   if (data.isActive === false || data.isBlocked === true || data.isBillingBlocked === true) return false
   const subscriptionStatus = String(data.subscriptionStatus || data.subscription?.status || '').trim()
-  return !BILLING_BLOCKED_PUBLIC_STATUSES.has(subscriptionStatus)
+  if (!subscriptionStatus) return true
+  if (BILLING_BLOCKED_PUBLIC_STATUSES.has(subscriptionStatus)) return false
+  return BILLING_PUBLICLY_READABLE_STATUSES.has(subscriptionStatus)
 }
 
 function isPublicStoreVisible(data) {
@@ -509,9 +581,12 @@ function validateCouponForPublicResponse(coupon, items, subtotalCents) {
 }
 
 exports.getPublicStoreProfile = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
+  PUBLIC_CALLABLE_OPTIONS,
   async (request) => {
-    const storeRecord = await findStoreForCallable(request.data || {})
+    const data = request.data || {}
+    await assertPublicCallableRateLimit('getPublicStoreProfile', request)
+
+    const storeRecord = await findStoreForCallable(data)
     if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
       throw new HttpsError('not-found', 'Loja não encontrada.')
     }
@@ -524,9 +599,12 @@ exports.getPublicStoreProfile = onCall(
 )
 
 exports.getPublicCatalog = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '512MiB', maxInstances: 10 },
+  { ...PUBLIC_CALLABLE_OPTIONS, memory: '512MiB' },
   async (request) => {
-    const storeRecord = await findStoreForCallable(request.data || {})
+    const data = request.data || {}
+    await assertPublicCallableRateLimit('getPublicCatalog', request)
+
+    const storeRecord = await findStoreForCallable(data)
     if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
       throw new HttpsError('not-found', 'Loja não encontrada.')
     }
@@ -546,9 +624,11 @@ exports.getPublicCatalog = onCall(
 )
 
 exports.validatePublicCoupon = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 20 },
+  { ...PUBLIC_CALLABLE_OPTIONS, maxInstances: 20 },
   async (request) => {
     const data = request.data || {}
+    await assertPublicCallableRateLimit('validatePublicCoupon', request)
+
     const storeRecord = await findStoreForCallable(data)
     if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
       return { valid: false, message: 'Loja indisponível.' }
@@ -618,7 +698,12 @@ exports.updateStoreSettings = onCall(
     const storeData = storeSnapshot.data() || {}
     assertStoreOwnerOrAdmin(storeData, uid, userSnapshot.data() || {})
 
-    const patch = sanitizeStoreSettingsPayload(data.payload || {})
+    if (data.payload !== undefined && data.updates !== undefined) {
+      throw new HttpsError('invalid-argument', 'Envie apenas payload ou updates.')
+    }
+
+    const settingsPayload = data.payload !== undefined ? data.payload : data.updates
+    const patch = sanitizeStoreSettingsPayload(settingsPayload || {})
     if (Object.keys(patch).length === 0) {
       return { ok: true, updatedFields: [] }
     }

@@ -21,6 +21,7 @@ import {
   FiGrid,
   FiHome,
   FiLayers,
+  FiLoader,
   FiLock,
   FiLogOut,
   FiMenu,
@@ -395,7 +396,7 @@ function SoonToast({ feature, onClose }) {
   )
 }
 
-function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfileModal }) {
+function MobileMoreSheet({ open, onClose, onLogout, isLoggingOut, user, userData, onOpenProfileModal }) {
   if (!open) return null
 
   const name =
@@ -511,14 +512,16 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
           <div className="space-y-3 pt-1">
             <button
               type="button"
+              disabled={isLoggingOut}
               onClick={() => {
-                onClose()
-                onLogout()
+                if (!isLoggingOut) {
+                  onLogout()
+                }
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3 text-sm font-black text-red-600 transition hover:border-red-200 hover:bg-red-100 active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3 text-sm font-black text-red-600 transition hover:border-red-200 hover:bg-red-100 active:scale-[0.98] disabled:opacity-70"
             >
-              <FiLogOut size={16} />
-              Sair da conta
+              {isLoggingOut ? <FiLoader size={16} className="animate-spin" /> : <FiLogOut size={16} />}
+              {isLoggingOut ? 'Saindo...' : 'Sair da conta'}
             </button>
 
             <p className="text-center text-[10px] font-bold text-[#c7cbd1]">
@@ -533,7 +536,7 @@ function MobileMoreSheet({ open, onClose, onLogout, user, userData, onOpenProfil
 
 // ─── Profile Modal ──────────────────────────────────────────────────────────
 
-function ProfileModal({ open, onClose, onLogout, user, userData }) {
+function ProfileModal({ open, onClose, onLogout, isLoggingOut, user, userData }) {
   if (!open) return null
 
   return (
@@ -585,14 +588,16 @@ function ProfileModal({ open, onClose, onLogout, user, userData }) {
             Fechar
           </button>
           <button
+            disabled={isLoggingOut}
             onClick={() => {
-              onClose()
-              onLogout()
+              if (!isLoggingOut) {
+                onLogout()
+              }
             }}
-            className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 cursor-pointer"
+            className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 cursor-pointer disabled:opacity-70"
           >
-            <FiLogOut size={16} />
-            Sair da conta
+            {isLoggingOut ? <FiLoader size={16} className="animate-spin" /> : <FiLogOut size={16} />}
+            {isLoggingOut ? 'Saindo...' : 'Sair da conta'}
           </button>
         </div>
       </motion.div>
@@ -651,9 +656,10 @@ function SidebarUserCard({ user, userData, onOpenProfileModal }) {
   )
 }
 
-function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
-  return (
-    <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)]">
+function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal }) {
+  const location = useLocation()
+
+  return ( <aside className="hidden h-[100dvh] w-[18.5rem] shrink-0 overflow-hidden border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)]">
       <div className="flex h-full min-h-0 flex-col">
         <div className="relative rounded-[1.6rem] border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-3 shadow-sm ring-1 ring-white dark:from-zinc-800 dark:to-zinc-900 dark:border-zinc-700/50 dark:ring-zinc-800">
           <PratoByMark />
@@ -693,11 +699,16 @@ function Sidebar({ onLogout, user, userData, onOpenProfileModal }) {
         <div className="mt-2 space-y-2">
           <button
             type="button"
+            disabled={isLoggingOut}
             onClick={onLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer disabled:opacity-70 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
           >
-            <FiLogOut size={13} className="shrink-0" />
-            <span>Sair da conta</span>
+            {isLoggingOut ? (
+              <FiLoader size={13} className="shrink-0 animate-spin" />
+            ) : (
+              <FiLogOut size={13} className="shrink-0" />
+            )}
+            <span>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>
           </button>
           
           <p className="text-center text-[10px] font-bold text-gray-400 dark:text-zinc-600">
@@ -761,6 +772,7 @@ export default function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const { user, userData, logout, loading } = authContext || {}
   const storeName =
@@ -789,6 +801,9 @@ export default function DashboardLayout() {
 
   const handleLogout = async () => {
     try {
+      setIsLoggingOut(true)
+      await new Promise((resolve) => setTimeout(resolve, 600))
+
       if (typeof logout === 'function') {
         await logout()
       } else {
@@ -798,6 +813,7 @@ export default function DashboardLayout() {
       navigate('/login', { replace: true })
     } catch (error) {
       console.error('Erro ao sair:', error)
+      setIsLoggingOut(false)
     }
   }
 
@@ -819,7 +835,7 @@ export default function DashboardLayout() {
       </div>
 
       <div className="relative flex h-[100dvh] min-h-0 overflow-hidden">
-        <Sidebar onLogout={handleLogout} user={user} userData={userData} onOpenProfileModal={() => setProfileModalOpen(true)} />
+        <Sidebar onLogout={handleLogout} isLoggingOut={isLoggingOut} user={user} userData={userData} onOpenProfileModal={() => setProfileModalOpen(true)} />
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
           {/* Topbar/Header do Dashboard */}
@@ -925,6 +941,7 @@ export default function DashboardLayout() {
               open={mobileMenuOpen}
               onClose={() => setMobileMenuOpen(false)}
               onLogout={handleLogout}
+              isLoggingOut={isLoggingOut}
               user={user}
               userData={userData}
               onOpenProfileModal={() => setProfileModalOpen(true)}
@@ -935,6 +952,7 @@ export default function DashboardLayout() {
               open={profileModalOpen}
               onClose={() => setProfileModalOpen(false)}
               onLogout={handleLogout}
+              isLoggingOut={isLoggingOut}
               user={user}
               userData={userData}
             />

@@ -81,7 +81,19 @@ function orderStoreKeys(data) {
       return data.get('isActive', true) != false
         && data.get('isBlocked', false) != true
         && data.get('isBillingBlocked', false) != true
-        && data.get('isDeleted', false) != true;
+        && data.get('isDeleted', false) != true
+        && !(data.get('subscriptionStatus', '') in [
+          'blocked',
+          'canceled',
+          'checkout_pending',
+          'pending_checkout',
+          'billing_pending',
+          'billing_pending_payment_method'
+        ])
+        && (
+          data.get('subscriptionStatus', '') == ''
+          || data.get('subscriptionStatus', '') in ['trialing', 'active', 'past_due']
+        );
     }
 
     function isStoreOwnerData(data) {
@@ -114,7 +126,9 @@ function orderStoreKeys(data) {
     function publicStoreExists(storeId) {
       return storeId is string
         && exists(publicStorePath(storeId))
-        && isPublicStoreData(get(publicStorePath(storeId)).data);
+        && isPublicStoreData(get(publicStorePath(storeId)).data)
+        && exists(storePath(storeId))
+        && isPublicStoreData(get(storePath(storeId)).data);
     }
 
     function storeFieldUnchanged(field) {
@@ -468,7 +482,9 @@ function publicOrderUpdateAllowed(orderId) {
     }
 
     match /publicStores/{storeId} {
-      allow get, list: if isPublicStoreData(resource.data);
+      allow get, list: if isPublicStoreData(resource.data)
+        && exists(storePath(storeId))
+        && isPublicStoreData(get(storePath(storeId)).data);
       allow create, update, delete: if false;
 
       match /products/{productId} {

@@ -52,3 +52,11 @@ firebase deploy --only functions:aggregateStorePresence,functions:auditStoreChan
 ```
 
 > IMPORTANTE: Se criar um novo trigger de background, sempre lembre de exportar pelo `index.js`.
+
+
+Pendências ainda relevantes
+
+Cloudinary ainda usa upload unsigned no frontend.
+App Check ainda precisa ser ativado/configurado no Firebase Console e no client para endurecer de verdade.
+npm audit tinha vulnerabilidades moderadas em dependências; não atualizei pacotes nesta rodada.
+presence no Realtime Database ainda pode ser poluído por usuários autenticados/anonymous, embora o impacto seja baixo.
