@@ -814,8 +814,16 @@ function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false
   const initial = (name[0] || 'L').toUpperCase()
   const [isHovered, setIsHovered] = useState(false)
 
+  const planId = userData?.plan || 'essential'
+  const planBadges = {
+    essential: { label: 'ESSENCIAL', classes: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' },
+    professional: { label: 'PRO', classes: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400' },
+    premium: { label: 'PREMIUM', classes: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400' },
+  }
+  const activePlanBadge = planBadges[planId] || planBadges.essential
+
   return (
-    <div className="mt-4">
+    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800">
       {/* Card do usuário */}
       <button
         type="button"
@@ -823,16 +831,16 @@ function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          'group relative flex items-center rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40 dark:hover:border-orange-500/30 cursor-pointer',
-          collapsed ? 'w-12 h-12 justify-center p-0 mx-auto' : 'w-full px-3 py-2.5 gap-3'
+          'group relative flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:border-orange-100 hover:bg-orange-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40 dark:hover:border-orange-500/30 cursor-pointer text-left',
+          collapsed ? 'w-12 h-12 justify-center p-0 mx-auto gap-0' : 'px-3 py-2.5'
         )}
       >
         {/* Avatar */}
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-1 ring-black/5 dark:ring-white/10">
           {photoURL ? (
             <img src={photoURL} alt={name} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-orange-50 text-sm font-black text-[#f97316] dark:bg-zinc-800 dark:text-zinc-400">
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-100 to-orange-50 text-sm font-black text-[#f97316] dark:from-zinc-800 dark:to-zinc-900 dark:text-zinc-400">
               {initial}
             </div>
           )}
@@ -840,25 +848,38 @@ function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false
 
         {/* Texto */}
         {!collapsed && (
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black text-[#111827] dark:text-white">{name}</p>
+          <div className="min-w-0 flex-1 flex flex-col justify-center">
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-bold text-gray-900 dark:text-gray-100 leading-tight">{name}</p>
+              {userData?.subscriptionStatus === 'active' && (
+                <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider", activePlanBadge.classes)}>
+                  {activePlanBadge.label}
+                </span>
+              )}
+              {userData?.subscriptionStatus === 'trialing' && (
+                <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">TRIAL</span>
+              )}
+              {['past_due', 'blocked', 'canceled'].includes(userData?.subscriptionStatus) && (
+                <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-red-700 dark:bg-red-500/20 dark:text-red-400">AVISO</span>
+              )}
+            </div>
             {email && (
-              <p className="truncate text-[11px] font-semibold text-[#9ca3af] dark:text-zinc-500">{email}</p>
+              <p className="truncate text-[11px] font-medium text-gray-500 dark:text-zinc-500 mt-0.5">{email}</p>
             )}
           </div>
         )}
 
         {/* Ícone de perfil */}
         {!collapsed && (
-          <FiUser
+          <FiSettings
             size={14}
-            className="shrink-0 text-gray-300 transition group-hover:text-[#f97316] dark:text-zinc-600"
+            className="shrink-0 text-gray-400 transition duration-300 group-hover:rotate-45 group-hover:text-gray-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
           />
         )}
 
         {/* Tooltip para sidebar colapsada */}
         {collapsed && isHovered && (
-          <div className="absolute left-20 z-[9999] pointer-events-none flex items-center">
+          <div className="absolute left-16 z-[9999] pointer-events-none flex items-center">
             <div className="h-0 w-0 border-y-6 border-y-transparent border-r-6 border-r-zinc-900/95 dark:border-r-white/95" />
             <div className="rounded-xl border border-white/10 bg-zinc-900/95 dark:bg-white/95 px-3 py-2 text-xs font-black text-white dark:text-zinc-900 shadow-xl backdrop-blur-md whitespace-nowrap">
               <p className="font-black">{name}</p>
@@ -940,16 +961,18 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
             disabled={isLoggingOut}
             onClick={onLogout}
             className={cn(
-              'flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer disabled:opacity-70 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20',
-              collapsed ? 'w-12 h-10 px-0 mx-auto' : 'w-full px-3 py-2'
+              'flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98] cursor-pointer disabled:opacity-70 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20',
+              collapsed ? 'w-12 h-10 justify-center px-0 mx-auto' : 'w-full px-3 py-2 text-left'
             )}
           >
-            {isLoggingOut ? (
-              <FiLoader size={13} className="shrink-0 animate-spin" />
-            ) : (
-              <FiLogOut size={13} className="shrink-0" />
-            )}
-            {!collapsed && <span>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>}
+            <div className="flex shrink-0 items-center justify-center">
+              {isLoggingOut ? (
+                <FiLoader size={15} className="animate-spin text-red-500" />
+              ) : (
+                <FiLogOut size={15} className={collapsed ? 'text-gray-400 transition-colors' : ''} />
+              )}
+            </div>
+            {!collapsed && <span className="text-sm font-semibold">{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>}
           </button>
           
           {!collapsed && (
