@@ -11,6 +11,8 @@ import ProfilePanel from '../merchant/ProfilePanel'
 import { DashboardPageSkeleton } from '../shared/Skeletons'
 import DashboardNotificationBell from '../notifications/DashboardNotificationBell'
 import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
+import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
+import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
 
 import {
   FiBarChart2,
@@ -174,6 +176,43 @@ function isPathActive(pathname, item) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`)
 }
 
+function getNavNotificationArea(item) {
+  return getDashboardAreaForPath(item?.to)
+}
+
+function formatBadgeCount(count) {
+  if (!count) return null
+  return count > 99 ? '99+' : String(count)
+}
+
+function NotificationBadge({ count = 0, active = false }) {
+  const label = formatBadgeCount(count)
+
+  if (label) {
+    return (
+      <span
+        className={cn(
+          'relative z-10 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-black leading-none shadow-sm',
+          active
+            ? 'bg-white text-[#f97316] ring-1 ring-white/60'
+            : 'bg-red-500 text-white ring-2 ring-white dark:ring-zinc-900'
+        )}
+      >
+        {label}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className={cn(
+        'relative z-10 h-2.5 w-2.5 shrink-0 rounded-full shadow-sm',
+        active ? 'bg-white ring-2 ring-white/40' : 'bg-red-500 ring-2 ring-white dark:ring-zinc-900'
+      )}
+    />
+  )
+}
+
 function PratoByMark({ compact = false, collapsed = false }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -222,9 +261,13 @@ function SidebarSection({ title, children, collapsed = false }) {
   )
 }
 
-function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false }) {
+function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false, badgeCount = 0, hasNotification = false }) {
   const Icon = item.icon
   const [isHovered, setIsHovered] = useState(false)
+  const showNotification = badgeCount > 0 || hasNotification
+  const notificationLabel = badgeCount > 0
+    ? `${item.label}, ${badgeCount > 99 ? '99 ou mais' : badgeCount} notificações não lidas`
+    : `${item.label}, há notificação nova`
 
   const handleClick = (e) => {
     if (item.action) {
@@ -243,6 +286,7 @@ function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false }) {
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      aria-label={showNotification ? notificationLabel : item.label}
       className={({ isActive }) =>
         cn(
           'group relative flex min-w-0 items-center rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
@@ -289,6 +333,18 @@ function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false }) {
           )}
 
           {!collapsed && isActive && <FiChevronRight className="relative z-10 shrink-0" size={16} />}
+
+          {showNotification && (
+            <span
+              className={cn(
+                collapsed
+                  ? 'absolute right-1.5 top-1.5 z-20'
+                  : 'relative z-10 ml-1'
+              )}
+            >
+              <NotificationBadge count={badgeCount} active={isActive} />
+            </span>
+          )}
 
           {/* Tooltip para sidebar colapsada */}
           {collapsed && isHovered && (
@@ -381,25 +437,40 @@ function ComingSoonNavItem({ item, onNavigate, collapsed = false }) {
   )
 }
 
-function MobileNavItem({ item }) {
+function MobileNavItem({ item, badgeCount = 0, hasNotification = false }) {
   const Icon = item.icon
+  const showNotification = badgeCount > 0 || hasNotification
 
   return (
     <NavLink
       to={item.to}
       end={item.end}
+      aria-label={showNotification
+        ? `${item.label}, ${badgeCount > 0 ? `${badgeCount > 99 ? '99 ou mais' : badgeCount} notificações não lidas` : 'há notificação nova'}`
+        : item.label}
       className={({ isActive }) =>
         cn(
-          'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98]',
+          'relative flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98]',
           isActive
             ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
             : 'text-[#6b7280] active:bg-gray-50 dark:text-zinc-400 dark:active:bg-zinc-800/50'
         )
       }
     >
-      <Icon size={19} />
+      {({ isActive }) => (
+        <>
+          <span className="relative">
+            <Icon size={19} />
+            {showNotification && (
+              <span className="absolute -right-2 -top-2">
+                <NotificationBadge count={badgeCount} active={isActive} />
+              </span>
+            )}
+          </span>
 
-      <span className="mt-1 max-w-full truncate">{item.label}</span>
+          <span className="mt-1 max-w-full truncate">{item.label}</span>
+        </>
+      )}
     </NavLink>
   )
 }
@@ -456,7 +527,8 @@ function MobileMoreSheet({
   soundMuted,
   onToggleSound,
   theme,
-  onSetTheme
+  onSetTheme,
+  notificationCounts = {}
 }) {
   if (!open) return null
 
@@ -602,6 +674,7 @@ function MobileMoreSheet({
               <MainNavItem
                 key={item.to}
                 item={item}
+                badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
                 onNavigate={onClose}
                 onCustomAction={(action) => {
                   if (action === 'PROFILE_MODAL') {
@@ -793,7 +866,7 @@ function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false
   )
 }
 
-function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, collapsed = false, onToggle }) {
+function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, collapsed = false, onToggle, notificationCounts = {} }) {
   return (
     <motion.aside
       animate={{ width: collapsed ? 80 : 296 }}
@@ -833,6 +906,7 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
                 key={item.to}
                 item={item}
                 collapsed={collapsed}
+                badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
                 onCustomAction={(action) => {
                   if (action === 'PROFILE_MODAL') {
                     onOpenProfileModal()
@@ -884,27 +958,43 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
   )
 }
 
-function MobileBottomNav({ onOpenMore, moreActive }) {
+function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
   const mobileItems = MAIN_ITEMS.slice(0, 4)
+  const hiddenHasNotification = MAIN_ITEMS.slice(4).some((item) => {
+    const area = getNavNotificationArea(item)
+    return area && notificationCounts[area] > 0
+  })
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/95 px-2 pt-2 shadow-2xl shadow-gray-300/60 backdrop-blur-xl pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:hidden dark:bg-zinc-900/95 dark:border-zinc-800 dark:shadow-[0_-10px_50px_rgba(0,0,0,0.3)]">
       <div className="grid grid-cols-5 gap-1">
         {mobileItems.map((item) => (
-          <MobileNavItem key={item.to} item={item} />
+          <MobileNavItem
+            key={item.to}
+            item={item}
+            badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
+          />
         ))}
 
         <button
           type="button"
           onClick={onOpenMore}
+          aria-label={hiddenHasNotification ? 'Mais, há notificações em itens escondidos' : 'Mais'}
           className={cn(
-            'flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50 dark:active:bg-zinc-800',
+            'relative flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50 dark:active:bg-zinc-800',
             moreActive
               ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
               : 'text-[#6b7280] dark:text-zinc-400'
           )}
         >
-          <FiMenu size={19} />
+          <span className="relative">
+            <FiMenu size={19} />
+            {hiddenHasNotification && (
+              <span className="absolute -right-2 -top-2">
+                <NotificationBadge active={moreActive} />
+              </span>
+            )}
+          </span>
 
           <span className="mt-1 max-w-full truncate">Mais</span>
         </button>
@@ -917,6 +1007,8 @@ export default function DashboardLayout() {
   const navigate = useNavigate()
   const authContext = useAuth()
   const currentOutlet = useOutlet()
+  const notificationState = useDashboardNotifications()
+  const { countsByArea = {}, markAreaAsRead } = notificationState
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -1240,6 +1332,13 @@ export default function DashboardLayout() {
     setMobileMenuOpen(false)
   }, [location.pathname])
 
+  useEffect(() => {
+    const area = getDashboardAreaForPath(location.pathname)
+    if (area) {
+      markAreaAsRead(area)
+    }
+  }, [location.pathname, markAreaAsRead])
+
   return (
     <main className="dashboard-shell h-[100dvh] overflow-hidden bg-[#f9fafb] text-[#111827] dark:bg-zinc-950 dark:text-zinc-50 transition-colors">
       <SoonToast
@@ -1262,6 +1361,7 @@ export default function DashboardLayout() {
           onOpenProfileModal={() => setProfileModalOpen(true)}
           collapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
+          notificationCounts={countsByArea}
         />
 
         <section className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
@@ -1386,7 +1486,7 @@ export default function DashboardLayout() {
                 </motion.div>
               </button>
 
-              <DashboardNotificationBell />
+              <DashboardNotificationBell notificationState={notificationState} />
 
               <button
                 type="button"
@@ -1436,6 +1536,7 @@ export default function DashboardLayout() {
         <MobileBottomNav
           moreActive={moreActive}
           onOpenMore={() => setMobileMenuOpen(true)}
+          notificationCounts={countsByArea}
         />
 
         <AnimatePresence>
@@ -1452,6 +1553,7 @@ export default function DashboardLayout() {
               onToggleSound={toggleSound}
               theme={theme}
               onSetTheme={setTheme}
+              notificationCounts={countsByArea}
             />
           )}
           {profileModalOpen && (

@@ -3,6 +3,12 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
 import {
+  buildOrderClipboardSummary,
+  buildOrderWhatsAppUrl,
+  hasValidOrderWhatsAppPhone,
+} from '../../utils/orderSummary'
+import { normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
+import {
   getPricingValidation,
   shouldBlockOrderAcceptance,
   shouldWarnOrderAcceptance,
@@ -870,16 +876,6 @@ function getCancellationReason(order) {
   )
 }
 
-function normalizePhoneForWhatsApp(phone) {
-  const digits = String(phone || '').replace(/\D/g, '')
-
-  if (!digits) return ''
-  if (digits.startsWith('55')) return digits
-  if (digits.length >= 10) return `55${digits}`
-
-  return digits
-}
-
 function safeGetLocalStorage(key) {
   try {
     return localStorage.getItem(key)
@@ -1686,6 +1682,7 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
   const cancellationReason = getCancellationReason(order)
   const customerName = getCustomerName(order)
   const phone = getCustomerPhone(order)
+  const canOpenWhatsApp = hasValidOrderWhatsAppPhone(order)
   const savings = promotionSavings + discount
 
   const isFinalStatus = status === 'entregue' || status === 'cancelado'
@@ -1838,7 +1835,7 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
             </button>
           )}
 
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className={`grid ${canOpenWhatsApp ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
             <button
               type="button"
               onClick={() => onOpen(order)}
@@ -1846,13 +1843,25 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
             >
               Abrir
             </button>
+            {canOpenWhatsApp && (
+              <button
+                type="button"
+                onClick={() => onOpenWhatsApp(order)}
+                className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-green-100 bg-green-50 px-2 py-1.5 text-xs font-black text-green-700 transition hover:bg-green-100/50 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/15"
+                title="Chamar cliente no WhatsApp"
+                aria-label="Chamar cliente no WhatsApp"
+              >
+                <FiMessageCircle size={14} />
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => onOpenWhatsApp(order)}
-              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-green-100 bg-green-50 px-2 py-1.5 text-xs font-black text-green-700 transition hover:bg-green-100/50 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/15"
-              title="WhatsApp"
+              onClick={() => onCopyOrder(order)}
+              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-gray-100 bg-white px-2 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10"
+              title="Copiar resumo do pedido"
+              aria-label="Copiar resumo do pedido"
             >
-              <FiMessageCircle size={14} />
+              <FiCopy size={14} />
             </button>
           </div>
         </div>
@@ -1971,8 +1980,14 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
 
           <button
             type="button"
-            onClick={() => onOpenWhatsApp(order)}
-            className="flex h-10 items-center justify-center gap-1 rounded-xl border border-green-200 bg-green-50 text-xs font-black text-green-700 transition active:scale-95 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-400"
+            onClick={() => canOpenWhatsApp && onOpenWhatsApp(order)}
+            disabled={!canOpenWhatsApp}
+            aria-label="Chamar cliente no WhatsApp"
+            className={`flex h-10 items-center justify-center gap-1 rounded-xl border text-xs font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+              canOpenWhatsApp
+                ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-400'
+                : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600'
+            }`}
           >
             <FiMessageCircle size={13} /> WhatsApp
           </button>
@@ -1981,6 +1996,7 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
             type="button"
             onClick={() => onCopyOrder(order)}
             className="flex h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white text-xs font-black text-gray-500 transition active:scale-95 dark:border-zinc-700 dark:bg-white/[0.06] dark:text-zinc-400"
+            aria-label="Copiar resumo do pedido"
           >
             <FiCopy size={12} /> Copiar
           </button>
@@ -2224,6 +2240,7 @@ function OrderModal({
   const isFinalStatus = status === 'entregue' || status === 'cancelado'
   const showCustomerThanksAction = shouldShowCustomerThanksAction(order)
   const cancellationReason = getCancellationReason(order)
+  const canOpenWhatsApp = hasValidOrderWhatsAppPhone(order)
 
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
@@ -2351,7 +2368,8 @@ function OrderModal({
                 <FiPrinter size={16}/> Comanda
               </button>
               <button onClick={() => onCopyOrder(order)}
-                className="hidden items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-800 transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:bg-white/[0.08] sm:inline-flex">
+                aria-label="Copiar resumo do pedido"
+                className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-800 transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:bg-white/[0.08]">
                 <FiCopy size={16}/> Copiar
               </button>
             </div>
@@ -2389,13 +2407,16 @@ function OrderModal({
                       {formatDisplayPhone(getCustomerPhone(order)) || 'Telefone não informado'}
                     </p>
                   </div>
-                  <button
-                    onClick={() => onOpenWhatsApp(order)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-green-50 text-green-600 transition hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:hover:bg-green-900"
-                    title="Chamar no WhatsApp"
-                  >
-                    <FiMessageCircle size={17} />
-                  </button>
+                  {canOpenWhatsApp && (
+                    <button
+                      onClick={() => onOpenWhatsApp(order)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-green-50 text-green-600 transition hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:hover:bg-green-900"
+                      title="Chamar cliente no WhatsApp"
+                      aria-label="Chamar cliente no WhatsApp"
+                    >
+                      <FiMessageCircle size={17} />
+                    </button>
+                  )}
                 </div>
               </section>
 
@@ -2782,7 +2803,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     let whatsappUrl = ''
 
     if (['preparando', 'em_rota', 'entregue', 'cancelado'].includes(nextStatus)) {
-      const phone = normalizePhoneForWhatsApp(getCustomerPhone(order))
+      const phone = normalizeBrazilianPhoneForWhatsApp(getCustomerPhone(order))
 
       if (!phone) {
         showToast('error', 'Cliente sem WhatsApp válido para receber aviso.')
@@ -2961,7 +2982,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         }, 500)
       }
 
-      const phone = normalizePhoneForWhatsApp(getCustomerPhone(order))
+      const phone = normalizeBrazilianPhoneForWhatsApp(getCustomerPhone(order))
 
       if (phone && shouldStartPreparing) {
         const shouldNotify = window.confirm(
@@ -3002,7 +3023,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   async (order) => {
     if (!order?.id || updatingStatus) return
 
-    const phone = normalizePhoneForWhatsApp(getCustomerPhone(order))
+    const phone = normalizeBrazilianPhoneForWhatsApp(getCustomerPhone(order))
 
     if (!phone) {
       showToast('error', 'Cliente sem WhatsApp válido.')
@@ -3039,16 +3060,17 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
   const handleOpenWhatsApp = useCallback(
     (order) => {
-      const phone = normalizePhoneForWhatsApp(getCustomerPhone(order))
+      const url = buildOrderWhatsAppUrl(order, {
+        store: selectedStore,
+        totalLabel: formatMoney(getOrderTotal(order)),
+      })
 
-      if (!phone) {
+      if (!url) {
         showToast('error', 'Este pedido não possui telefone válido.')
         return
       }
 
-      const message = encodeURIComponent(buildWhatsAppMessage(order, selectedStore))
-
-      window.open(`https://wa.me/${phone}?text=${message}`, '_blank', 'noopener,noreferrer')
+      window.open(url, '_blank', 'noopener,noreferrer')
     },
     [selectedStore, showToast]
   )
@@ -3079,37 +3101,27 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   const handleCopyOrder = useCallback(
     async (order) => {
       const address = getAddress(order)
-
-      const itemsText = getOrderItems(order)
-        .map((item) => {
-          const options = getItemOptionsSummary(item)
-          const observation = item.observation ? ` | Obs: ${item.observation}` : ''
-
-          return `${getItemQty(item)}x ${getItemName(item)}${options ? ` (${options})` : ''}${observation}`
-        })
-        .join('\n')
-
-      const text = [
-        `Pedido ${getOrderDisplayNumber(order)}`,
-        `Cliente: ${getCustomerName(order)}`,
-        `Telefone: ${getCustomerPhone(order) || 'Não informado'}`,
-        `Status: ${STATUS_META[normalizeStatus(order.status)]?.label || 'Pendente'}`,
-        `Pagamento: ${getPaymentMethod(order)}`,
-        `Total: ${formatMoney(getOrderTotal(order))}`,
-        `Endereço: ${address.full}`,
-        address.complement ? `Complemento: ${address.complement}` : '',
-        address.reference ? `Referência: ${address.reference}` : '',
-        '',
-        'Itens:',
-        itemsText || getOrderItemsSummary(order),
-      ]
-        .filter(Boolean)
-        .join('\n')
+      const text = buildOrderClipboardSummary(order, {
+        addressLabel: [
+          address.full,
+          address.complement ? `Complemento: ${address.complement}` : '',
+          address.reference ? `Referência: ${address.reference}` : '',
+        ].filter(Boolean).join(' | '),
+        deliveryTypeLabel: getOrderTypeLabel(order),
+        notes: order?.notes || order?.observation || order?.customerNote || '',
+        paymentLabel: getPaymentMethod(order),
+        totalLabel: formatMoney(getOrderTotal(order)),
+      })
 
       try {
+        if (!navigator?.clipboard?.writeText) {
+          throw new Error('clipboard-unavailable')
+        }
+
         await navigator.clipboard.writeText(text)
         showToast('success', 'Resumo do pedido copiado.')
-      } catch {
+      } catch (error) {
+        console.warn('[OrdersPage] Não foi possível copiar resumo do pedido:', error)
         showToast('error', 'Não foi possível copiar o resumo.')
       }
     },

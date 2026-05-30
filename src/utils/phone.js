@@ -11,6 +11,10 @@ export function normalizeBrazilianPhone(phone) {
   return { phoneDigits: digits, phoneE164: '+' + digits }
 }
 
+export function normalizeBrazilianPhoneForWhatsApp(phone) {
+  return normalizeBrazilianPhone(phone)?.phoneDigits || ''
+}
+
 export function validateBrazilianMobilePhone(phone) {
   const rawDigits = String(phone || '').replace(/\D/g, '')
   let nationalDigits

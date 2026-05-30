@@ -1,18 +1,51 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore'
-import { FiVolume2, FiShoppingBag, FiX, FiChevronRight } from 'react-icons/fi'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { collection, limit, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore'
+import {
+  FiCheck,
+  FiChevronRight,
+  FiCopy,
+  FiMessageCircle,
+  FiShoppingBag,
+  FiVolume2,
+  FiX,
+} from 'react-icons/fi'
+
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
+import { getOrderDisplayNumber } from '../../utils/orderNumber'
+import {
+  getBrowserNotificationPermission,
+  getNewOrderNotificationBody,
+  showNewOrderBrowserNotification,
+} from '../../utils/browserNotifications'
+import {
+  buildOrderClipboardSummary,
+  buildOrderWhatsAppUrl,
+  getOrderCustomerName,
+  hasValidOrderWhatsAppPhone,
+} from '../../utils/orderSummary'
 
-// --- CONSTANTES ---
 const ALERT_PERMISSION_KEY = '@PratoBy:alertsEnabled'
-const BELL_AUDIO_PATH = '/bell.mp3'
-const NOTIFICATION_ICON = '/icons/favicon.png'
-const NEW_ORDER_STATUSES = new Set(['novo', 'pendente', 'pending', 'new'])
+const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
+const RECENT_ORDERS_LIMIT = 50
 const STORE_QUERY_CHUNK_SIZE = 10
+const NEW_ORDER_STATUSES = new Set([
+  'pending',
+  'pendente',
+  'novo',
+  'new',
+  'received',
+  'recebido',
+  'aguardando',
+  'aguardando_confirmacao',
+])
 
-// --- FUNÇÕES AUXILIARES ---
+function uniqueArray(values) {
+  return [...new Set(values.filter(Boolean).map(String))]
+}
+
 function chunkArray(array, size = STORE_QUERY_CHUNK_SIZE) {
   const chunks = []
   for (let index = 0; index < array.length; index += size) {
@@ -27,60 +60,260 @@ function getStartOfTodayTimestamp() {
   return Timestamp.fromDate(startOfToday)
 }
 
-function isNewOrderStatus(status) {
-  if (!status) return false
-  return NEW_ORDER_STATUSES.has(String(status).toLowerCase())
+function normalizeStatus(status) {
+  return String(status || '').toLowerCase().trim()
 }
 
-// --- COMPONENTE PRINCIPAL ---
+function isNewOrderStatus(status) {
+  return NEW_ORDER_STATUSES.has(normalizeStatus(status))
+}
+
+function getOrderId(order) {
+  return String(order?.firestoreId || order?.docId || order?._docId || order?.id || '').trim()
+}
+
+function getOrderTotal(order) {
+  const cents = order?.totalCents ?? order?.totalAmountCents ?? order?.amountCents
+  if (Number(cents) > 0) return Number(cents) / 100
+
+  const total = order?.total ?? order?.totalAmount ?? order?.amount
+  return Number(total) || 0
+}
+
+function formatMoney(value) {
+  return Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+}
+
+function resolveActiveStoreId({ storeId, storeIds, userData, user }) {
+  const linkedStoreIds = uniqueArray([
+    storeId,
+    ...(Array.isArray(storeIds) ? storeIds : []),
+    userData?.storeId,
+    ...(Array.isArray(userData?.storeIds) ? userData.storeIds : []),
+    user?.storeId,
+    ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+  ])
+
+  const fallbackStoreId = linkedStoreIds[0] || ''
+
+  try {
+    const selectedStoreId = localStorage.getItem(SELECTED_STORE_KEY)
+    if (selectedStoreId && linkedStoreIds.includes(String(selectedStoreId))) {
+      return selectedStoreId
+    }
+  } catch {
+    return fallbackStoreId
+  }
+
+  return fallbackStoreId
+}
+
+function NewOrderToast({ order, copied, onOpenOrder, onViewOrders, onCopy, onWhatsApp, onDismiss }) {
+  const orderId = getOrderId(order)
+  const canOpenWhatsApp = hasValidOrderWhatsAppPhone(order)
+
+  return (
+    <div className="fixed inset-x-3 top-20 z-[100] mx-auto w-[calc(100vw-1.5rem)] max-w-md rounded-[1.5rem] border border-orange-100 bg-white p-4 shadow-2xl shadow-orange-900/15 ring-1 ring-white/70 dark:border-orange-900/30 dark:bg-zinc-900 dark:ring-zinc-800 sm:inset-x-auto sm:right-6 sm:mx-0">
+      <div className="flex items-start gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/25">
+          <FiShoppingBag size={20} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#f97316]">
+            Novo pedido recebido
+          </p>
+          <h3 className="mt-1 text-base font-black text-[#111827] dark:text-white">
+            {getOrderDisplayNumber(order, orderId)} · {formatMoney(getOrderTotal(order))}
+          </h3>
+          <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+            {getOrderCustomerName(order)} enviou um pedido agora.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="rounded-xl p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          aria-label="Dispensar alerta de novo pedido"
+        >
+          <FiX size={18} />
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onOpenOrder}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-[#111827] px-3 py-2.5 text-xs font-black text-white transition hover:bg-black active:scale-[0.98] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
+        >
+          Abrir pedido
+          <FiChevronRight size={14} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onViewOrders}
+          className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs font-black text-[#111827] transition hover:bg-gray-100 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-800"
+        >
+          Ver pedidos
+        </button>
+
+        <button
+          type="button"
+          onClick={onCopy}
+          className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          {copied ? <FiCheck size={14} className="text-emerald-500" /> : <FiCopy size={14} />}
+          {copied ? 'Copiado' : 'Copiar resumo'}
+        </button>
+
+        {canOpenWhatsApp ? (
+          <button
+            type="button"
+            onClick={onWhatsApp}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-300 dark:hover:bg-emerald-950/35"
+          >
+            <FiMessageCircle size={14} />
+            Chamar cliente
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Dispensar
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function GlobalOrderAlert() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, storeId, storeIds } = useAuth()
-  const storeIdsKey = Array.isArray(storeIds) ? storeIds.filter(Boolean).join('|') : ''
-  const alertStoreKeys = useMemo(() => {
-    return [
-      ...new Set([
-        storeId,
-        ...storeIdsKey.split('|'),
-      ].filter(Boolean)),
-    ]
-  }, [storeId, storeIdsKey])
+  const auth = useAuth()
+  const { user, userData, storeId, storeIds } = auth
+  const { addLocalNotification, markAsRead } = useDashboardNotifications()
 
-  // 1. Estados (Lendo do Cache do Navegador)
   const [enabled, setEnabled] = useState(() => {
-    return localStorage.getItem(ALERT_PERMISSION_KEY) === 'true'
+    try {
+      return localStorage.getItem(ALERT_PERMISSION_KEY) === 'true'
+    } catch {
+      return false
+    }
   })
   const [latestOrder, setLatestOrder] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const [activeStoreId, setActiveStoreId] = useState(() =>
+    resolveActiveStoreId({ storeId, storeIds, userData, user })
+  )
 
-  // 2. Referências
-  const audioRef = useRef(null)
   const seenOrderIdsRef = useRef(new Set())
   const orderUnsubscribersRef = useRef([])
   const initialSnapshotsPendingRef = useRef(0)
   const isBootingOrdersRef = useRef(true)
-  const latestOrderTimerRef = useRef(null)
+  const originalTitleRef = useRef(null)
 
-  // 3. Efeito de Inicialização Simples
+  const activeOrderId = getOrderId(latestOrder)
+  const activeNotificationId = activeOrderId ? `order:${activeOrderId}` : ''
+
+  const activeStoreKeys = useMemo(() => uniqueArray([activeStoreId]), [activeStoreId])
+
   useEffect(() => {
-    audioRef.current = new Audio(BELL_AUDIO_PATH)
-    audioRef.current.preload = 'auto'
-    audioRef.current.volume = 1
+    const syncActiveStoreId = () => {
+      setActiveStoreId(resolveActiveStoreId({ storeId, storeIds, userData, user }))
+    }
+
+    syncActiveStoreId()
+
+    const interval = window.setInterval(syncActiveStoreId, 1500)
+    window.addEventListener('storage', syncActiveStoreId)
 
     return () => {
-      if (latestOrderTimerRef.current) {
-        clearTimeout(latestOrderTimerRef.current)
-        latestOrderTimerRef.current = null
-      }
+      window.clearInterval(interval)
+      window.removeEventListener('storage', syncActiveStoreId)
+    }
+  }, [storeId, storeIds, user, userData])
 
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current = null
+  const clearLatestOrder = useCallback((markRead = false) => {
+    if (markRead && activeNotificationId) {
+      markAsRead(activeNotificationId)
+    }
+
+    setLatestOrder(null)
+    setCopied(false)
+  }, [activeNotificationId, markAsRead])
+
+  useEffect(() => {
+    if (!latestOrder) return undefined
+
+    if (!originalTitleRef.current) {
+      originalTitleRef.current = document.title || 'PratoBy'
+    }
+
+    document.title = '🔔 Novo pedido! | PratoBy'
+
+    return () => {
+      if (originalTitleRef.current) {
+        document.title = originalTitleRef.current
+        originalTitleRef.current = null
       }
     }
-  }, [])
+  }, [latestOrder])
 
-  // 4. Lógica de Monitoramento de Novos Pedidos
+  useEffect(() => {
+    if (location.pathname !== '/dashboard/orders' || !latestOrder) return undefined
+
+    const timer = window.setTimeout(() => clearLatestOrder(false), 0)
+    return () => window.clearTimeout(timer)
+  }, [clearLatestOrder, latestOrder, location.pathname])
+
+  const goToOrders = useCallback(() => {
+    clearLatestOrder(false)
+    navigate('/dashboard/orders')
+  }, [clearLatestOrder, navigate])
+
+  const notifyNewOrder = useCallback((order) => {
+    const orderId = getOrderId(order)
+    const body = getNewOrderNotificationBody(order, orderId)
+
+    setLatestOrder(order)
+    setCopied(false)
+
+    window.dispatchEvent(new Event('play-new-order-sound'))
+
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([200, 100, 200])
+    }
+
+    addLocalNotification({
+      id: `order:${orderId}`,
+      area: 'orders',
+      channel: 'local_dashboard',
+      sourceType: 'order',
+      sourceId: orderId,
+      title: 'Novo pedido recebido',
+      message: body,
+      href: '/dashboard/orders',
+      severity: 'success',
+      createdAt: order?.createdAt || Date.now(),
+    })
+
+    if (getBrowserNotificationPermission() === 'granted') {
+      showNewOrderBrowserNotification(order, {
+        orderId,
+        body,
+        onClick: () => navigate('/dashboard/orders'),
+      })
+    }
+  }, [addLocalNotification, navigate])
+
   useEffect(() => {
     if (!user?.uid) return undefined
 
@@ -89,53 +322,15 @@ export function GlobalOrderAlert() {
       orderUnsubscribersRef.current = []
     }
 
-    const notifyNewOrder = async (order) => {
-      setLatestOrder(order)
+    clearOrderListeners()
 
-      if (latestOrderTimerRef.current) {
-        clearTimeout(latestOrderTimerRef.current)
-      }
-
-      latestOrderTimerRef.current = setTimeout(() => {
-        setLatestOrder(null)
-        latestOrderTimerRef.current = null
-      }, 8000)
-
-      try {
-        if (audioRef.current) {
-          audioRef.current.currentTime = 0
-          await audioRef.current.play()
-        }
-      } catch (error) {
-        console.info('Áudio bloqueado pelo navegador. Reativando botão manual.', error)
-        setEnabled(false) // Se o navegador bloquear, o botão verde volta pra pedir permissão
-      }
-
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([200, 100, 200])
-      }
-
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        const displayNumber = order?.id?.slice(-4)?.toUpperCase() || 'Novo'
-        new Notification('Novo pedido no PratoBy!', {
-          body: `Pedido #${displayNumber} acabou de chegar!`,
-          icon: NOTIFICATION_ICON,
-        })
-      }
-    }
-
-    // Simplifica a busca para usar apenas o storeId principal (docId).
-    // Como novos pedidos exigem validPublicOrderCreate(publicStoreExists),
-    // o storeId salvo no pedido sempre será o docId real, tornando a busca por slugs desnecessária e evitando falhas de permissão nas regras.
-    const deduplicatedKeys = alertStoreKeys
-
-    if (deduplicatedKeys.length === 0) {
+    if (!activeStoreKeys.length) {
       seenOrderIdsRef.current = new Set()
       isBootingOrdersRef.current = false
-      return
+      return undefined
     }
 
-    const storeKeyChunks = chunkArray(deduplicatedKeys)
+    const storeKeyChunks = chunkArray(activeStoreKeys)
     const cutoffDate = getStartOfTodayTimestamp()
 
     seenOrderIdsRef.current = new Set()
@@ -148,16 +343,17 @@ export function GlobalOrderAlert() {
       const qOrders = query(
         collection(db, 'orders'),
         where('storeId', 'in', storeKeyChunk),
-        where('createdAt', '>=', cutoffDate)
+        where('createdAt', '>=', cutoffDate),
+        orderBy('createdAt', 'desc'),
+        limit(RECENT_ORDERS_LIMIT)
       )
 
       const unsubscribeOrders = onSnapshot(qOrders, (ordersSnapshot) => {
-        const pendingOrders = ordersSnapshot.docs
-          .map((orderDoc) => ({ id: orderDoc.id, ...orderDoc.data() }))
-          .filter((order) => isNewOrderStatus(order.status))
-
         if (isFirstChunkSnapshot) {
-          pendingOrders.forEach((order) => seenOrderIdsRef.current.add(order.id))
+          ordersSnapshot.docs.forEach((orderDoc) => {
+            seenOrderIdsRef.current.add(orderDoc.id)
+          })
+
           isFirstChunkSnapshot = false
           initialSnapshotsPendingRef.current -= 1
           if (initialSnapshotsPendingRef.current <= 0) {
@@ -166,14 +362,24 @@ export function GlobalOrderAlert() {
           return
         }
 
-        if (isBootingOrdersRef.current) {
-          pendingOrders.forEach((order) => seenOrderIdsRef.current.add(order.id))
-          return
-        }
+        ordersSnapshot.docChanges().forEach((change) => {
+          if (change.type !== 'added') return
+          if (change.doc.metadata.hasPendingWrites) return
 
-        pendingOrders.forEach((order) => {
-          if (seenOrderIdsRef.current.has(order.id)) return
-          seenOrderIdsRef.current.add(order.id)
+          const order = {
+            id: change.doc.id,
+            firestoreId: change.doc.id,
+            ...change.doc.data(),
+          }
+          const orderId = getOrderId(order)
+
+          if (!orderId || seenOrderIdsRef.current.has(orderId)) return
+
+          seenOrderIdsRef.current.add(orderId)
+
+          if (isBootingOrdersRef.current) return
+          if (!isNewOrderStatus(order.status)) return
+
           notifyNewOrder(order)
         })
       }, (error) => {
@@ -186,29 +392,44 @@ export function GlobalOrderAlert() {
     return () => {
       clearOrderListeners()
     }
-  }, [alertStoreKeys, user?.uid])
+  }, [activeStoreKeys, notifyNewOrder, user?.uid])
 
-  // 5. Função de Ação do Botão Verde
   const handleEnable = async () => {
     setEnabled(true)
-    localStorage.setItem(ALERT_PERMISSION_KEY, 'true')
-
-    // Toca o som de verdade para o lojista saber que ativou!
-    if (audioRef.current) {
-      try {
-        audioRef.current.currentTime = 0
-        await audioRef.current.play() 
-      } catch (error) {
-        console.error('Erro ao tocar áudio inicial', error)
-      }
+    try {
+      localStorage.setItem(ALERT_PERMISSION_KEY, 'true')
+    } catch {
+      // localStorage can be unavailable in hardened browsers.
     }
 
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      await Notification.requestPermission()
+    window.dispatchEvent(new Event('play-new-order-sound'))
+  }
+
+  const handleCopySummary = async () => {
+    if (!latestOrder) return
+
+    try {
+      await navigator.clipboard.writeText(buildOrderClipboardSummary(latestOrder, {
+        totalLabel: formatMoney(getOrderTotal(latestOrder)),
+      }))
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch (error) {
+      console.warn('[GlobalOrderAlert] Não foi possível copiar resumo do pedido:', error)
     }
   }
 
-  // --- REGRAS DE VISIBILIDADE NA TELA ---
+  const handleWhatsApp = () => {
+    if (!latestOrder) return
+
+    const url = buildOrderWhatsAppUrl(latestOrder, {
+      totalLabel: formatMoney(getOrderTotal(latestOrder)),
+    })
+    if (!url) return
+
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   if (location.pathname.includes('/store')) return null
   if (!user?.uid) return null
 
@@ -217,8 +438,9 @@ export function GlobalOrderAlert() {
       {!enabled && (
         <div className="fixed bottom-6 left-6 z-[100] animate-bounce-slow">
           <button
+            type="button"
             onClick={handleEnable}
-            className="flex items-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3.5 font-black text-white shadow-2xl shadow-orange-900/20 ring-4 ring-white transition hover:scale-105 active:scale-95"
+            className="flex items-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3.5 font-black text-white shadow-2xl shadow-orange-900/20 ring-4 ring-white transition hover:scale-105 active:scale-95 dark:ring-zinc-900"
           >
             <FiVolume2 size={20} />
             Ativar alertas do painel
@@ -227,45 +449,16 @@ export function GlobalOrderAlert() {
       )}
 
       {latestOrder && (
-        <div className="fixed top-6 right-6 z-[100] w-[320px] animate-[slideInRight_0.3s_ease-out] rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-2xl shadow-orange-900/10">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
-              <FiShoppingBag size={20} />
-            </div>
-
-            <div className="flex-1">
-              <p className="text-xs font-black uppercase tracking-wide text-[#f97316]">
-                Novo Pedido!
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-[#111827]">
-                #{latestOrder.id.slice(-4).toUpperCase()}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-[#6b7280]">
-                {latestOrder.customerName || 'Cliente'} enviou um pedido.
-              </p>
-            </div>
-
-            <button 
-              onClick={() => setLatestOrder(null)}
-              className="text-gray-400 transition hover:text-gray-700"
-            >
-              <FiX size={18} />
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-              setLatestOrder(null)
-              navigate('/dashboard/orders')
-            }}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-4 py-2.5 text-xs font-black text-white transition hover:bg-black"
-          >
-            Ver detalhes
-            <FiChevronRight size={14} />
-          </button>
-        </div>
+        <NewOrderToast
+          order={latestOrder}
+          copied={copied}
+          onOpenOrder={goToOrders}
+          onViewOrders={goToOrders}
+          onCopy={handleCopySummary}
+          onWhatsApp={handleWhatsApp}
+          onDismiss={() => clearLatestOrder(true)}
+        />
       )}
     </>
   )
 }
-

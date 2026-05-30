@@ -2,10 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { FiAlertCircle, FiAlertTriangle, FiBell, FiCheck, FiInfo, FiX } from 'react-icons/fi'
-import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
 
-function NotificationIcon({ type }) {
-  if (type === 'critical') {
+import {
+  getBrowserNotificationPermission,
+  isBrowserNotificationsSupported,
+  requestBrowserNotificationPermission,
+} from '../../utils/browserNotifications'
+import { formatNotificationTime } from '../../utils/notificationFormatters'
+
+function NotificationIcon({ severity }) {
+  if (severity === 'danger') {
     return (
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400">
         <FiAlertCircle size={16} />
@@ -13,10 +19,18 @@ function NotificationIcon({ type }) {
     )
   }
 
-  if (type === 'warning') {
+  if (severity === 'warning') {
     return (
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
         <FiAlertTriangle size={16} />
+      </span>
+    )
+  }
+
+  if (severity === 'success') {
+    return (
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+        <FiCheck size={16} />
       </span>
     )
   }
@@ -28,18 +42,20 @@ function NotificationIcon({ type }) {
   )
 }
 
-export default function DashboardNotificationBell() {
+export default function DashboardNotificationBell({ notificationState }) {
   const {
-    notifications,
-    unreadNotifications,
-    unreadCount,
-    markAsRead,
-    markAllAsRead,
-    loading,
-  } = useDashboardNotifications()
+    notifications = [],
+    unreadCount = 0,
+    markAsRead = () => {},
+    markAllAsRead = () => {},
+    setLocalPreference = () => {},
+    loading = false,
+  } = notificationState || {}
 
   const [isOpen, setIsOpen] = useState(false)
+  const [browserPermission, setBrowserPermission] = useState(() => getBrowserNotificationPermission())
   const dropdownRef = useRef(null)
+  const supportsBrowserNotifications = isBrowserNotificationsSupported()
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -65,19 +81,25 @@ export default function DashboardNotificationBell() {
     }
   }, [isOpen])
 
+  const handleEnableBrowserNotifications = async () => {
+    const permission = await requestBrowserNotificationPermission()
+    setBrowserPermission(permission)
+    setLocalPreference('browserNotificationsPermission', permission)
+  }
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen((value) => !value)}
         className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 hover:text-gray-700 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-        aria-label="Notificações"
+        aria-label={unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : 'Notificações'}
         aria-expanded={isOpen}
       >
         <FiBell size={18} />
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
@@ -109,12 +131,38 @@ export default function DashboardNotificationBell() {
                   onClick={markAllAsRead}
                   className="shrink-0 rounded-full px-2 py-1 text-[11px] font-black text-[#f97316] transition hover:bg-orange-50 hover:text-[#ea580c] dark:hover:bg-orange-950/20"
                 >
-                  Marcar lidas
+                  Marcar tudo como lido
                 </button>
               )}
             </div>
 
             <div className="max-h-[min(420px,70vh)] space-y-2 overflow-y-auto p-2.5 [scrollbar-width:thin]">
+              {supportsBrowserNotifications && browserPermission === 'default' && (
+                <button
+                  type="button"
+                  onClick={handleEnableBrowserNotifications}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50/70 px-3 py-3 text-left transition hover:bg-orange-50 dark:border-orange-900/30 dark:bg-orange-950/15 dark:hover:bg-orange-950/25"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-xs font-black text-gray-900 dark:text-zinc-100">
+                      Ativar notificações do Windows
+                    </span>
+                    <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-zinc-400">
+                      Receba avisos locais enquanto o painel estiver aberto.
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-[#f97316] px-2.5 py-1 text-[10px] font-black text-white">
+                    Ativar
+                  </span>
+                </button>
+              )}
+
+              {supportsBrowserNotifications && browserPermission === 'denied' && (
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2.5 text-[11px] font-semibold leading-4 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/15 dark:text-amber-300">
+                  Notificações do navegador estão bloqueadas. Libere nas configurações do navegador para receber avisos do Windows.
+                </div>
+              )}
+
               {loading ? (
                 <div className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-5 text-xs font-bold text-gray-500 dark:bg-zinc-950 dark:text-zinc-400">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
@@ -134,7 +182,7 @@ export default function DashboardNotificationBell() {
                 </div>
               ) : (
                 notifications.map((notification) => {
-                  const isUnread = unreadNotifications.some((unread) => unread.id === notification.id)
+                  const isUnread = !notification.read
 
                   return (
                     <article
@@ -150,12 +198,12 @@ export default function DashboardNotificationBell() {
                       )}
 
                       <div className="shrink-0 pl-1">
-                        <NotificationIcon type={notification.type} />
+                        <NotificationIcon severity={notification.severity} />
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <Link
-                          to={notification.link}
+                          to={notification.href}
                           onClick={() => {
                             markAsRead(notification.id)
                             setIsOpen(false)
@@ -166,7 +214,10 @@ export default function DashboardNotificationBell() {
                             {notification.title}
                           </h4>
                           <p className="mt-0.5 line-clamp-2 text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
-                            {notification.description}
+                            {notification.message}
+                          </p>
+                          <p className="mt-1 text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">
+                            {formatNotificationTime(notification.createdAt)}
                           </p>
                         </Link>
                       </div>

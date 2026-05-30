@@ -1,8 +1,24 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
+
 import { db } from '../services/firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { getTrialDaysRemaining } from '../utils/billingStatus'
+import {
+  createReadEntry,
+  getNotificationPreferences,
+  getNotificationReadIds,
+  loadNotificationReadState,
+  saveNotificationPreference,
+  saveNotificationReadState,
+} from '../utils/notificationStorage'
+import {
+  DASHBOARD_NOTIFICATION_EVENT,
+  DASHBOARD_NOTIFICATION_READ_EVENT,
+  NOTIFICATION_AREAS,
+  dispatchDashboardNotification,
+  normalizeDashboardNotification,
+} from '../utils/notificationFormatters'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 
@@ -15,8 +31,12 @@ function resolveActiveStoreId(userData) {
     ...(Array.isArray(userData.storeKeys) ? userData.storeKeys : []),
   ].filter(Boolean).map(String))
 
-  const fallbackStoreId = userData.storeId || (Array.isArray(userData.storeIds) ? userData.storeIds[0] : null) || null
-  let selectedStoreId = null
+  const fallbackStoreId =
+    userData.storeId ||
+    (Array.isArray(userData.storeIds) ? userData.storeIds[0] : null) ||
+    null
+
+  let selectedStoreId
   try {
     selectedStoreId = localStorage.getItem(SELECTED_STORE_KEY)
   } catch {
@@ -34,55 +54,110 @@ function resolveActiveStoreId(userData) {
   return fallbackStoreId
 }
 
-/**
- * Hook para gerenciar e derivar notificações do painel do lojista (frontend-only).
- * As notificações lidas são persistidas no localStorage de forma isolada por usuário e loja.
- */
+function createBillingNotification({ id, title, message, severity = 'warning', createdAt }) {
+  return {
+    id,
+    area: 'billing',
+    channel: 'local_dashboard',
+    title,
+    message,
+    severity,
+    href: '/dashboard/billing',
+    createdAt,
+    sourceType: 'billing',
+    sourceId: id,
+  }
+}
+
 export function useDashboardNotifications() {
   const { user, userData } = useAuth()
+  const uid = user?.uid
+  const instanceId = useId()
   const [store, setStore] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [localNotifications, setLocalNotifications] = useState([])
+  const [readState, setReadState] = useState(() => loadNotificationReadState(null, null))
 
   const activeStoreId = useMemo(() => resolveActiveStoreId(userData), [userData])
 
-  // Estado de notificações lidas carregado dinamicamente com base no uid e storeId
-  const [readNotifications, setReadNotifications] = useState([])
-
-  // Sincroniza estado de notificações lidas do localStorage
   useEffect(() => {
-    if (!user?.uid || !activeStoreId) {
-      setReadNotifications([])
+    if (!uid || !activeStoreId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setReadState(loadNotificationReadState(null, null))
       return
     }
 
-    try {
-      const key = `pratoby:notifications-read:${user.uid}:${activeStoreId}`
-      const saved = localStorage.getItem(key)
-      setReadNotifications(saved ? JSON.parse(saved) : [])
-    } catch (e) {
-      console.error('[Notifications] Error loading read notifications from localStorage:', e)
-      setReadNotifications([])
-    }
-  }, [user?.uid, activeStoreId])
+    setReadState(loadNotificationReadState(uid, activeStoreId))
+  }, [uid, activeStoreId])
 
-  // Salva no localStorage quando o array de lidas muda
-  const saveReadNotifications = (nextList) => {
-    if (!user?.uid || !activeStoreId) return
-    try {
-      const key = `pratoby:notifications-read:${user.uid}:${activeStoreId}`
-      localStorage.setItem(key, JSON.stringify(nextList))
-      setReadNotifications(nextList)
-    } catch (e) {
-      console.error('[Notifications] Error saving read notifications to localStorage:', e)
-    }
-  }
-
-  // Listener em tempo real para a loja ativa do Firestore
   useEffect(() => {
-    if (!user?.uid || !activeStoreId) {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalNotifications([])
+  }, [activeStoreId])
+
+  const readIds = useMemo(() => new Set(getNotificationReadIds(readState)), [readState])
+  const preferences = useMemo(() => getNotificationPreferences(readState), [readState])
+
+  const pushLocalNotification = useCallback((notification) => {
+    const normalized = normalizeDashboardNotification(notification)
+
+    setLocalNotifications((currentNotifications) => [
+      normalized,
+      ...currentNotifications.filter((item) => item.id !== normalized.id),
+    ].slice(0, 30))
+
+    return normalized.id
+  }, [])
+
+  const persistReadState = useCallback((updater) => {
+    if (!uid || !activeStoreId) return
+
+    setReadState((currentState) => {
+      const nextState = typeof updater === 'function' ? updater(currentState) : updater
+      const savedState = saveNotificationReadState(uid, activeStoreId, nextState)
+
+      if (typeof window !== 'undefined') {
+        queueMicrotask(() => {
+          window.dispatchEvent(new CustomEvent(DASHBOARD_NOTIFICATION_READ_EVENT, {
+            detail: {
+              uid,
+              storeId: activeStoreId,
+              state: savedState,
+              instanceId,
+            },
+          }))
+        })
+      }
+
+      return savedState
+    })
+  }, [activeStoreId, instanceId, uid])
+
+  const addReadEntries = useCallback((entries) => {
+    const safeEntries = entries.filter((entry) => entry?.id)
+    if (!safeEntries.length) return
+
+    persistReadState((currentState) => {
+      const nextRead = { ...(currentState?.read || {}) }
+
+      safeEntries.forEach(({ id, area }) => {
+        nextRead[String(id)] = createReadEntry(area)
+      })
+
+      return {
+        version: currentState?.version || 1,
+        read: nextRead,
+        preferences: currentState?.preferences || {},
+      }
+    })
+  }, [persistReadState])
+
+  useEffect(() => {
+    if (!uid || !activeStoreId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStore(null)
       setLoading(false)
-      return
+      return undefined
     }
 
     setLoading(true)
@@ -108,137 +183,240 @@ export function useDashboardNotifications() {
     )
 
     return () => unsubscribe()
-  }, [user?.uid, activeStoreId])
+  }, [uid, activeStoreId])
 
-  // Derivação das notificações com base nos dados do usuário e loja
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const handleNotification = (event) => {
+      const { notification, storeId, instanceId: eventInstanceId } = event.detail || {}
+      if (eventInstanceId === instanceId) return
+      if (storeId && activeStoreId && String(storeId) !== String(activeStoreId)) return
+      if (!notification) return
+
+      pushLocalNotification(notification)
+    }
+
+    const handleReadState = (event) => {
+      const { uid: eventUid, storeId, state, instanceId: eventInstanceId } = event.detail || {}
+      if (eventInstanceId === instanceId) return
+      if (eventUid && uid && String(eventUid) !== String(uid)) return
+      if (storeId && activeStoreId && String(storeId) !== String(activeStoreId)) return
+      if (!state) return
+
+      setReadState(state)
+    }
+
+    window.addEventListener(DASHBOARD_NOTIFICATION_EVENT, handleNotification)
+    window.addEventListener(DASHBOARD_NOTIFICATION_READ_EVENT, handleReadState)
+
+    return () => {
+      window.removeEventListener(DASHBOARD_NOTIFICATION_EVENT, handleNotification)
+      window.removeEventListener(DASHBOARD_NOTIFICATION_READ_EVENT, handleReadState)
+    }
+  }, [activeStoreId, instanceId, pushLocalNotification, uid])
+
   const notifications = useMemo(() => {
-    if (loading || !user?.uid || !activeStoreId) return []
+    if (loading || !uid || !activeStoreId) return []
 
     const list = []
 
-    // Normalização do status de faturamento
     const rawSubscriptionStatus = store?.subscriptionStatus || userData?.subscriptionStatus || ''
-    const subscriptionStatus = rawSubscriptionStatus === 'pending_checkout' ? 'checkout_pending' : rawSubscriptionStatus
+    const subscriptionStatus =
+      rawSubscriptionStatus === 'pending_checkout' ? 'checkout_pending' : rawSubscriptionStatus
 
-    const isPending = ['checkout_pending', 'billing_pending', 'billing_pending_payment_method'].includes(subscriptionStatus)
+    const isPending = [
+      'checkout_pending',
+      'billing_pending',
+      'billing_pending_payment_method',
+    ].includes(subscriptionStatus)
     const isTrial = subscriptionStatus === 'trialing'
     const isPastDue = subscriptionStatus === 'past_due'
     const isBlocked = subscriptionStatus === 'blocked'
     const isCanceled = subscriptionStatus === 'canceled'
     const trialEndsAt = store?.trialEndsAt || userData?.trialEndsAt
+    const derivedCreatedAt =
+      store?.updatedAt ||
+      userData?.updatedAt ||
+      store?.createdAt ||
+      userData?.createdAt ||
+      '2026-01-01T00:00:00.000Z'
 
-    // 1. Faturamento pendente
     if (isPending) {
-      list.push({
+      list.push(createBillingNotification({
         id: 'billing_required',
         title: 'Faturamento pendente',
-        description: 'Finalize sua cobrança para ativar o teste grátis.',
-        link: '/dashboard/billing',
-        type: 'critical',
-        timestamp: Date.now(),
-      })
+        message: 'Finalize sua cobrança para ativar o teste grátis.',
+        severity: 'danger',
+        createdAt: derivedCreatedAt,
+      }))
     }
 
-    // 2. & 3. Trial terminando / crítico
     if (isTrial && trialEndsAt) {
       const daysLeft = getTrialDaysRemaining(trialEndsAt)
       if (daysLeft !== null) {
         if (daysLeft === 0) {
-          list.push({
+          list.push(createBillingNotification({
             id: 'trial_expired',
             title: 'Período de testes expirado',
-            description: 'Seu período de teste grátis expirou. Configure o faturamento para reativar sua loja.',
-            link: '/dashboard/billing',
-            type: 'critical',
-            timestamp: Date.now(),
-          })
+            message: 'Seu período de teste grátis expirou. Configure o faturamento para reativar sua loja.',
+            severity: 'danger',
+            createdAt: derivedCreatedAt,
+          }))
         } else if (daysLeft <= 3) {
-          list.push({
+          list.push(createBillingNotification({
             id: 'trial_critical',
             title: 'Teste grátis terminando!',
-            description: `Seu teste grátis termina em ${daysLeft} dia${daysLeft > 1 ? 's' : ''}.`,
-            link: '/dashboard/billing',
-            type: 'critical',
-            timestamp: Date.now(),
-          })
+            message: `Seu teste grátis termina em ${daysLeft} dia${daysLeft > 1 ? 's' : ''}.`,
+            severity: 'danger',
+            createdAt: derivedCreatedAt,
+          }))
         } else if (daysLeft <= 7) {
-          list.push({
+          list.push(createBillingNotification({
             id: 'trial_ending',
             title: 'Teste grátis terminando',
-            description: `Seu teste grátis termina em ${daysLeft} dias.`,
-            link: '/dashboard/billing',
-            type: 'warning',
-            timestamp: Date.now(),
-          })
+            message: `Seu teste grátis termina em ${daysLeft} dias.`,
+            createdAt: derivedCreatedAt,
+          }))
         }
       }
     }
 
-    // 4. Assinatura past_due / blocked / canceled
     if (isPastDue) {
-      list.push({
+      list.push(createBillingNotification({
         id: 'past_due',
         title: 'Regularize sua assinatura',
-        description: 'Regularize sua assinatura para manter sua loja ativa.',
-        link: '/dashboard/billing',
-        type: 'critical',
-        timestamp: Date.now(),
-      })
+        message: 'Regularize sua assinatura para manter sua loja ativa.',
+        severity: 'danger',
+        createdAt: derivedCreatedAt,
+      }))
     }
 
     if (isBlocked || isCanceled) {
-      list.push({
+      list.push(createBillingNotification({
         id: 'blocked_canceled',
         title: 'Assinatura bloqueada',
-        description: 'Regularize sua assinatura para manter sua loja ativa.',
-        link: '/dashboard/billing',
-        type: 'critical',
-        timestamp: Date.now(),
-      })
+        message: 'Regularize sua assinatura para manter sua loja ativa.',
+        severity: 'danger',
+        createdAt: derivedCreatedAt,
+      }))
     }
 
-    // 5. Loja fechada para pedidos
     if (store && store.isOpen === false) {
       list.push({
         id: 'store_closed',
+        area: 'settings',
+        channel: 'local_dashboard',
         title: 'Loja fechada',
-        description: 'Sua loja está fechada para pedidos.',
-        link: '/dashboard',
-        type: 'warning',
-        timestamp: Date.now(),
+        message: 'Sua loja está fechada para pedidos.',
+        severity: 'warning',
+        href: '/dashboard/settings',
+        createdAt: derivedCreatedAt,
+        sourceType: 'store',
+        sourceId: 'store_closed',
       })
     }
 
-    // 6. FASE FUTURA: Notificações de pedidos pendentes
-    // Como acordado, a contagem de novos pedidos não cria listeners pesados globais nesta fase.
-    // Fica registrada para implementação futura quando integrarmos um barramento global de eventos de pedidos.
+    return [...list, ...localNotifications]
+      .map((notification) => {
+        const normalized = normalizeDashboardNotification(notification)
+        return {
+          ...normalized,
+          read: readIds.has(normalized.id),
+        }
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
+  }, [activeStoreId, loading, localNotifications, readIds, store, uid, userData])
 
-    return list
-  }, [loading, user?.uid, activeStoreId, store, userData])
-
-  // Filtra notificações não lidas
   const unreadNotifications = useMemo(() => {
-    return notifications.filter((n) => !readNotifications.includes(n.id))
-  }, [notifications, readNotifications])
+    return notifications.filter((notification) => !notification.read)
+  }, [notifications])
 
-  // Ações de gerenciamento de notificações
-  const markAsRead = (id) => {
-    if (readNotifications.includes(id)) return
-    const nextList = [...readNotifications, id]
-    saveReadNotifications(nextList)
-  }
+  const countsByArea = useMemo(() => {
+    const counts = NOTIFICATION_AREAS.reduce((acc, area) => {
+      acc[area] = 0
+      return acc
+    }, {})
 
-  const markAllAsRead = () => {
-    const allIds = notifications.map((n) => n.id)
-    saveReadNotifications(allIds)
-  }
+    unreadNotifications.forEach((notification) => {
+      counts[notification.area] = (counts[notification.area] || 0) + 1
+    })
+
+    return counts
+  }, [unreadNotifications])
+
+  const markAsRead = useCallback((id) => {
+    if (!id || readIds.has(String(id))) return
+
+    const notification = notifications.find((item) => item.id === String(id))
+    addReadEntries([{ id, area: notification?.area || 'general' }])
+  }, [addReadEntries, notifications, readIds])
+
+  const markAreaAsRead = useCallback((area) => {
+    if (!NOTIFICATION_AREAS.includes(area)) return
+
+    addReadEntries(
+      notifications
+        .filter((notification) => notification.area === area && !notification.read)
+        .map((notification) => ({ id: notification.id, area: notification.area }))
+    )
+  }, [addReadEntries, notifications])
+
+  const markAllAsRead = useCallback(() => {
+    addReadEntries(
+      notifications
+        .filter((notification) => !notification.read)
+        .map((notification) => ({ id: notification.id, area: notification.area }))
+    )
+  }, [addReadEntries, notifications])
+
+  const addLocalNotification = useCallback((notification) => {
+    const normalized = normalizeDashboardNotification({
+      ...notification,
+      channel: notification?.channel || 'local_dashboard',
+      createdAt: notification?.createdAt || Date.now(),
+    })
+
+    pushLocalNotification(normalized)
+    dispatchDashboardNotification(normalized, {
+      storeId: activeStoreId,
+      instanceId,
+    })
+
+    return normalized.id
+  }, [activeStoreId, instanceId, pushLocalNotification])
+
+  const setLocalPreference = useCallback((key, value) => {
+    if (!uid || !activeStoreId || !key) return
+
+    const savedState = saveNotificationPreference(uid, activeStoreId, key, value)
+    setReadState(savedState)
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(DASHBOARD_NOTIFICATION_READ_EVENT, {
+        detail: {
+          uid,
+          storeId: activeStoreId,
+          state: savedState,
+          instanceId,
+        },
+      }))
+    }
+  }, [activeStoreId, instanceId, uid])
 
   return {
     notifications,
     unreadNotifications,
     unreadCount: unreadNotifications.length,
+    countsByArea,
     markAsRead,
+    markAreaAsRead,
     markAllAsRead,
+    addLocalNotification,
+    preferences,
+    setLocalPreference,
+    uid,
+    activeStoreId,
     store,
     loading,
   }

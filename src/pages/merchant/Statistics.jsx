@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
@@ -46,7 +46,7 @@ const SELECTED_STATISTICS_STORE_KEY = 'pratoby:selected_statistics_store'
 const PERIOD_OPTIONS = [
   { label: 'Hoje', value: 'today', days: 0 },
   { label: '7 dias', value: '7d', days: 7 },
-  { label: 'Mês', value: 'month', days: 'current_month' },
+  { label: '30 dias', value: 'month', days: 'current_month' },
 ]
 
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -396,7 +396,7 @@ export default function Statistics() {
   const [showAllBairros, setShowAllBairros] = useState(false)
   const [chartMode, setChartMode] = useState('revenue') // 'revenue' | 'orders'
   const [lastUpdated, setLastUpdated] = useState(null)
-  const refreshRef = useRef(0)
+  const [_refreshNonce, setRefreshNonce] = useState(0)
 
   const period = PERIOD_OPTIONS.find(p => p.value === periodValue) || PERIOD_OPTIONS[1]
 
@@ -487,9 +487,9 @@ export default function Statistics() {
       }
     )
     return () => { mounted = false; unsub() }
-  }, [authLoading, canRead, selectedStore, refreshRef.current])
+  }, [authLoading, canRead, selectedStore, _refreshNonce])
 
-  const handleRefresh = useCallback(() => { refreshRef.current += 1; setOrders([]); setLoading(true) }, [])
+  const handleRefresh = useCallback(() => { setRefreshNonce((value) => value + 1); setOrders([]); setLoading(true) }, [])
 
   // ── Computed analytics
   const data = useMemo(() => {
