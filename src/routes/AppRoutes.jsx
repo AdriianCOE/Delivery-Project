@@ -39,6 +39,8 @@ import MenuManagementPage from '../pages/merchant/menu/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 import BillingPage from '../pages/merchant/BillingPage'
 import SubscriptionManagementPage from '../pages/merchant/SubscriptionManagementPage'
+import KitchenDisplayPage from '../pages/merchant/KitchenDisplayPage'
+import CustomerDisplayPage from '../pages/merchant/CustomerDisplayPage'
 
 // Layouts / Proteção
 import ProtectedRoute from '../components/auth/ProtectedRoute'
@@ -156,7 +158,6 @@ export default function AppRoutes() {
 
           <Route path="financeiro" element={<ComingSoon title="Financeiro" icon={FiDollarSign} />} />
           <Route path="qrcodes" element={<ComingSoon title="QR Codes" icon={FiGrid} />} />
-          <Route path="out-screen" element={<ComingSoon title="OutScreen / Tela de Cozinha" icon={FiMonitor} />} />
           <Route path="users" element={<ComingSoon title="Clientes e CRM" icon={FiUsers} />} />
           <Route path="motobot" element={<ComingSoon title="MotoBot / Motoboys" icon={FiTruck} />} />
           <Route path="motoboy" element={<Navigate to="/dashboard/motobot" replace />} />
@@ -171,6 +172,24 @@ export default function AppRoutes() {
           <Route path="gerenciar-assinatura" element={<Navigate to="/dashboard/subscription-management" replace />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
+
+        {/* ── Telas de TV / KDS — fora do DashboardLayout (sem sidebar/topbar) ── */}
+        <Route
+          path="/dashboard/out-screen"
+          element={
+            <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+              <KitchenDisplayPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/out-screen/customer"
+          element={
+            <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+              <CustomerDisplayPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Compatibilidade com URLs antigas */}
         <Route path="/orders" element={<Navigate to="/dashboard/orders" replace />} />

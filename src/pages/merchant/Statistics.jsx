@@ -598,7 +598,7 @@ export default function Statistics() {
     const topCustomers = Array.from(custMap.values()).sort((a, b) => b.orders - a.orders).slice(0, 5)
 
     // Status
-    const statusCounts = { pendente: 0, preparando: 0, entregando: 0, entregue: 0, cancelado: 0 }
+    const statusCounts = { pendente: 0, confirmado: 0, preparando: 0, pronto: 0, entregando: 0, entregue: 0, cancelado: 0 }
     cur.forEach(o => { const s = normalizeStatus(o.status); if (s in statusCounts) statusCounts[s]++ })
 
     // Coupons
@@ -824,7 +824,9 @@ export default function Statistics() {
                 <div className="space-y-1">
                   {[
                     { key: 'pendente', label: 'Pendente', color: 'bg-amber-400' },
+                    { key: 'confirmado', label: 'Confirmado', color: 'bg-indigo-500' },
                     { key: 'preparando', label: 'Preparando', color: 'bg-blue-500' },
+                    { key: 'pronto', label: 'Pronto', color: 'bg-teal-500' },
                     { key: 'entregando', label: 'Em Rota', color: 'bg-sky-500' },
                     { key: 'entregue', label: 'Entregue', color: 'bg-emerald-500' },
                     { key: 'cancelado', label: 'Cancelado', color: 'bg-red-500' },

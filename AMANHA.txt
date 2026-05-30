@@ -31,6 +31,7 @@
 
 31. Parei por aqui pois não consigo prosseguir pra fazer o pedido.
 
+32. Avaliações tambem tem que ter a bolinha de notificação
 
  Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
 :5173/onboarding:1 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
@@ -339,6 +340,7 @@ Problemas observados:
 5. Carrinho/checkout não explica claramente quais bairros são atendidos.
 6. CEP/bairro válido, como bairro “13 de Julho”, pode estar sendo recusado por diferença de acento, maiúscula/minúscula ou normalização.
 7. Cliente pode ficar impedido de prosseguir pedido por erro de CEP/bairro/cupom.
+8. Avaliações tambem tem que ter a bolinha de notificação
 
 Objetivo deste patch:
 Garantir que o cliente consiga:

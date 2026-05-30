@@ -66,6 +66,18 @@ const MAIN_ITEMS = [
     to: '/dashboard/menu',
     icon: FiGrid,
   },
+    {
+    label: 'Tela de Cozinha',
+    description: 'KDS em tempo real',
+    to: '/dashboard/out-screen',
+    icon: FiMonitor,
+  },
+    {
+    label: 'Avaliações',
+    description: 'Feedback dos clientes',
+    to: '/dashboard/reviews',
+    icon: FiStar,
+  },
   {
     label: 'Estatísticas',
     description: 'Resumo de vendas',
@@ -73,22 +85,16 @@ const MAIN_ITEMS = [
     icon: FiBarChart2,
   },
   {
-    label: 'Avaliações',
-    description: 'Feedback dos clientes',
-    to: '/dashboard/reviews',
-    icon: FiStar,
+    label: 'Assinatura',
+    description: 'Plano, teste e cobrança',
+    icon: FiCreditCard,
+    to: '/dashboard/billing',
   },
   {
     label: 'Configurações',
     description: 'Loja, horários e Pix',
     to: '/dashboard/settings',
     icon: FiSettings,
-  },
-  {
-    label: 'Assinatura',
-    description: 'Plano, teste e cobrança',
-    icon: FiCreditCard,
-    to: '/dashboard/billing',
   },
   {
     label: 'Perfil',
@@ -110,27 +116,44 @@ const FUTURE_SECTIONS = [
         to: '/dashboard/qrcodes',
       },
       {
-        label: 'OutScreen',
-        description: 'Tela de cozinha e painel de retirada',
-        icon: FiMonitor,
-        to: '/dashboard/out-screen',
-      },
-      {
         label: 'Clientes',
         description: 'Histórico, gasto total e recorrência',
         icon: FiUsers,
         to: '/dashboard/users',
       },
       {
+        label: 'Relatórios',
+        description: 'Produtos, bairros e horários de pico',
+        icon: FiPieChart,
+        to: '/dashboard/relatorios',
+      },
+    ],
+  },
+  {
+    title: 'Operação avançada',
+    items: [
+      {
         label: 'MotoBot',
         description: 'Motoboys, entregas e rotas',
         icon: FiTruck,
         to: '/dashboard/motobot',
       },
+      {
+        label: 'Automações',
+        description: 'Sino, fechamento e impressão',
+        icon: FiZap,
+        to: '/dashboard/automacoes',
+      },
+      {
+        label: 'Equipe',
+        description: 'Usuários, permissões e funções',
+        icon: FiLayers,
+        to: '/dashboard/equipe',
+      },
     ],
   },
   {
-    title: 'Avançado',
+    title: 'Financeiro',
     items: [
       {
         label: 'Financeiro',
@@ -143,24 +166,6 @@ const FUTURE_SECTIONS = [
         description: 'Webhook e confirmação automática',
         icon: FiCreditCard,
         to: '/dashboard/pix-automatico',
-      },
-      {
-        label: 'Relatórios',
-        description: 'Produtos, bairros e horários de pico',
-        icon: FiPieChart,
-        to: '/dashboard/relatorios',
-      },
-      {
-        label: 'Equipe',
-        description: 'Usuários, permissões e funções',
-        icon: FiLayers,
-        to: '/dashboard/equipe',
-      },
-      {
-        label: 'Automações',
-        description: 'Sino, fechamento e impressão',
-        icon: FiZap,
-        to: '/dashboard/automacoes',
       },
     ],
   },
@@ -871,18 +876,18 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
     <motion.aside
       animate={{ width: collapsed ? 80 : 296 }}
       transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-      className="relative hidden h-[100dvh] shrink-0 border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)] overflow-hidden"
+      className="relative z-50 hidden h-[100dvh] shrink-0 border-r border-gray-100 bg-white/[0.92] p-4 shadow-[18px_0_50px_rgba(15,23,42,0.03)] backdrop-blur-xl lg:block dark:bg-zinc-900/[0.92] dark:border-zinc-800 dark:shadow-[18px_0_50px_rgba(0,0,0,0.2)]"
     >
       {/* Botão de colapso absolutizado na borda direita */}
       <button
         type="button"
         onClick={onToggle}
-        className="absolute right-[6px] top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-md transition hover:scale-110 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 cursor-pointer"
+        className="absolute -right-3.5 top-10 z-[60] flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-md transition-all duration-200 hover:scale-[1.15] hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:scale-95 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 cursor-pointer"
         aria-label={collapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
       >
         <FiChevronRight
           className={cn('transition-transform duration-300', !collapsed && 'rotate-180')}
-          size={12}
+          size={14}
         />
       </button>
 
