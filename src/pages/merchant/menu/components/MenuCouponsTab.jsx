@@ -57,7 +57,7 @@ function getCouponVigencyStatus(coupon) {
   else if (coupon.expiresAt) expire = new Date(coupon.expiresAt)
 
   if (start && now < start) {
-    return { code: 'scheduled', label: 'Agendado', color: 'bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' }
+    return { code: 'scheduled', label: 'Agendado', color: 'bg-orange-50 text-orange-600 border border-orange-100 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20' }
   }
   if (expire && now > expire) {
     return { code: 'expired', label: 'Expirado', color: 'bg-red-50 text-red-600 border border-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' }
@@ -262,7 +262,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                       <button
                         type="button"
                         onClick={() => onEdit(coupon)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 py-3 text-xs font-black text-blue-600 dark:text-blue-400 transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20 active:scale-95"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-orange-50 dark:bg-orange-500/10 py-3 text-xs font-black text-orange-600 dark:text-orange-400 transition-all hover:bg-orange-100 dark:hover:bg-orange-500/20 active:scale-95"
                       >
                         <FiEdit2 size={13} /> Editar
                       </button>
@@ -417,7 +417,7 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                               type="button"
                               title="Editar cupom"
                               onClick={() => onEdit(coupon)}
-                              className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20 active:scale-90"
+                              className="grid h-9 w-9 place-items-center rounded-xl bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 transition-all hover:bg-orange-100 dark:hover:bg-orange-500/20 active:scale-90"
                             >
                               <FiEdit2 size={14} />
                             </button>

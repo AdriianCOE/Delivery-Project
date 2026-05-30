@@ -59,7 +59,7 @@ const PLAN_ORDER = {
   professional: 2,
   premium: 3,
 }
-const SUBSCRIPTION_MANAGEMENT_ACTIVE_STATUSES = new Set(['trialing', 'active', 'past_due'])
+const SUBSCRIPTION_MANAGEMENT_ACTIVE_STATUSES = new Set(['trialing', 'active', 'past_due', 'overdue'])
 const SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES = new Set(['canceled', 'blocked'])
 
 // Backend source of truth for billing amounts. Frontend plan catalogs are display-only.
@@ -1452,7 +1452,7 @@ function getSubscriptionManagementActions(context) {
   const terminal = SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(status)
 
   return {
-    canChangePlan: hasAsaasSubscription && !terminal,
+    canChangePlan: hasAsaasSubscription && !terminal && status !== 'past_due' && status !== 'overdue',
     canCancel: hasAsaasSubscription && activeEnough,
     canRequestDueDateChange: hasAsaasSubscription && activeEnough,
     canUpdatePaymentMethod: true,

@@ -1597,7 +1597,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               </div>
 
               <div className="flex flex-col gap-3 xl:w-[360px] xl:items-end xl:justify-between">
-                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap xl:justify-end">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
                   <button
                     type="button"
                     onClick={handleToggleStoreOpen}
@@ -1626,17 +1626,25 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     )}
                   </button>
 
-
-
-                  <button
-                    type="button"
-                    onClick={handleCopyStoreLink}
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 text-sm font-black text-[#6b7280] dark:text-zinc-400 shadow-sm transition hover:border-orange-200 hover:text-[#f97316] sm:h-12 sm:w-12 sm:px-0"
-                    title="Copiar link da loja"
-                  >
-                    <FiCopy size={16} />
-                    <span className="sm:hidden">Copiar link</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <a
+                      href={storePublicUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-[13px] font-black text-white shadow-sm transition hover:bg-[#ea580c] sm:w-auto sm:flex-none"
+                    >
+                      <FiExternalLink size={16} />
+                      Ver cardápio
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleCopyStoreLink}
+                      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#6b7280] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+                      title="Copiar link da loja"
+                    >
+                      <FiCopy size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 xl:w-full">

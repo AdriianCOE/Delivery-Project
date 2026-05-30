@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { Link, useParams } from 'react-router-dom'
+import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 
 import {
   FiCheckCircle,
@@ -157,15 +158,7 @@ function normalizeStatus(status) {
   return status || 'pendente'
 }
 
-function normalizePhoneBR(value) {
-  const digits = String(value || '').replace(/\D/g, '')
 
-  if (!digits) return ''
-  if (digits.startsWith('55')) return digits
-  if (digits.length >= 10) return `55${digits}`
-
-  return digits
-}
 
 function normalizeMoney(value, centsValue) {
   if (centsValue !== undefined && centsValue !== null) {
@@ -399,7 +392,7 @@ const greeting = useMemo(() => {
     if (loadedProfile) {
       const normalizedProfile = {
         ...loadedProfile,
-        phone: normalizePhoneBR(loadedProfile.phone),
+        phone: normalizeBrazilianPhoneForWhatsApp(loadedProfile.phone),
       }
 
       saveCustomerProfile(normalizedProfile)
@@ -695,7 +688,7 @@ const greeting = useMemo(() => {
                     <div className="mt-4 space-y-2">
                       <div className="flex items-center gap-2 text-sm font-bold text-[#6b7280]">
                         <FiPhone className="text-[#f97316]" />
-                        {profile.phone || 'Telefone não informado'}
+                        {formatBrazilianPhone(profile.phone) || 'Telefone não informado'}
                       </div>
 
                       {profile.neighborhood && (

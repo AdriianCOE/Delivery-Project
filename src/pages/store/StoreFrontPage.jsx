@@ -148,6 +148,10 @@ function getOpeningHoursSource(store) {
   )
 }
 
+function getCanonicalPublicStoreId(docId, data = {}, fallback = '') {
+  return String(data.storeDocId || data.docId || data.storeId || docId || fallback || '').trim()
+}
+
 async function findStoreBySlug(db, functionsInstance, slugParam) {
   const cleanSlug = String(slugParam || '').trim().replace(/^\/+|\/+$/g, '')
 
@@ -175,12 +179,14 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
 
     if (directSnap.exists()) {
       const data = directSnap.data() || {}
+      const canonicalStoreId = getCanonicalPublicStoreId(directSnap.id, data, cleanSlug)
       return {
         ...data,
         ref: directRef,
-        id: directSnap.id,
-        docId: directSnap.id,
-        storeId: directSnap.id,
+        id: canonicalStoreId,
+        docId: canonicalStoreId,
+        storeId: canonicalStoreId,
+        storeDocId: canonicalStoreId,
         storeSlug: data.storeSlug || data.slug || cleanSlug,
         slug: data.slug || data.storeSlug || cleanSlug,
         publicDataSource: 'publicStores',
@@ -201,12 +207,14 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
     if (!storeSlugSnap.empty) {
       const storeDoc = storeSlugSnap.docs[0]
       const data = storeDoc.data() || {}
+      const canonicalStoreId = getCanonicalPublicStoreId(storeDoc.id, data, cleanSlug)
       return {
         ...data,
         ref: storeDoc.ref,
-        id: storeDoc.id,
-        docId: storeDoc.id,
-        storeId: storeDoc.id,
+        id: canonicalStoreId,
+        docId: canonicalStoreId,
+        storeId: canonicalStoreId,
+        storeDocId: canonicalStoreId,
         storeSlug: data.storeSlug || data.slug || cleanSlug,
         slug: data.slug || data.storeSlug || cleanSlug,
         publicDataSource: 'publicStores',
@@ -227,12 +235,14 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
     if (!slugSnap.empty) {
       const storeDoc = slugSnap.docs[0]
       const data = storeDoc.data() || {}
+      const canonicalStoreId = getCanonicalPublicStoreId(storeDoc.id, data, cleanSlug)
       return {
         ...data,
         ref: storeDoc.ref,
-        id: storeDoc.id,
-        docId: storeDoc.id,
-        storeId: storeDoc.id,
+        id: canonicalStoreId,
+        docId: canonicalStoreId,
+        storeId: canonicalStoreId,
+        storeDocId: canonicalStoreId,
         storeSlug: data.storeSlug || data.slug || cleanSlug,
         slug: data.slug || data.storeSlug || cleanSlug,
         publicDataSource: 'publicStores',
@@ -244,15 +254,17 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
 
   try {
     const getPublicStoreProfile = httpsCallable(functionsInstance, 'getPublicStoreProfile')
-    const result = await getPublicStoreProfile({ storeSlug: cleanSlug })
+    const result = await getPublicStoreProfile({ storeSlug: cleanSlug, slug: cleanSlug })
     const store = result?.data?.store
 
     if (store) {
+      const canonicalStoreId = getCanonicalPublicStoreId(store.id, store, cleanSlug)
       return {
         ...store,
-        id: store.id || store.storeId || cleanSlug,
-        docId: store.docId || store.id || store.storeId || cleanSlug,
-        storeId: store.storeId || store.id || cleanSlug,
+        id: canonicalStoreId,
+        docId: canonicalStoreId,
+        storeId: canonicalStoreId,
+        storeDocId: canonicalStoreId,
         storeSlug: store.storeSlug || store.slug || cleanSlug,
         slug: store.slug || store.storeSlug || cleanSlug,
         publicDataSource: store.publicDataSource || result?.data?.source || 'callable',
@@ -2004,6 +2016,7 @@ const handleToggleFavorite = useCallback(() => {
         const result = await getPublicCatalog({
           storeId: targetStoreId,
           storeSlug: targetStoreSlug,
+          slug: targetStoreSlug,
         })
         const data = result?.data || {}
 

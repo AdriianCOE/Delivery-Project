@@ -23,6 +23,7 @@ const {
   sendBrevoTransactionalEmail,
   firstNameFrom,
   formatDatePtBr,
+  safeEmail,
   getPublicAppBaseUrl,
   getSupportWhatsappUrl,
 } = require('./brevo')
@@ -119,6 +120,7 @@ const PUBLIC_STORE_FIELDS = [
   'logoUrl', 'logo', 'bannerUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
   'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
   'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
+  'isPublic', 'isVisible',
   'openingHours', 'businessHours', 'hours', 'settings', 'deliveryTime', 'estimatedDeliveryTime',
   'minOrder', 'minOrderCents', 'minimumOrder', 'minimumOrderCents', 'deliveryFee',
   'deliveryFeeCents', 'deliveryFees', 'acceptDelivery', 'acceptPickup', 'acceptDineIn',
@@ -165,6 +167,66 @@ const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
 
 function uniqueTruthy(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+function slugifyPublicStoreName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
+}
+
+function getCanonicalStoreId(storeId, data = {}) {
+  return String(data.storeDocId || data.docId || data.storeId || storeId || '').trim()
+}
+
+function getPublicStoreSlug(storeId, data = {}) {
+  return String(
+    data.storeSlug ||
+      data.slug ||
+      slugifyPublicStoreName(data.storeName || data.name) ||
+      storeId ||
+      ''
+  ).trim()
+}
+
+function buildPublicStoreKeys(storeId, data = {}, storeSlug = '') {
+  return uniqueTruthy([
+    storeId,
+    data.storeId,
+    data.storeDocId,
+    data.docId,
+    storeSlug,
+    data.storeSlug,
+    data.slug,
+    ...(Array.isArray(data.storeKeys) ? data.storeKeys : []),
+  ]).slice(0, 30)
+}
+
+function buildPublicStoreProfile(storeId, data = {}, source = 'publicStores') {
+  const canonicalStoreId = getCanonicalStoreId(storeId, data)
+  const storeSlug = getPublicStoreSlug(canonicalStoreId || storeId, data)
+  const publicData = sanitizePublicStore(data)
+
+  return {
+    ...publicData,
+    id: canonicalStoreId || storeId,
+    docId: canonicalStoreId || storeId,
+    storeId: canonicalStoreId || storeId,
+    storeDocId: canonicalStoreId || storeId,
+    storeSlug,
+    slug: data.slug || storeSlug,
+    storeKeys: buildPublicStoreKeys(canonicalStoreId || storeId, data, storeSlug),
+    publicDataSource: source,
+    isOpen: data.isOpen !== false,
+    isActive: data.isActive !== false,
+    isBlocked: data.isBlocked === true,
+    isBillingBlocked: data.isBillingBlocked === true,
+    isDeleted: data.isDeleted === true,
+  }
 }
 
 function timestampToMillis(value) {
@@ -263,17 +325,8 @@ function pickPublicFields(data, fields) {
   }, {})
 }
 
-function normalizeStorePayload(storeId, data) {
-  const storeSlug = data.storeSlug || data.slug || storeId
-  const publicData = sanitizePublicStore(data)
-  return {
-    ...publicData,
-    id: storeId,
-    docId: data.storeDocId || storeId,
-    storeId: data.storeId || storeId,
-    storeSlug,
-    slug: data.slug || storeSlug,
-  }
+function normalizeStorePayload(storeId, data, source = 'publicStores') {
+  return buildPublicStoreProfile(storeId, data, source)
 }
 
 function isStorePubliclyReadable(data) {
@@ -361,6 +414,29 @@ function sanitizePublicCategory(data) {
   return pickPublicFields(data, PUBLIC_CATEGORY_FIELDS)
 }
 
+async function storeRecordFromSnapshot(snapshot, collectionName) {
+  const data = snapshot.data() || {}
+
+  if (collectionName === 'publicStores') {
+    const canonicalStoreId = getCanonicalStoreId(snapshot.id, data)
+    if (canonicalStoreId && canonicalStoreId !== snapshot.id) {
+      const canonicalSnapshot = await db.collection('publicStores').doc(canonicalStoreId).get()
+      if (canonicalSnapshot.exists) {
+        return {
+          id: canonicalSnapshot.id,
+          collectionName,
+          data: canonicalSnapshot.data() || {},
+        }
+      }
+    }
+  }
+
+  return {
+    id: snapshot.id,
+    collectionName,
+    data,
+  }
+}
 
 async function findStoreForCallable(input = {}) {
   const explicitStoreId = String(input.storeId || input.storeDocId || '').trim()
@@ -368,11 +444,7 @@ async function findStoreForCallable(input = {}) {
     for (const collectionName of ['publicStores', 'stores']) {
       const snapshot = await db.collection(collectionName).doc(explicitStoreId).get()
       if (snapshot.exists) {
-        return {
-          id: snapshot.id,
-          collectionName,
-          data: snapshot.data() || {},
-        }
+        return storeRecordFromSnapshot(snapshot, collectionName)
       }
     }
   }
@@ -388,11 +460,7 @@ async function findStoreForCallable(input = {}) {
     for (const collectionName of ['publicStores', 'stores']) {
       const snapshot = await db.collection(collectionName).doc(key).get()
       if (snapshot.exists) {
-        return {
-          id: snapshot.id,
-          collectionName,
-          data: snapshot.data() || {},
-        }
+        return storeRecordFromSnapshot(snapshot, collectionName)
       }
     }
   }
@@ -410,11 +478,7 @@ async function findStoreForCallable(input = {}) {
           .get()
         if (!snapshot.empty) {
           const docSnapshot = snapshot.docs[0]
-          return {
-            id: docSnapshot.id,
-            collectionName,
-            data: docSnapshot.data() || {},
-          }
+          return storeRecordFromSnapshot(docSnapshot, collectionName)
         }
       }
     }
@@ -586,15 +650,15 @@ function validateCouponForPublicResponse(coupon, items, subtotalCents) {
   const expiresAt = timestampToMillis(coupon.expiresAt)
 
   if (coupon.isDeleted === true || coupon.deletedAt || coupon.active === false) {
-    return { valid: false, message: 'Cupom inativo ou indisponível.' }
+    return { valid: false, reason: 'inactive', message: 'Cupom inativo ou indisponível.' }
   }
-  if (startsAt && now < startsAt) return { valid: false, message: 'Cupom ainda não está vigente.' }
-  if (expiresAt && now > expiresAt) return { valid: false, message: 'Cupom expirado.' }
+  if (startsAt && now < startsAt) return { valid: false, reason: 'not_started', message: 'Cupom ainda não está vigente.' }
+  if (expiresAt && now > expiresAt) return { valid: false, reason: 'expired', message: 'Cupom expirado.' }
 
   const usageLimit = Number(coupon.usageLimit || 0)
   const usedCount = Number(coupon.usedCount || 0)
   if (usageLimit > 0 && usedCount >= usageLimit) {
-    return { valid: false, message: 'Cupom esgotado.' }
+    return { valid: false, reason: 'limit_reached', message: 'Cupom esgotado.' }
   }
 
   const eligibleSubtotalCents = items
@@ -602,12 +666,19 @@ function validateCouponForPublicResponse(coupon, items, subtotalCents) {
     .reduce((acc, item) => acc + toCents(item.totalCents), 0)
 
   if (eligibleSubtotalCents <= 0) {
-    return { valid: false, message: 'Cupom não se aplica aos itens do carrinho.' }
+    return { valid: false, reason: 'ineligible_items', message: 'Cupom não se aplica aos itens do carrinho.' }
   }
 
   const minOrderCents = couponMoneyCents(coupon, 'minOrderCents', 'minOrder')
   if (minOrderCents > 0 && eligibleSubtotalCents < minOrderCents) {
-    return { valid: false, message: 'Subtotal elegível abaixo do pedido mínimo do cupom.' }
+    return {
+      valid: false,
+      reason: 'min_order_not_met',
+      message: 'Subtotal elegível abaixo do pedido mínimo do cupom.',
+      minOrderCents,
+      eligibleSubtotalCents,
+      missingCents: minOrderCents - eligibleSubtotalCents,
+    }
   }
 
   const type = coupon.type === 'fixed' ? 'fixed' : 'percent'
@@ -623,7 +694,7 @@ function validateCouponForPublicResponse(coupon, items, subtotalCents) {
   }
 
   discountCents = Math.min(Math.max(0, discountCents), eligibleSubtotalCents, subtotalCents)
-  if (discountCents <= 0) return { valid: false, message: 'Cupom sem desconto aplicável.' }
+  if (discountCents <= 0) return { valid: false, reason: 'no_discount_applicable', message: 'Cupom sem desconto aplicável.' }
 
   return {
     valid: true,
@@ -647,7 +718,7 @@ exports.getPublicStoreProfile = onCall(
 
     return {
       ok: true,
-      store: normalizeStorePayload(storeRecord.id, storeRecord.data),
+      store: normalizeStorePayload(storeRecord.id, storeRecord.data, storeRecord.collectionName),
     }
   }
 )
@@ -670,7 +741,7 @@ exports.getPublicCatalog = onCall(
 
     return {
       ok: true,
-      store: normalizeStorePayload(storeRecord.id, storeRecord.data),
+      store: normalizeStorePayload(storeRecord.id, storeRecord.data, storeRecord.collectionName),
       categories,
       products,
     }
@@ -2365,9 +2436,8 @@ async function reconcilePublicCatalogStore(storeDoc, summary) {
       type: 'set',
       ref: db.collection('publicStores').doc(storeId),
       data: {
-        ...sanitizePublicStore(storeData),
-        id: storeId,
-        storeId,
+        ...buildPublicStoreProfile(storeId, storeData, 'publicStores'),
+        publicUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
     },
   ], summary)
@@ -2469,9 +2539,8 @@ exports.materializePublicStoreProfile = onDocumentWritten(
       await publicRef.delete()
     } else {
       await db.collection('publicStores').doc(storeId).set({
-        ...sanitizePublicStore(afterData),
-        id: storeId,
-        storeId
+        ...buildPublicStoreProfile(storeId, afterData, 'publicStores'),
+        publicUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: false })
     }
   }
@@ -2593,6 +2662,147 @@ function safeDocId(value) {
   return String(value || '').replace(/\//g, '_')
 }
 
+function isMerchantUserData(userData = {}) {
+  const role = String(userData.role || userData.accountType || userData.type || '').trim().toLowerCase()
+  const roles = Array.isArray(userData.roles)
+    ? userData.roles.map((item) => String(item || '').trim().toLowerCase())
+    : []
+
+  return ['merchant', 'lojista'].includes(role) || roles.includes('merchant') || roles.includes('lojista')
+}
+
+function isAnonymousUserData(userData = {}) {
+  const provider = String(userData.provider || userData.authProvider || userData.signup?.authProvider || '').trim().toLowerCase()
+  const providers = Array.isArray(userData.providers)
+    ? userData.providers.map((item) => String(item || '').trim().toLowerCase())
+    : []
+
+  return userData.isAnonymous === true || provider === 'anonymous' || providers.includes('anonymous')
+}
+
+async function resolveWelcomeStoreName(dbInstance, userData = {}) {
+  const directName = String(userData.signup?.storeName || userData.storeName || '').trim()
+  if (directName) return directName
+
+  const storeIds = uniqueTruthy([
+    userData.storeId,
+    ...(Array.isArray(userData.storeIds) ? userData.storeIds : []),
+  ])
+
+  if (storeIds.length > 0) {
+    try {
+      const storeDoc = await dbInstance.collection('stores').doc(storeIds[0]).get()
+      const storeData = storeDoc.exists ? storeDoc.data() || {} : {}
+      const storeName = String(storeData.storeName || storeData.name || '').trim()
+      if (storeName) return storeName
+    } catch (error) {
+      logger.warn('[welcomeEmail] Could not resolve linked store name.', {
+        storeId: storeIds[0],
+        error: error?.message || String(error),
+      })
+    }
+  }
+
+  return 'sua loja'
+}
+
+async function sendWelcomeEmailForUserDoc({ db: dbInstance, admin: adminInstance, logger: log, uid, userData }) {
+  try {
+    const email = safeEmail(userData?.email)
+    const isMerchant = isMerchantUserData(userData)
+    const isAnonymous = isAnonymousUserData(userData)
+    const logId = `welcome_${safeDocId(uid)}`
+    const logRef = dbInstance.collection('notificationLogs').doc(logId)
+
+    if (!uid || !email || !isMerchant || isAnonymous) {
+      if (uid && email && !isMerchant) {
+        await logRef.set({
+          type: 'welcome',
+          provider: 'brevo',
+          templateId: BREVO_TEMPLATES.welcome.id,
+          tag: BREVO_TEMPLATES.welcome.tag,
+          uid,
+          email,
+          status: 'skipped',
+          reason: isAnonymous ? 'anonymous' : 'not_merchant',
+          updatedAt: adminInstance.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true })
+      }
+      return { sent: false, reason: !email ? 'missing_email' : isAnonymous ? 'anonymous' : 'not_merchant' }
+    }
+
+    const reservation = await dbInstance.runTransaction(async (transaction) => {
+      const logDoc = await transaction.get(logRef)
+      const logData = logDoc.exists ? logDoc.data() || {} : {}
+
+      if (logData.status === 'sent') return { proceed: false, reason: 'already_sent' }
+
+      if (logData.status === 'sending') {
+        const updatedMs = timestampToMillis(logData.updatedAt) || Date.now()
+        if (Date.now() - updatedMs < 15 * 60 * 1000) {
+          return { proceed: false, reason: 'sending_recent' }
+        }
+      }
+
+      const now = adminInstance.firestore.FieldValue.serverTimestamp()
+      transaction.set(logRef, {
+        type: 'welcome',
+        provider: 'brevo',
+        templateId: BREVO_TEMPLATES.welcome.id,
+        tag: BREVO_TEMPLATES.welcome.tag,
+        uid,
+        email,
+        status: 'sending',
+        reason: null,
+        attemptCount: Number(logData.attemptCount || 0) + 1,
+        createdAt: logData.createdAt || now,
+        updatedAt: now,
+      }, { merge: true })
+
+      return { proceed: true }
+    })
+
+    if (!reservation.proceed) return { sent: false, reason: reservation.reason }
+
+    const appBaseUrl = getPublicAppBaseUrl()
+    const storeName = await resolveWelcomeStoreName(dbInstance, userData)
+    const params = {
+      firstName: firstNameFrom(userData.displayName || storeName || email),
+      storeName,
+      onboardingUrl: `${appBaseUrl}/dashboard/billing`,
+      supportWhatsappUrl: getSupportWhatsappUrl(),
+    }
+
+    const brevoResponse = await sendBrevoTransactionalEmail({
+      to: email,
+      name: userData.displayName || undefined,
+      templateId: BREVO_TEMPLATES.welcome.id,
+      params,
+      tags: [BREVO_TEMPLATES.welcome.tag],
+      idempotencyKey: logId,
+    })
+
+    await logRef.set({
+      status: 'sent',
+      reason: null,
+      sentAt: adminInstance.firestore.FieldValue.serverTimestamp(),
+      brevoMessageId: brevoResponse?.messageId || null,
+      updatedAt: adminInstance.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+
+    return { sent: true }
+  } catch (error) {
+    const logId = `welcome_${safeDocId(uid)}`
+    log.error('[welcomeEmail] Failed to send welcome email.', { uid, error: error?.message || String(error) })
+    await dbInstance.collection('notificationLogs').doc(logId).set({
+      status: 'failed',
+      error: error?.message || String(error),
+      updatedAt: adminInstance.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+    return { sent: false, reason: 'failed' }
+  }
+}
+
 exports.sendWelcomeEmailOnUserCreate = onDocumentCreated(
   {
     document: 'users/{uid}',
@@ -2602,77 +2812,35 @@ exports.sendWelcomeEmailOnUserCreate = onDocumentCreated(
     secrets: [BREVO_API_KEY],
   },
   async (event) => {
-    const userData = event.data.data()
-    const uid = event.params.uid
-
-    if (userData.role !== 'merchant' || !userData.email) return
-    const isAnonymousAuth = userData.provider === 'anonymous' || !userData.email
-    if (isAnonymousAuth) return
-
-    const logId = `welcome_${safeDocId(uid)}`
-    const logRef = db.collection('notificationLogs').doc(logId)
-
-    const result = await db.runTransaction(async (transaction) => {
-      const logDoc = await transaction.get(logRef)
-      if (logDoc.exists) {
-        const data = logDoc.data()
-        if (data.status === 'sent') return { proceed: false }
-        if (data.status === 'sending') {
-          const updatedMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : Date.now()
-          if (Date.now() - updatedMs < 15 * 60 * 1000) return { proceed: false }
-        }
-      }
-
-      const now = admin.firestore.FieldValue.serverTimestamp()
-      transaction.set(logRef, {
-        type: 'welcome',
-        provider: 'brevo',
-        templateId: BREVO_TEMPLATES.welcome.id,
-        tag: BREVO_TEMPLATES.welcome.tag,
-        uid,
-        email: userData.email,
-        status: 'sending',
-        createdAt: logDoc.exists ? logDoc.data().createdAt : now,
-        updatedAt: now,
-      }, { merge: true })
-
-      return { proceed: true }
+    await sendWelcomeEmailForUserDoc({
+      db,
+      admin,
+      logger,
+      uid: event.params.uid,
+      userData: event.data.data() || {},
     })
+  }
+)
 
-    if (!result.proceed) return
+// Keep the create trigger during rollout; the write trigger covers users whose role/email arrive after creation.
+exports.sendWelcomeEmailOnUserWrite = onDocumentWritten(
+  {
+    document: 'users/{uid}',
+    region: 'southamerica-east1',
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    secrets: [BREVO_API_KEY],
+  },
+  async (event) => {
+    if (!event.data.after.exists) return
 
-    try {
-      const appBaseUrl = getPublicAppBaseUrl()
-      const params = {
-        firstName: firstNameFrom(userData.displayName || userData.signup?.storeName || userData.email),
-        storeName: userData.signup?.storeName || 'sua loja',
-        onboardingUrl: `${appBaseUrl}/dashboard/billing`,
-        supportWhatsappUrl: getSupportWhatsappUrl(),
-      }
-
-      const brevoResponse = await sendBrevoTransactionalEmail({
-        to: userData.email,
-        name: userData.displayName || undefined,
-        templateId: BREVO_TEMPLATES.welcome.id,
-        params,
-        tags: [BREVO_TEMPLATES.welcome.tag],
-        idempotencyKey: logId,
-      })
-
-      await logRef.set({
-        status: 'sent',
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-        brevoMessageId: brevoResponse?.messageId || null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true })
-    } catch (error) {
-      logger.error('Failed to send welcome email', { uid, error: error.message })
-      await logRef.set({
-        status: 'failed',
-        error: error.message,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true })
-    }
+    await sendWelcomeEmailForUserDoc({
+      db,
+      admin,
+      logger,
+      uid: event.params.uid,
+      userData: event.data.after.data() || {},
+    })
   }
 )
 

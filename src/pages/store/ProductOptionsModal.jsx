@@ -583,6 +583,11 @@ export default function ProductOptionsModal({
                             : 'Opcional'}
                           {group.type !== 'single' && ` · ${maxText}`}
                           {group.allowQuantity && ' · pode repetir'}
+                          {group.max > 0 && selectedQuantity >= group.max && (
+                            <span className="ml-2 font-bold text-amber-600">
+                              (Máximo atingido)
+                            </span>
+                          )}
                         </p>
                       </div>
 
@@ -628,8 +633,8 @@ export default function ProductOptionsModal({
                                     )
                                   : updateOptionQuantity(group, option, active ? 0 : 1)
                               }
-                              disabled={!option.available}
-                              className="min-w-0 flex-1 text-left"
+                              disabled={!option.available || (!active && disableIncrease)}
+                              className="min-w-0 flex-1 text-left disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               <p className="text-sm font-black text-[#111827]">
                                 {option.name}
@@ -688,8 +693,8 @@ export default function ProductOptionsModal({
                               <button
                                 type="button"
                                 onClick={() => updateOptionQuantity(group, option, active ? 0 : 1)}
-                                disabled={!option.available}
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition"
+                                disabled={!option.available || (!active && disableIncrease)}
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition disabled:opacity-30 disabled:bg-gray-50"
                                 style={
                                   active
                                     ? {

@@ -63,6 +63,39 @@ function sanitizeString(value, maxLength = 240) {
     .slice(0, maxLength)
 }
 
+function slugifyStoreName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
+}
+
+function getPublicStoreSlug(data = {}, storeId = '') {
+  return sanitizeString(
+    data.storeSlug ||
+      data.slug ||
+      slugifyStoreName(data.storeName || data.name) ||
+      storeId,
+    120
+  )
+}
+
+function getPublicStoreKeys(storeId, data = {}, storeSlug = '') {
+  return uniqueArray([
+    storeId,
+    data.storeId,
+    data.storeDocId,
+    data.docId,
+    storeSlug,
+    data.storeSlug,
+    data.slug,
+    ...(Array.isArray(data.storeKeys) ? data.storeKeys : []),
+  ]).slice(0, 30)
+}
+
 function isStorePubliclyAvailable(data = {}) {
   const subscriptionStatus = String(data.subscriptionStatus || data.subscription?.status || '').trim()
 
@@ -102,12 +135,13 @@ function sanitizePublicStoreSettings(settings = {}) {
 }
 
 function buildPublicStoreProfile(data = {}, storeId) {
+  const storeSlug = getPublicStoreSlug(data, storeId)
+  const storeKeys = getPublicStoreKeys(storeId, data, storeSlug)
+
   const profile = {
     ...pickFields(data, [
       'name',
       'storeName',
-      'slug',
-      'storeSlug',
       'logoUrl',
       'bannerUrl',
       'coverUrl',
@@ -136,6 +170,8 @@ function buildPublicStoreProfile(data = {}, storeId) {
       'acceptDineIn',
       'isOpen',
       'isActive',
+      'isPublic',
+      'isVisible',
       'isBlocked',
       'isBillingBlocked',
       'isDeleted',
@@ -155,6 +191,10 @@ function buildPublicStoreProfile(data = {}, storeId) {
     id: storeId,
     storeId,
     docId: storeId,
+    storeDocId: storeId,
+    slug: data.slug || storeSlug,
+    storeSlug,
+    storeKeys,
     isOpen: data.isOpen !== false,
     isActive: data.isActive !== false,
     isBlocked: data.isBlocked === true,
@@ -274,14 +314,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
 }
 
 function storeKeysFromSnapshot(storeId, data = {}) {
-  return uniqueArray([
-    storeId,
-    data.storeId,
-    data.docId,
-    data.slug,
-    data.storeSlug,
-    ...(Array.isArray(data.storeKeys) ? data.storeKeys : []),
-  ])
+  return getPublicStoreKeys(storeId, data, getPublicStoreSlug(data, storeId))
 }
 
 async function getDocsByStoreKeys(collectionName, keys) {

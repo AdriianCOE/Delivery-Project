@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
+import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import {
   FiCheck,
   FiClock,
@@ -221,32 +222,9 @@ function getLogoUrl(store) {
   )
 }
 
-function normalizePhoneBR(value) {
-  const digits = String(value || '').replace(/\D/g, '')
 
-  if (!digits) return ''
-  if (digits.startsWith('55')) return digits
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`
 
-  return digits
-}
 
-function formatPhone(value) {
-  const digits = String(value || '').replace(/\D/g, '')
-  if (!digits) return ''
-
-  const localDigits = digits.startsWith('55') ? digits.slice(2) : digits
-
-  if (localDigits.length === 11) {
-    return `(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 7)}-${localDigits.slice(7)}`
-  }
-
-  if (localDigits.length === 10) {
-    return `(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 6)}-${localDigits.slice(6)}`
-  }
-
-  return value
-}
 
 function getStoreWhatsapp(store) {
   return (
@@ -918,7 +896,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const primaryFavoriteKey = storeKeys[0] || store?.id || store?.name
 
   const whatsapp = getStoreWhatsapp(store)
-  const whatsappDigits = normalizePhoneBR(whatsapp)
+  const whatsappDigits = normalizeBrazilianPhoneForWhatsApp(whatsapp)
   const instagram = getInstagram(store)
   const twitter = getTwitter(store)
   const address = useMemo(() => getAddressData(store), [store])
@@ -1523,7 +1501,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
                 <InfoRow
                   icon={FiPhone}
                   label="Atendimento"
-                  value={formatPhone(whatsappDigits)}
+                  value={formatBrazilianPhone(whatsappDigits)}
                   themeColor={themeColor}
                   action={
                     <button

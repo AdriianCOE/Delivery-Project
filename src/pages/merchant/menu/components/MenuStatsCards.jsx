@@ -24,7 +24,7 @@ function StatCard({ icon: Icon, label, value, color, onClick, active }) {
     orange: 'bg-orange-50 dark:bg-orange-500/10 text-[#f97316]',
     green:  'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     red:    'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400',
-    blue:   'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    blue:   'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400',
     yellow: 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
     gray:   'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400',
   }

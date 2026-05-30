@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
+import { normalizeBrazilianPhoneForWhatsApp, formatBrazilianPhone, validateBrazilianMobilePhone } from '../../utils/phone'
+import { scrollToFirstError } from '../../utils/scroll'
 import {
   doc,
   onSnapshot,
@@ -133,15 +135,7 @@ function slugify(text = '') {
     .replace(/-+/g, '-')
 }
 
-function normalizePhoneBR(value) {
-  const digits = String(value || '').replace(/\D/g, '')
 
-  if (!digits) return ''
-  if (digits.startsWith('55')) return digits
-  if (digits.length >= 10) return `55${digits}`
-
-  return digits
-}
 
 function sanitizeSocial(value) {
   return String(value || '').replace('@', '').trim()
@@ -489,7 +483,7 @@ function Toast({ toast, onClose }) {
   const isSuccess = toast.type === 'success'
 
   return (
-    <div className="fixed right-4 top-4 z-50 max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200">
+    <div className="fixed right-4 top-4 max-sm:top-auto max-sm:bottom-4 max-sm:right-4 max-sm:left-4 z-50 max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200">
       <div className="flex items-start gap-3">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
@@ -1002,7 +996,7 @@ export default function Settings() {
       const segment = SEGMENTS.includes(form.segment) ? form.segment : 'Restaurante'
       const deliveryTime = sanitizeTextField(form.deliveryTime, 40) || DEFAULT_FORM.deliveryTime
       const instagram = sanitizeSocial(form.instagram).slice(0, 80)
-      const whatsapp = normalizePhoneBR(form.whatsapp)
+      const whatsapp = normalizeBrazilianPhoneForWhatsApp(form.whatsapp)
       const logoUrl = sanitizeImageUrl(form.logoUrl)
       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
 
@@ -1010,7 +1004,24 @@ export default function Settings() {
         throw new Error('Use imagens HTTPS do Cloudinary ou caminhos internos do PratoBy.')
       }
 
-      if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
+          if (form.pixEnabled) {
+      if (!form.pixKey?.trim() || !form.pixMerchantName?.trim() || !form.pixMerchantCity?.trim()) {
+        showToast('error', 'Preencha todos os dados do Pix manual.')
+        scrollToFirstError()
+        return
+      }
+      
+      if (form.pixKeyType === 'phone') {
+        const validatedPixPhone = validateBrazilianMobilePhone(form.pixKey)
+        if (!validatedPixPhone.ok) {
+           showToast('error', 'A chave Pix (Telefone) informada é inválida.')
+           scrollToFirstError()
+           return
+        }
+      }
+    }
+
+    if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
       }
 
@@ -1092,20 +1103,19 @@ export default function Settings() {
         acceptDineIn: Boolean(form.acceptDineIn),
 
         paymentMethods: {
-          pix: Boolean(form.paymentPix),
-          card: Boolean(form.paymentCard),
-          cash: Boolean(form.paymentCash),
-        },
-
-        pix: {
-          enabled: Boolean(form.pixEnabled),
-          key: sanitizeTextField(form.pixKey, 120),
-          keyType: ['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType)
-            ? form.pixKeyType
-            : 'phone',
-          merchantName: sanitizeTextField(form.pixMerchantName, 80) || cleanName,
-          merchantCity: sanitizeTextField(form.pixMerchantCity, 60) || sanitizeTextField(form.city, 60),
-        },
+        pix: Boolean(form.paymentPix),
+        card: Boolean(form.paymentCard),
+        cash: Boolean(form.paymentCash),
+      },
+      pix: {
+        enabled: Boolean(form.pixEnabled),
+        key: sanitizeTextField(form.pixKey, 120),
+        keyType: ['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType)
+          ? form.pixKeyType
+          : 'phone',
+        merchantName: sanitizeTextField(form.pixMerchantName, 80) || cleanName,
+        merchantCity: sanitizeTextField(form.pixMerchantCity, 60) || sanitizeTextField(form.city, 60),
+      },
 
         address: {
           cep: sanitizeTextField(form.cep, 12),
@@ -1434,9 +1444,9 @@ export default function Settings() {
               <Input
                 label="WhatsApp da loja"
                 icon={FiMessageCircle}
-                value={form.whatsapp}
-                onChange={(event) => updateField('whatsapp', event.target.value)}
-                placeholder="(79) 99999-9999"
+                value={formatBrazilianPhone(form.whatsapp)}
+                onChange={(event) => updateField('whatsapp', normalizeBrazilianPhoneForWhatsApp(event.target.value) || event.target.value)}
+                placeholder="(00) 00000-0000"
               />
 
               <Input
@@ -1723,23 +1733,36 @@ export default function Settings() {
 
                   <Input
                     label="Chave Pix"
-                    value={form.pixKey}
-                    onChange={(event) => updateField('pixKey', event.target.value)}
+                    aria-invalid={!form.pixKey?.trim() && form.paymentPix}
+                    className={!form.pixKey?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                    value={form.pixKeyType === 'phone' ? formatBrazilianPhone(form.pixKey) : form.pixKey}
+                    onChange={(event) => {
+                      let val = event.target.value;
+                      if (form.pixKeyType === 'phone') {
+                        const normalized = normalizeBrazilianPhoneForWhatsApp(val);
+                        if (normalized) val = '+55' + normalized.replace(/^55/, '');
+                      }
+                      updateField('pixKey', val);
+                    }}
                     placeholder="Chave Pix da loja"
                   />
 
                   <Input
                     label="Nome no Pix"
+                    aria-invalid={!form.pixMerchantName?.trim() && form.paymentPix}
+                    className={!form.pixMerchantName?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixMerchantName}
                     onChange={(event) => updateField('pixMerchantName', event.target.value)}
-                    placeholder={form.name || 'Nome da loja'}
+                    placeholder="Titular da conta"
                   />
 
                   <Input
                     label="Cidade no Pix"
+                    aria-invalid={!form.pixMerchantCity?.trim() && form.paymentPix}
+                    className={!form.pixMerchantCity?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixMerchantCity}
                     onChange={(event) => updateField('pixMerchantCity', event.target.value)}
-                    placeholder={form.city || 'Aracaju'}
+                    placeholder="Ex: Aracaju"
                   />
                 </div>
               )}

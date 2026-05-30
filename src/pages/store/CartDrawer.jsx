@@ -24,6 +24,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
+import { scrollToFirstError } from '../../utils/scroll'
 import { functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
@@ -927,19 +928,25 @@ function SectionCard({ title, icon: Icon, children, description }) {
   )
 }
 
-function InputField({ label, className = '', ...props }) {
+function InputField({ label, className = '', error, ...props }) {
   return (
-    <div className={className}>
+    <div className={`scroll-mt-24 ${className}`}>
       {label && (
-        <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+        <label className={`mb-1.5 block text-xs font-black uppercase tracking-wide ${error ? 'text-red-500' : 'text-[#6b7280]'}`}>
           {label}
         </label>
       )}
 
       <input
         {...props}
-        className="h-12 w-full rounded-2xl border border-gray-100 bg-[#F9FAFB] px-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+        aria-invalid={!!error}
+        className={`h-12 w-full rounded-2xl border bg-[#F9FAFB] px-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:bg-white focus:ring-4 ${
+          error
+            ? 'border-red-500 ring-2 ring-red-500/50 focus:border-red-500 focus:ring-red-100'
+            : 'border-gray-100 focus:border-[#f97316] focus:ring-orange-100'
+        }`}
       />
+      {error && <span className="mt-1.5 block text-xs font-semibold text-red-500">{error}</span>}
     </div>
   )
 }
@@ -1346,7 +1353,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   if (!digits) return null
 
   if (digits.length !== 8) {
-    setCepError('Digite um CEP com 8 números.')
+    setCepError('CEP inválido. Digite 8 números.')
     return null
   }
 
@@ -1356,14 +1363,14 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
 
     if (!response.ok) {
-      setCepError('Não foi possível buscar o CEP.')
+      setCepError('Não conseguimos buscar o CEP agora. Preencha o endereço manualmente.')
       return null
     }
 
     const data = await response.json()
 
     if (data?.erro) {
-      setCepError('CEP não encontrado.')
+      setCepError('CEP não encontrado. Confira o número ou preencha manualmente.')
       return null
     }
 
@@ -1394,8 +1401,8 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
       setCepError(
         cepNeighborhood
-          ? `A loja não entrega no bairro ${cepNeighborhood}.`
-          : 'Não conseguimos identificar um bairro de entrega para esse CEP.'
+          ? `A loja não entrega nesse bairro.`
+          : 'A loja não entrega nesse bairro.'
       )
 
       return null
@@ -1424,7 +1431,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     }
   } catch (error) {
     console.error('Erro ao buscar CEP', error)
-    setCepError('Erro ao buscar CEP. Confira sua conexão.')
+    setCepError('Não conseguimos buscar o CEP agora. Preencha o endereço manualmente.')
     return null
   } finally {
     setLoadingCep(false)
@@ -1444,6 +1451,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const [paymentMethod, setPaymentMethod] = useState('')
   const [changeFor, setChangeFor] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [checkoutError, setCheckoutError] = useState(null)
 
   const [selectedCartItem, setSelectedCartItem] = useState(null)
 
@@ -1478,12 +1486,18 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
   const paymentOptions = useMemo(() => {
     const paymentMethods = store?.paymentMethods || {}
-    const pixConfig = getPixConfig(store)
+    const publicPaymentMethods = store?.publicPaymentMethods || {}
+    const acceptedPaymentMethods = Array.isArray(store?.acceptedPaymentMethods) ? store.acceptedPaymentMethods : []
+    const acceptedPaymentMethodKeys = acceptedPaymentMethods.map((m) => String(m).toLowerCase())
 
     const pixEnabled =
       paymentMethods.pix !== false &&
-      pixConfig.enabled &&
-      Boolean(pixConfig.key)
+      (store?.pix?.enabled === true ||
+        paymentMethods?.pix === true ||
+        paymentMethods?.pix?.enabled === true ||
+        publicPaymentMethods?.pix === true ||
+        publicPaymentMethods?.pix?.enabled === true ||
+        acceptedPaymentMethodKeys.includes('pix'))
 
     const cardEnabled = paymentMethods.card !== false
     const cashEnabled = paymentMethods.cash !== false
@@ -1548,34 +1562,16 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
   const eligibleCouponSubtotal = useMemo(() => {
     if (!appliedCoupon) return 0
-
-    return cartItems
-      .filter((item) => couponAppliesToItem(appliedCoupon, item))
-      .reduce((acc, item) => acc + getItemTotal(item), 0)
-  }, [appliedCoupon, cartItems])
+    if (appliedCoupon.eligibleSubtotalCents !== undefined) {
+      return appliedCoupon.eligibleSubtotalCents / 100
+    }
+    return subtotal
+  }, [appliedCoupon, subtotal])
 
   const discount = useMemo(() => {
-    if (!appliedCoupon || eligibleCouponSubtotal <= 0) return 0
-
-    const minOrder = getCouponMinOrder(appliedCoupon)
-    if (minOrder > 0 && eligibleCouponSubtotal < minOrder) return 0
-
-    let rawDiscount = 0;
-
-    if (appliedCoupon.type === 'percent') {
-      rawDiscount = eligibleCouponSubtotal * (Number(appliedCoupon.value || 0) / 100)
-    } else {
-      rawDiscount = getCouponFixedValue(appliedCoupon)
-    }
-
-    const maxDiscount = getCouponMaxDiscount(appliedCoupon)
-
-    if (maxDiscount > 0) {
-      rawDiscount = Math.min(rawDiscount, maxDiscount)
-    }
-
-    return Math.min(Math.max(rawDiscount, 0), eligibleCouponSubtotal)
-  }, [appliedCoupon, eligibleCouponSubtotal])
+    if (!appliedCoupon) return 0
+    return (appliedCoupon.discountCents || 0) / 100
+  }, [appliedCoupon])
 
   const defaultDeliveryFee = getDefaultDeliveryFee(store)
 
@@ -1686,18 +1682,35 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
     try {
       const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
+
+      const subtotalCents = Math.round(subtotal * 100)
+      const itemsPayload = cartItems.map(item => ({
+        id: String(item.id || item.cartItemId || '').trim(),
+        productId: String(item.productId || item.id || '').trim(),
+        categoryId: String(item.categoryId || item.productCategoryId || item.product?.categoryId || '').trim(),
+        totalCents: Math.round(getItemTotal(item) * 100),
+        acceptsCoupons: item.acceptsCoupons !== false && item.acceptsCoupon !== false,
+      }))
+
       const result = await validatePublicCoupon({
         storeId: finalStoreId,
         storeSlug,
         storeDocId,
         couponCode: code,
-        items: buildPublicOrderItems(cartItems),
+        subtotalCents,
+        items: itemsPayload,
       })
       const data = result?.data || {}
 
       if (!data.valid) {
         setAppliedCoupon(null)
-        setCouponError(data.message || 'Cupom invalido ou nao encontrado.')
+        if (data.reason === 'min_order_not_met') {
+          setCouponError(`Esse cupom exige pedido mínimo de ${formatMoney(data.minOrderCents / 100)}. Faltam ${formatMoney(data.missingCents / 100)} para usar esse cupom.`)
+        } else if (data.reason === 'ineligible_items') {
+          setCouponError('Esse cupom vale apenas para produtos selecionados. Adicione um item elegível para usá-lo.')
+        } else {
+          setCouponError(data.message || 'Cupom inválido ou não encontrado.')
+        }
         return
       }
 
@@ -1705,8 +1718,11 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         id: data.coupon?.code || code,
         ...(data.coupon || {}),
         code: data.coupon?.code || code,
+        discountCents: data.discountCents,
+        eligibleSubtotalCents: data.eligibleSubtotalCents,
       })
       setCouponCode('')
+      setCouponError('')
     } catch (error) {
       console.error(error)
       setCouponError(error?.message || 'Erro ao validar cupom. Tente novamente.')
@@ -1714,6 +1730,20 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       setCouponLoading(false)
     }
   }, [cartItems, couponCode, couponLoading, finalStoreId, storeDocId, storeSlug])
+  const getFieldError = (field) => {
+    if (!checkoutError) return false
+    const err = typeof checkoutError === 'string' ? checkoutError.toLowerCase() : ''
+
+    if (field === 'name' && err.includes('nome')) return checkoutError
+    if (field === 'phone' && (err.includes('whatsapp') || err.includes('ddd') || err.includes('celular') || err.includes('telefone'))) return checkoutError
+    if (field === 'cep' && err.includes('cep')) return checkoutError
+    if (field === 'street' && (err.includes('rua') || err.includes('cep'))) return checkoutError
+    if (field === 'number' && (err.includes('número') || err.includes('dígitos') || err.includes('numero'))) return checkoutError
+    if (field === 'neighborhood' && (err.includes('bairro') || err.includes('entrega'))) return checkoutError
+
+    return null
+  }
+
   const validateCheckout = useCallback(() => {
     if (!storeIsOpen) return 'A loja está fechada no momento.'
     if (cartItems.length === 0) return 'Seu carrinho está vazio.'
@@ -1744,7 +1774,11 @@ if (orderType === 'delivery') {
     return 'Aguarde a busca do CEP terminar.'
   }
 
-  if (cepError) {
+  if (customer.cep.trim() && cepDigits.length !== 8) {
+    return 'Informe um CEP válido com 8 números.'
+  }
+
+  if (cepError && (cepError.includes('inválido') || cepError.includes('entrega'))) {
     return cepError
   }
 
@@ -1752,17 +1786,10 @@ if (orderType === 'delivery') {
     return 'Informe o CEP para confirmar se a loja entrega no seu bairro.'
   }
 
-  if (customer.cep.trim() && cepDigits.length !== 8) {
-    return 'Informe um CEP válido com 8 números.'
-  }
-
-  if (hasDeliveryNeighborhoodRules && !customer.cepValidated) {
-    return 'Busque um CEP válido antes de finalizar o pedido.'
-  }
-
-  if (!customer.neighborhood.trim()) return 'Selecione ou informe o bairro.'
+  // Final absolute blocks regardless of CEP resolution
   if (!customer.street.trim()) return 'Informe a rua.'
   if (!addressNumber) return 'Informe um número válido.'
+  if (!customer.neighborhood.trim()) return 'Selecione ou informe o bairro.'
   if (addressNumber !== customer.number.trim()) return 'O número deve conter apenas dígitos.'
 
   if (
@@ -1786,11 +1813,8 @@ if (orderType === 'delivery') {
     if (!paymentMethod) return 'Escolha a forma de pagamento.'
 
     if (paymentMethod === 'pix_manual') {
-      const pixConfig = getPixConfig(store)
-
-      if (!pixConfig.enabled || !pixConfig.key) {
-        return 'O Pix da loja não está configurado corretamente. Escolha outra forma de pagamento.'
-      }
+      // O frontend confia nas flags públicas para exibir a opção Pix.
+      // O backend (createPublicOrder) fará a validação final da chave e gerará a cobrança/brcode de forma segura.
     }
 
     if (paymentMethod === 'cash') {
@@ -1835,7 +1859,8 @@ if (orderType === 'delivery') {
     const error = validateCheckout()
 
     if (error) {
-      alert(error)
+      setCheckoutError(error)
+      scrollToFirstError()
       return
     }
 

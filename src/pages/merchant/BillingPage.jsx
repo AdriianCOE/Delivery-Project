@@ -983,6 +983,20 @@ export default function BillingPage() {
                 <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
                   Seu teste grátis será atualizado automaticamente após a confirmação. Se necessário, use o botão de verificar status no painel abaixo.
                 </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link
+                    to="/dashboard"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-700"
+                  >
+                    Ir para o dashboard
+                  </Link>
+                  <Link
+                    to="/dashboard#primeiros-passos"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 text-xs font-black text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                  >
+                    Ver primeiros passos
+                  </Link>
+                </div>
               </div>
             </div>
           </motion.section>
@@ -1211,7 +1225,7 @@ export default function BillingPage() {
             </span>
             <div className="min-w-0">
               <h4 className="text-xs font-black text-gray-900 dark:text-white">Pagamento Seguro Asaas</h4>
-              <p className="mt-1 hidden text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400 sm:block">
+              <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400">
                 Sua assinatura é processada de forma segura diretamente na infraestrutura criptografada oficial do Asaas.
               </p>
             </div>
@@ -1223,7 +1237,7 @@ export default function BillingPage() {
             </span>
             <div className="min-w-0">
               <h4 className="text-xs font-black text-gray-900 dark:text-white">Cartão Não Armazenado</h4>
-              <p className="mt-1 hidden text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400 sm:block">
+              <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400">
                 Seus dados de cartão ficam totalmente no ambiente Asaas. O PratoBy não armazena dados confidenciais de faturamento.
               </p>
             </div>
@@ -1235,7 +1249,7 @@ export default function BillingPage() {
             </span>
             <div className="min-w-0">
               <h4 className="text-xs font-black text-gray-900 dark:text-white">14 Dias Grátis Garantidos</h4>
-              <p className="mt-1 hidden text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400 sm:block">
+              <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-600 dark:text-zinc-400">
                 O período de teste é livre. Cadastre seus dados e aproveite a plataforma. Nenhuma cobrança é gerada hoje.
               </p>
             </div>

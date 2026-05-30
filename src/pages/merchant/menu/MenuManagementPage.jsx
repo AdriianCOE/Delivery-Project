@@ -277,13 +277,15 @@ export default function MenuManagementPage() {
                 >
                   <FiPlus size={13} /> Categoria
                 </button>
-                <button
-                  type="button"
-                  onClick={() => openProductDrawer()}
-                  className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
-                >
-                  <FiPlus size={15} /> Novo produto
-                </button>
+                {sortedCategories.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openProductDrawer()}
+                    className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
+                  >
+                    <FiPlus size={15} /> Novo produto
+                  </button>
+                )}
               </>
             )}
           </>
@@ -355,6 +357,7 @@ export default function MenuManagementPage() {
                 onDelete={onDeleteProduct}
                 onToggle={onToggle}
                 onCreateProduct={() => openProductDrawer()}
+                onCreateCategory={() => openCategoryDrawer()}
               />
             )}
 

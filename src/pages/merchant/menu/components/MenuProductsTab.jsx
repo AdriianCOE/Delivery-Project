@@ -11,6 +11,7 @@ import {
   FiEye,
   FiEyeOff,
   FiImage,
+  FiList,
   FiSearch,
   FiTrash2,
   FiX,
@@ -112,7 +113,7 @@ function ProductRow({ product, categories, onEdit, onDuplicate, onDelete, onTogg
         </button>
 
         <button type="button" title="Editar" aria-label="Editar produto" onClick={() => onEdit(product)}
-          className="grid h-10 w-full place-items-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100 sm:h-8 sm:w-8">
+          className="grid h-10 w-full place-items-center rounded-xl bg-orange-50 text-orange-600 transition hover:bg-orange-100 sm:h-8 sm:w-8">
           <FiEdit2 size={14} />
         </button>
 
@@ -163,6 +164,7 @@ export default function MenuProductsTab({
   onDelete,
   onToggle,
   onCreateProduct,
+  onCreateCategory,
 }) {
   const filteredProducts = useMemo(() => {
     return products
@@ -255,6 +257,13 @@ export default function MenuProductsTab({
             />
           ))}
         </AnimatePresence>
+      ) : categories.length === 0 ? (
+        <MenuEmptyState
+          icon={FiList}
+          title="Crie uma categoria antes"
+          description="Você precisa de pelo menos uma categoria (ex: 'Lanches', 'Bebidas') antes de cadastrar produtos."
+          action={{ label: 'Criar categoria', onClick: onCreateCategory }}
+        />
       ) : (
         <MenuEmptyState
           icon={FiBox}

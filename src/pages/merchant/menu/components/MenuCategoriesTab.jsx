@@ -69,7 +69,7 @@ function CategoryRow({ category, productCount, index, total, onEdit, onDelete, o
           {category.isActive !== false ? <FiCheck size={14} /> : <FiX size={14} />}
         </button>
         <button type="button" title="Editar" aria-label="Editar categoria" onClick={() => onEdit(category)}
-          className="grid h-10 w-full place-items-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100 sm:h-8 sm:w-8">
+          className="grid h-10 w-full place-items-center rounded-xl bg-orange-50 text-orange-600 transition hover:bg-orange-100 sm:h-8 sm:w-8">
           <FiEdit2 size={14} />
         </button>
         <button type="button" title="Excluir" aria-label="Excluir categoria" onClick={() => onDelete(category)}

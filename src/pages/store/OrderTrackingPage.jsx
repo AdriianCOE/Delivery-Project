@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { Link, useParams } from 'react-router-dom'
+import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import {
   addDoc,
   collection,
@@ -242,7 +243,7 @@ function normalizeBrazilianWhatsApp(value) {
 }
 
 function buildWhatsAppUrl(phone, message) {
-  const finalPhone = normalizeBrazilianWhatsApp(phone)
+  const finalPhone = normalizeBrazilianPhoneForWhatsApp(phone)
 
   if (!finalPhone) return ''
 
@@ -2387,7 +2388,7 @@ const isDelivered = status === 'entregue'
                 </p>
 
                 <p className="mt-1 text-sm text-[#6b7280]">
-                  {getCustomerPhone(order)}
+                  {formatBrazilianPhone(getCustomerPhone(order))}
                 </p>
 
                 <p className="mt-2 flex gap-2 text-sm leading-6 text-[#6b7280]">

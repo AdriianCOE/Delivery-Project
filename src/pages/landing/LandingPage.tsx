@@ -20,7 +20,7 @@ export default function LandingPage() {
         path="/"
       />
 
-      <div className="bg-white">
+      <div className="bg-white dark:bg-zinc-950 text-gray-900 dark:text-zinc-50">
         <HeroSection />
         <PainSection />
         <SolutionSection />

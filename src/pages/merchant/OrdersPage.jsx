@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
@@ -7,7 +7,7 @@ import {
   buildOrderWhatsAppUrl,
   hasValidOrderWhatsAppPhone,
 } from '../../utils/orderSummary'
-import { normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
+import { normalizeBrazilianPhoneForWhatsApp, formatBrazilianPhone } from '../../utils/phone'
 import {
   getPricingValidation,
   shouldBlockOrderAcceptance,
@@ -312,23 +312,7 @@ function getCustomerPhone(order) {
 }
 
 function formatDisplayPhone(phone) {
-  if (!phone) return ''
-  const cleaned = String(phone).replace(/\D/g, '')
-  let target = cleaned
-  if (cleaned.startsWith('55') && cleaned.length >= 12) {
-    target = cleaned.slice(2)
-  }
-  if (target.length === 11) {
-    return `(${target.slice(0, 2)}) ${target.slice(2, 7)}-${target.slice(7)}`
-  } else if (target.length === 10) {
-    return `(${target.slice(0, 2)}) ${target.slice(2, 6)}-${target.slice(6)}`
-  }
-  if (cleaned.length === 11) {
-    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`
-  } else if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`
-  }
-  return phone
+  return formatBrazilianPhone(phone)
 }
 
 function getPaymentMethod(order) {
