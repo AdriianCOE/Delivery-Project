@@ -254,7 +254,12 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
 
   try {
     const getPublicStoreProfile = httpsCallable(functionsInstance, 'getPublicStoreProfile')
-    const result = await getPublicStoreProfile({ storeSlug: cleanSlug, slug: cleanSlug })
+    const result = await getPublicStoreProfile({
+      storeId: cleanSlug,
+      storeDocId: cleanSlug,
+      storeSlug: cleanSlug,
+      slug: cleanSlug,
+    })
     const store = result?.data?.store
 
     if (store) {

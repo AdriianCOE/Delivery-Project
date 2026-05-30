@@ -308,6 +308,16 @@ function ProductCard({
   const oldPrice = getProductOldPrice(product)
   const discountPercent = getDiscountPercent(price, oldPrice)
   const hasDiscount = discountPercent > 0
+  const hasPromotionBadge = Boolean(product?.isPromotion || product?.isPromotional || product?.promotion)
+  const hasExplicitCouponEligibility =
+    product?.acceptsCoupons === true ||
+    product?.acceptsCoupon === true ||
+    product?.couponEligible === true
+  const acceptsCoupons =
+    hasExplicitCouponEligibility &&
+    product?.acceptsCoupons !== false &&
+    product?.acceptsCoupon !== false &&
+    product?.couponEligible !== false
 
   const productName = product?.name || 'Produto'
   const productDescription =
@@ -434,6 +444,20 @@ function ProductCard({
               {hasDiscount && canAdd && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
                   <FiTag size={12} />-{discountPercent}%
+                </span>
+              )}
+
+              {hasPromotionBadge && !hasDiscount && canAdd && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
+                  <FiTag size={12} />
+                  Promoção
+                </span>
+              )}
+
+              {acceptsCoupons && canAdd && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100">
+                  <FiTag size={12} />
+                  Aceita cupom
                 </span>
               )}
 

@@ -1710,26 +1710,26 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
           />
         ) : !loadingCatalog && !loadingOrders && !hasCatalog && orders.length === 0 ? (
           <div className="mx-auto max-w-4xl pt-8">
-            <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-100/50">
-              <div className="bg-gradient-to-br from-orange-50 to-white px-8 py-10 sm:px-12 sm:py-16">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-lg shadow-orange-200">
+            <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-100/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/20">
+              <div className="bg-gradient-to-br from-orange-50 to-white px-8 py-10 dark:from-zinc-900 dark:to-zinc-950 sm:px-12 sm:py-16">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-lg shadow-orange-200 dark:shadow-orange-950/50">
                   <FiPackage size={28} />
                 </div>
-                <h2 className="mt-6 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                <h2 className="mt-6 text-3xl font-black tracking-tight text-[#111827] dark:text-zinc-100 sm:text-4xl">
                   Bem-vindo à sua nova loja!
                 </h2>
-                <p className="mt-4 max-w-xl text-lg leading-8 text-[#6b7280]">
+                <p className="mt-4 max-w-xl text-lg leading-8 text-[#6b7280] dark:text-zinc-400">
                   Sua loja foi criada com sucesso e os {isTrialActive && trialDaysRemaining !== null ? `${trialDaysRemaining} dias de teste grátis` : 'dias de teste'} já estão ativos. Agora só falta configurar seu cardápio para começar a vender.
                 </p>
               </div>
 
-              <div className="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="bg-white p-8">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
+              <div className="grid gap-px bg-gray-100 dark:bg-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="bg-white p-8 dark:bg-zinc-900">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
                     <FiLayout size={24} />
                   </div>
-                  <h3 className="mt-5 text-lg font-black text-[#111827]">Configure sua loja</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                  <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">Configure sua loja</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
                     Acesse as configurações para adicionar sua logo, banner e horários de funcionamento.
                   </p>
                   <Link to="/dashboard/settings" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
@@ -1737,12 +1737,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   </Link>
                 </div>
 
-                <div className="bg-white p-8">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
+                <div className="bg-white p-8 dark:bg-zinc-900">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
                     <FiLayout size={24} />
                   </div>
-                  <h3 className="mt-5 text-lg font-black text-[#111827]">Adicione sua primeira categoria</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                  <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">Adicione sua primeira categoria</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
                     Crie categorias como "Pizzas", "Bebidas" ou "Promoções" para organizar seu cardápio.
                   </p>
                   <Link to="/dashboard/menu" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
@@ -1750,12 +1750,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   </Link>
                 </div>
 
-                <div className="bg-white p-8 sm:col-span-2 lg:col-span-1">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
+                <div className="bg-white p-8 dark:bg-zinc-900 sm:col-span-2 lg:col-span-1">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
                     <FiPackage size={24} />
                   </div>
-                  <h3 className="mt-5 text-lg font-black text-[#111827]">Cadastre seu primeiro produto</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                  <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">Cadastre seu primeiro produto</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
                     Adicione fotos atraentes, preços e descrições para deixar os clientes com água na boca.
                   </p>
                   <Link to="/dashboard/menu" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
@@ -1764,11 +1764,11 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 bg-gray-50 px-8 py-6 sm:px-12">
+              <div className="border-t border-gray-100 bg-gray-50 px-8 py-6 dark:border-zinc-800 dark:bg-zinc-950/60 sm:px-12">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h4 className="text-sm font-black text-[#111827]">Abra a loja quando estiver pronta</h4>
-                    <p className="mt-1 text-sm text-[#6b7280]">Sua loja nasce fechada para você arrumar a casa primeiro.</p>
+                    <h4 className="text-sm font-black text-[#111827] dark:text-zinc-100">Abra a loja quando estiver pronta</h4>
+                    <p className="mt-1 text-sm text-[#6b7280] dark:text-zinc-400">Sua loja nasce fechada para você arrumar a casa primeiro.</p>
                   </div>
                   <button
                     type="button"

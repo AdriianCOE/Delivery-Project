@@ -55,8 +55,8 @@ function Toast({ toast, onClose }) {
       initial={{ opacity: 0, y: 16, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8 }}
-      className={`fixed bottom-24 left-1/2 z-[200] flex w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-2xl shadow-gray-900/10 backdrop-blur-xl lg:bottom-6 ${
-        isError ? 'border-red-100 text-red-700' : 'border-orange-100 text-[#111827]'
+      className={`fixed left-1/2 top-5 z-[200] flex w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-2xl shadow-gray-900/10 backdrop-blur-xl dark:bg-zinc-900 dark:shadow-black/30 ${
+        isError ? 'border-red-100 text-red-700 dark:border-red-500/30 dark:text-red-300' : 'border-orange-100 text-[#111827] dark:border-orange-500/30 dark:text-zinc-100'
       }`}
     >
       {isError

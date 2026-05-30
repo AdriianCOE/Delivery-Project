@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { httpsCallable } from 'firebase/functions'
+import { motion } from 'motion/react'
 
 import {
   FiAlertCircle,
@@ -900,6 +901,39 @@ function couponAppliesToItem(coupon, item) {
   return true
 }
 
+function buildCouponItemsPayload(cartItems) {
+  return cartItems.map((item) => ({
+    id: String(item.id || item.cartItemId || '').trim(),
+    productId: String(item.productId || item.id || '').trim(),
+    categoryId: String(item.categoryId || item.productCategoryId || item.product?.categoryId || '').trim(),
+    totalCents: Math.round(getItemTotal(item) * 100),
+    acceptsCoupons: item.acceptsCoupons !== false && item.acceptsCoupon !== false,
+  }))
+}
+
+function getCouponValidationMessage(data = {}) {
+  if (data.reason === 'min_order_not_met') {
+    return `Esse cupom exige pedido mínimo de ${formatMoney(data.minOrderCents / 100)}. Faltam ${formatMoney(data.missingCents / 100)} em produtos elegíveis para usá-lo.`
+  }
+
+  if (data.reason === 'ineligible_items') {
+    return 'Esse cupom vale apenas para produtos selecionados. Adicione um item elegível para usá-lo.'
+  }
+
+  return data.message || 'Cupom inválido ou não encontrado.'
+}
+
+function isBlockingCepError(message) {
+  const normalizedMessage = normalizeForMatch(message)
+
+  return (
+    normalizedMessage.includes('digite 8 numeros') ||
+    normalizedMessage.includes('informe um cep valido') ||
+    normalizedMessage.includes('loja entrega apenas em') ||
+    normalizedMessage.includes('bairro fora da area')
+  )
+}
+
 function SectionCard({ title, icon: Icon, children, description }) {
   return (
     <section className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
@@ -1335,11 +1369,13 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const navigate = useNavigate()
   const [loadingCep, setLoadingCep] = useState(false)
   const [cepError, setCepError] = useState('')
+  const [cepLookupStatus, setCepLookupStatus] = useState('idle')
 
   const handleSearchCep = async (cep) => {
   const digits = onlyDigits(cep)
 
   setCepError('')
+  setCepLookupStatus('idle')
 
   setCustomer((prev) => ({
     ...prev,
@@ -1354,6 +1390,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
   if (digits.length !== 8) {
     setCepError('CEP inválido. Digite 8 números.')
+    setCepLookupStatus('invalid')
     return null
   }
 
@@ -1364,6 +1401,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
     if (!response.ok) {
       setCepError('Não conseguimos buscar o CEP agora. Preencha o endereço manualmente.')
+      setCepLookupStatus('manual')
       return null
     }
 
@@ -1371,6 +1409,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
     if (data?.erro) {
       setCepError('CEP não encontrado. Confira o número ou preencha manualmente.')
+      setCepLookupStatus('manual')
       return null
     }
 
@@ -1400,10 +1439,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       }))
 
       setCepError(
-        cepNeighborhood
-          ? `A loja não entrega nesse bairro.`
-          : 'A loja não entrega nesse bairro.'
+        deliveryAreaMessage || 'Bairro fora da área de entrega.'
       )
+      setCepLookupStatus('unsupported')
 
       return null
     }
@@ -1421,6 +1459,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       cepState,
       cepValidated: true,
     }))
+    setCepLookupStatus('validated')
 
     return {
       cep: formatCep(digits),
@@ -1432,6 +1471,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   } catch (error) {
     console.error('Erro ao buscar CEP', error)
     setCepError('Não conseguimos buscar o CEP agora. Preencha o endereço manualmente.')
+    setCepLookupStatus('manual')
     return null
   } finally {
     setLoadingCep(false)
@@ -1483,6 +1523,13 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       }))
       .sort((a, b) => a.neighborhood.localeCompare(b.neighborhood))
   }, [deliveryFees])
+  const deliveryNeighborhoodList = useMemo(() => {
+    return deliveryNeighborhoods.map((item) => item.neighborhood).join(', ')
+  }, [deliveryNeighborhoods])
+  const deliveryAreaMessage = deliveryNeighborhoodList
+    ? `A loja entrega apenas em: ${deliveryNeighborhoodList}.`
+    : ''
+  const blockingCepError = isBlockingCepError(cepError)
 
   const paymentOptions = useMemo(() => {
     const paymentMethods = store?.paymentMethods || {}
@@ -1578,9 +1625,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const selectedNeighborhoodFee = useMemo(() => {
     if (!customer.neighborhood) return null
 
-    const found = deliveryNeighborhoods.find(
-      (item) => item.neighborhood === customer.neighborhood
-    )
+    const found = findDeliveryNeighborhoodMatch(customer.neighborhood, deliveryNeighborhoods)
 
     if (found) return found.fee
 
@@ -1684,13 +1729,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
 
       const subtotalCents = Math.round(subtotal * 100)
-      const itemsPayload = cartItems.map(item => ({
-        id: String(item.id || item.cartItemId || '').trim(),
-        productId: String(item.productId || item.id || '').trim(),
-        categoryId: String(item.categoryId || item.productCategoryId || item.product?.categoryId || '').trim(),
-        totalCents: Math.round(getItemTotal(item) * 100),
-        acceptsCoupons: item.acceptsCoupons !== false && item.acceptsCoupon !== false,
-      }))
+      const itemsPayload = buildCouponItemsPayload(cartItems)
 
       const result = await validatePublicCoupon({
         storeId: finalStoreId,
@@ -1704,13 +1743,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
       if (!data.valid) {
         setAppliedCoupon(null)
-        if (data.reason === 'min_order_not_met') {
-          setCouponError(`Esse cupom exige pedido mínimo de ${formatMoney(data.minOrderCents / 100)}. Faltam ${formatMoney(data.missingCents / 100)} para usar esse cupom.`)
-        } else if (data.reason === 'ineligible_items') {
-          setCouponError('Esse cupom vale apenas para produtos selecionados. Adicione um item elegível para usá-lo.')
-        } else {
-          setCouponError(data.message || 'Cupom inválido ou não encontrado.')
-        }
+        setCouponError(getCouponValidationMessage(data))
         return
       }
 
@@ -1729,7 +1762,67 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     } finally {
       setCouponLoading(false)
     }
-  }, [cartItems, couponCode, couponLoading, finalStoreId, storeDocId, storeSlug])
+  }, [cartItems, couponCode, couponLoading, finalStoreId, storeDocId, storeSlug, subtotal])
+
+  useEffect(() => {
+    const code = appliedCoupon?.code
+
+    if (!code) return undefined
+
+    let isCurrent = true
+    const timeoutId = window.setTimeout(async () => {
+      if (cartItems.length === 0 || subtotal <= 0) {
+        setAppliedCoupon(null)
+        setCouponError('O cupom foi removido porque o carrinho não possui produtos elegíveis.')
+        return
+      }
+
+      try {
+        const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
+        const result = await validatePublicCoupon({
+          storeId: finalStoreId,
+          storeSlug,
+          storeDocId,
+          couponCode: code,
+          subtotalCents: Math.round(subtotal * 100),
+          items: buildCouponItemsPayload(cartItems),
+        })
+        const data = result?.data || {}
+
+        if (!isCurrent) return
+
+        if (!data.valid) {
+          setAppliedCoupon(null)
+          setCouponError(getCouponValidationMessage(data))
+          return
+        }
+
+        setAppliedCoupon((current) => {
+          if (!current || current.code !== code) return current
+
+          return {
+            ...current,
+            ...(data.coupon || {}),
+            code,
+            discountCents: data.discountCents,
+            eligibleSubtotalCents: data.eligibleSubtotalCents,
+          }
+        })
+      } catch (error) {
+        if (!isCurrent) return
+
+        console.error(error)
+        setAppliedCoupon(null)
+        setCouponError('Não foi possível revalidar o cupom. Aplique novamente para continuar.')
+      }
+    }, 250)
+
+    return () => {
+      isCurrent = false
+      window.clearTimeout(timeoutId)
+    }
+  }, [appliedCoupon?.code, cartItems, finalStoreId, storeDocId, storeSlug, subtotal])
+
   const getFieldError = (field) => {
     if (!checkoutError) return false
     const err = typeof checkoutError === 'string' ? checkoutError.toLowerCase() : ''
@@ -1778,7 +1871,7 @@ if (orderType === 'delivery') {
     return 'Informe um CEP válido com 8 números.'
   }
 
-  if (cepError && (cepError.includes('inválido') || cepError.includes('entrega'))) {
+  if (blockingCepError) {
     return cepError
   }
 
@@ -1830,6 +1923,7 @@ if (orderType === 'delivery') {
     return ''
   }, [
   belowMinimum,
+  blockingCepError,
   canUseDelivery,
   cartItems.length,
   cepError,
@@ -1856,6 +1950,7 @@ if (orderType === 'delivery') {
   const handleCheckout = useCallback(async () => {
     if (isSubmitting) return
 
+    setCheckoutError(null)
     const error = validateCheckout()
 
     if (error) {
@@ -1939,7 +2034,10 @@ if (orderType === 'delivery') {
       navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`)
     } catch (error) {
       console.error(error)
-      alert(error?.message || 'Erro ao enviar pedido. Tente novamente.')
+      const message = error?.message || 'Erro ao enviar pedido. Tente novamente.'
+      setCheckoutError(message)
+      scrollToFirstError()
+      alert(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -1964,14 +2062,22 @@ if (orderType === 'delivery') {
 
   return (
     <div className="fixed inset-0 z-[70] flex justify-end">
-      <button
+      <motion.button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
         aria-label="Fechar carrinho"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.18 }}
       />
 
-      <aside className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl">
+      <motion.aside
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 34 }}
+        className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl"
+      >
         <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -2222,6 +2328,7 @@ if (orderType === 'delivery') {
                   <SectionCard title="Seus dados" icon={FiUser}>
                     <InputField
                       label="Nome"
+                      error={getFieldError('name')}
                       placeholder="Como podemos te chamar?"
                       value={customer.name}
                       onChange={(event) =>
@@ -2234,6 +2341,7 @@ if (orderType === 'delivery') {
 
                     <InputField
                       label="WhatsApp"
+                      error={getFieldError('phone')}
                       type="tel"
                       inputMode="numeric"
                       autoComplete="tel"
@@ -2284,6 +2392,7 @@ if (orderType === 'delivery') {
   <div className="grid grid-cols-[1fr_auto] gap-2">
     <InputField
       label="CEP"
+      error={getFieldError('cep')}
       type="tel"
       inputMode="numeric"
       autoComplete="postal-code"
@@ -2298,6 +2407,7 @@ if (orderType === 'delivery') {
         }))
 
         setCepError('')
+        setCepLookupStatus('idle')
 
         if (onlyDigits(nextCep).length === 8) {
           handleSearchCep(nextCep)
@@ -2328,6 +2438,12 @@ if (orderType === 'delivery') {
       {customer.city} - {customer.state}
     </p>
   )}
+
+  {deliveryNeighborhoodList && (
+    <p className="mt-2 text-xs font-bold leading-5 text-[#6b7280]">
+      Entregamos apenas nos bairros: {deliveryNeighborhoodList}.
+    </p>
+  )}
 </div>
                       {deliveryNeighborhoods.length > 0 ? (
                         <div>
@@ -2337,6 +2453,7 @@ if (orderType === 'delivery') {
 
                           <select
                             value={customer.neighborhood}
+                            aria-invalid={!!getFieldError('neighborhood')}
                             onChange={(event) => {
   const nextNeighborhood = event.target.value
 
@@ -2345,7 +2462,9 @@ if (orderType === 'delivery') {
     neighborhood: nextNeighborhood,
   }))
 
-  if (
+  if (cepLookupStatus === 'unsupported') {
+    setCepError(deliveryAreaMessage || 'Bairro fora da área de entrega.')
+  } else if (
     customer.cepValidated &&
     customer.cepNeighborhood &&
     normalizeForMatch(customer.cepNeighborhood) !== normalizeForMatch(nextNeighborhood)
@@ -2369,10 +2488,16 @@ if (orderType === 'delivery') {
                               </option>
                             ))}
                           </select>
+                          {getFieldError('neighborhood') && (
+                            <span className="mt-1.5 block text-xs font-semibold text-red-500">
+                              {getFieldError('neighborhood')}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <InputField
                           label="Bairro"
+                          error={getFieldError('neighborhood')}
                           placeholder="Digite seu bairro"
                           value={customer.neighborhood}
                           onChange={(event) =>
@@ -2388,6 +2513,7 @@ if (orderType === 'delivery') {
                       <div className="grid grid-cols-[1fr_110px] gap-2">
                         <InputField
                           label="Rua"
+                          error={getFieldError('street')}
                           placeholder="Nome da rua"
                           value={customer.street}
                           onChange={(event) =>
@@ -2400,6 +2526,7 @@ if (orderType === 'delivery') {
 
                         <InputField
   label="Número"
+  error={getFieldError('number')}
   type="tel"
   inputMode="numeric"
   placeholder="123"
@@ -2758,6 +2885,16 @@ if (orderType === 'delivery') {
 </div>
 
 <div className="pb-2">
+  {checkoutError && (
+    <div
+      data-error="true"
+      className="mb-3 flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold leading-5 text-red-700"
+    >
+      <FiAlertCircle className="mt-0.5 shrink-0" size={14} />
+      <span>{checkoutError}</span>
+    </div>
+  )}
+
   <button
     type="button"
     onClick={handleCheckout}
@@ -2765,10 +2902,7 @@ if (orderType === 'delivery') {
       isSubmitting ||
       !storeIsOpen ||
       loadingCep ||
-      (orderType === 'delivery' && Boolean(cepError)) ||
-      (orderType === 'delivery' &&
-        deliveryNeighborhoods.length > 0 &&
-        !customer.cepValidated)
+      (orderType === 'delivery' && blockingCepError)
     }
     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-base font-black text-white transition hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
   >
@@ -2800,7 +2934,8 @@ if (orderType === 'delivery') {
   {orderType === 'delivery' &&
     deliveryNeighborhoods.length > 0 &&
     !cepError &&
-    !customer.cepValidated && (
+    !customer.cepValidated &&
+    !customer.neighborhood && (
       <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs font-bold text-[#6b7280]">
         <FiMapPin size={14} />
         Informe e busque o CEP para confirmar a entrega.
@@ -2859,7 +2994,7 @@ if (orderType === 'delivery') {
           onRemove={handleRemoveCartItem}
           onUpdateObservation={handleUpdateItemObservation}
         />
-      </aside>
+      </motion.aside>
     </div>
   )
 }

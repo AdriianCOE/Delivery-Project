@@ -483,23 +483,23 @@ function Toast({ toast, onClose }) {
   const isSuccess = toast.type === 'success'
 
   return (
-    <div className="fixed right-4 top-4 max-sm:top-auto max-sm:bottom-4 max-sm:right-4 max-sm:left-4 z-50 max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200">
+    <div className="fixed left-1/2 top-5 z-[200] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/30">
       <div className="flex items-start gap-3">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
             isSuccess
-              ? 'bg-orange-50 text-[#f97316]'
-              : 'bg-red-50 text-red-600'
+              ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10'
+              : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
           }`}
         >
           {isSuccess ? <FiCheckCircle /> : <FiAlertCircle />}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-[#111827]">
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
             {isSuccess ? 'Tudo certo' : 'Atenção'}
           </p>
-          <p className="mt-1 text-sm leading-5 text-[#6b7280]">
+          <p className="mt-1 text-sm leading-5 text-[#6b7280] dark:text-zinc-400">
             {toast.message}
           </p>
         </div>
@@ -507,7 +507,7 @@ function Toast({ toast, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-[#111827]"
+          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-[#111827] dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
         >
           <FiX />
         </button>
@@ -999,29 +999,37 @@ export default function Settings() {
       const whatsapp = normalizeBrazilianPhoneForWhatsApp(form.whatsapp)
       const logoUrl = sanitizeImageUrl(form.logoUrl)
       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
+      let normalizedPixKey = sanitizeTextField(form.pixKey, 120)
 
       if (logoUrl === null || bannerUrl === null) {
         throw new Error('Use imagens HTTPS do Cloudinary ou caminhos internos do PratoBy.')
       }
 
-          if (form.pixEnabled) {
-      if (!form.pixKey?.trim() || !form.pixMerchantName?.trim() || !form.pixMerchantCity?.trim()) {
-        showToast('error', 'Preencha todos os dados do Pix manual.')
-        scrollToFirstError()
-        return
-      }
-      
-      if (form.pixKeyType === 'phone') {
-        const validatedPixPhone = validateBrazilianMobilePhone(form.pixKey)
-        if (!validatedPixPhone.ok) {
-           showToast('error', 'A chave Pix (Telefone) informada é inválida.')
-           scrollToFirstError()
-           return
+      if (form.pixEnabled) {
+        if (
+          !['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType) ||
+          !form.pixKey?.trim() ||
+          !form.pixMerchantName?.trim() ||
+          !form.pixMerchantCity?.trim()
+        ) {
+          showToast('error', 'Preencha todos os dados do Pix manual.')
+          scrollToFirstError()
+          return
+        }
+
+        if (form.pixKeyType === 'phone') {
+          const validatedPixPhone = validateBrazilianMobilePhone(form.pixKey)
+          if (!validatedPixPhone.ok) {
+            showToast('error', 'A chave Pix (Telefone) informada é inválida.')
+            scrollToFirstError()
+            return
+          }
+
+          normalizedPixKey = validatedPixPhone.phoneE164
         }
       }
-    }
 
-    if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
+      if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
       }
 
@@ -1085,7 +1093,6 @@ export default function Settings() {
           instagram,
         },
 
-        isOpen: Boolean(form.isOpen),
         isActive: Boolean(form.isActive),
 
         activeDays,
@@ -1109,7 +1116,7 @@ export default function Settings() {
       },
       pix: {
         enabled: Boolean(form.pixEnabled),
-        key: sanitizeTextField(form.pixKey, 120),
+        key: normalizedPixKey,
         keyType: ['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType)
           ? form.pixKeyType
           : 'phone',
@@ -1139,7 +1146,7 @@ export default function Settings() {
       const ALLOWED_KEYS = [
         'name', 'storeName', 'description', 'segment', 'category',
         'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
-        'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
+        'phone', 'instagram', 'social', 'isActive', 'activeDays',
         'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
         'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
@@ -1281,8 +1288,8 @@ export default function Settings() {
                   <p className="text-xs font-black uppercase text-[#6b7280]">
                     Status
                   </p>
-                  <p className={`mt-1 text-sm font-black ${form.isOpen ? 'text-[#f97316]' : 'text-red-600'}`}>
-                    {form.isOpen ? 'Aberta' : 'Fechada'}
+                  <p className={`mt-1 text-sm font-black ${selectedStore?.isOpen !== false ? 'text-[#f97316]' : 'text-red-600'}`}>
+                    {selectedStore?.isOpen !== false ? 'Aberta' : 'Fechada'}
                   </p>
                 </div>
 
@@ -1603,12 +1610,12 @@ export default function Settings() {
             description="Configurações gerais de atendimento. Itens, cupons e taxas por bairro ficam no editor do cardápio."
           >
             <div className="grid gap-4 md:grid-cols-2">
-              <Toggle
-                checked={form.isOpen}
-                onChange={(value) => updateField('isOpen', value)}
-                label="Loja aberta agora"
-                description="Quando desligado, o cliente vê a loja como fechada."
-              />
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
+                <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Abrir ou fechar a loja</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                  Use o controle rápido no dashboard ou na página de pedidos para alterar o atendimento agora.
+                </p>
+              </div>
 
               <Toggle
                 checked={form.isActive}
@@ -1733,8 +1740,8 @@ export default function Settings() {
 
                   <Input
                     label="Chave Pix"
-                    aria-invalid={!form.pixKey?.trim() && form.paymentPix}
-                    className={!form.pixKey?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                    aria-invalid={!form.pixKey?.trim() && form.pixEnabled}
+                    className={!form.pixKey?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixKeyType === 'phone' ? formatBrazilianPhone(form.pixKey) : form.pixKey}
                     onChange={(event) => {
                       let val = event.target.value;
@@ -1749,8 +1756,8 @@ export default function Settings() {
 
                   <Input
                     label="Nome no Pix"
-                    aria-invalid={!form.pixMerchantName?.trim() && form.paymentPix}
-                    className={!form.pixMerchantName?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                    aria-invalid={!form.pixMerchantName?.trim() && form.pixEnabled}
+                    className={!form.pixMerchantName?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixMerchantName}
                     onChange={(event) => updateField('pixMerchantName', event.target.value)}
                     placeholder="Titular da conta"
@@ -1758,8 +1765,8 @@ export default function Settings() {
 
                   <Input
                     label="Cidade no Pix"
-                    aria-invalid={!form.pixMerchantCity?.trim() && form.paymentPix}
-                    className={!form.pixMerchantCity?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                    aria-invalid={!form.pixMerchantCity?.trim() && form.pixEnabled}
+                    className={!form.pixMerchantCity?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixMerchantCity}
                     onChange={(event) => updateField('pixMerchantCity', event.target.value)}
                     placeholder="Ex: Aracaju"

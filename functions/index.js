@@ -139,9 +139,10 @@ const PUBLIC_PRODUCT_FIELDS = [
   'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'categoryId', 'category',
   'categoryName', 'order', 'sortOrder', 'position', 'isActive', 'active', 'isVisible',
   'visible', 'isDeleted', 'deletedAt', 'isAvailable', 'available', 'status',
-  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isPromotion',
+  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
+  'isPopular', 'isPromotion', 'isPromotional',
   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
-  'unit', 'tags', 'availableDays', 'availability', 'stock',
+  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime',
 ]
 
 const STORE_SETTINGS_ALLOWED_FIELDS = new Set([

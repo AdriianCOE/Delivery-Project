@@ -124,17 +124,17 @@ export default function DeliveryAreaEditorDrawer({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 10 }}
               transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-              className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto overflow-x-hidden rounded-[2rem] bg-white p-6 shadow-2xl [scrollbar-width:thin]"
+              className="relative max-h-[92dvh] w-full max-w-md overflow-y-auto overflow-x-hidden rounded-[2rem] border border-gray-100 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 [scrollbar-width:thin]"
             >
               {/* Header */}
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-lg font-black text-[#111827]">
+                <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
                   {editingArea ? 'Editar bairro' : 'Adicionar bairro'}
                 </h2>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100"
+                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                   aria-label="Fechar"
                 >
                   <FiX size={17} />
@@ -153,7 +153,7 @@ export default function DeliveryAreaEditorDrawer({
                     onChange={(e) => setName(e.target.value)}
                     disabled={isPreset}
                     placeholder="Ex: Farolândia, Centro..."
-                    className="h-12 w-full rounded-2xl border border-gray-200 px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="h-12 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:bg-gray-50 disabled:text-gray-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20 dark:disabled:bg-zinc-800"
                   />
                   {isPreset && (
                     <p className="mt-1.5 text-xs font-semibold text-gray-400">
@@ -175,21 +175,21 @@ export default function DeliveryAreaEditorDrawer({
                       value={feeInput}
                       onChange={handleFeeChange}
                       placeholder="0,00"
-                      className="h-12 w-full rounded-2xl border border-gray-200 pl-11 pr-4 text-sm font-black text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                      className="h-12 w-full rounded-2xl border border-gray-200 bg-white pl-11 pr-4 text-sm font-black text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                     />
                   </div>
                   <p className="mt-1.5 text-xs font-semibold text-[#6b7280]">
-                    Digite `0,00` para configurar como entrega **Grátis**.
+                    Digite 0,00 para configurar entrega grátis.
                   </p>
                 </div>
               </div>
 
               {/* Actions Footer */}
-              <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+              <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-100 pt-4 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-black text-[#6b7280] transition hover:bg-gray-50"
+                  className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Cancelar
                 </button>
@@ -197,7 +197,7 @@ export default function DeliveryAreaEditorDrawer({
                   type="button"
                   onClick={handleSaveClick}
                   disabled={saving}
-                  className="flex items-center gap-1.5 rounded-xl bg-[#f97316] px-5 py-2.5 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-xl bg-[#f97316] px-5 py-2.5 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-50 dark:shadow-orange-950/50"
                 >
                   {saving ? (
                     <FiLoader className="animate-spin" size={14} />

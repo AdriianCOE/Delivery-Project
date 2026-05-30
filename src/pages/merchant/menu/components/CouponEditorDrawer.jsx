@@ -93,7 +93,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
       return
     }
 
-    const valueNum = form.type === 'percent' ? Number(form.value) : parseCurrency(form.value)
+    const valueNum = parseCurrency(form.value)
     if (Number.isNaN(valueNum) || valueNum <= 0) {
       onToast({ type: 'error', message: 'O valor do desconto deve ser maior que zero.' })
       return
@@ -176,12 +176,12 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-            className="fixed inset-y-0 right-0 z-[70] flex w-full flex-col bg-white shadow-2xl md:w-[500px] lg:w-[560px]"
+            className="fixed inset-y-0 right-0 z-[70] flex w-full flex-col bg-white shadow-2xl dark:bg-zinc-900 md:w-[500px] lg:w-[560px]"
           >
             {/* Header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
               <div>
-                <h2 className="text-lg font-black text-[#111827]">
+                <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
                   {editingCoupon ? 'Editar cupom' : 'Novo cupom'}
                 </h2>
                 <p className="mt-0.5 text-xs font-bold text-[#9ca3af]">
@@ -191,7 +191,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
               <button
                 type="button"
                 onClick={onClose}
-                className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100"
+                className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                 aria-label="Fechar"
               >
                 <FiX size={18} />
@@ -199,7 +199,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
             </div>
 
             {/* Tabs */}
-            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-100 px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-100 px-4 py-2 dark:border-zinc-800 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {DRAWER_SECTIONS.map((sec) => (
                 <button
                   key={sec.id}
@@ -208,7 +208,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                   className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-black transition ${
                     section === sec.id
                       ? 'bg-[#f97316] text-white'
-                      : 'bg-gray-50 text-[#6b7280] hover:bg-gray-100'
+                      : 'bg-gray-50 text-[#6b7280] hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
                   }`}
                 >
                   {sec.label}
@@ -231,7 +231,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                       onChange={(e) => setField('code', e.target.value.toUpperCase())}
                       placeholder="Ex: PROMO10"
                       maxLength={30}
-                      className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                      className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                     />
                     <p className="mt-1 text-xs text-[#9ca3af]">Apenas letras maiúsculas e números. Sem espaços.</p>
                   </div>
@@ -247,7 +247,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                       placeholder="Ex: R$ 10 de desconto em compras acima de R$ 50"
                       maxLength={150}
                       rows={2}
-                      className="w-full resize-none rounded-2xl border border-orange-100/80 bg-white px-4 py-3 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                      className="w-full resize-none rounded-2xl border border-orange-100/80 bg-white px-4 py-3 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                     />
                     <p className="mt-1 text-right text-xs text-[#9ca3af]">{form.description.length}/150</p>
                   </div>
@@ -266,8 +266,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                         }}
                         className={`flex h-12 items-center justify-center gap-2 rounded-2xl border-2 font-black transition ${
                           form.type === 'percent'
-                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316]'
-                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100'
+                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316] dark:bg-orange-500/10'
+                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
                         }`}
                       >
                         <FiPercent size={15} /> Porcentagem
@@ -280,8 +280,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                         }}
                         className={`flex h-12 items-center justify-center gap-2 rounded-2xl border-2 font-black transition ${
                           form.type === 'fixed'
-                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316]'
-                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100'
+                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316] dark:bg-orange-500/10'
+                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
                         }`}
                       >
                         <FiDollarSign size={15} /> Valor Fixo (R$)
@@ -306,19 +306,18 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                             value={form.value}
                             onChange={(e) => setField('value', e.target.value)}
                             placeholder="0,00"
-                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                           />
                         </>
                       ) : (
                         <>
                           <input
-                            type="number"
-                            min="1"
-                            max="100"
+                            type="text"
+                            inputMode="decimal"
                             value={form.value}
                             onChange={(e) => setField('value', e.target.value)}
                             placeholder="Ex: 15"
-                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                           />
                           <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-[#9ca3af]">
                             %
@@ -338,7 +337,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
               {section === 'rules' && (
                 <div className="space-y-4">
                   {/* Informativo de Cents */}
-                  <div className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/40 p-4">
+                  <div className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/40 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
                     <FiInfo className="mt-0.5 shrink-0 text-[#f97316]" size={16} />
                     <p className="text-xs font-semibold leading-5 text-[#6b7280]">
                       As regras financeiras são normalizadas em centavos para total precisão em pedidos do carrinho.
@@ -360,7 +359,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                         value={form.minOrder}
                         onChange={(e) => setField('minOrder', e.target.value)}
                         placeholder="0,00"
-                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                       />
                     </div>
                     <p className="mt-1 text-xs text-[#9ca3af]">O cupom só funcionará se o subtotal atingir este valor.</p>
@@ -382,7 +381,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                           value={form.maxDiscount}
                           onChange={(e) => setField('maxDiscount', e.target.value)}
                           placeholder="0,00"
-                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                         />
                       </div>
                       <p className="mt-1 text-xs text-[#9ca3af]">Limita o desconto do cupom caso o valor percentual ultrapasse este teto.</p>
@@ -401,7 +400,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                         value={form.usageLimit}
                         onChange={(e) => setField('usageLimit', e.target.value)}
                         placeholder="Ex: 50"
-                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
                       />
                       <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-[#9ca3af]">
                         <FiHash size={14} />
@@ -421,7 +420,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                           type="datetime-local"
                           value={form.startsAt}
                           onChange={(e) => setField('startsAt', e.target.value)}
-                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316]"
+                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                         />
                       </div>
                     </div>
@@ -434,16 +433,16 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                           type="datetime-local"
                           value={form.expiresAt}
                           onChange={(e) => setField('expiresAt', e.target.value)}
-                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316]"
+                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Status Inicial / Toggle */}
-                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:border-orange-100 hover:bg-orange-50/30">
+                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:border-orange-100 hover:bg-orange-50/30 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10">
                     <div>
-                      <p className="text-sm font-black text-[#111827]">Cupom ativo</p>
+                      <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Cupom ativo</p>
                       <p className="mt-0.5 text-xs text-[#9ca3af]">Indica se o cupom pode ser buscado e aplicado por clientes</p>
                     </div>
                     <div className="relative shrink-0">
@@ -485,8 +484,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                           key={opt.id}
                           className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition ${
                             form.appliesTo === opt.id
-                              ? 'border-[#f97316] bg-orange-50/20'
-                              : 'border-gray-100 bg-gray-50 hover:bg-gray-100'
+                              ? 'border-[#f97316] bg-orange-50/20 dark:bg-orange-500/10'
+                              : 'border-gray-100 bg-gray-50 hover:bg-gray-100 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-800'
                           }`}
                         >
                           <input
@@ -501,8 +500,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                             className="mt-1 accent-[#f97316]"
                           />
                           <div>
-                            <p className="text-sm font-black text-[#111827]">{opt.label}</p>
-                            <p className="mt-0.5 text-xs text-[#6b7280]">{opt.desc}</p>
+                            <p className="text-sm font-black text-[#111827] dark:text-zinc-100">{opt.label}</p>
+                            <p className="mt-0.5 text-xs text-[#6b7280] dark:text-zinc-400">{opt.desc}</p>
                           </div>
                         </label>
                       ))}
@@ -531,10 +530,10 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                         placeholder=" Buscar produto por nome..."
                         value={productSearch}
                         onChange={(e) => setProductSearch(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316]"
+                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                       />
 
-                      <div className="max-h-[300px] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 space-y-1 [scrollbar-width:thin]">
+                      <div className="max-h-[300px] space-y-1 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950 [scrollbar-width:thin]">
                         {filteredProducts.length === 0 ? (
                           <p className="p-4 text-center text-xs font-bold text-[#9ca3af]">Nenhum produto encontrado.</p>
                         ) : (
@@ -547,8 +546,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                             return (
                               <label
                                 key={p.id}
-                                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl p-3 transition hover:bg-gray-50 ${
-                                  isChecked ? 'bg-orange-50/10' : ''
+                                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl p-3 transition hover:bg-gray-50 dark:hover:bg-zinc-800 ${
+                                  isChecked ? 'bg-orange-50/10 dark:bg-orange-500/10' : ''
                                 }`}
                               >
                                 <div className="flex items-center gap-3">
@@ -564,7 +563,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                                     className="accent-[#f97316] h-4 w-4 shrink-0 rounded"
                                   />
                                   <div className="min-w-0">
-                                    <p className="truncate text-xs font-black text-[#111827]">{p.name}</p>
+                                    <p className="truncate text-xs font-black text-[#111827] dark:text-zinc-100">{p.name}</p>
                                     <div className="mt-1 flex flex-wrap gap-1">
                                       {doesNotAccept && (
                                         <span className="rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-black text-red-500">
@@ -599,12 +598,12 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
             </div>
 
             {/* Footer */}
-            <div className="flex shrink-0 gap-3 border-t border-gray-100 px-5 py-4 bg-white">
+            <div className="flex shrink-0 gap-3 border-t border-gray-100 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 dark:border-zinc-800 dark:bg-zinc-900">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={saving}
-                className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60"
+                className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Cancelar
               </button>
@@ -612,7 +611,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !form.code.trim()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60"
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60 dark:shadow-orange-950/50"
               >
                 {saving ? (
                   <>

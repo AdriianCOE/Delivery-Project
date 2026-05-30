@@ -909,7 +909,10 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
 
   if (activeNeighborhoods.length > 0) {
     const match = activeNeighborhoods.find((item) => item.normalized === normalizeForMatch(cleanNeighborhood))
-    if (!match) fail('failed-precondition', 'Bairro indisponivel para entrega.')
+    if (!match) {
+      const availableNeighborhoods = activeNeighborhoods.map((item) => item.name).join(', ')
+      fail('failed-precondition', `A loja entrega apenas em: ${availableNeighborhoods}.`)
+    }
     return { deliveryType: 'delivery', neighborhood: match.name, deliveryFeeCents: Math.max(0, match.feeCents) }
   }
 

@@ -1,0 +1,2213 @@
+diff --git a/AMANHA.txt b/AMANHA.txt
+deleted file mode 100644
+index e2ea877f..00000000
+--- a/AMANHA.txt
++++ /dev/null
+@@ -1,844 +0,0 @@
+-1. Email de Boas-vindas só ser enviado após a confirmação e verificação do numero e email...
+-2. Toast de que não pode sair do billing page que teoricamente existe	 não tá aparecendo.
+-3. Tela de configurar pagamento em billing page aparece lá em baixo e é necessário descer muito o scroll ao invés de aparecer no meio da tela pro cliente
+-4. Tela de configurar pagamento onde coloca cpf ir no modelo automático no padrão brasileiro, 092.953.875-70 exemplo
+-5. Parece que a tela de configurar pagamento não ta adaptado pro mobile.
+-6. colocar útil do scroll.js no billing page mais na tela de configurar pagamento (scroll.js aparentemente serve pra levar o scroll pra onde deu erro e ficar a mostra na cara.)
+-7. Se CPF colocado errado o asaas não leva pro checkout, necessário uma verificação de cpf.
+-8. Em /dashboard/billing depois do cliente voltar após configurar o meio de pagamento, mostrar um "parabéns vc configorou e agora já pode começar a vender" e um botão pra ir pro dashboard onde já tem um checklist pro lojista.
+-9. Cardapio de loja recém criado como "localhost:5173/pizzaria-da-lombra" teoricamente era pra ir mas não funciona só se for o "localhost:5173/Ys4iDDnrqMljtsTS1rux"
+-10. Parte de introdução do merchantdashboard como "Bem-vindo à sua nova loja!" não foi adaptada pro dark e light mode.
+-11. em Settings.jsx limitar os caracteres pra já na escrita ir no padrão brasileiro como já existe no código um útil ou hook disso. (79) 99978-6988 ex.
+-12. Em Settings.jsx tirar a opção de abrir loja "loja aberta agora"
+-13. Janela de configurar o Gerar QR Code Pix manual já ser obrigatória se em Pagamentos o pix já tiver permitido. logo não ser necessário o "Gerar QR Code Pix manual".
+-14. Toast ou reação de quando salva em settigns aparecer na tela do cliente e não em algum lugar da pagina.
+-15. No gerenciamento de cardápio, tela de nova categoria aparecer no centro da tela do cliente sem ter que precisar scrollar.
+-16. No gerenciamento de cardápio, tela de novo produto embelezar pra design premium com funcionalidades e adaptar tanto pra mobile e pra dark e light mode (esse azul não tem em mais nenhum lugar a não ser ai, precisa ser removido).
+-17. Em gerenciamento de cardápio na hora de criar um produto em preços aonde colocar o valor já vim com decimais.
+-18. Toast de "Produto Criado!", "Cupom Criado" etc deve aparecer na tela do cliente sem precisar scrollar em algum lugar aleatório da tela com design premium, e sem ficar cortado que nem agora.
+-19. Em gerenciamento de assinatura não era pra teoricamente conseguir solicitar cancelamento e continuar com o trial pra não ser descontado por exemplo? e ainda poder mudar a data do vencimento sem poder da golpe?
+-20. Pra que serve o atualizar dados de cobrança se ele só volta pro billing page?
+-21. em gerenciamento de cardápio a mesma coisa só que em editar bairro etc, a tela de edição aparece lá em baixo e precisa ser scrollado, ela na verdade tem que aparecer de cara na tela do cliente.
+-22. Tela de novo cupom ser parecido com o de editar frete porem com as funcionalidades já existe de cupom, apenas o design.
+-23. em criação de cupons valores de $ já ser em decimais também.
+-24. adaptar pro dark e light mode também criação de cupons.
+-25. botão de cancelar e criar cupom fica lá em baixo precisando scrollar muito. por isso deve parecer com o design da parte de editar frete.
+-26. Badges de destaque, promoção, aceita cupons etc que aparece na hora de editar cardápio não aparece no FrontPage do cardápio em si deve tá diferente os códigos.
+-27. Animação na hora de abrir o carrinho e trocar de sessão dentro do carrinho e nos textos também e tentar adicionar funcionalidades pra deixar fluido e interativo.
+-28. Fiz um pedido de 30 reais e tentei usar um cupom chamado pizza20 que dá 20% acima de 50 reais mínimo gasto ele deu "Subtotal elegível abaixo do pedido mínimo do cupom." ao invés de quanto precisava adicionar pra conseguir usar o cupom, então eu voltei e adicionei mais uma pizza de 30, ter uma animação de cupom funcionado, porem quando voltei e tirei uma pizza denovo ficando só com 1, o cupom continuou lá e ficou muito mais barato. o seja bug mesmo estando abaixo de 50 como ele já tava la ele não saiu ficando abaixo de 50.
+-29. Colocar informação no carrinho que entrega só nos bairros listados.
+-30. CEP parece que não ta funcionando, coloquei só o bairro 13 de julho que o restaurante entrega, coloquei o cep 49020-300 que é da 13 de julho e ainda diz que "A loja não entrega nesse bairro.".
+-
+-31. Parei por aqui pois não consigo prosseguir pra fazer o pedido.
+-
+-32. Avaliações tambem tem que ter a bolinha de notificação
+-
+- Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+-:5173/onboarding:1 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+- [CategoryEditorDrawer] Salvando categoria scope: [object Object]
+- [ProductEditorDrawer] Salvando produto scope: [object Object]
+-southamerica-east1-borapedir-f529a.cloudfunctions.net/createPaymentMethodUpdateCheckout:1  Failed to load resource: the server responded with a status of 429 ()
+- [SubscriptionManagement] createPaymentMethodUpdateCheckout failed or not deployed. FirebaseError: Aguarde alguns segundos antes de tentar novamente.
+-(anonymous) @ @sentry_react.js?v=9a0d4ced:8172
+-menu?tab=entrega:1 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=mDrZlQKs9SEG-Iry6SOM12FCpbF5OTLFqXRGe-yH57oyk_IwZ20Gww&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=RXEg0nZlMq_sxnf9Ax3waQ&AID=49&CI=0&TYPE=xmlhttp&zx=ci6b3130tpoe&t=1:1  Failed to load resource: net::ERR_QUIC_PROTOCOL_ERROR.QUIC_TOO_MANY_RTOS
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=rR_-vngZRDRd95p7BYm5p_UVe1P9JIbtWMRj8hySguPjTgeTcDj0wA&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=xLR_BLFnaxZ-xsTwTxyPeQ&AID=81&CI=0&TYPE=xmlhttp&zx=7wm90irf9gwo&t=1:1  Failed to load resource: net::ERR_QUIC_PROTOCOL_ERROR.QUIC_TOO_MANY_RTOS
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=mDrZlQKs9SEG-Iry6SOM12FCpbF5OTLFqXRGe-yH57oyk_IwZ20Gww&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=RXEg0nZlMq_sxnf9Ax3waQ&AID=50&CI=0&TYPE=xmlhttp&zx=7u2bmhsx26i8&t=1:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=rR_-vngZRDRd95p7BYm5p_UVe1P9JIbtWMRj8hySguPjTgeTcDj0wA&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=xLR_BLFnaxZ-xsTwTxyPeQ&AID=83&CI=0&TYPE=xmlhttp&zx=vgb3zj33eysq&t=1:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=mDrZlQKs9SEG-Iry6SOM12FCpbF5OTLFqXRGe-yH57oyk_IwZ20Gww&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=RXEg0nZlMq_sxnf9Ax3waQ&AID=50&CI=0&TYPE=xmlhttp&zx=ycmg6dsldzvl&t=2:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=rR_-vngZRDRd95p7BYm5p_UVe1P9JIbtWMRj8hySguPjTgeTcDj0wA&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=xLR_BLFnaxZ-xsTwTxyPeQ&AID=83&CI=0&TYPE=xmlhttp&zx=pyk45pth9vy6&t=2:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=rR_-vngZRDRd95p7BYm5p_UVe1P9JIbtWMRj8hySguPjTgeTcDj0wA&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=xLR_BLFnaxZ-xsTwTxyPeQ&AID=83&CI=0&TYPE=xmlhttp&zx=7qp0xb1urjx9&t=3:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=mDrZlQKs9SEG-Iry6SOM12FCpbF5OTLFqXRGe-yH57oyk_IwZ20Gww&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=RXEg0nZlMq_sxnf9Ax3waQ&AID=50&CI=0&TYPE=xmlhttp&zx=35wd5daekhh6&t=3:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=rR_-vngZRDRd95p7BYm5p_UVe1P9JIbtWMRj8hySguPjTgeTcDj0wA&VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=rpc&SID=xLR_BLFnaxZ-xsTwTxyPeQ&AID=83&CI=0&TYPE=xmlhttp&zx=lfeh6a27t3t9&t=4:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+- [2026-05-30T04:15:01.176Z]  @firebase/firestore: Firestore (12.12.0): WebChannelConnection RPC 'Listen' stream 0x7370e211 transport errored. Name: undefined Message: undefined
+-(anonymous) @ @sentry_react.js?v=9a0d4ced:8172
+-o4511407910092800.ingest.us.sentry.io/api/4511407911469056/envelope/?sentry_version=7&sentry_key=8a57be88e55664b80b32f26eeda780e4&sentry_client=sentry.javascript.react%2F10.53.1:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-o4511407910092800.ingest.us.sentry.io/api/4511407911469056/envelope/?sentry_version=7&sentry_key=8a57be88e55664b80b32f26eeda780e4&sentry_client=sentry.javascript.react%2F10.53.1:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-o4511407910092800.ingest.us.sentry.io/api/4511407911469056/envelope/?sentry_version=7&sentry_key=8a57be88e55664b80b32f26eeda780e4&sentry_client=sentry.javascript.react%2F10.53.1:1  Failed to load resource: net::ERR_CONNECTION_TIMED_OUT
+-firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&RID=86214&CVER=22&X-HTTP-Session-Id=gsessionid&zx=nhbrh84577tx&t=1:1  Failed to load resource: net::ERR_QUIC_PROTOCOL_ERROR.QUIC_NETWORK_IDLE_TIMEOUT
+- [2026-05-30T04:15:05.197Z]  @firebase/firestore: Firestore (12.12.0): WebChannelConnection RPC 'Listen' stream 0x7370e212 transport errored. Name: undefined Message: undefined
+-(anonymous) @ @sentry_react.js?v=9a0d4ced:8172
+-firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fborapedir-f529a%2Fdatabases%2F(default)&gsessionid=GU7XCAwYF2KkHIaSjr-P6S3Jxw8FCvAG_vYYspJ2vwrDqcPy3o0hhg&SID=nnp4dDdM4da_UY6aLf-FWQ&RID=68724&TYPE=terminate&zx=ttqfo29sfvob:1  Failed to load resource: the server responded with a status of 400 ()
+-
+-
+-
+-
+-
+-0---------------
+-
+-
+-
+-
+-
+-
+-Você é lead dev sênior no projeto PratoBy, React + Vite + Firebase + Firestore + Cloud Functions v2.
+-
+-Contexto:
+-Durante testes reais do MVP, apareceram bugs bloqueadores na loja pública e no checkout do cliente.
+-
+-Problemas observados:
+-
+-1. Loja nova “Lanchonete do João” gerou o slug `/lanchonete-do-joao`, mas esse link dizia que o cardápio não existia.
+-2. A mesma loja abre normalmente pelo ID `/2pdPYIKOofJjdRwvCKad`.
+-3. Isso indica problema de resolução/materialização do slug público.
+-4. Cupom com pedido mínimo continua aplicado mesmo quando o carrinho volta abaixo do mínimo.
+-5. Carrinho/checkout não explica claramente quais bairros são atendidos.
+-6. CEP/bairro válido, como bairro “13 de Julho”, pode estar sendo recusado por diferença de acento, maiúscula/minúscula ou normalização.
+-7. Cliente pode ficar impedido de prosseguir pedido por erro de CEP/bairro/cupom.
+-
+-Objetivo deste patch:
+-Garantir que o cliente consiga:
+-
+-* abrir loja pública por slug e por ID;
+-* ver cardápio corretamente;
+-* aplicar cupom corretamente;
+-* perder desconto automaticamente se o carrinho ficar abaixo do mínimo;
+-* validar CEP/bairro corretamente;
+-* prosseguir pedido quando a entrega for válida.
+-
+-Arquivos para analisar:
+-
+-* src/pages/store/StoreFrontPage.jsx
+-* src/components/store/CartDrawer.jsx
+-* src/components/store/ProductCard.jsx
+-* src/utils/storeIdentity.js
+-* src/utils/coupons.js
+-* src/utils/checkoutValidation.js
+-* src/utils/orderItems.js
+-* functions/index.js
+-* functions/publicOrder.js
+-* functions/scripts/backfillPublicCatalog.js
+-* firestore.rules
+-* firestore.indexes.json
+-
+-Regras obrigatórias:
+-
+-1. Não implementar WhatsApp Cloud API.
+-2. Não implementar FCM.
+-3. Não mexer em billing/Asaas.
+-4. Não afrouxar firestore.rules.
+-5. Não expor dados sensíveis em publicStores.
+-6. Não duplicar catálogo em publicStores/{slug}; manter publicStores/{storeId} como canônico.
+-7. Não confiar no frontend para preço/cupom final; backend continua fonte da verdade.
+-8. Não reescrever StoreFrontPage inteiro sem necessidade.
+-9. Build e ESLint precisam passar.
+-
+-Parte A — Corrigir slug público
+-
+-Situação:
+-`/2pdPYIKOofJjdRwvCKad` abre o cardápio, mas `/lanchonete-do-joao` não abre.
+-
+-Estratégia:
+-
+-* `publicStores/{storeId}` deve continuar sendo o documento canônico.
+-* Slug deve resolver para o docId canônico.
+-* Produtos e categorias devem ser carregados usando o docId/storeId canônico, nunca o slug cru da URL.
+-
+-Verificar/corrigir em StoreFrontPage.jsx:
+-
+-1. Ao receber `storeSlugOrId` da rota, limpar e normalizar.
+-2. Tentar resolver:
+-
+-   * publicStores.doc(cleanInput)
+-   * query publicStores where storeSlug == cleanInput
+-   * query publicStores where slug == cleanInput
+-   * fallback callable getPublicStoreProfile com storeSlug/slug/storeId
+-3. Quando resolver por query/callable, salvar o docId canônico:
+-
+-   * resolvedStoreId
+-   * canonicalStoreId
+-   * publicStoreDocId
+-4. Carregar subcoleções usando o ID canônico:
+-
+-   * publicStores/{canonicalStoreId}/products
+-   * publicStores/{canonicalStoreId}/categories
+-5. Não mostrar “cardápio não existe” se o perfil foi resolvido mas o catálogo local falhou; tentar fallback getPublicCatalog com storeId canônico.
+-
+-Verificar/corrigir em functions/index.js:
+-
+-1. getPublicStoreProfile deve aceitar:
+-
+-   * storeId
+-   * storeSlug
+-   * slug
+-   * storeDocId
+-2. Resposta pública deve incluir:
+-
+-   * id
+-   * docId
+-   * storeId
+-   * storeDocId
+-   * slug
+-   * storeSlug
+-   * storeKeys
+-   * publicDataSource
+-3. Não retornar campos sensíveis.
+-
+-Verificar/corrigir materialização:
+-publicStores/{storeId} deve conter:
+-
+-* storeId
+-* storeDocId
+-* docId
+-* slug
+-* storeSlug
+-* storeKeys incluindo storeId, slug e storeSlug
+-* publicDataSource
+-* dados públicos necessários da loja
+-
+-Não copiar:
+-
+-* ownerUid
+-* ownerEmail
+-* allowedUserIds
+-* merchantUids
+-* billing
+-* Asaas
+-* subscription
+-* dados internos/admin
+-
+-Backfill:
+-Atualizar functions/scripts/backfillPublicCatalog.js para garantir slug/storeSlug/storeKeys consistentes.
+-
+-Validar especificamente a loja:
+-
+-* storeId: 2pdPYIKOofJjdRwvCKad
+-* slug esperado: lanchonete-do-joao
+-
+-Comandos esperados:
+-cd functions
+-npm run backfill:public-catalog -- --dry-run --storeId=2pdPYIKOofJjdRwvCKad
+-npm run backfill:public-catalog -- --storeId=2pdPYIKOofJjdRwvCKad
+-
+-Se falhar por ADC/local credentials, documentar claramente e orientar rodar após `gcloud auth application-default login`.
+-
+-Parte B — Corrigir cupom com pedido mínimo
+-
+-Bug:
+-Cupom com mínimo de R$ 50 é aplicado quando carrinho passa de R$ 50, mas continua aplicado se o cliente remove item e subtotal volta para R$ 30.
+-
+-Corrigir:
+-
+-1. Sempre que carrinho mudar, revalidar cupom aplicado:
+-
+-   * quantidade alterada
+-   * item removido
+-   * adicionais/opções alterados
+-   * subtotal alterado
+-2. Se subtotal elegível ficar abaixo do mínimo:
+-
+-   * remover cupom automaticamente OU marcar cupom inválido e zerar desconto;
+-   * mostrar mensagem clara:
+-     “Faltam R$ X em produtos elegíveis para usar este cupom.”
+-3. Nunca manter desconto se regra do cupom não é mais satisfeita.
+-4. Backend/createPublicOrder deve continuar validando cupom e rejeitando desconto inválido.
+-5. Não recalcular preço final confiando no frontend; frontend apenas antecipa UX.
+-
+-Parte C — CEP/bairro e área de entrega
+-
+-Bug:
+-Bairro atendido, como “13 de Julho”, pode ser recusado.
+-
+-Corrigir:
+-
+-1. Criar/reusar normalização de bairro:
+-
+-   * trim
+-   * lower case
+-   * remover acentos
+-   * normalizar espaços
+-   * comparar “13 de julho” e “13 de Julho” como iguais
+-2. Se CEP retornar bairro, comparar bairro normalizado com bairros atendidos normalizados.
+-3. Se usuário digitar bairro manualmente, validar de forma clara.
+-4. Se API de CEP falhar, mostrar mensagem amigável e permitir entrada manual se o fluxo já permitir.
+-5. No carrinho/checkout, exibir claramente:
+-
+-   * “Entregamos apenas nos bairros: X, Y, Z.”
+-6. Se bairro não for atendido:
+-
+-   * “A loja entrega apenas em: X, Y, Z.”
+-7. Não bloquear bairro válido por acento/maiúscula/minúscula.
+-
+-Parte D — Prosseguir pedido
+-
+-Garantir que:
+-
+-1. Cliente com carrinho válido, bairro atendido e dados obrigatórios consegue prosseguir.
+-2. Cupom inválido não trava o cliente; apenas remove/zera desconto e explica.
+-3. CEP inválido não deixa a tela em estado impossível.
+-4. Botão de finalizar mostra erro visível na viewport.
+-5. Erros aparecem no campo correto e também em toast/alerta visível.
+-
+-Validação:
+-Rodar:
+-
+-* node --check functions/index.js
+-* node --check functions/publicOrder.js
+-* node --check functions/scripts/backfillPublicCatalog.js
+-* .\node_modules.bin\eslint.cmd . --quiet
+-* .\node_modules.bin\vite.cmd build
+-* firebase deploy --only firestore:rules --dry-run se rules forem tocadas
+-* firebase deploy --only hosting --dry-run
+-* firebase deploy --only functions:getPublicStoreProfile,functions:getPublicCatalog --dry-run se functions forem tocadas
+-
+-Testes manuais obrigatórios:
+-
+-1. Abrir `/lanchonete-do-joao` em aba anônima.
+-2. Abrir `/2pdPYIKOofJjdRwvCKad` em aba anônima.
+-3. Ambos devem mostrar a mesma loja.
+-4. Categorias e produtos devem aparecer.
+-5. Criar pedido pelo slug.
+-6. Confirmar pedido no dashboard.
+-7. Aplicar cupom com mínimo.
+-8. Reduzir carrinho abaixo do mínimo e confirmar que desconto some/invalida.
+-9. Ver mensagem “Faltam R$ X”.
+-10. Testar CEP/bairro “13 de Julho”.
+-11. Confirmar que cliente consegue prosseguir pedido quando bairro é atendido.
+-12. Confirmar que bairro não atendido mostra lista de bairros atendidos.
+-13. Build passa.
+-14. ESLint passa.
+-
+-Resumo final esperado:
+-
+-* causa raiz do slug não abrir;
+-* causa raiz do cupom continuar aplicado;
+-* causa raiz do bairro/CEP falhar;
+-* arquivos alterados;
+-* comandos rodados;
+-* se precisa rodar backfill;
+-* se precisa deploy de functions/hosting.
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-0--------------
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-Você é lead dev sênior no projeto PratoBy, React + Vite + Firebase + Firestore + Cloud Functions v2.
+-
+-Contexto:
+-Durante testes reais do MVP, apareceram bugs bloqueadores na loja pública e no checkout do cliente.
+-
+-Problemas observados:
+-
+-1. Loja nova “Lanchonete do João” gerou o slug `/lanchonete-do-joao`, mas esse link dizia que o cardápio não existia.
+-2. A mesma loja abre normalmente pelo ID `/2pdPYIKOofJjdRwvCKad`.
+-3. Isso indica problema de resolução/materialização do slug público.
+-4. Cupom com pedido mínimo continua aplicado mesmo quando o carrinho volta abaixo do mínimo.
+-5. Carrinho/checkout não explica claramente quais bairros são atendidos.
+-6. CEP/bairro válido, como bairro “13 de Julho”, pode estar sendo recusado por diferença de acento, maiúscula/minúscula ou normalização.
+-7. Cliente pode ficar impedido de prosseguir pedido por erro de CEP/bairro/cupom.
+-8. Avaliações tambem tem que ter a bolinha de notificação
+-
+-Objetivo deste patch:
+-Garantir que o cliente consiga:
+-
+-* abrir loja pública por slug e por ID;
+-* ver cardápio corretamente;
+-* aplicar cupom corretamente;
+-* perder desconto automaticamente se o carrinho ficar abaixo do mínimo;
+-* validar CEP/bairro corretamente;
+-* prosseguir pedido quando a entrega for válida.
+-
+-Arquivos para analisar:
+-
+-* src/pages/store/StoreFrontPage.jsx
+-* src/components/store/CartDrawer.jsx
+-* src/components/store/ProductCard.jsx
+-* src/utils/storeIdentity.js
+-* src/utils/coupons.js
+-* src/utils/checkoutValidation.js
+-* src/utils/orderItems.js
+-* functions/index.js
+-* functions/publicOrder.js
+-* functions/scripts/backfillPublicCatalog.js
+-* firestore.rules
+-* firestore.indexes.json
+-
+-Regras obrigatórias:
+-
+-1. Não implementar WhatsApp Cloud API.
+-2. Não implementar FCM.
+-3. Não mexer em billing/Asaas.
+-4. Não afrouxar firestore.rules.
+-5. Não expor dados sensíveis em publicStores.
+-6. Não duplicar catálogo em publicStores/{slug}; manter publicStores/{storeId} como canônico.
+-7. Não confiar no frontend para preço/cupom final; backend continua fonte da verdade.
+-8. Não reescrever StoreFrontPage inteiro sem necessidade.
+-9. Build e ESLint precisam passar.
+-
+-Parte A — Corrigir slug público
+-
+-Situação:
+-`/2pdPYIKOofJjdRwvCKad` abre o cardápio, mas `/lanchonete-do-joao` não abre.
+-
+-Estratégia:
+-
+-* `publicStores/{storeId}` deve continuar sendo o documento canônico.
+-* Slug deve resolver para o docId canônico.
+-* Produtos e categorias devem ser carregados usando o docId/storeId canônico, nunca o slug cru da URL.
+-
+-Verificar/corrigir em StoreFrontPage.jsx:
+-
+-1. Ao receber `storeSlugOrId` da rota, limpar e normalizar.
+-2. Tentar resolver:
+-
+-   * publicStores.doc(cleanInput)
+-   * query publicStores where storeSlug == cleanInput
+-   * query publicStores where slug == cleanInput
+-   * fallback callable getPublicStoreProfile com storeSlug/slug/storeId
+-3. Quando resolver por query/callable, salvar o docId canônico:
+-
+-   * resolvedStoreId
+-   * canonicalStoreId
+-   * publicStoreDocId
+-4. Carregar subcoleções usando o ID canônico:
+-
+-   * publicStores/{canonicalStoreId}/products
+-   * publicStores/{canonicalStoreId}/categories
+-5. Não mostrar “cardápio não existe” se o perfil foi resolvido mas o catálogo local falhou; tentar fallback getPublicCatalog com storeId canônico.
+-
+-Verificar/corrigir em functions/index.js:
+-
+-1. getPublicStoreProfile deve aceitar:
+-
+-   * storeId
+-   * storeSlug
+-   * slug
+-   * storeDocId
+-2. Resposta pública deve incluir:
+-
+-   * id
+-   * docId
+-   * storeId
+-   * storeDocId
+-   * slug
+-   * storeSlug
+-   * storeKeys
+-   * publicDataSource
+-3. Não retornar campos sensíveis.
+-
+-Verificar/corrigir materialização:
+-publicStores/{storeId} deve conter:
+-
+-* storeId
+-* storeDocId
+-* docId
+-* slug
+-* storeSlug
+-* storeKeys incluindo storeId, slug e storeSlug
+-* publicDataSource
+-* dados públicos necessários da loja
+-
+-Não copiar:
+-
+-* ownerUid
+-* ownerEmail
+-* allowedUserIds
+-* merchantUids
+-* billing
+-* Asaas
+-* subscription
+-* dados internos/admin
+-
+-Backfill:
+-Atualizar functions/scripts/backfillPublicCatalog.js para garantir slug/storeSlug/storeKeys consistentes.
+-
+-Validar especificamente a loja:
+-
+-* storeId: 2pdPYIKOofJjdRwvCKad
+-* slug esperado: lanchonete-do-joao
+-
+-Comandos esperados:
+-cd functions
+-npm run backfill:public-catalog -- --dry-run --storeId=2pdPYIKOofJjdRwvCKad
+-npm run backfill:public-catalog -- --storeId=2pdPYIKOofJjdRwvCKad
+-
+-Se falhar por ADC/local credentials, documentar claramente e orientar rodar após `gcloud auth application-default login`.
+-
+-Parte B — Corrigir cupom com pedido mínimo
+-
+-Bug:
+-Cupom com mínimo de R$ 50 é aplicado quando carrinho passa de R$ 50, mas continua aplicado se o cliente remove item e subtotal volta para R$ 30.
+-
+-Corrigir:
+-
+-1. Sempre que carrinho mudar, revalidar cupom aplicado:
+-
+-   * quantidade alterada
+-   * item removido
+-   * adicionais/opções alterados
+-   * subtotal alterado
+-2. Se subtotal elegível ficar abaixo do mínimo:
+-
+-   * remover cupom automaticamente OU marcar cupom inválido e zerar desconto;
+-   * mostrar mensagem clara:
+-     “Faltam R$ X em produtos elegíveis para usar este cupom.”
+-3. Nunca manter desconto se regra do cupom não é mais satisfeita.
+-4. Backend/createPublicOrder deve continuar validando cupom e rejeitando desconto inválido.
+-5. Não recalcular preço final confiando no frontend; frontend apenas antecipa UX.
+-
+-Parte C — CEP/bairro e área de entrega
+-
+-Bug:
+-Bairro atendido, como “13 de Julho”, pode ser recusado.
+-
+-Corrigir:
+-
+-1. Criar/reusar normalização de bairro:
+-
+-   * trim
+-   * lower case
+-   * remover acentos
+-   * normalizar espaços
+-   * comparar “13 de julho” e “13 de Julho” como iguais
+-2. Se CEP retornar bairro, comparar bairro normalizado com bairros atendidos normalizados.
+-3. Se usuário digitar bairro manualmente, validar de forma clara.
+-4. Se API de CEP falhar, mostrar mensagem amigável e permitir entrada manual se o fluxo já permitir.
+-5. No carrinho/checkout, exibir claramente:
+-
+-   * “Entregamos apenas nos bairros: X, Y, Z.”
+-6. Se bairro não for atendido:
+-
+-   * “A loja entrega apenas em: X, Y, Z.”
+-7. Não bloquear bairro válido por acento/maiúscula/minúscula.
+-
+-Parte D — Prosseguir pedido
+-
+-Garantir que:
+-
+-1. Cliente com carrinho válido, bairro atendido e dados obrigatórios consegue prosseguir.
+-2. Cupom inválido não trava o cliente; apenas remove/zera desconto e explica.
+-3. CEP inválido não deixa a tela em estado impossível.
+-4. Botão de finalizar mostra erro visível na viewport.
+-5. Erros aparecem no campo correto e também em toast/alerta visível.
+-
+-Validação:
+-Rodar:
+-
+-* node --check functions/index.js
+-* node --check functions/publicOrder.js
+-* node --check functions/scripts/backfillPublicCatalog.js
+-* .\node_modules.bin\eslint.cmd . --quiet
+-* .\node_modules.bin\vite.cmd build
+-* firebase deploy --only firestore:rules --dry-run se rules forem tocadas
+-* firebase deploy --only hosting --dry-run
+-* firebase deploy --only functions:getPublicStoreProfile,functions:getPublicCatalog --dry-run se functions forem tocadas
+-
+-Testes manuais obrigatórios:
+-
+-1. Abrir `/lanchonete-do-joao` em aba anônima.
+-2. Abrir `/2pdPYIKOofJjdRwvCKad` em aba anônima.
+-3. Ambos devem mostrar a mesma loja.
+-4. Categorias e produtos devem aparecer.
+-5. Criar pedido pelo slug.
+-6. Confirmar pedido no dashboard.
+-7. Aplicar cupom com mínimo.
+-8. Reduzir carrinho abaixo do mínimo e confirmar que desconto some/invalida.
+-9. Ver mensagem “Faltam R$ X”.
+-10. Testar CEP/bairro “13 de Julho”.
+-11. Confirmar que cliente consegue prosseguir pedido quando bairro é atendido.
+-12. Confirmar que bairro não atendido mostra lista de bairros atendidos.
+-13. Build passa.
+-14. ESLint passa.
+-
+-Resumo final esperado:
+-
+-* causa raiz do slug não abrir;
+-* causa raiz do cupom continuar aplicado;
+-* causa raiz do bairro/CEP falhar;
+-* arquivos alterados;
+-* comandos rodados;
+-* se precisa rodar backfill;
+-* se precisa deploy de functions/hosting.
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-0--------------------
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-Você é lead dev sênior no projeto PratoBy, React + Vite + Firebase + Firestore.
+-
+-Contexto:
+-Após corrigir os P0 de loja pública/checkout e billing, queremos melhorar a qualidade visual e operacional do dashboard do lojista. São ajustes próximos entre si: Settings, Pix, telefone, toasts, modais de cardápio, produto, categoria, bairro e cupom.
+-
+-Objetivo deste patch:
+-Melhorar UX/polimento do dashboard sem alterar regras sensíveis, sem mexer em backend desnecessariamente e sem quebrar mobile/dark mode.
+-
+-Problemas agrupados:
+-
+-1. Introdução “Bem-vindo à sua nova loja!” no MerchantDashboard não está adaptada para dark/light mode.
+-2. Settings precisa máscara brasileira para telefone.
+-3. Remover/tirar destaque da opção “loja aberta agora” no Settings, porque abrir/fechar loja já deve ser controlado em local mais apropriado.
+-4. Pix manual deve exigir dados obrigatórios quando Pix manual estiver ativado.
+-5. Toast de salvar Settings aparece fora da viewport ou sem destaque.
+-6. Modal nova categoria precisa ficar centralizado.
+-7. Modal novo produto precisa ficar premium/mobile/dark/light.
+-8. Campo preço precisa aceitar decimais corretamente.
+-9. Toast Produto Criado/Cupom Criado precisa ficar centralizado/premium.
+-10. Modal editar bairro precisa ficar centralizado.
+-11. Tela/modal novo cupom precisa ficar premium.
+-12. Campo valor do cupom precisa aceitar decimais corretamente.
+-13. Cupom precisa ficar bom em dark/light mode.
+-14. Botões cancelar/criar cupom precisam ficar visíveis sem scroll absurdo.
+-15. Badges de destaque/promoção/aceita cupons aparecem no editor mas não aparecem no cardápio público.
+-16. Animação/fluidez no carrinho, troca de sessão e textos pode melhorar.
+-
+-Arquivos para analisar:
+-
+-* src/pages/merchant/Settings.jsx
+-* src/pages/merchant/MerchantDashboard.jsx
+-* src/pages/merchant/MenuProductsTab.jsx
+-* src/pages/merchant/CouponsPage.jsx
+-* src/pages/merchant/DeliveryAreasPage.jsx
+-* src/pages/store/StoreFrontPage.jsx
+-* src/components/store/ProductCard.jsx
+-* src/components/store/CartDrawer.jsx
+-* src/components/ui/Toast.jsx
+-* src/components/ui/Modal.jsx
+-* src/utils/phone.js
+-* src/utils/money.js
+-* src/utils/scroll.js
+-
+-Regras obrigatórias:
+-
+-1. Não implementar WhatsApp Cloud API.
+-2. Não implementar FCM.
+-3. Não mexer em billing/Asaas.
+-4. Não alterar createPublicOrder.
+-5. Não afrouxar firestore.rules.
+-6. Não reescrever páginas inteiras.
+-7. Não adicionar biblioteca nova sem necessidade.
+-8. Preservar mobile.
+-9. Preservar dark mode.
+-10. Build e ESLint precisam passar.
+-
+-Parte A — MerchantDashboard dark/light
+-
+-Corrigir card/introdução:
+-“Bem-vindo à sua nova loja!”
+-
+-Requisitos:
+-
+-* legível no dark mode;
+-* legível no light mode;
+-* contraste correto;
+-* visual premium;
+-* não poluir dashboard.
+-
+-Parte B — Settings telefone, Pix e toast
+-
+-Telefone:
+-
+-1. Aplicar máscara brasileira:
+-
+-   * celular: (79) 99978-6984
+-   * fixo se aplicável: (79) 3333-3333
+-2. Permitir colar número com ou sem máscara.
+-3. Normalizar antes de salvar se backend já espera número limpo.
+-4. Não quebrar números existentes.
+-
+-Pix:
+-Importante:
+-Não confundir:
+-
+-* paymentPix = aceita Pix como forma de pagamento
+-* pixEnabled = Pix manual configurado com chave/dados para instrução ao cliente
+-
+-Corrigir/garantir:
+-
+-1. Se `pixEnabled === true`, exigir:
+-
+-   * pixKey
+-   * pixKeyType
+-   * pixMerchantName
+-   * pixMerchantCity
+-2. Se `paymentPix === true` mas `pixEnabled === false`, não exigir dados de Pix manual se a regra atual permitir Pix sem instrução manual.
+-3. Não salvar `pix.enabled` baseado em `paymentPix`.
+-4. Salvar `pix.enabled` baseado em `pixEnabled`.
+-5. Se chave Pix for telefone, validar telefone.
+-6. Mostrar erro visível e rolar até campo.
+-7. Não deixar salvar configuração inconsistente.
+-
+-Toast salvar Settings:
+-
+-* mostrar no centro/topo visível da viewport;
+-* funcionar mobile;
+-* funcionar dark/light;
+-* não aparecer lá embaixo.
+-
+-Loja aberta agora:
+-
+-* remover do Settings ou reduzir destaque se já existe controle correto em outro lugar;
+-* não voltar a usar updateDoc direto;
+-* manter updateStoreSettings como fonte segura.
+-
+-Parte C — Modais básicos centralizados
+-
+-Corrigir:
+-
+-1. Modal nova categoria centralizado.
+-2. Modal editar bairro centralizado.
+-3. Toasters de categoria/produto/cupom centralizados e premium.
+-
+-Requisitos:
+-
+-* overlay correto;
+-* max-height com scroll interno quando necessário;
+-* footer com botões visíveis;
+-* botão cancelar/criar sempre acessível;
+-* mobile ocupa largura adequada;
+-* dark/light ok.
+-
+-Parte D — Produto premium e preço decimal
+-
+-Modal novo produto:
+-
+-* visual premium;
+-* mobile-friendly;
+-* dark/light;
+-* campos agrupados;
+-* botões visíveis;
+-* não exigir scroll absurdo para salvar;
+-* validação clara.
+-
+-Campo preço:
+-
+-1. Aceitar entrada decimal brasileira:
+-
+-   * 12,50
+-   * 12.50
+-   * 1250 dependendo do componente atual, mas converter corretamente.
+-2. Exibir valor formatado.
+-3. Enviar para backend/Firestore no formato já usado pelo projeto.
+-4. Não quebrar produtos existentes.
+-5. Não criar cálculo financeiro novo inseguro.
+-
+-Parte E — Cupom premium e valor decimal
+-
+-Novo cupom:
+-
+-* visual premium;
+-* mobile-friendly;
+-* dark/light;
+-* botões cancelar/criar visíveis;
+-* errors visíveis.
+-
+-Campo valor:
+-
+-1. Aceitar decimal corretamente.
+-2. Para percentual, limitar a 0-100.
+-3. Para valor fixo, formatar moeda.
+-4. Não permitir valor negativo.
+-5. Não permitir cupom sem regra mínima se o projeto exige.
+-6. Toast de “Cupom criado” centralizado/premium.
+-
+-Parte F — Badges no StoreFront
+-
+-Problema:
+-Badges de destaque/promoção/aceita cupons aparecem no editor, mas não no cardápio público.
+-
+-Corrigir:
+-
+-1. Verificar quais campos existem no produto público:
+-
+-   * isFeatured
+-   * isPromotional
+-   * acceptsCoupons
+-   * badge
+-   * tags
+-   * discount
+-2. Garantir que materialização pública inclui apenas badges públicos seguros.
+-3. ProductCard/StoreFront deve renderizar badges:
+-
+-   * destaque
+-   * promoção
+-   * aceita cupom
+-4. Não mostrar badge se campo não existe.
+-5. Dark/light e mobile ok.
+-
+-Se precisar alterar materialização:
+-
+-* revisar functions/index.js e backfillPublicCatalog.js;
+-* não copiar dados privados;
+-* documentar se precisa backfill.
+-
+-Parte G — Carrinho e fluidez visual
+-
+-Melhorar sem exagerar:
+-
+-1. Animação suave ao abrir carrinho.
+-2. Transições leves ao trocar sessão/categoria.
+-3. Textos mais claros de carrinho vazio, entrega e cupom.
+-4. Não adicionar biblioteca nova.
+-5. Não prejudicar performance.
+-
+-Parte H — Validação
+-
+-Rodar:
+-
+-* node --check functions/index.js se materialização for alterada
+-* node --check functions/scripts/backfillPublicCatalog.js se backfill for alterado
+-* .\node_modules.bin\eslint.cmd . --quiet
+-* .\node_modules.bin\vite.cmd build
+-* firebase deploy --only hosting --dry-run
+-* firebase deploy --only functions:materializePublicStoreProfile,functions:reconcilePublicCatalog --dry-run se materialização for alterada
+-
+-Testes manuais:
+-
+-1. MerchantDashboard bem em dark/light.
+-2. Settings telefone mascara corretamente.
+-3. Settings salva sem confundir paymentPix e pixEnabled.
+-4. Pix manual ativo exige dados.
+-5. Pix manual inativo não exige dados indevidos.
+-6. Toast salvar Settings aparece visível.
+-7. Modal nova categoria centralizado.
+-8. Modal editar bairro centralizado.
+-9. Modal produto premium no mobile/dark/light.
+-10. Preço decimal salva corretamente.
+-11. Novo cupom premium no mobile/dark/light.
+-12. Valor do cupom decimal salva corretamente.
+-13. Botões de cupom visíveis.
+-14. Badges aparecem no StoreFront.
+-15. Carrinho abre com fluidez.
+-16. Build passa.
+-17. ESLint passa.
+-
+-Resumo final esperado:
+-
+-* arquivos alterados;
+-* quais modais/toasts foram corrigidos;
+-* como telefone/Pix foram tratados;
+-* se materialização pública foi alterada;
+-* se precisa backfill;
+-* validações executadas.
+diff --git a/firestore.indexes.json b/firestore.indexes.json
+index 9c87316c..081e1271 100644
+--- a/firestore.indexes.json
++++ b/firestore.indexes.json
+@@ -39,6 +39,14 @@
+         { "fieldPath": "storeId", "order": "ASCENDING" },
+         { "fieldPath": "active", "order": "ASCENDING" }
+       ]
++    },
++    {
++      "collectionGroup": "reviews",
++      "queryScope": "COLLECTION",
++      "fields": [
++        { "fieldPath": "storeId", "order": "ASCENDING" },
++        { "fieldPath": "createdAt", "order": "DESCENDING" }
++      ]
+     }
+   ],
+   "fieldOverrides": []
+diff --git a/functions/index.js b/functions/index.js
+index 9313110f..240f2d28 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -139,9 +139,10 @@ const PUBLIC_PRODUCT_FIELDS = [
+   'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'categoryId', 'category',
+   'categoryName', 'order', 'sortOrder', 'position', 'isActive', 'active', 'isVisible',
+   'visible', 'isDeleted', 'deletedAt', 'isAvailable', 'available', 'status',
+-  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isPromotion',
++  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
++  'isPopular', 'isPromotion', 'isPromotional',
+   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
+-  'unit', 'tags', 'availableDays', 'availability', 'stock',
++  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime',
+ ]
+ 
+ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+diff --git a/functions/publicOrder.js b/functions/publicOrder.js
+index b1f6aa99..3c0b7872 100644
+--- a/functions/publicOrder.js
++++ b/functions/publicOrder.js
+@@ -909,7 +909,10 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
+ 
+   if (activeNeighborhoods.length > 0) {
+     const match = activeNeighborhoods.find((item) => item.normalized === normalizeForMatch(cleanNeighborhood))
+-    if (!match) fail('failed-precondition', 'Bairro indisponivel para entrega.')
++    if (!match) {
++      const availableNeighborhoods = activeNeighborhoods.map((item) => item.name).join(', ')
++      fail('failed-precondition', `A loja entrega apenas em: ${availableNeighborhoods}.`)
++    }
+     return { deliveryType: 'delivery', neighborhood: match.name, deliveryFeeCents: Math.max(0, match.feeCents) }
+   }
+ 
+diff --git a/functions/scripts/backfillPublicCatalog.js b/functions/scripts/backfillPublicCatalog.js
+index fafd9f8d..873d81ec 100644
+--- a/functions/scripts/backfillPublicCatalog.js
++++ b/functions/scripts/backfillPublicCatalog.js
+@@ -195,6 +195,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
+     slug: data.slug || storeSlug,
+     storeSlug,
+     storeKeys,
++    publicDataSource: 'publicStores',
+     isOpen: data.isOpen !== false,
+     isActive: data.isActive !== false,
+     isBlocked: data.isBlocked === true,
+@@ -280,7 +281,9 @@ function buildPublicProduct(data = {}, productId, storeId) {
+       'status',
+       'showInStorefront',
+       'isFeatured',
++      'isPopular',
+       'isPromotion',
++      'isPromotional',
+       'promotion',
+       'acceptsCoupons',
+       'acceptsCoupon',
+diff --git a/src/hooks/useDashboardNotifications.js b/src/hooks/useDashboardNotifications.js
+index 831bf535..291a5562 100644
+--- a/src/hooks/useDashboardNotifications.js
++++ b/src/hooks/useDashboardNotifications.js
+@@ -1,5 +1,5 @@
+ import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+-import { doc, onSnapshot } from 'firebase/firestore'
++import { collection, doc, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+ 
+ import { db } from '../services/firebase'
+ import { useAuth } from '../contexts/AuthContext'
+@@ -76,6 +76,7 @@ export function useDashboardNotifications() {
+   const [store, setStore] = useState(null)
+   const [loading, setLoading] = useState(true)
+   const [localNotifications, setLocalNotifications] = useState([])
++  const [reviewNotifications, setReviewNotifications] = useState([])
+   const [readState, setReadState] = useState(() => loadNotificationReadState(null, null))
+ 
+   const activeStoreId = useMemo(() => resolveActiveStoreId(userData), [userData])
+@@ -95,6 +96,54 @@ export function useDashboardNotifications() {
+     setLocalNotifications([])
+   }, [activeStoreId])
+ 
++  useEffect(() => {
++    if (!uid || !activeStoreId || user?.isAnonymous) {
++      // eslint-disable-next-line react-hooks/set-state-in-effect
++      setReviewNotifications([])
++      return undefined
++    }
++
++    const reviewsQuery = query(
++      collection(db, 'reviews'),
++      where('storeId', '==', activeStoreId),
++      orderBy('createdAt', 'desc'),
++      limit(50)
++    )
++
++    const unsubscribe = onSnapshot(
++      reviewsQuery,
++      (snapshot) => {
++        setReviewNotifications(snapshot.docs.map((reviewDoc) => {
++          const review = reviewDoc.data() || {}
++          const rating = Number(review.rating || 0)
++
++          return {
++            id: `review:${reviewDoc.id}`,
++            area: 'reviews',
++            channel: 'firestore',
++            title: rating > 0 ? `Nova avaliação: ${rating} estrela${rating !== 1 ? 's' : ''}` : 'Nova avaliação recebida',
++            message: review.comment || 'Um cliente avaliou um pedido da sua loja.',
++            severity: rating > 0 && rating <= 3 ? 'warning' : 'info',
++            href: '/dashboard/reviews',
++            createdAt: review.createdAt || review.updatedAt,
++            sourceType: 'review',
++            sourceId: reviewDoc.id,
++          }
++        }))
++      },
++      (error) => {
++        if (error?.code === 'permission-denied') {
++          console.warn('[useDashboardNotifications] reviews listener denied for active store:', activeStoreId)
++        } else {
++          console.error('[useDashboardNotifications] error fetching reviews:', error)
++        }
++        setReviewNotifications([])
++      }
++    )
++
++    return () => unsubscribe()
++  }, [activeStoreId, uid, user?.isAnonymous])
++
+   const readIds = useMemo(() => new Set(getNotificationReadIds(readState)), [readState])
+   const preferences = useMemo(() => getNotificationPreferences(readState), [readState])
+ 
+@@ -317,7 +366,7 @@ export function useDashboardNotifications() {
+       })
+     }
+ 
+-    return [...list, ...localNotifications]
++    return [...list, ...reviewNotifications, ...localNotifications]
+       .map((notification) => {
+         const normalized = normalizeDashboardNotification(notification)
+         return {
+@@ -326,7 +375,7 @@ export function useDashboardNotifications() {
+         }
+       })
+       .sort((a, b) => b.createdAt - a.createdAt)
+-  }, [activeStoreId, loading, localNotifications, readIds, store, uid, userData])
++  }, [activeStoreId, loading, localNotifications, readIds, reviewNotifications, store, uid, userData])
+ 
+   const unreadNotifications = useMemo(() => {
+     return notifications.filter((notification) => !notification.read)
+diff --git a/src/pages/merchant/MerchantDashboard.jsx b/src/pages/merchant/MerchantDashboard.jsx
+index 083d49db..38b42267 100644
+--- a/src/pages/merchant/MerchantDashboard.jsx
++++ b/src/pages/merchant/MerchantDashboard.jsx
+@@ -1710,26 +1710,26 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+           />
+         ) : !loadingCatalog && !loadingOrders && !hasCatalog && orders.length === 0 ? (
+           <div className="mx-auto max-w-4xl pt-8">
+-            <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-100/50">
+-              <div className="bg-gradient-to-br from-orange-50 to-white px-8 py-10 sm:px-12 sm:py-16">
+-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-lg shadow-orange-200">
++            <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-100/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/20">
++              <div className="bg-gradient-to-br from-orange-50 to-white px-8 py-10 dark:from-zinc-900 dark:to-zinc-950 sm:px-12 sm:py-16">
++                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-lg shadow-orange-200 dark:shadow-orange-950/50">
+                   <FiPackage size={28} />
+                 </div>
+-                <h2 className="mt-6 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
++                <h2 className="mt-6 text-3xl font-black tracking-tight text-[#111827] dark:text-zinc-100 sm:text-4xl">
+                   Bem-vindo à sua nova loja!
+                 </h2>
+-                <p className="mt-4 max-w-xl text-lg leading-8 text-[#6b7280]">
++                <p className="mt-4 max-w-xl text-lg leading-8 text-[#6b7280] dark:text-zinc-400">
+                   Sua loja foi criada com sucesso e os {isTrialActive && trialDaysRemaining !== null ? `${trialDaysRemaining} dias de teste grátis` : 'dias de teste'} já estão ativos. Agora só falta configurar seu cardápio para começar a vender.
+                 </p>
+               </div>
+ 
+-              <div className="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-3">
+-                <div className="bg-white p-8">
+-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
++              <div className="grid gap-px bg-gray-100 dark:bg-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
++                <div className="bg-white p-8 dark:bg-zinc-900">
++                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
+                     <FiLayout size={24} />
+                   </div>
+-                  <h3 className="mt-5 text-lg font-black text-[#111827]">Configure sua loja</h3>
+-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
++                  <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">Configure sua loja</h3>
++                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
+                     Acesse as configurações para adicionar sua logo, banner e horários de funcionamento.
+                   </p>
+                   <Link to="/dashboard/settings" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
+@@ -1737,12 +1737,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+                   </Link>
+                 </div>
+ 
+-                <div className="bg-white p-8">
+-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
++                <div className="bg-white p-8 dark:bg-zinc-900">
++                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
+                     <FiLayout size={24} />
+                   </div>
+-                  <h3 className="mt-5 text-lg font-black text-[#111827]">Adicione sua primeira categoria</h3>
+-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
++                  <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">Adicione sua primeira categoria</h3>
++                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
+                     Crie categorias como "Pizzas", "Bebidas" ou "Promoções" para organizar seu cardápio.
+                   </p>
+                   <Link to="/dashboard/menu" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
+@@ -1750,12 +1750,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+                   </Link>
+                 </div>
+ 
+-                <div className="bg-white p-8 sm:col-span-2 lg:col-span-1">
+-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]">
++                <div className="bg-white p-8 dark:bg-zinc-900 sm:col-span-2 lg:col-span-1">
++                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
+                     <FiPackage size={24} />
+                   </div>
+-                  <h3 className="mt-5 text-lg font-black text-[#111827]">Cadastre seu primeiro produto</h3>
+-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
++                  <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">Cadastre seu primeiro produto</h3>
++                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
+                     Adicione fotos atraentes, preços e descrições para deixar os clientes com água na boca.
+                   </p>
+                   <Link to="/dashboard/menu" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#f97316] hover:text-[#ea580c]">
+@@ -1764,11 +1764,11 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+                 </div>
+               </div>
+ 
+-              <div className="border-t border-gray-100 bg-gray-50 px-8 py-6 sm:px-12">
++              <div className="border-t border-gray-100 bg-gray-50 px-8 py-6 dark:border-zinc-800 dark:bg-zinc-950/60 sm:px-12">
+                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                   <div>
+-                    <h4 className="text-sm font-black text-[#111827]">Abra a loja quando estiver pronta</h4>
+-                    <p className="mt-1 text-sm text-[#6b7280]">Sua loja nasce fechada para você arrumar a casa primeiro.</p>
++                    <h4 className="text-sm font-black text-[#111827] dark:text-zinc-100">Abra a loja quando estiver pronta</h4>
++                    <p className="mt-1 text-sm text-[#6b7280] dark:text-zinc-400">Sua loja nasce fechada para você arrumar a casa primeiro.</p>
+                   </div>
+                   <button
+                     type="button"
+diff --git a/src/pages/merchant/Settings.jsx b/src/pages/merchant/Settings.jsx
+index cfc8003c..e3a5e9ba 100644
+--- a/src/pages/merchant/Settings.jsx
++++ b/src/pages/merchant/Settings.jsx
+@@ -483,23 +483,23 @@ function Toast({ toast, onClose }) {
+   const isSuccess = toast.type === 'success'
+ 
+   return (
+-    <div className="fixed right-4 top-4 max-sm:top-auto max-sm:bottom-4 max-sm:right-4 max-sm:left-4 z-50 max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200">
++    <div className="fixed left-1/2 top-5 z-[200] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/30">
+       <div className="flex items-start gap-3">
+         <div
+           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+             isSuccess
+-              ? 'bg-orange-50 text-[#f97316]'
+-              : 'bg-red-50 text-red-600'
++              ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10'
++              : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+           }`}
+         >
+           {isSuccess ? <FiCheckCircle /> : <FiAlertCircle />}
+         </div>
+ 
+         <div className="min-w-0 flex-1">
+-          <p className="text-sm font-black text-[#111827]">
++          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
+             {isSuccess ? 'Tudo certo' : 'Atenção'}
+           </p>
+-          <p className="mt-1 text-sm leading-5 text-[#6b7280]">
++          <p className="mt-1 text-sm leading-5 text-[#6b7280] dark:text-zinc-400">
+             {toast.message}
+           </p>
+         </div>
+@@ -507,7 +507,7 @@ function Toast({ toast, onClose }) {
+         <button
+           type="button"
+           onClick={onClose}
+-          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-[#111827]"
++          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-[#111827] dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+         >
+           <FiX />
+         </button>
+@@ -999,29 +999,37 @@ export default function Settings() {
+       const whatsapp = normalizeBrazilianPhoneForWhatsApp(form.whatsapp)
+       const logoUrl = sanitizeImageUrl(form.logoUrl)
+       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
++      let normalizedPixKey = sanitizeTextField(form.pixKey, 120)
+ 
+       if (logoUrl === null || bannerUrl === null) {
+         throw new Error('Use imagens HTTPS do Cloudinary ou caminhos internos do PratoBy.')
+       }
+ 
+-          if (form.pixEnabled) {
+-      if (!form.pixKey?.trim() || !form.pixMerchantName?.trim() || !form.pixMerchantCity?.trim()) {
+-        showToast('error', 'Preencha todos os dados do Pix manual.')
+-        scrollToFirstError()
+-        return
+-      }
+-      
+-      if (form.pixKeyType === 'phone') {
+-        const validatedPixPhone = validateBrazilianMobilePhone(form.pixKey)
+-        if (!validatedPixPhone.ok) {
+-           showToast('error', 'A chave Pix (Telefone) informada é inválida.')
+-           scrollToFirstError()
+-           return
++      if (form.pixEnabled) {
++        if (
++          !['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType) ||
++          !form.pixKey?.trim() ||
++          !form.pixMerchantName?.trim() ||
++          !form.pixMerchantCity?.trim()
++        ) {
++          showToast('error', 'Preencha todos os dados do Pix manual.')
++          scrollToFirstError()
++          return
++        }
++
++        if (form.pixKeyType === 'phone') {
++          const validatedPixPhone = validateBrazilianMobilePhone(form.pixKey)
++          if (!validatedPixPhone.ok) {
++            showToast('error', 'A chave Pix (Telefone) informada é inválida.')
++            scrollToFirstError()
++            return
++          }
++
++          normalizedPixKey = validatedPixPhone.phoneE164
+         }
+       }
+-    }
+ 
+-    if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
++      if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
+         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
+       }
+ 
+@@ -1085,7 +1093,6 @@ export default function Settings() {
+           instagram,
+         },
+ 
+-        isOpen: Boolean(form.isOpen),
+         isActive: Boolean(form.isActive),
+ 
+         activeDays,
+@@ -1109,7 +1116,7 @@ export default function Settings() {
+       },
+       pix: {
+         enabled: Boolean(form.pixEnabled),
+-        key: sanitizeTextField(form.pixKey, 120),
++        key: normalizedPixKey,
+         keyType: ['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType)
+           ? form.pixKeyType
+           : 'phone',
+@@ -1139,7 +1146,7 @@ export default function Settings() {
+       const ALLOWED_KEYS = [
+         'name', 'storeName', 'description', 'segment', 'category',
+         'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+-        'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
++        'phone', 'instagram', 'social', 'isActive', 'activeDays',
+         'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+         'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
+@@ -1281,8 +1288,8 @@ export default function Settings() {
+                   <p className="text-xs font-black uppercase text-[#6b7280]">
+                     Status
+                   </p>
+-                  <p className={`mt-1 text-sm font-black ${form.isOpen ? 'text-[#f97316]' : 'text-red-600'}`}>
+-                    {form.isOpen ? 'Aberta' : 'Fechada'}
++                  <p className={`mt-1 text-sm font-black ${selectedStore?.isOpen !== false ? 'text-[#f97316]' : 'text-red-600'}`}>
++                    {selectedStore?.isOpen !== false ? 'Aberta' : 'Fechada'}
+                   </p>
+                 </div>
+ 
+@@ -1603,12 +1610,12 @@ export default function Settings() {
+             description="Configurações gerais de atendimento. Itens, cupons e taxas por bairro ficam no editor do cardápio."
+           >
+             <div className="grid gap-4 md:grid-cols-2">
+-              <Toggle
+-                checked={form.isOpen}
+-                onChange={(value) => updateField('isOpen', value)}
+-                label="Loja aberta agora"
+-                description="Quando desligado, o cliente vê a loja como fechada."
+-              />
++              <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
++                <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Abrir ou fechar a loja</p>
++                <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
++                  Use o controle rápido no dashboard ou na página de pedidos para alterar o atendimento agora.
++                </p>
++              </div>
+ 
+               <Toggle
+                 checked={form.isActive}
+@@ -1733,8 +1740,8 @@ export default function Settings() {
+ 
+                   <Input
+                     label="Chave Pix"
+-                    aria-invalid={!form.pixKey?.trim() && form.paymentPix}
+-                    className={!form.pixKey?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
++                    aria-invalid={!form.pixKey?.trim() && form.pixEnabled}
++                    className={!form.pixKey?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                     value={form.pixKeyType === 'phone' ? formatBrazilianPhone(form.pixKey) : form.pixKey}
+                     onChange={(event) => {
+                       let val = event.target.value;
+@@ -1749,8 +1756,8 @@ export default function Settings() {
+ 
+                   <Input
+                     label="Nome no Pix"
+-                    aria-invalid={!form.pixMerchantName?.trim() && form.paymentPix}
+-                    className={!form.pixMerchantName?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
++                    aria-invalid={!form.pixMerchantName?.trim() && form.pixEnabled}
++                    className={!form.pixMerchantName?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                     value={form.pixMerchantName}
+                     onChange={(event) => updateField('pixMerchantName', event.target.value)}
+                     placeholder="Titular da conta"
+@@ -1758,8 +1765,8 @@ export default function Settings() {
+ 
+                   <Input
+                     label="Cidade no Pix"
+-                    aria-invalid={!form.pixMerchantCity?.trim() && form.paymentPix}
+-                    className={!form.pixMerchantCity?.trim() && form.paymentPix ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
++                    aria-invalid={!form.pixMerchantCity?.trim() && form.pixEnabled}
++                    className={!form.pixMerchantCity?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                     value={form.pixMerchantCity}
+                     onChange={(event) => updateField('pixMerchantCity', event.target.value)}
+                     placeholder="Ex: Aracaju"
+diff --git a/src/pages/merchant/menu/MenuManagementPage.jsx b/src/pages/merchant/menu/MenuManagementPage.jsx
+index eba65f4a..bed51ca8 100644
+--- a/src/pages/merchant/menu/MenuManagementPage.jsx
++++ b/src/pages/merchant/menu/MenuManagementPage.jsx
+@@ -55,8 +55,8 @@ function Toast({ toast, onClose }) {
+       initial={{ opacity: 0, y: 16, scale: 0.97 }}
+       animate={{ opacity: 1, y: 0, scale: 1 }}
+       exit={{ opacity: 0, y: 8 }}
+-      className={`fixed bottom-24 left-1/2 z-[200] flex w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-2xl shadow-gray-900/10 backdrop-blur-xl lg:bottom-6 ${
+-        isError ? 'border-red-100 text-red-700' : 'border-orange-100 text-[#111827]'
++      className={`fixed left-1/2 top-5 z-[200] flex w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-2xl shadow-gray-900/10 backdrop-blur-xl dark:bg-zinc-900 dark:shadow-black/30 ${
++        isError ? 'border-red-100 text-red-700 dark:border-red-500/30 dark:text-red-300' : 'border-orange-100 text-[#111827] dark:border-orange-500/30 dark:text-zinc-100'
+       }`}
+     >
+       {isError
+diff --git a/src/pages/merchant/menu/components/CategoryEditorDrawer.jsx b/src/pages/merchant/menu/components/CategoryEditorDrawer.jsx
+index 4dc75d76..4ee1c1f3 100644
+--- a/src/pages/merchant/menu/components/CategoryEditorDrawer.jsx
++++ b/src/pages/merchant/menu/components/CategoryEditorDrawer.jsx
+@@ -93,14 +93,14 @@ export default function CategoryEditorDrawer({ open, onClose, editingCategory, s
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.97, y: 10 }}
+               transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+-              className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto overflow-x-hidden rounded-[2rem] bg-white p-6 shadow-2xl [scrollbar-width:thin]"
++              className="relative max-h-[92dvh] w-full max-w-md overflow-y-auto overflow-x-hidden rounded-[2rem] border border-gray-100 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 [scrollbar-width:thin]"
+             >
+               <div className="mb-5 flex items-center justify-between">
+-                <h2 className="text-lg font-black text-[#111827]">
++                <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
+                   {editingCategory ? 'Editar categoria' : 'Nova categoria'}
+                 </h2>
+                 <button type="button" onClick={onClose}
+-                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100" aria-label="Fechar">
++                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label="Fechar">
+                   <FiX size={17} />
+                 </button>
+               </div>
+@@ -110,17 +110,17 @@ export default function CategoryEditorDrawer({ open, onClose, editingCategory, s
+                   <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">Nome *</label>
+                   <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                     placeholder="Ex: Hambúrgueres, Bebidas, Sobremesas..." maxLength={60} autoFocus
+-                    className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100" />
++                    className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20" />
+                 </div>
+                 <div>
+                   <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">Descrição (opcional)</label>
+                   <input type="text" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                     placeholder="Breve descrição" maxLength={200}
+-                    className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100" />
++                    className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20" />
+                 </div>
+-                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
++                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/70">
+                   <div>
+-                    <p className="text-sm font-black text-[#111827]">Categoria ativa</p>
++                    <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Categoria ativa</p>
+                     <p className="text-xs text-[#9ca3af]">Aparece na loja quando ativa</p>
+                   </div>
+                   <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+@@ -130,11 +130,11 @@ export default function CategoryEditorDrawer({ open, onClose, editingCategory, s
+ 
+               <div className="mt-5 flex gap-3">
+                 <button type="button" onClick={onClose} disabled={saving}
+-                  className="flex-1 rounded-2xl border border-gray-200 py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60">
++                  className="flex-1 rounded-2xl border border-gray-200 py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                   Cancelar
+                 </button>
+                 <button type="button" onClick={handleSave} disabled={saving || !form.name.trim()}
+-                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60">
++                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60 dark:shadow-orange-950/50">
+                   {saving
+                     ? <><FiLoader className="animate-spin" size={14} /> Salvando...</>
+                     : <><FiCheck size={14} />{editingCategory ? 'Salvar' : 'Criar'}</>
+diff --git a/src/pages/merchant/menu/components/CouponEditorDrawer.jsx b/src/pages/merchant/menu/components/CouponEditorDrawer.jsx
+index 66eb110a..34fb993a 100644
+--- a/src/pages/merchant/menu/components/CouponEditorDrawer.jsx
++++ b/src/pages/merchant/menu/components/CouponEditorDrawer.jsx
+@@ -93,7 +93,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+       return
+     }
+ 
+-    const valueNum = form.type === 'percent' ? Number(form.value) : parseCurrency(form.value)
++    const valueNum = parseCurrency(form.value)
+     if (Number.isNaN(valueNum) || valueNum <= 0) {
+       onToast({ type: 'error', message: 'O valor do desconto deve ser maior que zero.' })
+       return
+@@ -176,12 +176,12 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+             animate={{ x: 0 }}
+             exit={{ x: '100%' }}
+             transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+-            className="fixed inset-y-0 right-0 z-[70] flex w-full flex-col bg-white shadow-2xl md:w-[500px] lg:w-[560px]"
++            className="fixed inset-y-0 right-0 z-[70] flex w-full flex-col bg-white shadow-2xl dark:bg-zinc-900 md:w-[500px] lg:w-[560px]"
+           >
+             {/* Header */}
+-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
++            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
+               <div>
+-                <h2 className="text-lg font-black text-[#111827]">
++                <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
+                   {editingCoupon ? 'Editar cupom' : 'Novo cupom'}
+                 </h2>
+                 <p className="mt-0.5 text-xs font-bold text-[#9ca3af]">
+@@ -191,7 +191,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+               <button
+                 type="button"
+                 onClick={onClose}
+-                className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100"
++                className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                 aria-label="Fechar"
+               >
+                 <FiX size={18} />
+@@ -199,7 +199,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+             </div>
+ 
+             {/* Tabs */}
+-            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-100 px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
++            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-100 px-4 py-2 dark:border-zinc-800 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+               {DRAWER_SECTIONS.map((sec) => (
+                 <button
+                   key={sec.id}
+@@ -208,7 +208,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                   className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-black transition ${
+                     section === sec.id
+                       ? 'bg-[#f97316] text-white'
+-                      : 'bg-gray-50 text-[#6b7280] hover:bg-gray-100'
++                      : 'bg-gray-50 text-[#6b7280] hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                   }`}
+                 >
+                   {sec.label}
+@@ -231,7 +231,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                       onChange={(e) => setField('code', e.target.value.toUpperCase())}
+                       placeholder="Ex: PROMO10"
+                       maxLength={30}
+-                      className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                      className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                     />
+                     <p className="mt-1 text-xs text-[#9ca3af]">Apenas letras maiúsculas e números. Sem espaços.</p>
+                   </div>
+@@ -247,7 +247,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                       placeholder="Ex: R$ 10 de desconto em compras acima de R$ 50"
+                       maxLength={150}
+                       rows={2}
+-                      className="w-full resize-none rounded-2xl border border-orange-100/80 bg-white px-4 py-3 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                      className="w-full resize-none rounded-2xl border border-orange-100/80 bg-white px-4 py-3 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                     />
+                     <p className="mt-1 text-right text-xs text-[#9ca3af]">{form.description.length}/150</p>
+                   </div>
+@@ -266,8 +266,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                         }}
+                         className={`flex h-12 items-center justify-center gap-2 rounded-2xl border-2 font-black transition ${
+                           form.type === 'percent'
+-                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316]'
+-                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100'
++                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316] dark:bg-orange-500/10'
++                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                         }`}
+                       >
+                         <FiPercent size={15} /> Porcentagem
+@@ -280,8 +280,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                         }}
+                         className={`flex h-12 items-center justify-center gap-2 rounded-2xl border-2 font-black transition ${
+                           form.type === 'fixed'
+-                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316]'
+-                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100'
++                            ? 'border-[#f97316] bg-orange-50/20 text-[#f97316] dark:bg-orange-500/10'
++                            : 'border-gray-100 bg-gray-50 text-[#6b7280] hover:bg-gray-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                         }`}
+                       >
+                         <FiDollarSign size={15} /> Valor Fixo (R$)
+@@ -306,19 +306,18 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                             value={form.value}
+                             onChange={(e) => setField('value', e.target.value)}
+                             placeholder="0,00"
+-                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                           />
+                         </>
+                       ) : (
+                         <>
+                           <input
+-                            type="number"
+-                            min="1"
+-                            max="100"
++                            type="text"
++                            inputMode="decimal"
+                             value={form.value}
+                             onChange={(e) => setField('value', e.target.value)}
+                             placeholder="Ex: 15"
+-                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                            className="h-14 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-xl font-black text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                           />
+                           <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-[#9ca3af]">
+                             %
+@@ -338,7 +337,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+               {section === 'rules' && (
+                 <div className="space-y-4">
+                   {/* Informativo de Cents */}
+-                  <div className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/40 p-4">
++                  <div className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/40 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
+                     <FiInfo className="mt-0.5 shrink-0 text-[#f97316]" size={16} />
+                     <p className="text-xs font-semibold leading-5 text-[#6b7280]">
+                       As regras financeiras são normalizadas em centavos para total precisão em pedidos do carrinho.
+@@ -360,7 +359,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                         value={form.minOrder}
+                         onChange={(e) => setField('minOrder', e.target.value)}
+                         placeholder="0,00"
+-                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                       />
+                     </div>
+                     <p className="mt-1 text-xs text-[#9ca3af]">O cupom só funcionará se o subtotal atingir este valor.</p>
+@@ -382,7 +381,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                           value={form.maxDiscount}
+                           onChange={(e) => setField('maxDiscount', e.target.value)}
+                           placeholder="0,00"
+-                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                         />
+                       </div>
+                       <p className="mt-1 text-xs text-[#9ca3af]">Limita o desconto do cupom caso o valor percentual ultrapasse este teto.</p>
+@@ -401,7 +400,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                         value={form.usageLimit}
+                         onChange={(e) => setField('usageLimit', e.target.value)}
+                         placeholder="Ex: 50"
+-                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
++                        className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                       />
+                       <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-[#9ca3af]">
+                         <FiHash size={14} />
+@@ -421,7 +420,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                           type="datetime-local"
+                           value={form.startsAt}
+                           onChange={(e) => setField('startsAt', e.target.value)}
+-                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316]"
++                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                         />
+                       </div>
+                     </div>
+@@ -434,16 +433,16 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                           type="datetime-local"
+                           value={form.expiresAt}
+                           onChange={(e) => setField('expiresAt', e.target.value)}
+-                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316]"
++                          className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                         />
+                       </div>
+                     </div>
+                   </div>
+ 
+                   {/* Status Inicial / Toggle */}
+-                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:border-orange-100 hover:bg-orange-50/30">
++                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:border-orange-100 hover:bg-orange-50/30 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10">
+                     <div>
+-                      <p className="text-sm font-black text-[#111827]">Cupom ativo</p>
++                      <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Cupom ativo</p>
+                       <p className="mt-0.5 text-xs text-[#9ca3af]">Indica se o cupom pode ser buscado e aplicado por clientes</p>
+                     </div>
+                     <div className="relative shrink-0">
+@@ -485,8 +484,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                           key={opt.id}
+                           className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition ${
+                             form.appliesTo === opt.id
+-                              ? 'border-[#f97316] bg-orange-50/20'
+-                              : 'border-gray-100 bg-gray-50 hover:bg-gray-100'
++                              ? 'border-[#f97316] bg-orange-50/20 dark:bg-orange-500/10'
++                              : 'border-gray-100 bg-gray-50 hover:bg-gray-100 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-800'
+                           }`}
+                         >
+                           <input
+@@ -501,8 +500,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                             className="mt-1 accent-[#f97316]"
+                           />
+                           <div>
+-                            <p className="text-sm font-black text-[#111827]">{opt.label}</p>
+-                            <p className="mt-0.5 text-xs text-[#6b7280]">{opt.desc}</p>
++                            <p className="text-sm font-black text-[#111827] dark:text-zinc-100">{opt.label}</p>
++                            <p className="mt-0.5 text-xs text-[#6b7280] dark:text-zinc-400">{opt.desc}</p>
+                           </div>
+                         </label>
+                       ))}
+@@ -531,10 +530,10 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                         placeholder=" Buscar produto por nome..."
+                         value={productSearch}
+                         onChange={(e) => setProductSearch(e.target.value)}
+-                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316]"
++                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-[#111827] outline-none focus:border-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                       />
+ 
+-                      <div className="max-h-[300px] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 space-y-1 [scrollbar-width:thin]">
++                      <div className="max-h-[300px] space-y-1 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950 [scrollbar-width:thin]">
+                         {filteredProducts.length === 0 ? (
+                           <p className="p-4 text-center text-xs font-bold text-[#9ca3af]">Nenhum produto encontrado.</p>
+                         ) : (
+@@ -547,8 +546,8 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                             return (
+                               <label
+                                 key={p.id}
+-                                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl p-3 transition hover:bg-gray-50 ${
+-                                  isChecked ? 'bg-orange-50/10' : ''
++                                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl p-3 transition hover:bg-gray-50 dark:hover:bg-zinc-800 ${
++                                  isChecked ? 'bg-orange-50/10 dark:bg-orange-500/10' : ''
+                                 }`}
+                               >
+                                 <div className="flex items-center gap-3">
+@@ -564,7 +563,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                                     className="accent-[#f97316] h-4 w-4 shrink-0 rounded"
+                                   />
+                                   <div className="min-w-0">
+-                                    <p className="truncate text-xs font-black text-[#111827]">{p.name}</p>
++                                    <p className="truncate text-xs font-black text-[#111827] dark:text-zinc-100">{p.name}</p>
+                                     <div className="mt-1 flex flex-wrap gap-1">
+                                       {doesNotAccept && (
+                                         <span className="rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-black text-red-500">
+@@ -599,12 +598,12 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+             </div>
+ 
+             {/* Footer */}
+-            <div className="flex shrink-0 gap-3 border-t border-gray-100 px-5 py-4 bg-white">
++            <div className="flex shrink-0 gap-3 border-t border-gray-100 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 dark:border-zinc-800 dark:bg-zinc-900">
+               <button
+                 type="button"
+                 onClick={onClose}
+                 disabled={saving}
+-                className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60"
++                className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
+               >
+                 Cancelar
+               </button>
+@@ -612,7 +611,7 @@ export default function CouponEditorDrawer({ open, onClose, editingCoupon, store
+                 type="button"
+                 onClick={handleSave}
+                 disabled={saving || !form.code.trim()}
+-                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60"
++                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60 dark:shadow-orange-950/50"
+               >
+                 {saving ? (
+                   <>
+diff --git a/src/pages/merchant/menu/components/DeliveryAreaEditorDrawer.jsx b/src/pages/merchant/menu/components/DeliveryAreaEditorDrawer.jsx
+index e8a5f808..af842f74 100644
+--- a/src/pages/merchant/menu/components/DeliveryAreaEditorDrawer.jsx
++++ b/src/pages/merchant/menu/components/DeliveryAreaEditorDrawer.jsx
+@@ -124,17 +124,17 @@ export default function DeliveryAreaEditorDrawer({
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.97, y: 10 }}
+               transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+-              className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto overflow-x-hidden rounded-[2rem] bg-white p-6 shadow-2xl [scrollbar-width:thin]"
++              className="relative max-h-[92dvh] w-full max-w-md overflow-y-auto overflow-x-hidden rounded-[2rem] border border-gray-100 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 [scrollbar-width:thin]"
+             >
+               {/* Header */}
+               <div className="mb-5 flex items-center justify-between">
+-                <h2 className="text-lg font-black text-[#111827]">
++                <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
+                   {editingArea ? 'Editar bairro' : 'Adicionar bairro'}
+                 </h2>
+                 <button
+                   type="button"
+                   onClick={onClose}
+-                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100"
++                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                   aria-label="Fechar"
+                 >
+                   <FiX size={17} />
+@@ -153,7 +153,7 @@ export default function DeliveryAreaEditorDrawer({
+                     onChange={(e) => setName(e.target.value)}
+                     disabled={isPreset}
+                     placeholder="Ex: Farolândia, Centro..."
+-                    className="h-12 w-full rounded-2xl border border-gray-200 px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:bg-gray-50 disabled:text-gray-400"
++                    className="h-12 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:bg-gray-50 disabled:text-gray-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20 dark:disabled:bg-zinc-800"
+                   />
+                   {isPreset && (
+                     <p className="mt-1.5 text-xs font-semibold text-gray-400">
+@@ -175,21 +175,21 @@ export default function DeliveryAreaEditorDrawer({
+                       value={feeInput}
+                       onChange={handleFeeChange}
+                       placeholder="0,00"
+-                      className="h-12 w-full rounded-2xl border border-gray-200 pl-11 pr-4 text-sm font-black text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
++                      className="h-12 w-full rounded-2xl border border-gray-200 bg-white pl-11 pr-4 text-sm font-black text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                     />
+                   </div>
+                   <p className="mt-1.5 text-xs font-semibold text-[#6b7280]">
+-                    Digite `0,00` para configurar como entrega **Grátis**.
++                    Digite 0,00 para configurar entrega grátis.
+                   </p>
+                 </div>
+               </div>
+ 
+               {/* Actions Footer */}
+-              <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
++              <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-100 pt-4 dark:border-zinc-800">
+                 <button
+                   type="button"
+                   onClick={onClose}
+-                  className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-black text-[#6b7280] transition hover:bg-gray-50"
++                  className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-black text-[#6b7280] transition hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                 >
+                   Cancelar
+                 </button>
+@@ -197,7 +197,7 @@ export default function DeliveryAreaEditorDrawer({
+                   type="button"
+                   onClick={handleSaveClick}
+                   disabled={saving}
+-                  className="flex items-center gap-1.5 rounded-xl bg-[#f97316] px-5 py-2.5 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-50"
++                  className="flex items-center gap-1.5 rounded-xl bg-[#f97316] px-5 py-2.5 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-50 dark:shadow-orange-950/50"
+                 >
+                   {saving ? (
+                     <FiLoader className="animate-spin" size={14} />
+diff --git a/src/pages/store/CartDrawer.jsx b/src/pages/store/CartDrawer.jsx
+index e109120e..b852a877 100644
+--- a/src/pages/store/CartDrawer.jsx
++++ b/src/pages/store/CartDrawer.jsx
+@@ -1,6 +1,7 @@
+ import { useCallback, useEffect, useMemo, useState } from 'react'
+ import { useNavigate, useParams } from 'react-router-dom'
+ import { httpsCallable } from 'firebase/functions'
++import { motion } from 'motion/react'
+ 
+ import {
+   FiAlertCircle,
+@@ -900,6 +901,39 @@ function couponAppliesToItem(coupon, item) {
+   return true
+ }
+ 
++function buildCouponItemsPayload(cartItems) {
++  return cartItems.map((item) => ({
++    id: String(item.id || item.cartItemId || '').trim(),
++    productId: String(item.productId || item.id || '').trim(),
++    categoryId: String(item.categoryId || item.productCategoryId || item.product?.categoryId || '').trim(),
++    totalCents: Math.round(getItemTotal(item) * 100),
++    acceptsCoupons: item.acceptsCoupons !== false && item.acceptsCoupon !== false,
++  }))
++}
++
++function getCouponValidationMessage(data = {}) {
++  if (data.reason === 'min_order_not_met') {
++    return `Esse cupom exige pedido mínimo de ${formatMoney(data.minOrderCents / 100)}. Faltam ${formatMoney(data.missingCents / 100)} em produtos elegíveis para usá-lo.`
++  }
++
++  if (data.reason === 'ineligible_items') {
++    return 'Esse cupom vale apenas para produtos selecionados. Adicione um item elegível para usá-lo.'
++  }
++
++  return data.message || 'Cupom inválido ou não encontrado.'
++}
++
++function isBlockingCepError(message) {
++  const normalizedMessage = normalizeForMatch(message)
++
++  return (
++    normalizedMessage.includes('digite 8 numeros') ||
++    normalizedMessage.includes('informe um cep valido') ||
++    normalizedMessage.includes('loja entrega apenas em') ||
++    normalizedMessage.includes('bairro fora da area')
++  )
++}
++
+ function SectionCard({ title, icon: Icon, children, description }) {
+   return (
+     <section className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+@@ -1335,11 +1369,13 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+   const navigate = useNavigate()
+   const [loadingCep, setLoadingCep] = useState(false)
+   const [cepError, setCepError] = useState('')
++  const [cepLookupStatus, setCepLookupStatus] = useState('idle')
+ 
+   const handleSearchCep = async (cep) => {
+   const digits = onlyDigits(cep)
+ 
+   setCepError('')
++  setCepLookupStatus('idle')
+ 
+   setCustomer((prev) => ({
+     ...prev,
+@@ -1354,6 +1390,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+ 
+   if (digits.length !== 8) {
+     setCepError('CEP inválido. Digite 8 números.')
++    setCepLookupStatus('invalid')
+     return null
+   }
+ 
+@@ -1364,6 +1401,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+ 
+     if (!response.ok) {
+       setCepError('Não conseguimos buscar o CEP agora. Preencha o endereço manualmente.')
++      setCepLookupStatus('manual')
+       return null
+     }
+ 
+@@ -1371,6 +1409,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+ 
+     if (data?.erro) {
+       setCepError('CEP não encontrado. Confira o número ou preencha manualmente.')
++      setCepLookupStatus('manual')
+       return null
+     }
+ 
+@@ -1400,10 +1439,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+       }))
+ 
+       setCepError(
+-        cepNeighborhood
+-          ? `A loja não entrega nesse bairro.`
+-          : 'A loja não entrega nesse bairro.'
++        deliveryAreaMessage || 'Bairro fora da área de entrega.'
+       )
++      setCepLookupStatus('unsupported')
+ 
+       return null
+     }
+@@ -1421,6 +1459,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+       cepState,
+       cepValidated: true,
+     }))
++    setCepLookupStatus('validated')
+ 
+     return {
+       cep: formatCep(digits),
+@@ -1432,6 +1471,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+   } catch (error) {
+     console.error('Erro ao buscar CEP', error)
+     setCepError('Não conseguimos buscar o CEP agora. Preencha o endereço manualmente.')
++    setCepLookupStatus('manual')
+     return null
+   } finally {
+     setLoadingCep(false)
+@@ -1483,6 +1523,13 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+       }))
+       .sort((a, b) => a.neighborhood.localeCompare(b.neighborhood))
+   }, [deliveryFees])
++  const deliveryNeighborhoodList = useMemo(() => {
++    return deliveryNeighborhoods.map((item) => item.neighborhood).join(', ')
++  }, [deliveryNeighborhoods])
++  const deliveryAreaMessage = deliveryNeighborhoodList
++    ? `A loja entrega apenas em: ${deliveryNeighborhoodList}.`
++    : ''
++  const blockingCepError = isBlockingCepError(cepError)
+ 
+   const paymentOptions = useMemo(() => {
+     const paymentMethods = store?.paymentMethods || {}
+@@ -1578,9 +1625,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+   const selectedNeighborhoodFee = useMemo(() => {
+     if (!customer.neighborhood) return null
+ 
+-    const found = deliveryNeighborhoods.find(
+-      (item) => item.neighborhood === customer.neighborhood
+-    )
++    const found = findDeliveryNeighborhoodMatch(customer.neighborhood, deliveryNeighborhoods)
+ 
+     if (found) return found.fee
+ 
+@@ -1684,13 +1729,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+       const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
+ 
+       const subtotalCents = Math.round(subtotal * 100)
+-      const itemsPayload = cartItems.map(item => ({
+-        id: String(item.id || item.cartItemId || '').trim(),
+-        productId: String(item.productId || item.id || '').trim(),
+-        categoryId: String(item.categoryId || item.productCategoryId || item.product?.categoryId || '').trim(),
+-        totalCents: Math.round(getItemTotal(item) * 100),
+-        acceptsCoupons: item.acceptsCoupons !== false && item.acceptsCoupon !== false,
+-      }))
++      const itemsPayload = buildCouponItemsPayload(cartItems)
+ 
+       const result = await validatePublicCoupon({
+         storeId: finalStoreId,
+@@ -1704,13 +1743,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+ 
+       if (!data.valid) {
+         setAppliedCoupon(null)
+-        if (data.reason === 'min_order_not_met') {
+-          setCouponError(`Esse cupom exige pedido mínimo de ${formatMoney(data.minOrderCents / 100)}. Faltam ${formatMoney(data.missingCents / 100)} para usar esse cupom.`)
+-        } else if (data.reason === 'ineligible_items') {
+-          setCouponError('Esse cupom vale apenas para produtos selecionados. Adicione um item elegível para usá-lo.')
+-        } else {
+-          setCouponError(data.message || 'Cupom inválido ou não encontrado.')
+-        }
++        setCouponError(getCouponValidationMessage(data))
+         return
+       }
+ 
+@@ -1729,7 +1762,67 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+     } finally {
+       setCouponLoading(false)
+     }
+-  }, [cartItems, couponCode, couponLoading, finalStoreId, storeDocId, storeSlug])
++  }, [cartItems, couponCode, couponLoading, finalStoreId, storeDocId, storeSlug, subtotal])
++
++  useEffect(() => {
++    const code = appliedCoupon?.code
++
++    if (!code) return undefined
++
++    let isCurrent = true
++    const timeoutId = window.setTimeout(async () => {
++      if (cartItems.length === 0 || subtotal <= 0) {
++        setAppliedCoupon(null)
++        setCouponError('O cupom foi removido porque o carrinho não possui produtos elegíveis.')
++        return
++      }
++
++      try {
++        const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
++        const result = await validatePublicCoupon({
++          storeId: finalStoreId,
++          storeSlug,
++          storeDocId,
++          couponCode: code,
++          subtotalCents: Math.round(subtotal * 100),
++          items: buildCouponItemsPayload(cartItems),
++        })
++        const data = result?.data || {}
++
++        if (!isCurrent) return
++
++        if (!data.valid) {
++          setAppliedCoupon(null)
++          setCouponError(getCouponValidationMessage(data))
++          return
++        }
++
++        setAppliedCoupon((current) => {
++          if (!current || current.code !== code) return current
++
++          return {
++            ...current,
++            ...(data.coupon || {}),
++            code,
++            discountCents: data.discountCents,
++            eligibleSubtotalCents: data.eligibleSubtotalCents,
++          }
++        })
++      } catch (error) {
++        if (!isCurrent) return
++
++        console.error(error)
++        setAppliedCoupon(null)
++        setCouponError('Não foi possível revalidar o cupom. Aplique novamente para continuar.')
++      }
++    }, 250)
++
++    return () => {
++      isCurrent = false
++      window.clearTimeout(timeoutId)
++    }
++  }, [appliedCoupon?.code, cartItems, finalStoreId, storeDocId, storeSlug, subtotal])
++
+   const getFieldError = (field) => {
+     if (!checkoutError) return false
+     const err = typeof checkoutError === 'string' ? checkoutError.toLowerCase() : ''
+@@ -1778,7 +1871,7 @@ if (orderType === 'delivery') {
+     return 'Informe um CEP válido com 8 números.'
+   }
+ 
+-  if (cepError && (cepError.includes('inválido') || cepError.includes('entrega'))) {
++  if (blockingCepError) {
+     return cepError
+   }
+ 
+@@ -1830,6 +1923,7 @@ if (orderType === 'delivery') {
+     return ''
+   }, [
+   belowMinimum,
++  blockingCepError,
+   canUseDelivery,
+   cartItems.length,
+   cepError,
+@@ -1856,6 +1950,7 @@ if (orderType === 'delivery') {
+   const handleCheckout = useCallback(async () => {
+     if (isSubmitting) return
+ 
++    setCheckoutError(null)
+     const error = validateCheckout()
+ 
+     if (error) {
+@@ -1939,7 +2034,10 @@ if (orderType === 'delivery') {
+       navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`)
+     } catch (error) {
+       console.error(error)
+-      alert(error?.message || 'Erro ao enviar pedido. Tente novamente.')
++      const message = error?.message || 'Erro ao enviar pedido. Tente novamente.'
++      setCheckoutError(message)
++      scrollToFirstError()
++      alert(message)
+     } finally {
+       setIsSubmitting(false)
+     }
+@@ -1964,14 +2062,22 @@ if (orderType === 'delivery') {
+ 
+   return (
+     <div className="fixed inset-0 z-[70] flex justify-end">
+-      <button
++      <motion.button
+         type="button"
+         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+         onClick={onClose}
+         aria-label="Fechar carrinho"
++        initial={{ opacity: 0 }}
++        animate={{ opacity: 1 }}
++        transition={{ duration: 0.18 }}
+       />
+ 
+-      <aside className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl">
++      <motion.aside
++        initial={{ x: '100%' }}
++        animate={{ x: 0 }}
++        transition={{ type: 'spring', stiffness: 360, damping: 34 }}
++        className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl"
++      >
+         <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white px-4 py-4">
+           <div className="flex items-center justify-between gap-3">
+             <div className="flex items-center gap-3">
+@@ -2222,6 +2328,7 @@ if (orderType === 'delivery') {
+                   <SectionCard title="Seus dados" icon={FiUser}>
+                     <InputField
+                       label="Nome"
++                      error={getFieldError('name')}
+                       placeholder="Como podemos te chamar?"
+                       value={customer.name}
+                       onChange={(event) =>
+@@ -2234,6 +2341,7 @@ if (orderType === 'delivery') {
+ 
+                     <InputField
+                       label="WhatsApp"
++                      error={getFieldError('phone')}
+                       type="tel"
+                       inputMode="numeric"
+                       autoComplete="tel"
+@@ -2284,6 +2392,7 @@ if (orderType === 'delivery') {
+   <div className="grid grid-cols-[1fr_auto] gap-2">
+     <InputField
+       label="CEP"
++      error={getFieldError('cep')}
+       type="tel"
+       inputMode="numeric"
+       autoComplete="postal-code"
+@@ -2298,6 +2407,7 @@ if (orderType === 'delivery') {
+         }))
+ 
+         setCepError('')
++        setCepLookupStatus('idle')
+ 
+         if (onlyDigits(nextCep).length === 8) {
+           handleSearchCep(nextCep)
+@@ -2328,6 +2438,12 @@ if (orderType === 'delivery') {
+       {customer.city} - {customer.state}
+     </p>
+   )}
++
++  {deliveryNeighborhoodList && (
++    <p className="mt-2 text-xs font-bold leading-5 text-[#6b7280]">
++      Entregamos apenas nos bairros: {deliveryNeighborhoodList}.
++    </p>
++  )}
+ </div>
+                       {deliveryNeighborhoods.length > 0 ? (
+                         <div>
+@@ -2337,6 +2453,7 @@ if (orderType === 'delivery') {
+ 
+                           <select
+                             value={customer.neighborhood}
++                            aria-invalid={!!getFieldError('neighborhood')}
+                             onChange={(event) => {
+   const nextNeighborhood = event.target.value
+ 
+@@ -2345,7 +2462,9 @@ if (orderType === 'delivery') {
+     neighborhood: nextNeighborhood,
+   }))
+ 
+-  if (
++  if (cepLookupStatus === 'unsupported') {
++    setCepError(deliveryAreaMessage || 'Bairro fora da área de entrega.')
++  } else if (
+     customer.cepValidated &&
+     customer.cepNeighborhood &&
+     normalizeForMatch(customer.cepNeighborhood) !== normalizeForMatch(nextNeighborhood)
+@@ -2369,10 +2488,16 @@ if (orderType === 'delivery') {
+                               </option>
+                             ))}
+                           </select>
++                          {getFieldError('neighborhood') && (
++                            <span className="mt-1.5 block text-xs font-semibold text-red-500">
++                              {getFieldError('neighborhood')}
++                            </span>
++                          )}
+                         </div>
+                       ) : (
+                         <InputField
+                           label="Bairro"
++                          error={getFieldError('neighborhood')}
+                           placeholder="Digite seu bairro"
+                           value={customer.neighborhood}
+                           onChange={(event) =>
+@@ -2388,6 +2513,7 @@ if (orderType === 'delivery') {
+                       <div className="grid grid-cols-[1fr_110px] gap-2">
+                         <InputField
+                           label="Rua"
++                          error={getFieldError('street')}
+                           placeholder="Nome da rua"
+                           value={customer.street}
+                           onChange={(event) =>
+@@ -2400,6 +2526,7 @@ if (orderType === 'delivery') {
+ 
+                         <InputField
+   label="Número"
++  error={getFieldError('number')}
+   type="tel"
+   inputMode="numeric"
+   placeholder="123"
+@@ -2758,6 +2885,16 @@ if (orderType === 'delivery') {
+ </div>
+ 
+ <div className="pb-2">
++  {checkoutError && (
++    <div
++      data-error="true"
++      className="mb-3 flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold leading-5 text-red-700"
++    >
++      <FiAlertCircle className="mt-0.5 shrink-0" size={14} />
++      <span>{checkoutError}</span>
++    </div>
++  )}
++
+   <button
+     type="button"
+     onClick={handleCheckout}
+@@ -2765,10 +2902,7 @@ if (orderType === 'delivery') {
+       isSubmitting ||
+       !storeIsOpen ||
+       loadingCep ||
+-      (orderType === 'delivery' && Boolean(cepError)) ||
+-      (orderType === 'delivery' &&
+-        deliveryNeighborhoods.length > 0 &&
+-        !customer.cepValidated)
++      (orderType === 'delivery' && blockingCepError)
+     }
+     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-base font-black text-white transition hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+   >
+@@ -2800,7 +2934,8 @@ if (orderType === 'delivery') {
+   {orderType === 'delivery' &&
+     deliveryNeighborhoods.length > 0 &&
+     !cepError &&
+-    !customer.cepValidated && (
++    !customer.cepValidated &&
++    !customer.neighborhood && (
+       <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs font-bold text-[#6b7280]">
+         <FiMapPin size={14} />
+         Informe e busque o CEP para confirmar a entrega.
+@@ -2859,7 +2994,7 @@ if (orderType === 'delivery') {
+           onRemove={handleRemoveCartItem}
+           onUpdateObservation={handleUpdateItemObservation}
+         />
+-      </aside>
++      </motion.aside>
+     </div>
+   )
+ }
+diff --git a/src/pages/store/ProductCard.jsx b/src/pages/store/ProductCard.jsx
+index 8ea1adac..e8df0a3e 100644
+--- a/src/pages/store/ProductCard.jsx
++++ b/src/pages/store/ProductCard.jsx
+@@ -308,6 +308,16 @@ function ProductCard({
+   const oldPrice = getProductOldPrice(product)
+   const discountPercent = getDiscountPercent(price, oldPrice)
+   const hasDiscount = discountPercent > 0
++  const hasPromotionBadge = Boolean(product?.isPromotion || product?.isPromotional || product?.promotion)
++  const hasExplicitCouponEligibility =
++    product?.acceptsCoupons === true ||
++    product?.acceptsCoupon === true ||
++    product?.couponEligible === true
++  const acceptsCoupons =
++    hasExplicitCouponEligibility &&
++    product?.acceptsCoupons !== false &&
++    product?.acceptsCoupon !== false &&
++    product?.couponEligible !== false
+ 
+   const productName = product?.name || 'Produto'
+   const productDescription =
+@@ -437,6 +447,20 @@ function ProductCard({
+                 </span>
+               )}
+ 
++              {hasPromotionBadge && !hasDiscount && canAdd && (
++                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
++                  <FiTag size={12} />
++                  Promoção
++                </span>
++              )}
++
++              {acceptsCoupons && canAdd && (
++                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100">
++                  <FiTag size={12} />
++                  Aceita cupom
++                </span>
++              )}
++
+               {lowStock && canAdd && (
+                 <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-600 ring-1 ring-orange-100">
+                   Últimas unidades
+@@ -595,4 +619,4 @@ function ProductCard({
+   )
+ }
+ 
+-export default memo(ProductCard)
+\ No newline at end of file
++export default memo(ProductCard)
+diff --git a/src/pages/store/StoreFrontPage.jsx b/src/pages/store/StoreFrontPage.jsx
+index 6e1c30e0..e803d0b5 100644
+--- a/src/pages/store/StoreFrontPage.jsx
++++ b/src/pages/store/StoreFrontPage.jsx
+@@ -254,7 +254,12 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
+ 
+   try {
+     const getPublicStoreProfile = httpsCallable(functionsInstance, 'getPublicStoreProfile')
+-    const result = await getPublicStoreProfile({ storeSlug: cleanSlug, slug: cleanSlug })
++    const result = await getPublicStoreProfile({
++      storeId: cleanSlug,
++      storeDocId: cleanSlug,
++      storeSlug: cleanSlug,
++      slug: cleanSlug,
++    })
+     const store = result?.data?.store
+ 
+     if (store) {

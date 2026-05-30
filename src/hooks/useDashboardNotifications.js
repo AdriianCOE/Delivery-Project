@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { collection, doc, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 
 import { db } from '../services/firebase'
 import { useAuth } from '../contexts/AuthContext'
@@ -76,6 +76,7 @@ export function useDashboardNotifications() {
   const [store, setStore] = useState(null)
   const [loading, setLoading] = useState(true)
   const [localNotifications, setLocalNotifications] = useState([])
+  const [reviewNotifications, setReviewNotifications] = useState([])
   const [readState, setReadState] = useState(() => loadNotificationReadState(null, null))
 
   const activeStoreId = useMemo(() => resolveActiveStoreId(userData), [userData])
@@ -94,6 +95,54 @@ export function useDashboardNotifications() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalNotifications([])
   }, [activeStoreId])
+
+  useEffect(() => {
+    if (!uid || !activeStoreId || user?.isAnonymous) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setReviewNotifications([])
+      return undefined
+    }
+
+    const reviewsQuery = query(
+      collection(db, 'reviews'),
+      where('storeId', '==', activeStoreId),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    )
+
+    const unsubscribe = onSnapshot(
+      reviewsQuery,
+      (snapshot) => {
+        setReviewNotifications(snapshot.docs.map((reviewDoc) => {
+          const review = reviewDoc.data() || {}
+          const rating = Number(review.rating || 0)
+
+          return {
+            id: `review:${reviewDoc.id}`,
+            area: 'reviews',
+            channel: 'firestore',
+            title: rating > 0 ? `Nova avaliação: ${rating} estrela${rating !== 1 ? 's' : ''}` : 'Nova avaliação recebida',
+            message: review.comment || 'Um cliente avaliou um pedido da sua loja.',
+            severity: rating > 0 && rating <= 3 ? 'warning' : 'info',
+            href: '/dashboard/reviews',
+            createdAt: review.createdAt || review.updatedAt,
+            sourceType: 'review',
+            sourceId: reviewDoc.id,
+          }
+        }))
+      },
+      (error) => {
+        if (error?.code === 'permission-denied') {
+          console.warn('[useDashboardNotifications] reviews listener denied for active store:', activeStoreId)
+        } else {
+          console.error('[useDashboardNotifications] error fetching reviews:', error)
+        }
+        setReviewNotifications([])
+      }
+    )
+
+    return () => unsubscribe()
+  }, [activeStoreId, uid, user?.isAnonymous])
 
   const readIds = useMemo(() => new Set(getNotificationReadIds(readState)), [readState])
   const preferences = useMemo(() => getNotificationPreferences(readState), [readState])
@@ -317,7 +366,7 @@ export function useDashboardNotifications() {
       })
     }
 
-    return [...list, ...localNotifications]
+    return [...list, ...reviewNotifications, ...localNotifications]
       .map((notification) => {
         const normalized = normalizeDashboardNotification(notification)
         return {
@@ -326,7 +375,7 @@ export function useDashboardNotifications() {
         }
       })
       .sort((a, b) => b.createdAt - a.createdAt)
-  }, [activeStoreId, loading, localNotifications, readIds, store, uid, userData])
+  }, [activeStoreId, loading, localNotifications, readIds, reviewNotifications, store, uid, userData])
 
   const unreadNotifications = useMemo(() => {
     return notifications.filter((notification) => !notification.read)
