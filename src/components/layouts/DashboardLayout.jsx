@@ -1693,7 +1693,10 @@ export default function DashboardLayout() {
                 </motion.div>
               </button>
 
-              <DashboardNotificationBell notificationState={notificationState} />
+              <DashboardNotificationBell
+                notificationState={notificationState}
+                storeId={currentStoreId}
+              />
 
               <button
                 type="button"

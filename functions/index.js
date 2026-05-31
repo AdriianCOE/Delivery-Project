@@ -12,7 +12,12 @@ const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
 const { createAsaasFunctions } = require('./asaas')
 const { createMerchantOrderFunctions } = require('./merchantOrder')
-const { sendNewOrderPushToStore } = require('./fcmNotifications')
+const {
+  disableCustomerOrderPushToken,
+  registerCustomerOrderPushToken,
+  sendCustomerOrderStatusPushToOrder,
+  sendNewOrderPushToStore,
+} = require('./fcmNotifications')
 const {
   normalizeBrazilianPhone,
   validateBrazilianMobilePhone,
@@ -47,7 +52,21 @@ const TERMS_VERSION = '2026-05-24'
 const PRIVACY_VERSION = '2026-05-24'
 const REGION = 'southamerica-east1'
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
-const merchantOrderFunctions = createMerchantOrderFunctions({ db, admin, HttpsError, logger, region: REGION })
+const merchantOrderFunctions = createMerchantOrderFunctions({
+  db,
+  admin,
+  HttpsError,
+  logger,
+  region: REGION,
+  sendCustomerOrderStatusPushToOrder: ({ orderId, status, orderData }) => sendCustomerOrderStatusPushToOrder({
+    db,
+    admin,
+    logger,
+    orderId,
+    status,
+    orderData,
+  }),
+})
 
 if (!ENFORCE_APP_CHECK && process.env.FUNCTIONS_EMULATOR !== 'true') {
   logger.warn('[appCheck] Public callables are running without App Check enforcement. Use monitor mode first, then set ENFORCE_APP_CHECK=true after validating public store, coupon and order flows.')
@@ -229,7 +248,44 @@ const PUBLIC_READ_RATE_LIMITS = {
   markCustomerPixProofSent: 20,
   requestCustomerOrderCancellation: 20,
   submitPublicOrderReview: 20,
+  registerCustomerOrderPushToken: 20,
+  disableCustomerOrderPushToken: 20,
 }
+
+exports.registerCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+  await assertPublicCallableRateLimit('registerCustomerOrderPushToken', request)
+
+  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
+  const trackingToken = request.data?.trackingToken
+
+  return registerCustomerOrderPushToken({
+    db,
+    admin,
+    HttpsError,
+    orderId,
+    trackingToken,
+    token: request.data?.token,
+    platform: request.data?.platform,
+    userAgent: request.data?.userAgent,
+  })
+})
+
+exports.disableCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+  await assertPublicCallableRateLimit('disableCustomerOrderPushToken', request)
+
+  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
+  const trackingToken = request.data?.trackingToken
+
+  return disableCustomerOrderPushToken({
+    db,
+    admin,
+    HttpsError,
+    orderId,
+    trackingToken,
+    token: request.data?.token,
+    tokenHash: request.data?.tokenHash,
+  })
+})
 
 exports.confirmCustomerDelivery = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
   await assertPublicCallableRateLimit('confirmCustomerDelivery', request)

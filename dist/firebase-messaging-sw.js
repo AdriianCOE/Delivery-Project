@@ -25,17 +25,25 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
     const data = payload.data || {}
     const orderId = String(data.orderId || '').trim()
     const orderNumber = orderId ? `#${orderId.slice(-4).toUpperCase()}` : '#----'
-    const title = 'Novo pedido recebido'
+    const isCustomerStatusUpdate = data.type === 'order_status_update'
+    const title = isCustomerStatusUpdate
+      ? data.title || 'Pedido atualizado'
+      : 'Novo pedido recebido'
     const options = {
-      body: `Pedido ${orderNumber} aguardando confirmacao`,
+      body: isCustomerStatusUpdate
+        ? data.body || `Pedido ${orderNumber} foi atualizado.`
+        : `Pedido ${orderNumber} aguardando confirmacao`,
       icon: '/android-chrome-512x512.png',
       badge: '/favicon.png',
-      tag: data.orderId ? `new-order-${data.orderId}` : 'new-order',
+      tag: isCustomerStatusUpdate
+        ? `order-status-${data.orderId || Date.now()}-${data.status || 'updated'}`
+        : data.orderId ? `new-order-${data.orderId}` : 'new-order',
       renotify: true,
       data: {
         type: data.type || 'new_order',
         orderId: data.orderId || '',
         storeId: data.storeId || '',
+        status: data.status || '',
         url: data.url || '/dashboard/orders',
       },
     }

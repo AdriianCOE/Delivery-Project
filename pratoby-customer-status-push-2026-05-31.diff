@@ -1,0 +1,894 @@
+diff --git a/functions/fcmNotifications.js b/functions/fcmNotifications.js
+index 06e5f91e..a8778f29 100644
+--- a/functions/fcmNotifications.js
++++ b/functions/fcmNotifications.js
+@@ -1,3 +1,5 @@
++const crypto = require('crypto')
++
+ function isInvalidFcmTokenError(error) {
+   const code = String(error?.code || error?.errorInfo?.code || '').toLowerCase()
+   return [
+@@ -7,6 +9,175 @@ function isInvalidFcmTokenError(error) {
+   ].includes(code)
+ }
+ 
++function normalizeOrderStatus(status) {
++  const value = String(status || '').toLowerCase().trim()
++  return {
++    confirmado: 'confirmado',
++    accepted: 'confirmado',
++    preparando: 'preparando',
++    preparing: 'preparando',
++    pronto: 'pronto',
++    ready: 'pronto',
++    em_rota: 'em_rota',
++    out_for_delivery: 'em_rota',
++    entregue: 'entregue',
++    delivered: 'entregue',
++    cancelado: 'cancelado',
++    canceled: 'cancelado',
++    cancelled: 'cancelado',
++  }[value] || value
++}
++
++function getOrderShortCode(orderId) {
++  return String(orderId || '').trim().slice(-4).toUpperCase() || '----'
++}
++
++function getCustomerStatusPushContent(status, orderId) {
++  const orderNumber = `#${getOrderShortCode(orderId)}`
++  const normalizedStatus = normalizeOrderStatus(status)
++
++  const map = {
++    confirmado: {
++      title: 'Pedido confirmado',
++      body: `Pedido ${orderNumber} confirmado pela loja.`,
++    },
++    preparando: {
++      title: 'Pedido em preparo',
++      body: `Pedido ${orderNumber} esta sendo preparado.`,
++    },
++    pronto: {
++      title: 'Pedido pronto',
++      body: `Pedido ${orderNumber} pronto para retirada.`,
++    },
++    em_rota: {
++      title: 'Pedido saiu para entrega',
++      body: `Pedido ${orderNumber} saiu para entrega.`,
++    },
++    entregue: {
++      title: 'Pedido entregue',
++      body: `Pedido ${orderNumber} foi finalizado.`,
++    },
++    cancelado: {
++      title: 'Pedido cancelado',
++      body: `Pedido ${orderNumber} foi cancelado pela loja.`,
++    },
++  }
++
++  return map[normalizedStatus] || {
++    title: 'Pedido atualizado',
++    body: `Pedido ${orderNumber} foi atualizado.`,
++  }
++}
++
++function getTrackingUrlPath(orderData, orderId) {
++  const savedPath = String(orderData?.trackingUrlPath || '').trim()
++  if (savedPath.startsWith('/')) return savedPath
++
++  const storeSlug = String(orderData?.storeSlug || orderData?.storeId || '').trim()
++  if (storeSlug) return `/${storeSlug}/pedido/${orderId}`
++
++  return `/pedido/${orderId}`
++}
++
++function getCustomerOrderTokenHash({ orderId, trackingToken, token }) {
++  return crypto
++    .createHash('sha256')
++    .update(`${orderId}:${trackingToken}:${token}`)
++    .digest('hex')
++}
++
++function assertCustomerTrackingAccess({ HttpsError, orderId, trackingToken, orderData }) {
++  const expectedToken = String(orderData?.trackingToken || '').trim()
++  const providedToken = String(trackingToken || '').trim()
++
++  if (!expectedToken || !providedToken || providedToken !== expectedToken) {
++    throw new HttpsError('permission-denied', 'Link de acompanhamento invalido.')
++  }
++}
++
++function sanitizeFcmToken(token, HttpsError) {
++  const value = String(token || '').trim()
++  if (value.length < 20 || value.length > 4096) {
++    throw new HttpsError('invalid-argument', 'Token de notificacao invalido.')
++  }
++  return value
++}
++
++function getPlatform(value) {
++  return String(value || 'web').trim().slice(0, 120) || 'web'
++}
++
++function getUserAgent(value) {
++  return String(value || '').trim().slice(0, 600)
++}
++
++async function registerCustomerOrderPushToken({ db, admin, HttpsError, orderId, trackingToken, token, platform, userAgent }) {
++  const safeToken = sanitizeFcmToken(token, HttpsError)
++  const orderRef = db.collection('orders').doc(orderId)
++  const orderSnapshot = await orderRef.get()
++
++  if (!orderSnapshot.exists) {
++    throw new HttpsError('not-found', 'Pedido nao encontrado.')
++  }
++
++  const orderData = orderSnapshot.data() || {}
++  assertCustomerTrackingAccess({ HttpsError, orderId, trackingToken, orderData })
++
++  const tokenHash = getCustomerOrderTokenHash({
++    orderId,
++    trackingToken: String(trackingToken || '').trim(),
++    token: safeToken,
++  })
++
++  await orderRef.collection('customerNotificationTokens').doc(tokenHash).set({
++    orderId,
++    storeId: orderData.storeId || orderData.storeDocId || '',
++    token: safeToken,
++    enabled: true,
++    platform: getPlatform(platform),
++    userAgent: getUserAgent(userAgent),
++    createdAt: admin.firestore.FieldValue.serverTimestamp(),
++    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++    lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
++  }, { merge: true })
++
++  return { ok: true, orderId, tokenHash }
++}
++
++async function disableCustomerOrderPushToken({ db, admin, HttpsError, orderId, trackingToken, token, tokenHash }) {
++  const orderRef = db.collection('orders').doc(orderId)
++  const orderSnapshot = await orderRef.get()
++
++  if (!orderSnapshot.exists) {
++    throw new HttpsError('not-found', 'Pedido nao encontrado.')
++  }
++
++  const orderData = orderSnapshot.data() || {}
++  assertCustomerTrackingAccess({ HttpsError, orderId, trackingToken, orderData })
++
++  const resolvedTokenHash = String(tokenHash || '').trim() || (
++    token
++      ? getCustomerOrderTokenHash({
++          orderId,
++          trackingToken: String(trackingToken || '').trim(),
++          token: sanitizeFcmToken(token, HttpsError),
++        })
++      : ''
++  )
++
++  if (!/^[a-f0-9]{64}$/.test(resolvedTokenHash)) {
++    throw new HttpsError('invalid-argument', 'Token de notificacao invalido.')
++  }
++
++  await orderRef.collection('customerNotificationTokens').doc(resolvedTokenHash).set({
++    enabled: false,
++    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++    lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
++  }, { merge: true })
++
++  return { ok: true, orderId, tokenHash: resolvedTokenHash }
++}
++
+ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) {
+   const normalizedStoreId = String(storeId || '').trim()
+   const normalizedOrderId = String(orderId || '').trim()
+@@ -92,6 +263,105 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId })
+   }
+ }
+ 
++async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, status, orderData = null }) {
++  const normalizedOrderId = String(orderId || '').trim()
++  const normalizedStatus = normalizeOrderStatus(status)
++
++  if (!normalizedOrderId || !normalizedStatus) {
++    logger.warn('[fcm] Skipping customer status push without orderId/status.', {
++      hasOrderId: Boolean(normalizedOrderId),
++      hasStatus: Boolean(normalizedStatus),
++    })
++    return { sent: 0, failed: 0, invalidated: 0 }
++  }
++
++  const orderRef = db.collection('orders').doc(normalizedOrderId)
++  let currentOrderData = orderData
++
++  if (!currentOrderData) {
++    const orderSnapshot = await orderRef.get()
++    if (!orderSnapshot.exists) return { sent: 0, failed: 0, invalidated: 0 }
++    currentOrderData = orderSnapshot.data() || {}
++  }
++
++  const tokenSnapshot = await orderRef
++    .collection('customerNotificationTokens')
++    .where('enabled', '==', true)
++    .limit(100)
++    .get()
++
++  if (tokenSnapshot.empty) {
++    return { sent: 0, failed: 0, invalidated: 0 }
++  }
++
++  const tokenDocs = tokenSnapshot.docs
++    .map((doc) => ({ ref: doc.ref, id: doc.id, data: doc.data() || {} }))
++    .filter((entry) => typeof entry.data.token === 'string' && entry.data.token.trim())
++
++  if (tokenDocs.length === 0) {
++    return { sent: 0, failed: 0, invalidated: 0 }
++  }
++
++  const content = getCustomerStatusPushContent(normalizedStatus, normalizedOrderId)
++  const response = await admin.messaging().sendEachForMulticast({
++    tokens: tokenDocs.map((entry) => entry.data.token),
++    data: {
++      type: 'order_status_update',
++      orderId: normalizedOrderId,
++      status: normalizedStatus,
++      title: content.title,
++      body: content.body,
++      url: getTrackingUrlPath(currentOrderData, normalizedOrderId),
++    },
++  })
++
++  const batch = db.batch()
++  let invalidated = 0
++
++  response.responses.forEach((sendResult, index) => {
++    const tokenDoc = tokenDocs[index]
++    if (!tokenDoc) return
++
++    if (sendResult.success) {
++      batch.set(tokenDoc.ref, {
++        lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
++        lastSentStatus: normalizedStatus,
++        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++      }, { merge: true })
++      return
++    }
++
++    if (isInvalidFcmTokenError(sendResult.error)) {
++      invalidated += 1
++      batch.set(tokenDoc.ref, {
++        enabled: false,
++        invalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
++        invalidationReason: String(sendResult.error?.code || 'messaging-error').slice(0, 120),
++        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++      }, { merge: true })
++    }
++  })
++
++  await batch.commit()
++
++  logger.info('[fcm] Customer order status push sent.', {
++    orderId: normalizedOrderId,
++    status: normalizedStatus,
++    successCount: response.successCount,
++    failureCount: response.failureCount,
++    invalidated,
++  })
++
++  return {
++    sent: response.successCount,
++    failed: response.failureCount,
++    invalidated,
++  }
++}
++
+ module.exports = {
++  disableCustomerOrderPushToken,
++  registerCustomerOrderPushToken,
++  sendCustomerOrderStatusPushToOrder,
+   sendNewOrderPushToStore,
+ }
+diff --git a/functions/index.js b/functions/index.js
+index f7408d18..4164c237 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -12,7 +12,12 @@ const crypto = require('crypto')
+ const { createPublicOrderHandler } = require('./publicOrder')
+ const { createAsaasFunctions } = require('./asaas')
+ const { createMerchantOrderFunctions } = require('./merchantOrder')
+-const { sendNewOrderPushToStore } = require('./fcmNotifications')
++const {
++  disableCustomerOrderPushToken,
++  registerCustomerOrderPushToken,
++  sendCustomerOrderStatusPushToOrder,
++  sendNewOrderPushToStore,
++} = require('./fcmNotifications')
+ const {
+   normalizeBrazilianPhone,
+   validateBrazilianMobilePhone,
+@@ -47,7 +52,21 @@ const TERMS_VERSION = '2026-05-24'
+ const PRIVACY_VERSION = '2026-05-24'
+ const REGION = 'southamerica-east1'
+ const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
+-const merchantOrderFunctions = createMerchantOrderFunctions({ db, admin, HttpsError, logger, region: REGION })
++const merchantOrderFunctions = createMerchantOrderFunctions({
++  db,
++  admin,
++  HttpsError,
++  logger,
++  region: REGION,
++  sendCustomerOrderStatusPushToOrder: ({ orderId, status, orderData }) => sendCustomerOrderStatusPushToOrder({
++    db,
++    admin,
++    logger,
++    orderId,
++    status,
++    orderData,
++  }),
++})
+ 
+ if (!ENFORCE_APP_CHECK && process.env.FUNCTIONS_EMULATOR !== 'true') {
+   logger.warn('[appCheck] Public callables are running without App Check enforcement. Use monitor mode first, then set ENFORCE_APP_CHECK=true after validating public store, coupon and order flows.')
+@@ -229,8 +248,45 @@ const PUBLIC_READ_RATE_LIMITS = {
+   markCustomerPixProofSent: 20,
+   requestCustomerOrderCancellation: 20,
+   submitPublicOrderReview: 20,
++  registerCustomerOrderPushToken: 20,
++  disableCustomerOrderPushToken: 20,
+ }
+ 
++exports.registerCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
++  await assertPublicCallableRateLimit('registerCustomerOrderPushToken', request)
++
++  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
++  const trackingToken = request.data?.trackingToken
++
++  return registerCustomerOrderPushToken({
++    db,
++    admin,
++    HttpsError,
++    orderId,
++    trackingToken,
++    token: request.data?.token,
++    platform: request.data?.platform,
++    userAgent: request.data?.userAgent,
++  })
++})
++
++exports.disableCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
++  await assertPublicCallableRateLimit('disableCustomerOrderPushToken', request)
++
++  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
++  const trackingToken = request.data?.trackingToken
++
++  return disableCustomerOrderPushToken({
++    db,
++    admin,
++    HttpsError,
++    orderId,
++    trackingToken,
++    token: request.data?.token,
++    tokenHash: request.data?.tokenHash,
++  })
++})
++
+ exports.confirmCustomerDelivery = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+   await assertPublicCallableRateLimit('confirmCustomerDelivery', request)
+ 
+diff --git a/functions/merchantOrder.js b/functions/merchantOrder.js
+index 35ed0ec1..56f255d7 100644
+--- a/functions/merchantOrder.js
++++ b/functions/merchantOrder.js
+@@ -356,7 +356,14 @@ function assertNonAnonymousCallableUser(request, HttpsError) {
+   return uid
+ }
+ 
+-function createMerchantOrderFunctions({ db, admin, HttpsError, logger, region = 'southamerica-east1' }) {
++function createMerchantOrderFunctions({
++  db,
++  admin,
++  HttpsError,
++  logger,
++  region = 'southamerica-east1',
++  sendCustomerOrderStatusPushToOrder = null,
++}) {
+   const updateMerchantOrder = onCall(
+     { region, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
+     async (request) => {
+@@ -442,9 +449,14 @@ function createMerchantOrderFunctions({ db, admin, HttpsError, logger, region =
+         transaction.update(orderRef, patch)
+ 
+         return {
++          previousStatus: normalizeMerchantOrderStatus(orderData?.status),
+           status: nextStatus,
+           storeId: orderData.storeId || '',
+           storeSlug: orderData.storeSlug || '',
++          orderData: {
++            ...orderData,
++            status: nextStatus,
++          },
+           changedFields: Object.keys(patch),
+         }
+       })
+@@ -461,6 +473,27 @@ function createMerchantOrderFunctions({ db, admin, HttpsError, logger, region =
+         source: 'cloud_function',
+       })
+ 
++      const shouldSendCustomerStatusPush =
++        ['updateStatus', 'confirmPixPayment'].includes(action) &&
++        result.status &&
++        result.status !== result.previousStatus
++
++      if (shouldSendCustomerStatusPush && typeof sendCustomerOrderStatusPushToOrder === 'function') {
++        try {
++          await sendCustomerOrderStatusPushToOrder({
++            orderId,
++            status: result.status,
++            orderData: result.orderData,
++          })
++        } catch (pushError) {
++          logger?.warn?.('[updateMerchantOrder] customer status push failed', {
++            orderId,
++            status: result.status,
++            error: pushError?.message || String(pushError),
++          })
++        }
++      }
++
+       return {
+         ok: true,
+         orderId,
+diff --git a/public/firebase-messaging-sw.js b/public/firebase-messaging-sw.js
+index 57c185fd..228918be 100644
+--- a/public/firebase-messaging-sw.js
++++ b/public/firebase-messaging-sw.js
+@@ -25,17 +25,25 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
+     const data = payload.data || {}
+     const orderId = String(data.orderId || '').trim()
+     const orderNumber = orderId ? `#${orderId.slice(-4).toUpperCase()}` : '#----'
+-    const title = 'Novo pedido recebido'
++    const isCustomerStatusUpdate = data.type === 'order_status_update'
++    const title = isCustomerStatusUpdate
++      ? data.title || 'Pedido atualizado'
++      : 'Novo pedido recebido'
+     const options = {
+-      body: `Pedido ${orderNumber} aguardando confirmacao`,
++      body: isCustomerStatusUpdate
++        ? data.body || `Pedido ${orderNumber} foi atualizado.`
++        : `Pedido ${orderNumber} aguardando confirmacao`,
+       icon: '/android-chrome-512x512.png',
+       badge: '/favicon.png',
+-      tag: data.orderId ? `new-order-${data.orderId}` : 'new-order',
++      tag: isCustomerStatusUpdate
++        ? `order-status-${data.orderId || Date.now()}-${data.status || 'updated'}`
++        : data.orderId ? `new-order-${data.orderId}` : 'new-order',
+       renotify: true,
+       data: {
+         type: data.type || 'new_order',
+         orderId: data.orderId || '',
+         storeId: data.storeId || '',
++        status: data.status || '',
+         url: data.url || '/dashboard/orders',
+       },
+     }
+diff --git a/src/pages/store/OrderTrackingPage.jsx b/src/pages/store/OrderTrackingPage.jsx
+index 0f3dce07..8b2832aa 100644
+--- a/src/pages/store/OrderTrackingPage.jsx
++++ b/src/pages/store/OrderTrackingPage.jsx
+@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions'
+ import {
+   FiAlertCircle,
+   FiArrowLeft,
++  FiBell,
+   FiCheck,
+   FiCheckCircle,
+   FiClock,
+@@ -31,6 +32,12 @@ import {
+ 
+ import { db, functions } from '../../services/firebase'
+ import StoreFooter from '../../components/layouts/StoreFooter'
++import {
++  disableCustomerOrderFcmToken,
++  isFcmSupported,
++  requestCustomerOrderFcmPermissionAndToken,
++  saveCustomerOrderFcmToken,
++} from '../../utils/fcmNotifications'
+ 
+ const DELIVERY_STATUS_STEPS = [
+   {
+@@ -1444,10 +1451,18 @@ export default function OrderTrackingPage() {
+   const [reviewLoading, setReviewLoading] = useState(false)
+   const [reviewError, setReviewError] = useState('')
+   const [reviewSent, setReviewSent] = useState(false)
++  const [customerPushStatus, setCustomerPushStatus] = useState('checking')
++  const [customerPushLoading, setCustomerPushLoading] = useState(false)
++  const [customerPushTokenHash, setCustomerPushTokenHash] = useState('')
+ 
+   const audioRef = useRef(null)
+   const previousStatusRef = useRef(null)
+ 
++  const trackingToken = String(order?.trackingToken || '').trim()
++  const customerPushStorageKey = order?.id && trackingToken
++    ? `pratoby:customer-fcm:${order.id}:${trackingToken}`
++    : ''
++
+   useEffect(() => {
+     audioRef.current = new Audio('/confirmation.mp3')
+     audioRef.current.preload = 'auto'
+@@ -1570,6 +1585,56 @@ export default function OrderTrackingPage() {
+     }
+   }, [order, slug])
+ 
++  useEffect(() => {
++    let mounted = true
++
++    async function refreshCustomerPushStatus() {
++      if (!order?.id) {
++        setCustomerPushStatus('disabled')
++        setCustomerPushTokenHash('')
++        return
++      }
++
++      if (!trackingToken) {
++        setCustomerPushStatus('missing-tracking-token')
++        setCustomerPushTokenHash('')
++        return
++      }
++
++      const support = await isFcmSupported()
++      if (!mounted) return
++
++      if (!support.supported) {
++        setCustomerPushStatus('unsupported')
++        return
++      }
++
++      if (support.permission === 'denied') {
++        setCustomerPushStatus('denied')
++        return
++      }
++
++      try {
++        const saved = customerPushStorageKey ? JSON.parse(localStorage.getItem(customerPushStorageKey) || 'null') : null
++        if (saved?.enabled && saved?.tokenHash) {
++          setCustomerPushTokenHash(saved.tokenHash)
++          setCustomerPushStatus('enabled')
++          return
++        }
++      } catch {
++        // localStorage can be unavailable or manually edited.
++      }
++
++      setCustomerPushStatus('disabled')
++    }
++
++    refreshCustomerPushStatus()
++
++    return () => {
++      mounted = false
++    }
++  }, [customerPushStorageKey, order?.id, trackingToken])
++
+ 
+   const status = normalizeStatus(order?.status)
+ 
+@@ -1628,6 +1693,92 @@ const isDelivered = status === 'entregue'
+     window.print()
+   }, [])
+ 
++  const handleEnableCustomerPush = useCallback(async () => {
++    if (!order?.id || customerPushLoading) return
++
++    if (!trackingToken) {
++      setCustomerPushStatus('missing-tracking-token')
++      return
++    }
++
++    try {
++      setCustomerPushLoading(true)
++      const result = await requestCustomerOrderFcmPermissionAndToken({
++        orderId: order.id,
++        trackingToken,
++      })
++
++      if (result.permission === 'denied') {
++        setCustomerPushStatus('denied')
++        return
++      }
++
++      if (!result.supported) {
++        setCustomerPushStatus('unsupported')
++        return
++      }
++
++      if (result.reason === 'missing-vapid-key') {
++        setCustomerPushStatus('missing-vapid-key')
++        return
++      }
++
++      if (!result.token || !result.tokenHash) {
++        setCustomerPushStatus('disabled')
++        return
++      }
++
++      await saveCustomerOrderFcmToken({
++        orderId: order.id,
++        trackingToken,
++        token: result.token,
++      })
++
++      setCustomerPushTokenHash(result.tokenHash)
++      setCustomerPushStatus('enabled')
++
++      if (customerPushStorageKey) {
++        localStorage.setItem(customerPushStorageKey, JSON.stringify({
++          enabled: true,
++          tokenHash: result.tokenHash,
++          updatedAt: Date.now(),
++        }))
++      }
++    } catch (error) {
++      console.error('[FCM] Erro ao ativar push do pedido:', error)
++      setCustomerPushStatus('error')
++    } finally {
++      setCustomerPushLoading(false)
++    }
++  }, [customerPushLoading, customerPushStorageKey, order?.id, trackingToken])
++
++  const handleDisableCustomerPush = useCallback(async () => {
++    if (!order?.id || customerPushLoading) return
++
++    if (!trackingToken) {
++      setCustomerPushStatus('missing-tracking-token')
++      return
++    }
++
++    try {
++      setCustomerPushLoading(true)
++      await disableCustomerOrderFcmToken({
++        orderId: order.id,
++        trackingToken,
++        tokenHash: customerPushTokenHash,
++      })
++
++      setCustomerPushTokenHash('')
++      setCustomerPushStatus('disabled')
++
++      if (customerPushStorageKey) {
++        localStorage.removeItem(customerPushStorageKey)
++      }
++    } finally {
++      setCustomerPushLoading(false)
++    }
++  }, [customerPushLoading, customerPushStorageKey, customerPushTokenHash, order?.id, trackingToken])
++
+   const handleConfirmDelivery = useCallback(async () => {
+     if (!order?.id || actionLoading) return
+ 
+@@ -1645,7 +1796,7 @@ const isDelivered = status === 'entregue'
+       const confirmCustomerDelivery = httpsCallable(functions, 'confirmCustomerDelivery')
+       await confirmCustomerDelivery({
+         orderId: order.id,
+-        trackingToken: order.trackingToken || order.id,
++        trackingToken: order.trackingToken,
+       })
+     } catch (error) {
+       console.error(error)
+@@ -1688,7 +1839,7 @@ const isDelivered = status === 'entregue'
+       const markCustomerPixProofSent = httpsCallable(functions, 'markCustomerPixProofSent')
+       await markCustomerPixProofSent({
+         orderId: order.id,
+-        trackingToken: order.trackingToken || order.id,
++        trackingToken: order.trackingToken,
+       })
+     } catch (error) {
+       console.info('Não foi possível registrar o envio do comprovante no pedido.', error)
+@@ -1718,7 +1869,7 @@ const isDelivered = status === 'entregue'
+       const requestCustomerOrderCancellation = httpsCallable(functions, 'requestCustomerOrderCancellation')
+       await requestCustomerOrderCancellation({
+         orderId: order.id,
+-        trackingToken: order.trackingToken || order.id,
++        trackingToken: order.trackingToken,
+       })
+     } catch (error) {
+       console.info('Não foi possível registrar a solicitação no pedido.', error)
+@@ -1766,7 +1917,7 @@ const isDelivered = status === 'entregue'
+       const submitPublicOrderReview = httpsCallable(functions, 'submitPublicOrderReview')
+       await submitPublicOrderReview({
+         orderId: order.id,
+-        trackingToken: order.trackingToken || order.id,
++        trackingToken: order.trackingToken,
+         review: {
+           rating: Number(review.rating),
+           foodRating: Number(review.foodRating),
+@@ -1925,6 +2076,73 @@ const isDelivered = status === 'entregue'
+           )}
+         </section>
+ 
++        {((!isCanceled && !isDelivered) || customerPushStatus === 'enabled') && (
++          <section className="rounded-[2rem] border border-orange-100 bg-white p-4 shadow-sm print:hidden">
++            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
++              <div className="flex min-w-0 items-start gap-3">
++                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
++                  <FiBell size={20} />
++                </div>
++
++                <div className="min-w-0">
++                  <h3 className="text-sm font-black text-[#111827]">
++                    Receber atualizacoes do pedido
++                  </h3>
++                  <p className="mt-1 text-xs leading-5 text-[#6b7280]">
++                    Ative neste dispositivo para ser avisado quando o status mudar.
++                  </p>
++
++                  {customerPushStatus === 'denied' && (
++                    <p className="mt-1 text-xs font-bold text-amber-700">
++                      Permissao bloqueada no navegador.
++                    </p>
++                  )}
++
++                  {customerPushStatus === 'missing-vapid-key' && (
++                    <p className="mt-1 text-xs font-bold text-amber-700">
++                      Push ainda nao foi configurado pela loja.
++                    </p>
++                  )}
++
++                  {customerPushStatus === 'missing-tracking-token' && (
++                    <p className="mt-1 text-xs font-bold text-amber-700">
++                      Este pedido nao possui token de acompanhamento para ativar avisos.
++                    </p>
++                  )}
++                </div>
++              </div>
++
++              {customerPushStatus === 'enabled' ? (
++                <button
++                  type="button"
++                  onClick={handleDisableCustomerPush}
++                  disabled={customerPushLoading}
++                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black text-[#6b7280] transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
++                >
++                  {customerPushLoading ? <FiLoader className="animate-spin" /> : <FiCheck />}
++                  Desativar avisos
++                </button>
++              ) : (
++                <button
++                  type="button"
++                  onClick={handleEnableCustomerPush}
++                  disabled={
++                    customerPushLoading ||
++                    customerPushStatus === 'unsupported' ||
++                    customerPushStatus === 'denied' ||
++                    customerPushStatus === 'missing-tracking-token' ||
++                    !trackingToken
++                  }
++                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-xs font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
++                >
++                  {customerPushLoading ? <FiLoader className="animate-spin" /> : <FiBell />}
++                  Ativar avisos
++                </button>
++              )}
++            </div>
++          </section>
++        )}
++
+         {!isCanceled && (
+   <section className="grid gap-3 print:hidden sm:grid-cols-2">
+     <button
+diff --git a/src/utils/fcmNotifications.js b/src/utils/fcmNotifications.js
+index b1a7f305..5b9a1e70 100644
+--- a/src/utils/fcmNotifications.js
++++ b/src/utils/fcmNotifications.js
+@@ -7,11 +7,13 @@ import {
+ } from 'firebase/firestore'
+ 
+ import {
++  functions,
+   auth,
+   db,
+   firebaseConfig,
+   getSupportedMessaging,
+ } from '../services/firebase'
++import { httpsCallable } from 'firebase/functions'
+ 
+ function hasNotificationApi() {
+   return typeof window !== 'undefined' && 'Notification' in window
+@@ -36,6 +38,11 @@ async function getMerchantTokenHash(token) {
+   return sha256Hex(`${uid}:${token}`)
+ }
+ 
++async function sha256OrderTokenHash({ orderId, trackingToken, token }) {
++  if (!orderId || !trackingToken || !token) return ''
++  return sha256Hex(`${orderId}:${trackingToken}:${token}`)
++}
++
+ function getFirebaseMessagingSwUrl() {
+   const publicConfig = {
+     apiKey: firebaseConfig.apiKey,
+@@ -183,6 +190,21 @@ export async function requestFcmPermissionAndToken() {
+   }
+ }
+ 
++export async function requestCustomerOrderFcmPermissionAndToken({ orderId, trackingToken }) {
++  const result = await requestFcmPermissionAndToken()
++
++  if (!result.token) return result
++
++  return {
++    ...result,
++    tokenHash: await sha256OrderTokenHash({
++      orderId,
++      trackingToken,
++      token: result.token,
++    }),
++  }
++}
++
+ export async function saveMerchantFcmToken({ storeId, token, tokenHash }) {
+   const uid = auth.currentUser?.uid
+ 
+@@ -263,3 +285,62 @@ export async function disableMerchantFcmToken({ storeId, token, tokenHash }) {
+     return { disabled: false, reason: 'disable-failed', error }
+   }
+ }
++
++export async function saveCustomerOrderFcmToken({ orderId, trackingToken, token }) {
++  if (!orderId || !trackingToken || !token) {
++    throw new Error('orderId, trackingToken e token sao obrigatorios.')
++  }
++
++  const registerCustomerOrderPushToken = httpsCallable(functions, 'registerCustomerOrderPushToken')
++  const result = await registerCustomerOrderPushToken({
++    orderId,
++    trackingToken,
++    token,
++    platform: getPlatform(),
++    userAgent: typeof navigator === 'undefined' ? '' : String(navigator.userAgent || '').slice(0, 600),
++  })
++
++  return result.data || { ok: true }
++}
++
++export async function disableCustomerOrderFcmToken({ orderId, trackingToken, token, tokenHash }) {
++  if (!orderId || !trackingToken) {
++    return { disabled: false, reason: 'missing-order' }
++  }
++
++  let resolvedToken = token
++  let resolvedTokenHash = tokenHash
++
++  try {
++    const permission = getNotificationPermission()
++    const vapidKey = import.meta.env.VITE_FIREBASE_MESSAGING_VAPID_KEY
++
++    if ((!resolvedToken || !resolvedTokenHash) && permission === 'granted' && vapidKey) {
++      const messaging = await getSupportedMessaging()
++      const serviceWorkerRegistration = await registerMessagingServiceWorker()
++      resolvedToken = await getToken(messaging, {
++        vapidKey,
++        serviceWorkerRegistration,
++      })
++      resolvedTokenHash = await sha256OrderTokenHash({ orderId, trackingToken, token: resolvedToken })
++    }
++
++    const disableCustomerOrderPushToken = httpsCallable(functions, 'disableCustomerOrderPushToken')
++    await disableCustomerOrderPushToken({
++      orderId,
++      trackingToken,
++      token: resolvedToken,
++      tokenHash: resolvedTokenHash,
++    })
++
++    if (resolvedToken) {
++      const messaging = await getSupportedMessaging()
++      if (messaging) await deleteToken(messaging)
++    }
++
++    return { disabled: true, tokenHash: resolvedTokenHash || '' }
++  } catch (error) {
++    console.warn('[FCM] Nao foi possivel desativar push do pedido.', error)
++    return { disabled: false, reason: 'disable-failed', error }
++  }
++}

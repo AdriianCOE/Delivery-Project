@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions'
 import {
   FiAlertCircle,
   FiArrowLeft,
+  FiBell,
   FiCheck,
   FiCheckCircle,
   FiClock,
@@ -31,6 +32,12 @@ import {
 
 import { db, functions } from '../../services/firebase'
 import StoreFooter from '../../components/layouts/StoreFooter'
+import {
+  disableCustomerOrderFcmToken,
+  isFcmSupported,
+  requestCustomerOrderFcmPermissionAndToken,
+  saveCustomerOrderFcmToken,
+} from '../../utils/fcmNotifications'
 
 const DELIVERY_STATUS_STEPS = [
   {
@@ -1444,9 +1451,17 @@ export default function OrderTrackingPage() {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewError, setReviewError] = useState('')
   const [reviewSent, setReviewSent] = useState(false)
+  const [customerPushStatus, setCustomerPushStatus] = useState('checking')
+  const [customerPushLoading, setCustomerPushLoading] = useState(false)
+  const [customerPushTokenHash, setCustomerPushTokenHash] = useState('')
 
   const audioRef = useRef(null)
   const previousStatusRef = useRef(null)
+
+  const trackingToken = String(order?.trackingToken || '').trim()
+  const customerPushStorageKey = order?.id && trackingToken
+    ? `pratoby:customer-fcm:${order.id}:${trackingToken}`
+    : ''
 
   useEffect(() => {
     audioRef.current = new Audio('/confirmation.mp3')
@@ -1570,6 +1585,56 @@ export default function OrderTrackingPage() {
     }
   }, [order, slug])
 
+  useEffect(() => {
+    let mounted = true
+
+    async function refreshCustomerPushStatus() {
+      if (!order?.id) {
+        setCustomerPushStatus('disabled')
+        setCustomerPushTokenHash('')
+        return
+      }
+
+      if (!trackingToken) {
+        setCustomerPushStatus('missing-tracking-token')
+        setCustomerPushTokenHash('')
+        return
+      }
+
+      const support = await isFcmSupported()
+      if (!mounted) return
+
+      if (!support.supported) {
+        setCustomerPushStatus('unsupported')
+        return
+      }
+
+      if (support.permission === 'denied') {
+        setCustomerPushStatus('denied')
+        return
+      }
+
+      try {
+        const saved = customerPushStorageKey ? JSON.parse(localStorage.getItem(customerPushStorageKey) || 'null') : null
+        if (saved?.enabled && saved?.tokenHash) {
+          setCustomerPushTokenHash(saved.tokenHash)
+          setCustomerPushStatus('enabled')
+          return
+        }
+      } catch {
+        // localStorage can be unavailable or manually edited.
+      }
+
+      setCustomerPushStatus('disabled')
+    }
+
+    refreshCustomerPushStatus()
+
+    return () => {
+      mounted = false
+    }
+  }, [customerPushStorageKey, order?.id, trackingToken])
+
 
   const status = normalizeStatus(order?.status)
 
@@ -1628,6 +1693,92 @@ const isDelivered = status === 'entregue'
     window.print()
   }, [])
 
+  const handleEnableCustomerPush = useCallback(async () => {
+    if (!order?.id || customerPushLoading) return
+
+    if (!trackingToken) {
+      setCustomerPushStatus('missing-tracking-token')
+      return
+    }
+
+    try {
+      setCustomerPushLoading(true)
+      const result = await requestCustomerOrderFcmPermissionAndToken({
+        orderId: order.id,
+        trackingToken,
+      })
+
+      if (result.permission === 'denied') {
+        setCustomerPushStatus('denied')
+        return
+      }
+
+      if (!result.supported) {
+        setCustomerPushStatus('unsupported')
+        return
+      }
+
+      if (result.reason === 'missing-vapid-key') {
+        setCustomerPushStatus('missing-vapid-key')
+        return
+      }
+
+      if (!result.token || !result.tokenHash) {
+        setCustomerPushStatus('disabled')
+        return
+      }
+
+      await saveCustomerOrderFcmToken({
+        orderId: order.id,
+        trackingToken,
+        token: result.token,
+      })
+
+      setCustomerPushTokenHash(result.tokenHash)
+      setCustomerPushStatus('enabled')
+
+      if (customerPushStorageKey) {
+        localStorage.setItem(customerPushStorageKey, JSON.stringify({
+          enabled: true,
+          tokenHash: result.tokenHash,
+          updatedAt: Date.now(),
+        }))
+      }
+    } catch (error) {
+      console.error('[FCM] Erro ao ativar push do pedido:', error)
+      setCustomerPushStatus('error')
+    } finally {
+      setCustomerPushLoading(false)
+    }
+  }, [customerPushLoading, customerPushStorageKey, order?.id, trackingToken])
+
+  const handleDisableCustomerPush = useCallback(async () => {
+    if (!order?.id || customerPushLoading) return
+
+    if (!trackingToken) {
+      setCustomerPushStatus('missing-tracking-token')
+      return
+    }
+
+    try {
+      setCustomerPushLoading(true)
+      await disableCustomerOrderFcmToken({
+        orderId: order.id,
+        trackingToken,
+        tokenHash: customerPushTokenHash,
+      })
+
+      setCustomerPushTokenHash('')
+      setCustomerPushStatus('disabled')
+
+      if (customerPushStorageKey) {
+        localStorage.removeItem(customerPushStorageKey)
+      }
+    } finally {
+      setCustomerPushLoading(false)
+    }
+  }, [customerPushLoading, customerPushStorageKey, customerPushTokenHash, order?.id, trackingToken])
+
   const handleConfirmDelivery = useCallback(async () => {
     if (!order?.id || actionLoading) return
 
@@ -1645,7 +1796,7 @@ const isDelivered = status === 'entregue'
       const confirmCustomerDelivery = httpsCallable(functions, 'confirmCustomerDelivery')
       await confirmCustomerDelivery({
         orderId: order.id,
-        trackingToken: order.trackingToken || order.id,
+        trackingToken: order.trackingToken,
       })
     } catch (error) {
       console.error(error)
@@ -1688,7 +1839,7 @@ const isDelivered = status === 'entregue'
       const markCustomerPixProofSent = httpsCallable(functions, 'markCustomerPixProofSent')
       await markCustomerPixProofSent({
         orderId: order.id,
-        trackingToken: order.trackingToken || order.id,
+        trackingToken: order.trackingToken,
       })
     } catch (error) {
       console.info('Não foi possível registrar o envio do comprovante no pedido.', error)
@@ -1718,7 +1869,7 @@ const isDelivered = status === 'entregue'
       const requestCustomerOrderCancellation = httpsCallable(functions, 'requestCustomerOrderCancellation')
       await requestCustomerOrderCancellation({
         orderId: order.id,
-        trackingToken: order.trackingToken || order.id,
+        trackingToken: order.trackingToken,
       })
     } catch (error) {
       console.info('Não foi possível registrar a solicitação no pedido.', error)
@@ -1766,7 +1917,7 @@ const isDelivered = status === 'entregue'
       const submitPublicOrderReview = httpsCallable(functions, 'submitPublicOrderReview')
       await submitPublicOrderReview({
         orderId: order.id,
-        trackingToken: order.trackingToken || order.id,
+        trackingToken: order.trackingToken,
         review: {
           rating: Number(review.rating),
           foodRating: Number(review.foodRating),
@@ -1924,6 +2075,73 @@ const isDelivered = status === 'entregue'
             </div>
           )}
         </section>
+
+        {((!isCanceled && !isDelivered) || customerPushStatus === 'enabled') && (
+          <section className="rounded-[2rem] border border-orange-100 bg-white p-4 shadow-sm print:hidden">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+                  <FiBell size={20} />
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-[#111827]">
+                    Receber atualizacoes do pedido
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-[#6b7280]">
+                    Ative neste dispositivo para ser avisado quando o status mudar.
+                  </p>
+
+                  {customerPushStatus === 'denied' && (
+                    <p className="mt-1 text-xs font-bold text-amber-700">
+                      Permissao bloqueada no navegador.
+                    </p>
+                  )}
+
+                  {customerPushStatus === 'missing-vapid-key' && (
+                    <p className="mt-1 text-xs font-bold text-amber-700">
+                      Push ainda nao foi configurado pela loja.
+                    </p>
+                  )}
+
+                  {customerPushStatus === 'missing-tracking-token' && (
+                    <p className="mt-1 text-xs font-bold text-amber-700">
+                      Este pedido nao possui token de acompanhamento para ativar avisos.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {customerPushStatus === 'enabled' ? (
+                <button
+                  type="button"
+                  onClick={handleDisableCustomerPush}
+                  disabled={customerPushLoading}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black text-[#6b7280] transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {customerPushLoading ? <FiLoader className="animate-spin" /> : <FiCheck />}
+                  Desativar avisos
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleEnableCustomerPush}
+                  disabled={
+                    customerPushLoading ||
+                    customerPushStatus === 'unsupported' ||
+                    customerPushStatus === 'denied' ||
+                    customerPushStatus === 'missing-tracking-token' ||
+                    !trackingToken
+                  }
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-xs font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {customerPushLoading ? <FiLoader className="animate-spin" /> : <FiBell />}
+                  Ativar avisos
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         {!isCanceled && (
   <section className="grid gap-3 print:hidden sm:grid-cols-2">

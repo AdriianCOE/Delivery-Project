@@ -356,7 +356,14 @@ function assertNonAnonymousCallableUser(request, HttpsError) {
   return uid
 }
 
-function createMerchantOrderFunctions({ db, admin, HttpsError, logger, region = 'southamerica-east1' }) {
+function createMerchantOrderFunctions({
+  db,
+  admin,
+  HttpsError,
+  logger,
+  region = 'southamerica-east1',
+  sendCustomerOrderStatusPushToOrder = null,
+}) {
   const updateMerchantOrder = onCall(
     { region, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
     async (request) => {
@@ -442,9 +449,14 @@ function createMerchantOrderFunctions({ db, admin, HttpsError, logger, region = 
         transaction.update(orderRef, patch)
 
         return {
+          previousStatus: normalizeMerchantOrderStatus(orderData?.status),
           status: nextStatus,
           storeId: orderData.storeId || '',
           storeSlug: orderData.storeSlug || '',
+          orderData: {
+            ...orderData,
+            status: nextStatus,
+          },
           changedFields: Object.keys(patch),
         }
       })
@@ -460,6 +472,27 @@ function createMerchantOrderFunctions({ db, admin, HttpsError, logger, region = 
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         source: 'cloud_function',
       })
+
+      const shouldSendCustomerStatusPush =
+        ['updateStatus', 'confirmPixPayment'].includes(action) &&
+        result.status &&
+        result.status !== result.previousStatus
+
+      if (shouldSendCustomerStatusPush && typeof sendCustomerOrderStatusPushToOrder === 'function') {
+        try {
+          await sendCustomerOrderStatusPushToOrder({
+            orderId,
+            status: result.status,
+            orderData: result.orderData,
+          })
+        } catch (pushError) {
+          logger?.warn?.('[updateMerchantOrder] customer status push failed', {
+            orderId,
+            status: result.status,
+            error: pushError?.message || String(pushError),
+          })
+        }
+      }
 
       return {
         ok: true,

@@ -7,11 +7,13 @@ import {
 } from 'firebase/firestore'
 
 import {
+  functions,
   auth,
   db,
   firebaseConfig,
   getSupportedMessaging,
 } from '../services/firebase'
+import { httpsCallable } from 'firebase/functions'
 
 function hasNotificationApi() {
   return typeof window !== 'undefined' && 'Notification' in window
@@ -34,6 +36,11 @@ async function getMerchantTokenHash(token) {
   const uid = auth.currentUser?.uid
   if (!uid || !token) return ''
   return sha256Hex(`${uid}:${token}`)
+}
+
+async function sha256OrderTokenHash({ orderId, trackingToken, token }) {
+  if (!orderId || !trackingToken || !token) return ''
+  return sha256Hex(`${orderId}:${trackingToken}:${token}`)
 }
 
 function getFirebaseMessagingSwUrl() {
@@ -183,6 +190,21 @@ export async function requestFcmPermissionAndToken() {
   }
 }
 
+export async function requestCustomerOrderFcmPermissionAndToken({ orderId, trackingToken }) {
+  const result = await requestFcmPermissionAndToken()
+
+  if (!result.token) return result
+
+  return {
+    ...result,
+    tokenHash: await sha256OrderTokenHash({
+      orderId,
+      trackingToken,
+      token: result.token,
+    }),
+  }
+}
+
 export async function saveMerchantFcmToken({ storeId, token, tokenHash }) {
   const uid = auth.currentUser?.uid
 
@@ -260,6 +282,65 @@ export async function disableMerchantFcmToken({ storeId, token, tokenHash }) {
     return { disabled: true, tokenHash: resolvedTokenHash || '' }
   } catch (error) {
     console.warn('[FCM] Nao foi possivel desativar token push.', error)
+    return { disabled: false, reason: 'disable-failed', error }
+  }
+}
+
+export async function saveCustomerOrderFcmToken({ orderId, trackingToken, token }) {
+  if (!orderId || !trackingToken || !token) {
+    throw new Error('orderId, trackingToken e token sao obrigatorios.')
+  }
+
+  const registerCustomerOrderPushToken = httpsCallable(functions, 'registerCustomerOrderPushToken')
+  const result = await registerCustomerOrderPushToken({
+    orderId,
+    trackingToken,
+    token,
+    platform: getPlatform(),
+    userAgent: typeof navigator === 'undefined' ? '' : String(navigator.userAgent || '').slice(0, 600),
+  })
+
+  return result.data || { ok: true }
+}
+
+export async function disableCustomerOrderFcmToken({ orderId, trackingToken, token, tokenHash }) {
+  if (!orderId || !trackingToken) {
+    return { disabled: false, reason: 'missing-order' }
+  }
+
+  let resolvedToken = token
+  let resolvedTokenHash = tokenHash
+
+  try {
+    const permission = getNotificationPermission()
+    const vapidKey = import.meta.env.VITE_FIREBASE_MESSAGING_VAPID_KEY
+
+    if ((!resolvedToken || !resolvedTokenHash) && permission === 'granted' && vapidKey) {
+      const messaging = await getSupportedMessaging()
+      const serviceWorkerRegistration = await registerMessagingServiceWorker()
+      resolvedToken = await getToken(messaging, {
+        vapidKey,
+        serviceWorkerRegistration,
+      })
+      resolvedTokenHash = await sha256OrderTokenHash({ orderId, trackingToken, token: resolvedToken })
+    }
+
+    const disableCustomerOrderPushToken = httpsCallable(functions, 'disableCustomerOrderPushToken')
+    await disableCustomerOrderPushToken({
+      orderId,
+      trackingToken,
+      token: resolvedToken,
+      tokenHash: resolvedTokenHash,
+    })
+
+    if (resolvedToken) {
+      const messaging = await getSupportedMessaging()
+      if (messaging) await deleteToken(messaging)
+    }
+
+    return { disabled: true, tokenHash: resolvedTokenHash || '' }
+  } catch (error) {
+    console.warn('[FCM] Nao foi possivel desativar push do pedido.', error)
     return { disabled: false, reason: 'disable-failed', error }
   }
 }
