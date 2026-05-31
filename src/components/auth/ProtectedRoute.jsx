@@ -27,23 +27,23 @@ function getFallbackRouteByRole(role) {
 
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-6">
+    <div className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950 px-6">
       <div className="text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-[#F97316] text-white shadow-xl shadow-orange-600/20">
           <FiShield size={28} />
         </div>
 
         <div className="mt-5">
-          <p className="text-lg font-black tracking-tight text-[#111827]">
+          <p className="text-lg font-black tracking-tight text-[#111827] dark:text-zinc-100">
             PratoBy
           </p>
 
-          <p className="mt-1 text-sm font-medium text-[#6B7280]">
+          <p className="mt-1 text-sm font-medium text-[#6B7280] dark:text-zinc-400">
             Verificando seu acesso...
           </p>
         </div>
 
-        <div className="mx-auto mt-5 h-2 w-40 overflow-hidden rounded-full bg-orange-100">
+        <div className="mx-auto mt-5 h-2 w-40 overflow-hidden rounded-full bg-orange-100 dark:bg-zinc-800">
           <div className="h-full w-1/2 animate-pulse rounded-full bg-[#F97316]" />
         </div>
       </div>

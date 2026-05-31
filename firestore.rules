@@ -123,6 +123,70 @@ function orderStoreKeys(data) {
       );
     }
 
+    function validNotificationTokenCreate(storeId, tokenId) {
+      return signedInNonAnonymous()
+        && canManageStoreId(storeId)
+        && tokenId is string
+        && tokenId.size() == 64
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'storeId',
+          'token',
+          'enabled',
+          'platform',
+          'userAgent',
+          'createdAt',
+          'updatedAt',
+          'lastSeenAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.storeId == storeId
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 20
+        && request.resource.data.token.size() <= 4096
+        && request.resource.data.enabled is bool
+        && request.resource.data.platform is string
+        && request.resource.data.platform.size() <= 120
+        && request.resource.data.userAgent is string
+        && request.resource.data.userAgent.size() <= 600
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.lastSeenAt is timestamp;
+    }
+
+    function validNotificationTokenUpdate(storeId, tokenId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+
+      return signedInNonAnonymous()
+        && canManageStoreId(storeId)
+        && tokenId is string
+        && tokenId.size() == 64
+        && resource.data.uid == request.auth.uid
+        && resource.data.storeId == storeId
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.token == resource.data.token
+        && request.resource.data.createdAt == resource.data.createdAt
+        && changed.hasOnly([
+          'enabled',
+          'platform',
+          'userAgent',
+          'updatedAt',
+          'lastSeenAt'
+        ])
+        && (!changed.hasAny(['enabled']) || request.resource.data.enabled is bool)
+        && (!changed.hasAny(['platform']) || (
+          request.resource.data.platform is string
+          && request.resource.data.platform.size() <= 120
+        ))
+        && (!changed.hasAny(['userAgent']) || (
+          request.resource.data.userAgent is string
+          && request.resource.data.userAgent.size() <= 600
+        ))
+        && (!changed.hasAny(['updatedAt']) || request.resource.data.updatedAt is timestamp)
+        && (!changed.hasAny(['lastSeenAt']) || request.resource.data.lastSeenAt is timestamp);
+    }
+
     function publicStoreExists(storeId) {
       return storeId is string
         && exists(publicStorePath(storeId))
@@ -388,6 +452,14 @@ function validPublicOrderCreate(orderId) {
       allow create: if isAdmin();
       allow update: if isAdmin() || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
       allow delete: if isAdmin();
+
+      match /notificationTokens/{tokenId} {
+        allow get: if isAdmin() || (signedInNonAnonymous() && resource.data.uid == request.auth.uid && canManageStoreId(storeId));
+        allow list: if false;
+        allow create: if validNotificationTokenCreate(storeId, tokenId);
+        allow update: if validNotificationTokenUpdate(storeId, tokenId);
+        allow delete: if isAdmin() || (signedInNonAnonymous() && resource.data.uid == request.auth.uid && canManageStoreId(storeId));
+      }
     }
 
     match /publicStores/{storeId} {

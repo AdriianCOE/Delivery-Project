@@ -252,7 +252,7 @@ function getOrderDate(order) {
 function formatDate(order) {
   const date = getOrderDate(order)
 
-  if (!date) return 'â€”'
+  if (!date) return '-'
 
   return date.toLocaleString('pt-BR', {
     day: '2-digit',
@@ -291,7 +291,7 @@ function getOrderDisplayNumber(order) {
 function timeAgo(order) {
   const date = getOrderDate(order)
 
-  if (!date) return 'â€”'
+  if (!date) return '-'
 
   const diff = Math.floor((Date.now() - date.getTime()) / 1000)
 
@@ -776,7 +776,7 @@ function getItemOptionsSummary(item) {
     return `+ ${prefix}${getOptionName(extra)}`
   })
 
-  return [...groupText, ...additionalText].join(' Â· ')
+  return [...groupText, ...additionalText].join(' · ')
 }
 
 function getOrderItemsSummary(order) {
@@ -975,7 +975,7 @@ function getPaymentLine(order) {
   ''
   const payment = getPaymentMethod(order)
 
-  return changeForLabel ? `${payment} Â· ${changeForLabel}` : payment
+  return changeForLabel ? `${payment} · ${changeForLabel}` : payment
 }
 
 function getFirstName(name) {
@@ -1055,7 +1055,7 @@ function buildWhatsAppMessage(order, store) {
     return [
       `Olá, *${customerName}*! Aqui é da *${storeName}*.`,
       '',
-      `âœ… *Pedido confirmado*`,
+      `*Pedido confirmado*`,
       '',
       `Confirmamos o seu pedido *${orderCode}* e já estamos cuidando dele com atenção.`,
       '',
@@ -1107,7 +1107,7 @@ cancelado: {
       ? `\nAcompanhe por aqui:\n${trackingLink}`
       : '',
     '',
-    `â€” ${storeName}`,
+    `- ${storeName}`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -1127,7 +1127,7 @@ function buildCustomerThanksMessage(order, store) {
     '',
     'Ficamos felizes em te atender e esperamos que tenha chegado tudo certinho. ðŸ˜Š',
     '',
-    `â€” ${storeName}`,
+    `- ${storeName}`,
   ].join('\n')
 }
 
@@ -2118,7 +2118,7 @@ function OrderItemsList({ items }) {
                         <strong>Adicional:</strong>{' '}
                         {quantity > 1 ? `${quantity}x ` : ''}
                         {getOptionName(extra)}
-                        {totalExtraPrice > 0 ? ` Â· + ${formatMoney(totalExtraPrice)}` : ''}
+                        {totalExtraPrice > 0 ? ` · + ${formatMoney(totalExtraPrice)}` : ''}
                       </p>
                     )
                   })}
@@ -2337,7 +2337,7 @@ function OrderModal({
                 )}
               </div>
               <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-zinc-500">
-                {formatDate(order)} Â· {store?.name || 'Loja'} Â· {items.length} item{items.length === 1 ? '' : 's'}
+                {formatDate(order)} · {store?.name || 'Loja'} · {items.length} item{items.length === 1 ? '' : 's'}
               </p>
             </div>
             <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
@@ -2467,7 +2467,7 @@ function OrderModal({
                       address.reference ? `Ref: ${address.reference}` : '',
                     ]
                       .filter(Boolean)
-                      .join(' Â· ')}
+                      .join(' · ')}
                   </p>
                 )}
               </section>

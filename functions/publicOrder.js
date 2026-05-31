@@ -1145,7 +1145,14 @@ function buildDeliveryAddress(input, deliveryType, neighborhood) {
   }
 }
 
-function createPublicOrderHandler({ db, admin, HttpsError, logger, maxOrderCents = 100000000 }) {
+function createPublicOrderHandler({
+  db,
+  admin,
+  HttpsError,
+  logger,
+  maxOrderCents = 100000000,
+  sendNewOrderPushToStore = null,
+}) {
   return async (request) => {
     try {
       const input = request.data || {}
@@ -1461,6 +1468,21 @@ function createPublicOrderHandler({ db, admin, HttpsError, logger, maxOrderCents
         totalCents: result.totals.totalCents,
         hasCoupon: Boolean(couponCode),
       })
+
+      if (typeof sendNewOrderPushToStore === 'function') {
+        try {
+          await sendNewOrderPushToStore({
+            storeId: storeDocId,
+            orderId: result.orderId,
+          })
+        } catch (pushError) {
+          logger.warn('Public order created but new order push failed.', {
+            orderId: result.orderId,
+            storeId: storeDocId,
+            error: pushError?.message || String(pushError),
+          })
+        }
+      }
 
       return result
     } catch (error) {

@@ -11,6 +11,8 @@ import {
   loadNotificationReadState,
   saveNotificationPreference,
   saveNotificationReadState,
+  saveNotificationPreferences,
+  saveStructuredNotificationPreference,
 } from '../utils/notificationStorage'
 import {
   DASHBOARD_NOTIFICATION_EVENT,
@@ -19,6 +21,11 @@ import {
   dispatchDashboardNotification,
   normalizeDashboardNotification,
 } from '../utils/notificationFormatters'
+import {
+  NOTIFICATION_PREFERENCES_EVENT,
+  dispatchNotificationPreferencesUpdated,
+  shouldShowInternalNotification,
+} from '../utils/notificationPreferences'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 
@@ -66,6 +73,7 @@ function createBillingNotification({ id, title, message, severity = 'warning', c
     createdAt,
     sourceType: 'billing',
     sourceId: id,
+    critical: severity === 'danger',
   }
 }
 
@@ -256,12 +264,28 @@ export function useDashboardNotifications() {
       setReadState(state)
     }
 
+    const handlePreferencesState = (event) => {
+      const { uid: eventUid, storeId, preferences: nextPreferences, instanceId: eventInstanceId } = event.detail || {}
+      if (eventInstanceId === instanceId) return
+      if (eventUid && uid && String(eventUid) !== String(uid)) return
+      if (storeId && activeStoreId && String(storeId) !== String(activeStoreId)) return
+      if (!nextPreferences) return
+
+      setReadState((currentState) => ({
+        version: currentState?.version || 1,
+        read: currentState?.read || {},
+        preferences: nextPreferences,
+      }))
+    }
+
     window.addEventListener(DASHBOARD_NOTIFICATION_EVENT, handleNotification)
     window.addEventListener(DASHBOARD_NOTIFICATION_READ_EVENT, handleReadState)
+    window.addEventListener(NOTIFICATION_PREFERENCES_EVENT, handlePreferencesState)
 
     return () => {
       window.removeEventListener(DASHBOARD_NOTIFICATION_EVENT, handleNotification)
       window.removeEventListener(DASHBOARD_NOTIFICATION_READ_EVENT, handleReadState)
+      window.removeEventListener(NOTIFICATION_PREFERENCES_EVENT, handlePreferencesState)
     }
   }, [activeStoreId, instanceId, pushLocalNotification, uid])
 
@@ -374,8 +398,9 @@ export function useDashboardNotifications() {
           read: readIds.has(normalized.id),
         }
       })
+      .filter((notification) => shouldShowInternalNotification(notification, preferences))
       .sort((a, b) => b.createdAt - a.createdAt)
-  }, [activeStoreId, loading, localNotifications, readIds, reviewNotifications, store, uid, userData])
+  }, [activeStoreId, loading, localNotifications, preferences, readIds, reviewNotifications, store, uid, userData])
 
   const unreadNotifications = useMemo(() => {
     return notifications.filter((notification) => !notification.read)
@@ -426,6 +451,10 @@ export function useDashboardNotifications() {
       createdAt: notification?.createdAt || Date.now(),
     })
 
+    if (!shouldShowInternalNotification(normalized, preferences)) {
+      return normalized.id
+    }
+
     pushLocalNotification(normalized)
     dispatchDashboardNotification(normalized, {
       storeId: activeStoreId,
@@ -433,7 +462,7 @@ export function useDashboardNotifications() {
     })
 
     return normalized.id
-  }, [activeStoreId, instanceId, pushLocalNotification])
+  }, [activeStoreId, instanceId, preferences, pushLocalNotification])
 
   const setLocalPreference = useCallback((key, value) => {
     if (!uid || !activeStoreId || !key) return
@@ -453,6 +482,32 @@ export function useDashboardNotifications() {
     }
   }, [activeStoreId, instanceId, uid])
 
+  const setNotificationPreferences = useCallback((nextPreferences) => {
+    if (!uid || !activeStoreId) return
+
+    const savedState = saveNotificationPreferences(uid, activeStoreId, nextPreferences)
+    setReadState(savedState)
+    dispatchNotificationPreferencesUpdated({
+      uid,
+      storeId: activeStoreId,
+      preferences: savedState.preferences,
+      instanceId,
+    })
+  }, [activeStoreId, instanceId, uid])
+
+  const setNotificationPreference = useCallback((group, key, value) => {
+    if (!uid || !activeStoreId || !group || !key) return
+
+    const savedState = saveStructuredNotificationPreference(uid, activeStoreId, group, key, value)
+    setReadState(savedState)
+    dispatchNotificationPreferencesUpdated({
+      uid,
+      storeId: activeStoreId,
+      preferences: savedState.preferences,
+      instanceId,
+    })
+  }, [activeStoreId, instanceId, uid])
+
   return {
     notifications,
     unreadNotifications,
@@ -464,6 +519,8 @@ export function useDashboardNotifications() {
     addLocalNotification,
     preferences,
     setLocalPreference,
+    setNotificationPreferences,
+    setNotificationPreference,
     uid,
     activeStoreId,
     store,

@@ -2,6 +2,14 @@ export const NOTIFICATION_AREAS = ['orders', 'reviews', 'billing', 'settings', '
 export const DASHBOARD_NOTIFICATION_EVENT = 'pratoby:dashboard-notification'
 export const DASHBOARD_NOTIFICATION_READ_EVENT = 'pratoby:dashboard-notification-read'
 
+const AREA_LABELS = {
+  orders: 'Pedido',
+  reviews: 'Avaliacao',
+  billing: 'Assinatura',
+  settings: 'Configuracao',
+  general: 'Painel',
+}
+
 const AREA_SET = new Set(NOTIFICATION_AREAS)
 const SEVERITY_SET = new Set(['info', 'warning', 'danger', 'success'])
 
@@ -40,6 +48,8 @@ export function normalizeDashboardNotification(notification) {
     createdAt: normalizeCreatedAt(notification?.createdAt || notification?.timestamp),
     sourceType,
     sourceId: String(sourceId),
+    label: notification?.label || AREA_LABELS[area] || AREA_LABELS.general,
+    critical: notification?.critical === true,
     read: Boolean(notification?.read),
   }
 }

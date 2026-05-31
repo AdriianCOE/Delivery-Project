@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'motion/react'
@@ -14,10 +14,13 @@ import DashboardNotificationBell from '../notifications/DashboardNotificationBel
 import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
 import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
 import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
+import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
 
 import {
   FiBarChart2,
+  FiChevronDown,
   FiChevronRight,
+  FiChevronUp,
   FiClock,
   FiCreditCard,
   FiDollarSign,
@@ -300,9 +303,9 @@ function PratoByMark({ compact = false, collapsed = false }) {
 
 function SidebarSection({ title, children, collapsed = false }) {
   return (
-    <section className={cn('min-w-0', !collapsed && 'rounded-[1.5rem] border border-gray-100 bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/60 p-2.5 mb-3')}>
+    <section className={cn('min-w-0 snap-start scroll-mt-4', !collapsed && 'rounded-[1.5rem] border border-gray-100 bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/60 p-2 mb-2')}>
       {!collapsed ? (
-        <p className="mb-2.5 px-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#9ca3af]">
+        <p className="mb-1.5 px-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#9ca3af]">
           {title}
         </p>
       ) : (
@@ -349,6 +352,7 @@ function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false, badg
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       aria-label={showNotification ? notificationLabel : item.label}
+      data-has-notification={showNotification ? 'true' : undefined}
       className={({ isActive }) =>
         cn(
           'group relative flex min-w-0 items-center rounded-2xl px-3 py-3 text-sm font-black transition active:scale-[0.99] cursor-pointer',
@@ -730,7 +734,7 @@ function MobileMoreSheet({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 scroll-smooth snap-y snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NAV_SECTIONS.map((section) => (
             <SidebarSection key={section.title} title={section.title}>
               {section.items.map((item) => (
@@ -787,7 +791,7 @@ function MobileMoreSheet({
   )
 }
 
-// ─── Profile Modal ──────────────────────────────────────────────────────────
+// Profile Modal
 
 function ProfileModal({ open, onClose, onLogout, isLoggingOut, _user, _userData }) {
   if (!open) return null
@@ -858,7 +862,7 @@ function ProfileModal({ open, onClose, onLogout, isLoggingOut, _user, _userData 
   )
 }
 
-// ─── User card (sidebar footer) ──────────────────────────────────────────────
+// User card (sidebar footer)
 
 function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false }) {
   const name =
@@ -951,7 +955,80 @@ function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false
   )
 }
 
+function useHiddenNotifications(containerRef, notificationCounts, collapsed) {
+  const [hiddenAbove, setHiddenAbove] = useState(false)
+  const [hiddenBelow, setHiddenBelow] = useState(false)
+
+  const checkVisibility = useCallback(() => {
+    if (!containerRef.current) return
+
+    const container = containerRef.current
+    const rect = container.getBoundingClientRect()
+    const elements = container.querySelectorAll('[data-has-notification="true"]')
+
+    let isAbove = false
+    let isBelow = false
+
+    elements.forEach(el => {
+      const elRect = el.getBoundingClientRect()
+      if (elRect.bottom < rect.top) {
+        isAbove = true
+      }
+      if (elRect.top > rect.bottom) {
+        isBelow = true
+      }
+    })
+
+    setHiddenAbove(isAbove)
+    setHiddenBelow(isBelow)
+  }, [containerRef, notificationCounts, collapsed])
+
+  useEffect(() => {
+    checkVisibility()
+
+    const container = containerRef.current
+    if (!container) return
+
+    container.addEventListener('scroll', checkVisibility, { passive: true })
+    window.addEventListener('resize', checkVisibility, { passive: true })
+
+    const resizeObserver = new ResizeObserver(() => checkVisibility())
+    resizeObserver.observe(container)
+
+    return () => {
+      container.removeEventListener('scroll', checkVisibility)
+      window.removeEventListener('resize', checkVisibility)
+      resizeObserver.disconnect()
+    }
+  }, [checkVisibility])
+
+  const scrollToNextHidden = useCallback((direction) => {
+    if (!containerRef.current) return
+    const container = containerRef.current
+    const rect = container.getBoundingClientRect()
+    const elements = Array.from(container.querySelectorAll('[data-has-notification="true"]'))
+
+    if (direction === 'down') {
+      const firstBelow = elements.find(el => el.getBoundingClientRect().top > rect.bottom)
+      if (firstBelow) {
+        firstBelow.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    } else {
+      const aboveElements = elements.filter(el => el.getBoundingClientRect().bottom < rect.top)
+      if (aboveElements.length > 0) {
+        const lastAbove = aboveElements[aboveElements.length - 1]
+        lastAbove.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+  }, [containerRef])
+
+  return { hiddenAbove, hiddenBelow, scrollToNextHidden }
+}
+
 function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, collapsed = false, onToggle, notificationCounts = {} }) {
+  const scrollRef = useRef(null)
+  const { hiddenAbove, hiddenBelow, scrollToNextHidden } = useHiddenNotifications(scrollRef, notificationCounts, collapsed)
+
   return (
     <motion.aside
       animate={{ width: collapsed ? 80 : 296 }}
@@ -984,35 +1061,68 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
           )}
         </div>
 
-        <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {NAV_SECTIONS.map((section) => (
-            <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
-              {section.items.map((item) => (
-                <MainNavItem
-                  key={item.to}
-                  item={item}
-                  collapsed={collapsed}
-                  badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
-                  onCustomAction={(action) => {
-                    if (action === 'PROFILE_MODAL') {
-                      onOpenProfileModal()
-                    }
-                  }}
-                />
-              ))}
-            </SidebarSection>
-          ))}
+        <div className="relative mt-5 min-h-0 flex-1">
+          {!collapsed && hiddenAbove && (
+            <div className="absolute left-0 right-1 top-0 z-20 flex justify-center bg-gradient-to-b from-white via-white/80 to-transparent pb-4 pt-1 pointer-events-none dark:from-zinc-900 dark:via-zinc-900/80">
+              <button
+                type="button"
+                onClick={() => scrollToNextHidden('up')}
+                aria-label="Há notificações mais acima"
+                className="pointer-events-auto relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white text-orange-500 shadow-md ring-1 ring-black/5 transition hover:bg-orange-50 hover:text-orange-600 dark:bg-zinc-800 dark:text-orange-400 dark:ring-white/10 dark:hover:bg-zinc-700"
+              >
+                <FiChevronUp size={14} />
+                <span className="absolute -right-0.5 -top-0.5 block h-2 w-2 rounded-full bg-[#f97316] ring-2 ring-white dark:ring-zinc-800" />
+              </button>
+            </div>
+          )}
 
-          {FUTURE_SECTIONS.map((section) => (
-            <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
-              {section.items.map((item) => (
-                <ComingSoonNavItem key={item.to} item={item} collapsed={collapsed} />
-              ))}
-            </SidebarSection>
-          ))}
-        </nav>
+          <nav
+            ref={scrollRef}
+            className="h-full space-y-3 overflow-y-auto pr-1 scroll-smooth snap-y snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {NAV_SECTIONS.map((section) => (
+              <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
+                {section.items.map((item) => (
+                  <MainNavItem
+                    key={item.to}
+                    item={item}
+                    collapsed={collapsed}
+                    badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
+                    onCustomAction={(action) => {
+                      if (action === 'PROFILE_MODAL') {
+                        onOpenProfileModal()
+                      }
+                    }}
+                  />
+                ))}
+              </SidebarSection>
+            ))}
 
-        {/* Rodapé — card de usuário */}
+            {FUTURE_SECTIONS.map((section) => (
+              <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
+                {section.items.map((item) => (
+                  <ComingSoonNavItem key={item.to} item={item} collapsed={collapsed} />
+                ))}
+              </SidebarSection>
+            ))}
+          </nav>
+
+          {!collapsed && hiddenBelow && (
+            <div className="absolute bottom-0 left-0 right-1 z-20 flex justify-center bg-gradient-to-t from-white via-white/80 to-transparent pb-1 pt-4 pointer-events-none dark:from-zinc-900 dark:via-zinc-900/80">
+              <button
+                type="button"
+                onClick={() => scrollToNextHidden('down')}
+                aria-label="Há notificações mais abaixo"
+                className="pointer-events-auto relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white text-orange-500 shadow-md ring-1 ring-black/5 transition hover:bg-orange-50 hover:text-orange-600 dark:bg-zinc-800 dark:text-orange-400 dark:ring-white/10 dark:hover:bg-zinc-700"
+              >
+                <FiChevronDown size={14} />
+                <span className="absolute -right-0.5 -top-0.5 block h-2 w-2 rounded-full bg-[#f97316] ring-2 ring-white dark:ring-zinc-800" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Rodape - card de usuario */}
         <SidebarUserCard user={user} userData={userData} onOpenProfileModal={onOpenProfileModal} collapsed={collapsed} />
 
         {/* Logout rápido no desktop */}
@@ -1035,7 +1145,7 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
             </div>
             {!collapsed && <span className="text-sm font-semibold">{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>}
           </button>
-          
+
           {!collapsed && (
             <p className="text-center text-[10px] font-bold text-gray-400 dark:text-zinc-600">
               © 2026 PratoBy
@@ -1133,21 +1243,22 @@ export default function DashboardLayout() {
   })
 
   const toggleSound = () => {
-    setSoundMuted((prev) => {
-      const next = !prev
-      try {
-        localStorage.setItem('pratoby-sound-muted', String(next))
-      } catch (e) {
-        console.warn(e)
-      }
-      return next
-    })
+    const next = !soundMuted
+    setSoundMuted(next)
+    try {
+      localStorage.setItem('pratoby-sound-muted', String(next))
+    } catch (e) {
+      console.warn(e)
+    }
+    notificationState.setNotificationPreference?.('channels', 'sound', !next)
   }
 
   // 1. New Order Sound Dispatcher & Global Listener
   useEffect(() => {
     const handlePlayNewOrderSound = () => {
       if (soundMuted) return
+      if (!notificationPreferenceEnabled(notificationState.preferences, 'channels', 'sound')) return
+      if (!notificationPreferenceEnabled(notificationState.preferences, 'events', 'newOrder')) return
 
       try {
         const audio = new Audio('/sounds/notification.mp3')
@@ -1162,7 +1273,7 @@ export default function DashboardLayout() {
 
     window.addEventListener('play-new-order-sound', handlePlayNewOrderSound)
     return () => window.removeEventListener('play-new-order-sound', handlePlayNewOrderSound)
-  }, [soundMuted])
+  }, [notificationState.preferences, soundMuted])
 
   // 2. Sync selectedStoreId dynamically from localStorage or context
   const { user, userData, logout, loading } = authContext || {}
@@ -1269,7 +1380,7 @@ export default function DashboardLayout() {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        
+
         const activeEl = document.activeElement
         const isInput = activeEl && (
           activeEl.tagName === 'INPUT' ||
@@ -1388,7 +1499,7 @@ export default function DashboardLayout() {
 
   // Time & Greeting State
   const [now, setNow] = useState(new Date())
-  
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(timer)
@@ -1482,7 +1593,7 @@ export default function DashboardLayout() {
                     <p className="truncate text-sm font-black leading-5 text-[#111827] dark:text-white sm:text-base">
                       {greeting}, {storeName}
                     </p>
-                    
+
                     {/* Badge do Status da Loja */}
                     {storeLoading ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-bold text-gray-400 dark:bg-zinc-900/50">
@@ -1842,7 +1953,7 @@ export default function DashboardLayout() {
               exit={{ opacity: 0, y: 30, scale: 0.9 }}
               className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom))] lg:bottom-20 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700 shadow-xl dark:border-emerald-950/20 dark:bg-emerald-950/40 dark:text-emerald-400"
             >
-              <span>✓ Link da loja copiado com sucesso!</span>
+              <span>Link da loja copiado com sucesso!</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1851,7 +1962,7 @@ export default function DashboardLayout() {
   )
 }
 
-// ─── Command Palette Component ──────────────────────────────────────────────
+// Command Palette Component
 
 function CommandPalette({ open, onClose, commands, onSelect }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -1989,8 +2100,8 @@ function CommandPalette({ open, onClose, commands, onSelect }) {
 
         <div className="flex items-center justify-between border-t border-gray-100/50 bg-gray-50/50 px-4 py-2.5 text-[10px] font-bold text-gray-400 dark:border-zinc-800/50 dark:bg-zinc-950/20 dark:text-zinc-500">
           <div className="flex items-center gap-3">
-            <span>↑↓ Navegar</span>
-            <span>↵ Ir para</span>
+            <span>Setas: navegar</span>
+            <span>Enter: ir para</span>
           </div>
           <span>PratoBy Command Palette</span>
         </div>

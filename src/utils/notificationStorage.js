@@ -1,3 +1,8 @@
+import {
+  normalizeNotificationPreferences,
+  updateNotificationPreference,
+} from './notificationPreferences'
+
 const STORAGE_PREFIX = 'pratoby:notifications-read'
 const STORAGE_VERSION = 1
 
@@ -19,7 +24,7 @@ function normalizeStoragePayload(payload) {
         }
         return acc
       }, {}),
-      preferences: {},
+      preferences: normalizeNotificationPreferences({}),
     }
   }
 
@@ -32,10 +37,7 @@ function normalizeStoragePayload(payload) {
   }
 
   const read = payload.read && typeof payload.read === 'object' ? payload.read : {}
-  const preferences =
-    payload.preferences && typeof payload.preferences === 'object'
-      ? payload.preferences
-      : {}
+  const preferences = normalizeNotificationPreferences(payload.preferences)
 
   return {
     version: STORAGE_VERSION,
@@ -86,7 +88,7 @@ export function getNotificationReadIds(state) {
 }
 
 export function getNotificationPreferences(state) {
-  return normalizeStoragePayload(state).preferences
+  return normalizeNotificationPreferences(normalizeStoragePayload(state).preferences)
 }
 
 export function saveNotificationPreference(uid, storeId, key, value) {
@@ -98,4 +100,21 @@ export function saveNotificationPreference(uid, storeId, key, value) {
       [key]: value,
     },
   })
+}
+
+export function saveNotificationPreferences(uid, storeId, preferences) {
+  const currentState = loadNotificationReadState(uid, storeId)
+  return saveNotificationReadState(uid, storeId, {
+    ...currentState,
+    preferences: normalizeNotificationPreferences(preferences),
+  })
+}
+
+export function saveStructuredNotificationPreference(uid, storeId, group, key, value) {
+  const currentState = loadNotificationReadState(uid, storeId)
+  return saveNotificationPreferences(
+    uid,
+    storeId,
+    updateNotificationPreference(currentState.preferences, group, key, value)
+  )
 }

@@ -9,6 +9,7 @@ import { getDatabase } from 'firebase/database'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
+import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -58,6 +59,28 @@ function initializeOptionalAppCheck(firebaseApp) {
 }
 
 export const appCheck = initializeOptionalAppCheck(app)
+
+let messaging = null
+
+export async function getSupportedMessaging() {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const supported = await isMessagingSupported()
+    if (!supported) return null
+
+    if (!messaging) {
+      messaging = getMessaging(app)
+    }
+
+    return messaging
+  } catch (error) {
+    console.warn('[FCM] Firebase Messaging indisponivel neste navegador.', error)
+    return null
+  }
+}
+
+export { messaging, firebaseConfig }
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)

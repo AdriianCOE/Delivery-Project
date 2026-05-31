@@ -12,6 +12,7 @@ const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
 const { createAsaasFunctions } = require('./asaas')
 const { createMerchantOrderFunctions } = require('./merchantOrder')
+const { sendNewOrderPushToStore } = require('./fcmNotifications')
 const {
   normalizeBrazilianPhone,
   validateBrazilianMobilePhone,
@@ -193,6 +194,13 @@ exports.createPublicOrder = onCall(
     HttpsError,
     logger,
     maxOrderCents: 100000000,
+    sendNewOrderPushToStore: ({ storeId, orderId }) => sendNewOrderPushToStore({
+      db,
+      admin,
+      logger,
+      storeId,
+      orderId,
+    }),
   })
 )
 

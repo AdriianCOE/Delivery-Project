@@ -69,12 +69,30 @@ const CustomerDisplayPage = lazy(() => import('../pages/merchant/CustomerDisplay
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] px-6 text-[#111827]">
-      <div className="text-center">
-        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-orange-100 border-t-[#f97316]" />
-        <p className="mt-4 text-sm font-black text-[#6b7280]">
+    <div
+      className="grid min-h-screen place-items-center bg-[#f9fafb] px-6 text-[#111827] transition-colors dark:bg-zinc-950 dark:text-zinc-50"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="flex w-full max-w-[16rem] flex-col items-center text-center">
+        <div className="relative grid h-14 w-14 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-zinc-800">
+          <div className="absolute inset-0 rounded-2xl bg-orange-500/10 dark:bg-orange-500/15" />
+          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-orange-100 border-t-[#f97316] dark:border-zinc-700 dark:border-t-orange-400" />
+        </div>
+
+        <p className="mt-4 text-sm font-black text-[#111827] dark:text-zinc-100">
+          PratoBy
+        </p>
+        <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
           Carregando...
         </p>
+        <div className="mt-4 h-1.5 w-32 overflow-hidden rounded-full bg-orange-100 dark:bg-zinc-800">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-[#f97316]" />
+        </div>
+        <span className="sr-only">
+          Carregando...
+        </span>
       </div>
     </div>
   )

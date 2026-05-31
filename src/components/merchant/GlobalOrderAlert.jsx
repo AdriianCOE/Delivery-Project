@@ -17,9 +17,9 @@ import { useDashboardNotifications } from '../../hooks/useDashboardNotifications
 import { getOrderDisplayNumber } from '../../utils/orderNumber'
 import {
   getBrowserNotificationPermission,
-  getNewOrderNotificationBody,
   showNewOrderBrowserNotification,
 } from '../../utils/browserNotifications'
+import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
 import {
   buildOrderClipboardSummary,
   buildOrderWhatsAppUrl,
@@ -199,7 +199,7 @@ export function GlobalOrderAlert() {
   const location = useLocation()
   const auth = useAuth()
   const { user, userData, storeId, storeIds } = auth
-  const { addLocalNotification, markAsRead } = useDashboardNotifications()
+  const { addLocalNotification, markAsRead, preferences } = useDashboardNotifications()
 
   const [enabled, setEnabled] = useState(() => {
     try {
@@ -209,6 +209,7 @@ export function GlobalOrderAlert() {
     }
   })
   const [latestOrder, setLatestOrder] = useState(null)
+  const [titleAlertActive, setTitleAlertActive] = useState(false)
   const [copied, setCopied] = useState(false)
   const [activeStoreId, setActiveStoreId] = useState(() =>
     resolveActiveStoreId({ storeId, storeIds, userData, user })
@@ -247,11 +248,12 @@ export function GlobalOrderAlert() {
     }
 
     setLatestOrder(null)
+    setTitleAlertActive(false)
     setCopied(false)
   }, [activeNotificationId, markAsRead])
 
   useEffect(() => {
-    if (!latestOrder) return undefined
+    if (!titleAlertActive) return undefined
 
     if (!originalTitleRef.current) {
       originalTitleRef.current = document.title || 'PratoBy'
@@ -265,14 +267,14 @@ export function GlobalOrderAlert() {
         originalTitleRef.current = null
       }
     }
-  }, [latestOrder])
+  }, [titleAlertActive])
 
   useEffect(() => {
-    if (location.pathname !== '/dashboard/orders' || !latestOrder) return undefined
+    if (location.pathname !== '/dashboard/orders' || (!latestOrder && !titleAlertActive)) return undefined
 
     const timer = window.setTimeout(() => clearLatestOrder(false), 0)
     return () => window.clearTimeout(timer)
-  }, [clearLatestOrder, latestOrder, location.pathname])
+  }, [clearLatestOrder, latestOrder, location.pathname, titleAlertActive])
 
   const goToOrders = useCallback(() => {
     clearLatestOrder(false)
@@ -281,14 +283,27 @@ export function GlobalOrderAlert() {
 
   const notifyNewOrder = useCallback((order) => {
     const orderId = getOrderId(order)
-    const body = getNewOrderNotificationBody(order, orderId)
+    const orderNumber = getOrderDisplayNumber(order, orderId)
+    const internalBody = `${orderNumber} - ${formatMoney(getOrderTotal(order))}`
+    const publicBody = `${orderNumber} aguardando confirmacao`
+    const allowToast = notificationPreferenceEnabled(preferences, 'channels', 'toast')
+      && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+    const allowSound = notificationPreferenceEnabled(preferences, 'channels', 'sound')
+      && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+    const allowBrowser = notificationPreferenceEnabled(preferences, 'channels', 'browser')
+      && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+    const allowTitle = notificationPreferenceEnabled(preferences, 'channels', 'title')
+      && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
 
-    setLatestOrder(order)
+    setLatestOrder(allowToast ? order : null)
+    setTitleAlertActive(allowTitle)
     setCopied(false)
 
-    window.dispatchEvent(new Event('play-new-order-sound'))
+    if (allowSound) {
+      window.dispatchEvent(new Event('play-new-order-sound'))
+    }
 
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    if (allowSound && typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([200, 100, 200])
     }
 
@@ -299,20 +314,21 @@ export function GlobalOrderAlert() {
       sourceType: 'order',
       sourceId: orderId,
       title: 'Novo pedido recebido',
-      message: body,
+      message: internalBody,
       href: '/dashboard/orders',
       severity: 'success',
+      critical: true,
       createdAt: order?.createdAt || Date.now(),
     })
 
-    if (getBrowserNotificationPermission() === 'granted') {
+    if (allowBrowser && getBrowserNotificationPermission() === 'granted') {
       showNewOrderBrowserNotification(order, {
         orderId,
-        body,
+        body: publicBody,
         onClick: () => navigate('/dashboard/orders'),
       })
     }
-  }, [addLocalNotification, navigate])
+  }, [addLocalNotification, navigate, preferences])
 
   useEffect(() => {
     if (!user?.uid) return undefined

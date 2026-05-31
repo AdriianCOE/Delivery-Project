@@ -49,4 +49,19 @@ export default defineConfig([
       sourceType: 'commonjs',
     },
   },
+  {
+    files: ['playwright.config.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    files: ['public/firebase-messaging-sw.js'],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker,
+        firebase: 'readonly',
+      },
+    },
+  },
 ])
