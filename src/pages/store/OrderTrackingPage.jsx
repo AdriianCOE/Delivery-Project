@@ -2440,7 +2440,7 @@ const isDelivered = status === 'entregue'
                 <div className="mt-3 break-inside-avoid rounded-xl border border-orange-100 bg-white p-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                      Pix manual
+                      Pix
                     </span>
 
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${

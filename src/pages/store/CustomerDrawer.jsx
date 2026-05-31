@@ -12,6 +12,7 @@ import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../
 
 import {
   FiCheckCircle,
+  FiCheck,
   FiChevronRight,
   FiClock,
   FiFileText,
@@ -51,6 +52,13 @@ const STATUS_META = {
     icon: FiPackage,
     className: 'bg-purple-50 text-purple-700 border-purple-100',
     bar: 'w-2/4 bg-purple-500',
+  },
+  pronto: {
+    label: 'Pronto',
+    description: 'Seu pedido esta pronto para retirada.',
+    icon: FiCheck,
+    className: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    bar: 'w-3/4 bg-emerald-500',
   },
   em_rota: {
     label: 'Em rota',
@@ -154,8 +162,10 @@ function clearCustomerProfile() {
 }
 
 function normalizeStatus(status) {
-  if (status === 'entregando') return 'em_rota'
-  return status || 'pendente'
+  const value = String(status || 'pendente').toLowerCase().trim()
+  if (value === 'entregando') return 'em_rota'
+  if (['ready', 'ready_for_pickup', 'aguardando_retirada', 'pronta'].includes(value)) return 'pronto'
+  return value || 'pendente'
 }
 
 
@@ -243,7 +253,7 @@ function getItemsSummary(order) {
 }
 
 function isActiveOrder(order) {
-  return ['pendente', 'preparando', 'em_rota'].includes(
+  return ['pendente', 'preparando', 'pronto', 'em_rota'].includes(
     normalizeStatus(order?.status)
   )
 }

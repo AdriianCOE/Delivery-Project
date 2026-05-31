@@ -98,6 +98,8 @@ function canLoadOperationalOrders({ role, selectedStore, userData }) {
   return OPERATIONAL_STATUSES.has(effectiveStatus) || !effectiveStatus
 }
 
+
+
 const STATUS_META = {
   pendente: {
     label: 'Pendente',
@@ -107,6 +109,14 @@ const STATUS_META = {
     dotClass: 'bg-amber-500',
     buttonClass: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
   },
+  confirmado: {
+    label: 'Confirmado',
+    description: 'Pedido aceito e aguardando preparo',
+    icon: FiCheckCircle,
+    badgeClass: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/25',
+    dotClass: 'bg-blue-500',
+    buttonClass: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300',
+  },
   preparando: {
     label: 'Preparando',
     description: 'Pedido em produção',
@@ -114,6 +124,14 @@ const STATUS_META = {
     badgeClass: 'bg-purple-50 text-purple-700 ring-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-purple-500/25',
     dotClass: 'bg-purple-500',
     buttonClass: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300',
+  },
+  pronto: {
+    label: 'Pronto',
+    description: 'Aguardando retirada ou proxima etapa',
+    icon: FiCheckCircle,
+    badgeClass: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25',
+    dotClass: 'bg-emerald-500',
+    buttonClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
   },
   em_rota: {
     label: 'Em rota',
@@ -144,14 +162,16 @@ const STATUS_META = {
 const STATUS_TABS = [
   { key: 'todos', label: 'Todos' },
   { key: 'pendente', label: 'Pendentes' },
+  { key: 'confirmado', label: 'Confirmados' },
   { key: 'preparando', label: 'Preparando' },
+  { key: 'pronto', label: 'Prontos' },
   { key: 'em_rota', label: 'Em rota' },
   { key: 'entregue', label: 'Entregues' },
   { key: 'cancelado', label: 'Cancelados' },
 ]
 
-const STATUS_FLOW = ['pendente', 'preparando', 'em_rota', 'entregue', 'cancelado']
-const ACTIVE_STATUSES = ['pendente', 'preparando', 'em_rota']
+const STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
+const ACTIVE_STATUSES = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota']
 
 function uniqueArray(values) {
   return [...new Set(values.filter(Boolean))]
@@ -167,11 +187,17 @@ function normalizeStatus(status) {
     aguardando: 'pendente',
     pendente: 'pendente',
 
-    aceito: 'preparando',
-    confirmado: 'preparando',
+    aceito: 'confirmado',
+    confirmado: 'confirmado',
     em_preparo: 'preparando',
     preparo: 'preparando',
     preparando: 'preparando',
+
+    pronto: 'pronto',
+    pronta: 'pronto',
+    ready: 'pronto',
+    ready_for_pickup: 'pronto',
+    aguardando_retirada: 'pronto',
 
     entregando: 'em_rota',
     saiu_para_entrega: 'em_rota',
@@ -3321,6 +3347,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       todos: orders.length,
       pendente: 0,
       preparando: 0,
+      pronto: 0,
       em_rota: 0,
       entregue: 0,
       cancelado: 0,

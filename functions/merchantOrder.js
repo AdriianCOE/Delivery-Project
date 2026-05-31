@@ -1,6 +1,6 @@
 const { onCall } = require('firebase-functions/v2/https')
 
-const MERCHANT_ORDER_STATUS_FLOW = ['pendente', 'preparando', 'em_rota', 'entregue', 'cancelado']
+const MERCHANT_ORDER_STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
 const MERCHANT_ORDER_STATUSES = new Set(MERCHANT_ORDER_STATUS_FLOW)
 const MERCHANT_ORDER_FINAL_STATUSES = new Set(['entregue', 'cancelado'])
 const MERCHANT_ORDER_NOTIFY_STATUSES = new Set(['preparando', 'em_rota', 'entregue', 'cancelado'])
@@ -27,17 +27,24 @@ function normalizeRoleValue(role) {
 function normalizeMerchantOrderStatus(status) {
   const value = String(status || 'pendente').toLowerCase().trim()
 
+
+
   const map = {
     novo: 'pendente',
     new: 'pendente',
     recebido: 'pendente',
     aguardando: 'pendente',
     pendente: 'pendente',
-    aceito: 'preparando',
-    confirmado: 'preparando',
+    aceito: 'confirmado',
+    confirmado: 'confirmado',
     em_preparo: 'preparando',
     preparo: 'preparando',
     preparando: 'preparando',
+    pronto: 'pronto',
+    pronta: 'pronto',
+    ready: 'pronto',
+    ready_for_pickup: 'pronto',
+    aguardando_retirada: 'pronto',
     entregando: 'em_rota',
     saiu_para_entrega: 'em_rota',
     saiu_entrega: 'em_rota',
@@ -58,7 +65,9 @@ function normalizeMerchantOrderStatus(status) {
 function getMerchantOrderStatusField(status) {
   return {
     pendente: 'pendingAt',
+    confirmado: 'confirmedAt',
     preparando: 'preparingAt',
+    pronto: 'readyAt',
     em_rota: 'outForDeliveryAt',
     entregue: 'deliveredAt',
     cancelado: 'canceledAt',

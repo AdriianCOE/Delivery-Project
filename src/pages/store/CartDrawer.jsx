@@ -1527,7 +1527,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     return deliveryNeighborhoods.map((item) => item.neighborhood).join(', ')
   }, [deliveryNeighborhoods])
   const deliveryAreaMessage = deliveryNeighborhoodList
-    ? `A loja entrega apenas em: ${deliveryNeighborhoodList}.`
+    ? `A loja entrega apenas nos bairros listados.`
     : ''
   const blockingCepError = isBlockingCepError(cepError)
 
@@ -2441,7 +2441,7 @@ if (orderType === 'delivery') {
 
   {deliveryNeighborhoodList && (
     <p className="mt-2 text-xs font-bold leading-5 text-[#6b7280]">
-      Entregamos apenas nos bairros: {deliveryNeighborhoodList}.
+      Entregamos apenas nos bairros listados:
     </p>
   )}
 </div>

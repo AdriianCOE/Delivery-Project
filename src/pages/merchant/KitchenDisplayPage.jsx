@@ -4,9 +4,6 @@
  *
  * Renderiza FORA do DashboardLayout (sem sidebar/topbar/banner).
  * Ocupa 100vw × 100vh. Projetado para TV e tablet de cozinha.
- *
- * TODO: quando OrdersPage migrar para `updateMerchantOrder`,
- * migrar o handleUpdateStatus abaixo para a mesma função.
  */
 import {
   useState,
@@ -23,9 +20,9 @@ import {
   orderBy,
   query,
   Timestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import {
   FiMonitor,
   FiMaximize,
@@ -34,7 +31,6 @@ import {
   FiAlertCircle,
   FiClock,
   FiPackage,
-  FiCheck,
   FiPlay,
   FiZap,
   FiTruck,
@@ -49,48 +45,58 @@ import {
   FiTag,
   FiUsers,
   FiChevronRight,
+  FiX,
+  FiCheckCircle,
+  FiTrash2,
 } from 'react-icons/fi'
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import {
+  getDisplayStoreName,
+  getMerchantDisplayLogoUrl,
+} from '../../utils/merchantDisplayBranding'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const KDS_STATUSES = ['pendente', 'confirmado', 'preparando']
+const KDS_QUERY_STATUSES = ['confirmado', 'preparando', 'pronto']
+const KDS_COLUMNS = ['confirmado', 'preparando', 'pronto']
 const KDS_THEME_KEY = 'pratoby_kds_theme'
 
 const STATUS_CFG = {
-  pendente: {
-    label: 'Novo Pedido',
-    colLabel: 'Novos Pedidos',
-    color: { dark: 'text-amber-400', light: 'text-amber-600' },
-    bg: { dark: 'bg-amber-400/10', light: 'bg-amber-50' },
-    border: { dark: 'border-amber-400/30', light: 'border-amber-300' },
-    dot: { dark: 'bg-amber-400', light: 'bg-amber-500' },
-    actionBg: { dark: 'bg-amber-500 hover:bg-amber-400', light: 'bg-amber-500 hover:bg-amber-600' },
-    pulse: true,
-    nextAction: { label: 'Confirmar Pedido', status: 'confirmado', icon: FiCheck },
-  },
   confirmado: {
     label: 'Confirmado',
-    colLabel: 'Confirmados',
+    colLabel: 'Aguardando preparo',
     color: { dark: 'text-sky-400', light: 'text-sky-600' },
     bg: { dark: 'bg-sky-400/10', light: 'bg-sky-50' },
     border: { dark: 'border-sky-400/30', light: 'border-sky-300' },
     dot: { dark: 'bg-sky-400', light: 'bg-sky-500' },
     actionBg: { dark: 'bg-sky-500 hover:bg-sky-400', light: 'bg-sky-500 hover:bg-sky-600' },
-    pulse: false,
-    nextAction: { label: 'Iniciar Preparo', status: 'preparando', icon: FiPlay },
+    pulse: true,
+    nextAction: { label: 'Iniciar preparo', status: 'preparando', icon: FiPlay },
   },
+
   preparando: {
     label: 'Preparando',
-    colLabel: 'Em Preparo',
+    colLabel: 'Em preparo',
     color: { dark: 'text-orange-400', light: 'text-orange-600' },
     bg: { dark: 'bg-orange-400/10', light: 'bg-orange-50' },
     border: { dark: 'border-orange-400/30', light: 'border-orange-300' },
     dot: { dark: 'bg-orange-500', light: 'bg-orange-500' },
     actionBg: { dark: 'bg-orange-500 hover:bg-orange-400', light: 'bg-orange-500 hover:bg-orange-600' },
     pulse: false,
-    nextAction: { label: 'Marcar como Pronto', status: 'pronto', icon: FiZap },
+    nextAction: { label: 'Marcar como pronto', status: 'pronto', icon: FiZap },
+  },
+
+  pronto: {
+    label: 'Pronto',
+    colLabel: 'Prontos',
+    color: { dark: 'text-emerald-400', light: 'text-emerald-600' },
+    bg: { dark: 'bg-emerald-400/10', light: 'bg-emerald-50' },
+    border: { dark: 'border-emerald-400/30', light: 'border-emerald-300' },
+    dot: { dark: 'bg-emerald-500', light: 'bg-emerald-500' },
+    actionBg: { dark: 'bg-emerald-500 hover:bg-emerald-400', light: 'bg-emerald-500 hover:bg-emerald-600' },
+    pulse: false,
+    nextAction: null,
   },
 }
 
@@ -132,6 +138,49 @@ function useElapsed(ts) {
 }
 
 function cn(...classes) { return classes.filter(Boolean).join(' ') }
+
+function getSortTimestamp(order) {
+  const val = order.confirmedAt || order.acceptedAt || order.updatedAt || order.createdAt
+  if (!val) return 0
+  if (val.toDate) return val.toDate().getTime()
+  if (val instanceof Date) return val.getTime()
+  if (typeof val === 'number') return val
+  try {
+    return new Date(val).getTime()
+  } catch {
+    return 0
+  }
+}
+
+function compareOrdersOldestFirst(a, b) {
+  const tsA = getSortTimestamp(a)
+  const tsB = getSortTimestamp(b)
+  return tsA - tsB
+}
+
+function normalizeKdsStatus(status) {
+  const value = String(status || '').toLowerCase().trim()
+
+  if (['confirmado', 'aceito', 'accepted'].includes(value)) return 'confirmado'
+  if (['preparando', 'em_preparo', 'preparo', 'in_progress'].includes(value)) return 'preparando'
+  if (['pronto', 'ready'].includes(value)) return 'pronto'
+
+  // Pedido novo/pendente não deve entrar na cozinha até o atendente confirmar.
+  if (['pendente', 'novo', 'new', 'recebido'].includes(value)) return 'pendente'
+
+  return value || 'pendente'
+}
+
+function getOrderFulfillmentType(order) {
+  const type = String(order?.deliveryType || order?.orderType || order?.type || '').toLowerCase().trim()
+  if (order?.isDelivery === true || ['delivery', 'entrega'].includes(type)) return 'delivery'
+  if (['dine_in', 'mesa', 'table', 'local', 'eat_in'].includes(type)) return 'dine_in'
+  return 'pickup'
+}
+
+function getKdsNextAction(_order, _status, cfg) {
+  return cfg.nextAction
+}
 
 // ─── Sound engine ─────────────────────────────────────────────────────────────
 
@@ -207,8 +256,9 @@ function useKdsTheme() {
 
 function ElapsedBadge({ createdAt, status, t }) {
   const { elapsed, diffMin } = useElapsed(createdAt)
-  const urgent = diffMin >= 20 && status !== 'preparando'
-  const warning = diffMin >= 10 && status !== 'preparando'
+  const showDelay = status === 'confirmado' || status === 'preparando'
+  const urgent = showDelay && diffMin >= 20
+  const warning = showDelay && diffMin >= 10
   return (
     <span className={cn(
       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums',
@@ -225,13 +275,27 @@ function ElapsedBadge({ createdAt, status, t }) {
 // ─── Order Type Badge ─────────────────────────────────────────────────────────
 
 function OrderTypeBadge({ order, t }) {
-  const isDelivery = order?.deliveryType === 'delivery' || order?.type === 'delivery' || order?.isDelivery === true
-  return isDelivery ? (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold',
-      t('bg-indigo-500/15 text-indigo-400', 'bg-indigo-50 text-indigo-600'))}>
-      <FiTruck size={12} />Entrega
-    </span>
-  ) : (
+  const fulfillmentType = getOrderFulfillmentType(order)
+
+  if (fulfillmentType === 'delivery') {
+    return (
+      <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold',
+        t('bg-indigo-500/15 text-indigo-400', 'bg-indigo-50 text-indigo-600'))}>
+        <FiTruck size={12} />Entrega
+      </span>
+    )
+  }
+
+  if (fulfillmentType === 'dine_in') {
+    return (
+      <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold',
+        t('bg-sky-500/15 text-sky-400', 'bg-sky-50 text-sky-600'))}>
+        <FiUsers size={12} />Local
+      </span>
+    )
+  }
+
+  return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold',
       t('bg-emerald-500/15 text-emerald-400', 'bg-emerald-50 text-emerald-600'))}>
       <FiShoppingBag size={12} />Retirada
@@ -242,16 +306,42 @@ function OrderTypeBadge({ order, t }) {
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
 function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
-  const cfg = STATUS_CFG[order.status] || STATUS_CFG.pendente
-  const { nextAction } = cfg
+  const normalizedStatus = normalizeKdsStatus(order.status)
+  const cfg = STATUS_CFG[normalizedStatus] || STATUS_CFG.pendente
+  const nextAction = getKdsNextAction(order, normalizedStatus, cfg)
   const [loading, setLoading] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   const handleAction = useCallback(async () => {
     if (!nextAction || loading) return
+    setActionError('')
     setLoading(true)
-    await onUpdateStatus(order.id, nextAction.status)
-    setLoading(false)
+    try {
+      await onUpdateStatus(order.id, nextAction.status)
+    } catch (err) {
+      console.error('[KDS] Erro ao atualizar status:', err)
+      setActionError(err?.message || 'Nao foi possivel atualizar o pedido.')
+    } finally {
+      setLoading(false)
+    }
   }, [order.id, nextAction, loading, onUpdateStatus])
+
+  const fulfillmentType = getOrderFulfillmentType(order)
+
+  const handleRemove = useCallback(async () => {
+    if (loading) return
+    if (!window.confirm('Remover este pedido pronto da tela da cozinha?')) return
+    setActionError('')
+    setLoading(true)
+    try {
+      await onUpdateStatus(order.id, 'entregue')
+    } catch (err) {
+      console.error('[KDS] Erro ao remover:', err)
+      setActionError(err?.message || 'Erro ao remover pedido.')
+    } finally {
+      setLoading(false)
+    }
+  }, [order.id, loading, onUpdateStatus])
 
   const num = order.orderNumber || order.ticketNumber || order.number
     || `#${String(order.id).slice(-4).toUpperCase()}`
@@ -263,7 +353,7 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
 
   return (
     <article className={cn(
-      'flex flex-col rounded-2xl border transition-all duration-300',
+      'relative flex flex-col rounded-2xl border transition-all duration-300',
       t('bg-zinc-900', 'bg-white shadow-md'),
       cfg.border[isDark ? 'dark' : 'light'],
       isNew && 'ring-2 ring-orange-500 ring-offset-2',
@@ -298,20 +388,58 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <OrderTypeBadge order={order} t={t} />
-          <ElapsedBadge createdAt={order.createdAt} status={order.status} t={t} />
+          <ElapsedBadge createdAt={order.createdAt} status={normalizedStatus} t={t} />
+          {normalizedStatus === 'pronto' && fulfillmentType !== 'delivery' && (
+            <button
+              onClick={handleRemove}
+              disabled={loading}
+              title="Remover da tela"
+              aria-label="Remover pedido pronto da tela da cozinha"
+              className={cn(
+                'ml-1 flex h-7 w-7 items-center justify-center rounded-full transition-colors active:scale-95 disabled:opacity-50',
+                t('bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200', 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800')
+              )}
+            >
+              <FiX size={16} />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Time row */}
-      <div className={cn('flex items-center gap-1.5 border-b px-4 py-2 text-sm',
+      <div className={cn('flex flex-wrap items-center gap-1.5 border-b px-4 py-2 text-sm',
         t('border-zinc-800 text-zinc-500', 'border-gray-100 text-gray-500'))}>
-        <FiClock size={12} />
-        <span>Criado às {fmtTime(order.createdAt)}</span>
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <FiClock size={12} />
+          <span>Criado às {fmtTime(order.createdAt)}</span>
+        </div>
+
+        {normalizedStatus === 'pronto' && order.readyAt && (
+          <>
+            <span className={t('text-zinc-700', 'text-gray-300')}>·</span>
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <FiCheckCircle size={12} className={t('text-emerald-500', 'text-emerald-600')} />
+              <span className={t('text-emerald-400 font-medium', 'text-emerald-700 font-bold')}>
+                Pronto às {fmtTime(order.readyAt)}
+              </span>
+            </div>
+          </>
+        )}
+
         <span className={t('text-zinc-700', 'text-gray-300')}>·</span>
         <span className={cn('font-bold truncate', cfg.color[isDark ? 'dark' : 'light'])}>
           {cfg.label}
         </span>
       </div>
+
+      {actionError && (
+        <div className={cn(
+          'mx-4 mt-3 rounded-xl border px-3 py-2 text-xs font-bold',
+          t('border-red-500/30 bg-red-500/10 text-red-300', 'border-red-100 bg-red-50 text-red-700')
+        )}>
+          {actionError}
+        </div>
+      )}
 
       {/* Items */}
       <div className={cn('flex-1 space-y-3 px-4', compact ? 'py-3' : 'py-4')}>
@@ -403,7 +531,7 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
       )}
 
       {/* Action button */}
-      {nextAction && (
+      {nextAction ? (
         <div className="px-4 pb-4 pt-2">
           <button
             type="button"
@@ -420,7 +548,17 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
             {loading ? 'Atualizando...' : nextAction.label}
           </button>
         </div>
-      )}
+      ) : normalizedStatus === 'pronto' && fulfillmentType === 'delivery' ? (
+        <div className="px-4 pb-4 pt-2">
+          <div className={cn(
+            'flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold text-center border-2 border-dashed',
+            t('border-zinc-800 text-zinc-500', 'border-gray-200 text-gray-400')
+          )}>
+            <FiTruck size={14} />
+            Delivery: Despache pela tela de Pedidos
+          </div>
+        </div>
+      ) : null}
     </article>
   )
 }
@@ -519,8 +657,10 @@ export default function KitchenDisplayPage() {
   const [compact, setCompact] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [newIds, setNewIds] = useState(new Set())
+  const [storeData, setStoreData] = useState(null)
 
   const containerRef = useRef(null)
+  const isFirstLoadRef = useRef(true)
   const prevIdsRef = useRef(new Set())
   const newIdTimers = useRef({})
 
@@ -559,6 +699,23 @@ export default function KitchenDisplayPage() {
     return () => document.removeEventListener('fullscreenchange', handler)
   }, [])
 
+  useEffect(() => {
+    if (!storeId) {
+      setStoreData(null)
+      return undefined
+    }
+
+    return onSnapshot(
+      doc(db, 'stores', storeId),
+      (snapshot) => {
+        setStoreData(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null)
+      },
+      () => {
+        setStoreData(null)
+      }
+    )
+  }, [storeId])
+
   // ── Firestore ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!storeId) {
@@ -568,11 +725,12 @@ export default function KitchenDisplayPage() {
     }
     setLoading(true)
     setError(null)
+    isFirstLoadRef.current = true
 
     const q = query(
       collection(db, 'orders'),
       where('storeId', '==', storeId),
-      where('status', 'in', KDS_STATUSES),
+      where('status', 'in', KDS_QUERY_STATUSES),
       orderBy('createdAt', 'desc')
     )
 
@@ -580,7 +738,7 @@ export default function KitchenDisplayPage() {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
 
       // Detect truly new orders (not first load)
-      if (prevIdsRef.current.size > 0) {
+      if (!isFirstLoadRef.current) {
         const incoming = docs.filter(o => !prevIdsRef.current.has(o.id))
         if (incoming.length > 0) {
           sound.play('new')
@@ -598,6 +756,8 @@ export default function KitchenDisplayPage() {
             }, 8000)
           })
         }
+      } else {
+        isFirstLoadRef.current = false
       }
       prevIdsRef.current = new Set(docs.map(o => o.id))
       setOrders(docs)
@@ -613,28 +773,35 @@ export default function KitchenDisplayPage() {
   }, [storeId, retryKey])
 
   // ── Status update ──────────────────────────────────────────────────────────
-  // TODO: Migrar para updateMerchantOrder (callable function) assim que o projeto tiver essa função pronta e padronizada (para lidar com rate limit, validação, audit log, etc).
   const handleUpdateStatus = useCallback(async (orderId, newStatus) => {
     if (!orderId || !storeId) return
-    try {
-      await updateDoc(doc(db, 'orders', orderId), {
-        status: newStatus,
-        updatedAt: Timestamp.now(),
-      })
-    } catch (err) {
-      console.error('[KDS] Erro ao atualizar status:', err)
-    }
+    const updateMerchantOrder = httpsCallable(functions, 'updateMerchantOrder')
+    await updateMerchantOrder({
+      orderId,
+      action: 'updateStatus',
+      status: newStatus,
+    })
   }, [storeId])
 
   // ── Group by status ────────────────────────────────────────────────────────
   const grouped = useMemo(() => {
-    const map = { pendente: [], confirmado: [], preparando: [] }
-    orders.forEach(o => { if (map[o.status]) map[o.status].push(o) })
+    const map = { confirmado: [], preparando: [], pronto: [] }
+    orders.forEach(o => {
+      const status = normalizeKdsStatus(o.status)
+      if (map[status]) map[status].push(o)
+    })
+
+    // Sort each status column from oldest to newest
+    map.confirmado.sort(compareOrdersOldestFirst)
+    map.preparando.sort(compareOrdersOldestFirst)
+    map.pronto.sort(compareOrdersOldestFirst)
+
     return map
   }, [orders])
 
   const totalActive = orders.length
-  const storeName = userData?.storeName || userData?.name || 'PratoBy'
+  const storeName = getDisplayStoreName(storeData, userData)
+  const logoUrl = getMerchantDisplayLogoUrl(storeData, userData)
 
   // ── CSS fullscreen fallback classes ───────────────────────────────────────
   const isCSSFullscreen = isFullscreen && !document.fullscreenElement
@@ -657,21 +824,23 @@ export default function KitchenDisplayPage() {
         {/* Left — logo + store */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className={cn(
-            'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ring-1',
+            'flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl ring-1',
             t('bg-orange-500/10 text-orange-400 ring-orange-500/30', 'bg-orange-50 text-orange-600 ring-orange-200')
           )}>
-            <FiMonitor size={20} />
+            {logoUrl ? (
+              <img src={logoUrl} alt={storeName} className="h-full w-full object-cover" />
+            ) : (
+              <FiMonitor size={20} />
+            )}
           </div>
           <div className="min-w-0">
-            <p className="text-base font-black leading-tight truncate">
+            <p className="text-lg font-black leading-tight">
               Tela de Cozinha
-              <span className="ml-1.5 text-orange-500">·</span>
-              <span className={cn('ml-1', t('text-zinc-400', 'text-gray-500'))}>{storeName}</span>
             </p>
-            <p className={cn('text-xs font-semibold', t('text-zinc-600', 'text-gray-400'))}>
+            <p className={cn('text-xs font-semibold mt-0.5', t('text-zinc-500', 'text-gray-500'))}>
               {loading ? 'Conectando...'
                 : error ? 'Erro de conexão'
-                : `${totalActive} pedido${totalActive !== 1 ? 's' : ''} ativo${totalActive !== 1 ? 's' : ''}`}
+                : <>{storeName} <span className="text-orange-500 mx-1">·</span> {totalActive} pedido{totalActive !== 1 ? 's' : ''} ativo{totalActive !== 1 ? 's' : ''}</>}
             </p>
           </div>
         </div>
@@ -720,7 +889,7 @@ export default function KitchenDisplayPage() {
             )}
           >
             <FiUsers size={13} />
-            Painel Cliente
+            <span className="hidden sm:inline">Painel de Retirada</span>
             <FiChevronRight size={12} />
           </Link>
 
@@ -789,7 +958,7 @@ export default function KitchenDisplayPage() {
           ) : (
             /* TV: 3 cols — tablet: 1 col */
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:h-[calc(100vh-120px)]">
-              {KDS_STATUSES.map(status => (
+              {KDS_COLUMNS.map(status => (
                 <KDSColumn
                   key={status}
                   status={status}

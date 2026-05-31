@@ -1361,6 +1361,7 @@ exports.auditOrderChanges = onDocumentUpdated(
       'cancellationReason',
       'cancelReason',
       'canceledBy',
+      'readyAt',
       'deliveredAt',
       'customerLastNotifiedStatus',
     ])
