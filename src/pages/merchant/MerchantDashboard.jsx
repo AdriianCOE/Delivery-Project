@@ -8,13 +8,12 @@ import {
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   Timestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import { useAuth } from '../../contexts/AuthContext'
@@ -1027,9 +1026,12 @@ const showToast = useCallback(
 
     try {
       setStoreActionLoading(true)
-      await updateDoc(doc(db, 'stores', storeDocId), {
-        isOpen: nextStatus,
-        updatedAt: serverTimestamp(),
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId: storeDocId,
+        payload: {
+          isOpen: nextStatus,
+        },
       })
       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
     } catch (error) {

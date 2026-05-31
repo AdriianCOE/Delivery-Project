@@ -56,6 +56,28 @@
         { "fieldPath": "storeId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "publicStores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "storeSlug", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "isBlocked", "order": "ASCENDING" },
+        { "fieldPath": "isBillingBlocked", "order": "ASCENDING" },
+        { "fieldPath": "isDeleted", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publicStores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "slug", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "isBlocked", "order": "ASCENDING" },
+        { "fieldPath": "isBillingBlocked", "order": "ASCENDING" },
+        { "fieldPath": "isDeleted", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

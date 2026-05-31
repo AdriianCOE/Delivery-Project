@@ -10,6 +10,7 @@ import {
   FiTrash2,
 } from 'react-icons/fi'
 import { BAIRROS_ARACAJU, formatMoneyBrl } from '../utils/deliveryPayloads'
+import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
 
 /**
  * @param {{
@@ -154,25 +155,19 @@ export default function MenuDeliveryAreasTab({
           </div>
 
           {/* Filtros Status */}
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-50 dark:bg-slate-800 p-1 sm:flex shrink-0">
-            {[
-              { id: 'all', label: 'Todos' },
-              { id: 'active', label: 'Ativos' },
-              { id: 'inactive', label: 'Inativos' },
-            ].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setStatusFilter(f.id)}
-                className={`rounded-lg px-3.5 py-2 text-xs font-black transition-all duration-200 active:scale-95 sm:py-1.5 ${
-                  statusFilter === f.id
-                    ? 'bg-white dark:bg-slate-700 text-[#111827] dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-[#f97316] dark:hover:text-[#f97316]'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="w-full shrink-0 sm:w-auto">
+            <AnimatedSegmentedControl
+              size="md"
+              variant="neutral"
+              fullWidthMobile={true}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: 'Todos' },
+                { value: 'active', label: 'Ativos' },
+                { value: 'inactive', label: 'Inativos' },
+              ]}
+            />
           </div>
         </div>
 

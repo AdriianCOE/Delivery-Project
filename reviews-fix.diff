@@ -1,0 +1,82 @@
+﻿diff --git a/firestore.rules b/firestore.rules
+index dd939fe6..0a7a442e 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -314,6 +314,7 @@ function publicOrderUpdateAllowed(orderId) {
+           'merchantReplyBy',
+           'isPublic',
+           'resolved',
++          'resolvedAt',
+           'moderationStatus',
+           'updatedAt'
+         ])
+@@ -322,6 +323,7 @@ function publicOrderUpdateAllowed(orderId) {
+         && (!changed.hasAny(['merchantReplyBy']) || request.resource.data.get('merchantReplyBy', '') == request.auth.uid)
+         && (!changed.hasAny(['isPublic']) || request.resource.data.get('isPublic', false) is bool)
+         && (!changed.hasAny(['resolved']) || request.resource.data.get('resolved', false) is bool)
++        && (!changed.hasAny(['resolvedAt']) || request.resource.data.get('resolvedAt', null) is timestamp)
+         && (!changed.hasAny(['moderationStatus']) || request.resource.data.get('moderationStatus', '') in ['pending', 'public', 'hidden', 'resolved'])
+         && (!changed.hasAny(['updatedAt']) || request.resource.data.get('updatedAt', null) is timestamp);
+     }
+diff --git a/src/pages/merchant/Reviews.jsx b/src/pages/merchant/Reviews.jsx
+index 62def709..badd1ddc 100644
+--- a/src/pages/merchant/Reviews.jsx
++++ b/src/pages/merchant/Reviews.jsx
+@@ -154,17 +154,28 @@ function Toast({ toast, onClose }) {
+   const Icon = isSuccess ? FiCheckCircle : FiAlertTriangle
+ 
+   return (
+-    <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50">
+-      <div className="flex gap-3">
+-        <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${isSuccess ? 'bg-orange-50 text-[#f97316]' : 'bg-red-50 text-red-600'}`}>
+-          <Icon size={17} />
++    <div className="fixed right-4 top-4 z-[99] w-[calc(100vw-2rem)] max-w-sm">
++      <div
++        className={`flex items-start gap-3 rounded-[1.5rem] border px-4 py-3.5 shadow-2xl backdrop-blur-xl ${
++          isSuccess
++            ? 'border-orange-100 bg-white text-[#111827]'
++            : 'border-red-100 bg-white text-red-700'
++        }`}
++      >
++        <div className="mt-0.5 shrink-0">
++          <Icon size={18} className={isSuccess ? 'text-[#f97316]' : 'text-red-500'} />
+         </div>
+-        <div>
+-          <p className="text-sm font-black text-[#111827]">{isSuccess ? 'Sucesso' : 'Atenção'}</p>
+-          <p className="mt-0.5 text-sm font-bold text-[#6b7280]">{toast.message}</p>
++        <div className="flex-1">
++          <p className="text-sm font-black leading-5">{isSuccess ? 'Sucesso' : 'Atenção'}</p>
++          <p className={`mt-0.5 text-[13px] font-bold leading-5 ${isSuccess ? 'text-[#6b7280]' : 'text-red-600'}`}>{toast.message}</p>
+         </div>
+-        <button type="button" onClick={onClose} className="ml-2 text-gray-400 transition hover:text-gray-700">
+-          <FiX />
++        <button
++          type="button"
++          onClick={onClose}
++          aria-label="Fechar"
++          className="shrink-0 rounded-xl p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
++        >
++          <FiX size={15} />
+         </button>
+       </div>
+     </div>
+@@ -295,8 +306,8 @@ export default function Reviews() {
+       return
+     }
+ 
+-    const storeKeys = getStoreKeys(selectedStore)
+-    if (!storeKeys.length) {
++    const docId = selectedStore.id || selectedStore.docId || selectedStore.storeId
++    if (!docId) {
+       setReviews([])
+       setLoadingReviews(false)
+       return
+@@ -304,7 +315,7 @@ export default function Reviews() {
+ 
+     setLoadingReviews(true)
+ 
+-    const reviewsQuery = query(collection(db, 'reviews'), where('storeId', 'in', storeKeys))
++    const reviewsQuery = query(collection(db, 'reviews'), where('storeId', '==', docId))
+     
+     const unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
+       const data = snapshot.docs

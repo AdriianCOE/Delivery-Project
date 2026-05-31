@@ -226,42 +226,6 @@ function validPublicOrderCreate(orderId) {
     && request.resource.data.items.size() > 0;
 }
 
-function publicOrderUpdateAllowed(orderId) {
-  let changed = request.resource.data.diff(resource.data).affectedKeys();
-
-  return resource.data.get('trackingToken', '') == orderId
-    && (
-      (
-        changed.hasOnly(['status', 'deliveredAt', 'customerConfirmedDeliveryAt', 'updatedAt'])
-        && resource.data.get('status', '') in ['pronto', 'em_rota', 'entregando']
-        && request.resource.data.get('status', '') == 'entregue'
-      ) || (
-        changed.hasOnly(['payment', 'paymentProofRequestedAt', 'updatedAt'])
-        && request.resource.data.get('status', '') == resource.data.get('status', '')
-        && request.resource.data.get('paymentStatus', '') == resource.data.get('paymentStatus', '')
-        && request.resource.data.get('payment', {}) is map
-        && resource.data.get('payment', {}) is map
-        && request.resource.data.payment.diff(resource.data.payment).affectedKeys().hasOnly([
-          'proofSentAt',
-          'proofSource',
-          'proofWhatsappOpened'
-        ])
-        && request.resource.data.payment.get('proofSource', '') in ['', 'whatsapp']
-      ) || (
-        changed.hasOnly(['customerCancelRequested', 'customerCancelRequestedAt', 'cancelRequestSource', 'updatedAt'])
-        && request.resource.data.get('customerCancelRequested', false) == true
-        && request.resource.data.get('status', '') == resource.data.get('status', '')
-      ) || (
-        changed.hasOnly(['reviewId', 'review', 'updatedAt'])
-        && request.resource.data.get('status', '') == resource.data.get('status', '')
-        && request.resource.data.get('reviewId', '') == orderId
-        && request.resource.data.get('review', {}) is map
-        && request.resource.data.review.get('submitted', false) == true
-        && exists(/databases/$(database)/documents/reviews/$(orderId))
-      )
-    );
-}
-
     function validReviewCreate(reviewId) {
       let orderId = request.resource.data.get('orderId', '');
       let orderPath = /databases/$(database)/documents/orders/$(orderId);
@@ -314,6 +278,7 @@ function publicOrderUpdateAllowed(orderId) {
           'merchantReplyBy',
           'isPublic',
           'resolved',
+          'resolvedAt',
           'moderationStatus',
           'updatedAt'
         ])
@@ -322,6 +287,17 @@ function publicOrderUpdateAllowed(orderId) {
         && (!changed.hasAny(['merchantReplyBy']) || request.resource.data.get('merchantReplyBy', '') == request.auth.uid)
         && (!changed.hasAny(['isPublic']) || request.resource.data.get('isPublic', false) is bool)
         && (!changed.hasAny(['resolved']) || request.resource.data.get('resolved', false) is bool)
+        && (
+          !changed.hasAny(['resolvedAt'])
+          || (
+            request.resource.data.get('resolved', false) == true
+            && request.resource.data.get('resolvedAt', null) is timestamp
+          )
+          || (
+            request.resource.data.get('resolved', false) == false
+            && request.resource.data.get('resolvedAt', null) == null
+          )
+        )
         && (!changed.hasAny(['moderationStatus']) || request.resource.data.get('moderationStatus', '') in ['pending', 'public', 'hidden', 'resolved'])
         && (!changed.hasAny(['updatedAt']) || request.resource.data.get('updatedAt', null) is timestamp);
     }
@@ -464,8 +440,7 @@ function publicOrderUpdateAllowed(orderId) {
 
       allow create: if false;
 
-      allow update: if isAdmin()
-        || publicOrderUpdateAllowed(orderId);
+      allow update: if isAdmin();
 
       allow delete: if isAdmin();
     }

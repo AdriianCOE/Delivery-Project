@@ -21,6 +21,7 @@ import { formatMoney, normalizeMoney } from '../utils/menuFormatters'
 import { STATUS_FILTERS } from '../utils/menuPayloads'
 import MenuEmptyState from './MenuEmptyState'
 import { hasOutOfStock } from '../../../../utils/productStatus'
+import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
 
 // ── ProductBadges ──────────────────────────────────────────────────────────────
 
@@ -195,43 +196,53 @@ export default function MenuProductsTab({
 
   return (
     <div className="space-y-4">
-      {/* Filter bar */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        {/* Search */}
-        <div className="relative flex-1">
-          <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome ou descrição..."
-            className="h-11 w-full rounded-2xl border border-gray-200 bg-white pl-11 pr-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
-          />
-          {search && (
-            <button type="button" onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
-              <FiX size={15} />
-            </button>
-          )}
-        </div>
+      {/* Filter bar (Unified Container) */}
+      <div className="flex overflow-x-auto pb-4 justify-start md:justify-center [scrollbar-width:none] w-full">
+        <div className="inline-flex shrink-0 items-center gap-2 rounded-[1.25rem] border border-gray-200 bg-gray-100/80 p-1.5 dark:border-zinc-800 dark:bg-zinc-900/80">
+          
+          {/* Search */}
+          <div className="relative w-56 sm:w-64 shrink-0">
+            <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500" size={14} />
+            <input
+              type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="h-9 w-full rounded-[14px] bg-white pl-9 pr-8 text-sm font-bold text-[#111827] outline-none shadow-sm transition-all focus:ring-2 focus:ring-orange-100 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:ring-orange-900/30"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-300">
+                <FiX size={14} />
+              </button>
+            )}
+          </div>
 
-        {/* Category filter */}
-        <select value={filterCategoryId} onChange={(e) => setFilterCategoryId(e.target.value)}
-          className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] lg:w-56">
-          <option value="all">Todas as categorias</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
-          ))}
-        </select>
+          <div className="h-5 w-px shrink-0 bg-gray-300 dark:bg-zinc-700" />
 
-        {/* Status filter pills */}
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] lg:mx-0 lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
-          {STATUS_FILTERS.map((f) => (
-            <button key={f.id} type="button" onClick={() => setFilterStatus(f.id)}
-              className={`h-10 shrink-0 rounded-xl px-3 text-xs font-black transition lg:h-auto lg:py-1.5 ${
-                filterStatus === f.id ? 'bg-[#f97316] text-white' : 'bg-white border border-gray-200 text-[#6b7280] hover:border-orange-200'
-              }`}>
-              {f.label}
-            </button>
-          ))}
+          {/* Category filter */}
+          <select value={filterCategoryId} onChange={(e) => setFilterCategoryId(e.target.value)}
+            className="h-9 w-40 sm:w-48 shrink-0 cursor-pointer rounded-[14px] bg-white px-3 text-sm font-bold text-[#111827] outline-none shadow-sm transition-all focus:ring-2 focus:ring-orange-100 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:ring-orange-900/30">
+            <option value="all">Todas categorias</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+
+          <div className="h-5 w-px shrink-0 bg-gray-300 dark:bg-zinc-700" />
+
+          {/* Status filter pills */}
+          <div className="shrink-0">
+            <AnimatedSegmentedControl
+              size="md"
+              variant="neutral"
+              value={filterStatus}
+              onChange={setFilterStatus}
+              className="!bg-transparent !border-transparent dark:!bg-transparent dark:!border-transparent !p-0"
+              options={STATUS_FILTERS.map((f) => ({
+                value: f.id,
+                label: f.label
+              }))}
+            />
+          </div>
         </div>
       </div>
 

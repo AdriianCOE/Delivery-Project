@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'motion/react'
-import { doc, onSnapshot, updateDoc, Timestamp } from 'firebase/firestore'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
-import { auth, db } from '../../services/firebase'
+import { auth, db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
 import ProfilePanel from '../merchant/ProfilePanel'
@@ -1186,9 +1187,12 @@ export default function DashboardLayout() {
     try {
       setStoreToggleLoading(true)
       setStoreError(null)
-      await updateDoc(doc(db, 'stores', currentStoreId), {
-        isOpen: nextStatus,
-        updatedAt: Timestamp.now(),
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId: currentStoreId,
+        payload: {
+          isOpen: nextStatus,
+        },
       })
       setConfirmStatusModalOpen(false)
     } catch (err) {
@@ -1452,18 +1456,6 @@ export default function DashboardLayout() {
 
             {/* Direita: Sino de notificações + Quick Profile */}
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              {publicStoreHref && (
-                <a
-                  href={publicStoreHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hidden h-10 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 text-xs font-black text-[#6b7280] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:text-[#f97316] active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-[#f97316] sm:inline-flex"
-                >
-                  <FiExternalLink size={14} />
-                  Ver loja
-                </a>
-              )}
-
               {/* Botão Buscar no painel... (Ctrl + K) */}
               <button
                 type="button"
@@ -1476,6 +1468,18 @@ export default function DashboardLayout() {
                   Ctrl K
                 </kbd>
               </button>
+
+              {publicStoreHref && (
+                <a
+                  href={publicStoreHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hidden h-10 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 text-xs font-black text-[#6b7280] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:text-[#f97316] active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-[#f97316] sm:inline-flex"
+                >
+                  <FiExternalLink size={14} />
+                  Ver loja
+                </a>
+              )}
 
               {/* Botão de Som/Mudo */}
               <button

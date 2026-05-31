@@ -8,6 +8,7 @@ export default function AnimatedSegmentedControl({
   size = 'md',
   variant = 'primary', // 'primary' | 'neutral'
   fullWidth = false,
+  fullWidthMobile = false,
   className = '',
   ariaLabel = 'Segmented Control',
 }) {
@@ -30,7 +31,7 @@ export default function AnimatedSegmentedControl({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className={`relative flex items-center rounded-full bg-gray-100 p-1 border border-gray-200/50 dark:border-zinc-800 dark:bg-zinc-900 ${sizeClasses[size]} ${fullWidth ? 'w-full' : 'inline-flex'} ${className}`}
+      className={`relative flex items-center rounded-full bg-gray-100 p-1 border border-gray-200/50 dark:border-zinc-800 dark:bg-zinc-900 ${sizeClasses[size]} ${fullWidth ? 'w-full' : fullWidthMobile ? 'w-full sm:w-auto sm:inline-flex' : 'inline-flex'} ${className}`}
     >
       {options.map((option) => {
         const isActive = value === option.value
@@ -52,7 +53,7 @@ export default function AnimatedSegmentedControl({
             aria-selected={isActive}
             disabled={isDisabled}
             onClick={() => !isDisabled && onChange(option.value)}
-            className={`relative flex h-full items-center justify-center rounded-full font-bold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${fullWidth ? 'flex-1' : ''} ${optionPaddingClasses[size]} ${
+            className={`relative flex h-full items-center justify-center rounded-full font-bold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${fullWidth ? 'flex-1' : fullWidthMobile ? 'flex-1 sm:flex-initial' : ''} ${optionPaddingClasses[size]} ${
               isDisabled 
                 ? 'cursor-not-allowed opacity-50' 
                 : 'cursor-pointer'

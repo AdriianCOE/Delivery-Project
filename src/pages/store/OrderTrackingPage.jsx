@@ -3,13 +3,8 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { Link, useParams } from 'react-router-dom'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import {
-  addDoc,
-  collection,
   doc,
   onSnapshot,
-  serverTimestamp,
-  updateDoc,
-  setDoc,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 
@@ -1647,11 +1642,10 @@ const isDelivered = status === 'entregue'
     try {
       setActionLoading(true)
 
-      await updateDoc(doc(db, 'orders', order.id), {
-        status: 'entregue',
-        deliveredAt: serverTimestamp(),
-        customerConfirmedDeliveryAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const confirmCustomerDelivery = httpsCallable(functions, 'confirmCustomerDelivery')
+      await confirmCustomerDelivery({
+        orderId: order.id,
+        trackingToken: order.trackingToken || order.id,
       })
     } catch (error) {
       console.error(error)
@@ -1691,12 +1685,10 @@ const isDelivered = status === 'entregue'
     try {
       setProofLoading(true)
 
-      await updateDoc(doc(db, 'orders', order.id), {
-        'payment.proofSentAt': serverTimestamp(),
-        'payment.proofSource': 'whatsapp',
-        'payment.proofWhatsappOpened': true,
-        paymentProofRequestedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const markCustomerPixProofSent = httpsCallable(functions, 'markCustomerPixProofSent')
+      await markCustomerPixProofSent({
+        orderId: order.id,
+        trackingToken: order.trackingToken || order.id,
       })
     } catch (error) {
       console.info('Não foi possível registrar o envio do comprovante no pedido.', error)
@@ -1723,11 +1715,10 @@ const isDelivered = status === 'entregue'
     try {
       setCancelRequestLoading(true)
 
-      await updateDoc(doc(db, 'orders', order.id), {
-        customerCancelRequested: true,
-        customerCancelRequestedAt: serverTimestamp(),
-        cancelRequestSource: 'tracking',
-        updatedAt: serverTimestamp(),
+      const requestCustomerOrderCancellation = httpsCallable(functions, 'requestCustomerOrderCancellation')
+      await requestCustomerOrderCancellation({
+        orderId: order.id,
+        trackingToken: order.trackingToken || order.id,
       })
     } catch (error) {
       console.info('Não foi possível registrar a solicitação no pedido.', error)
@@ -1772,56 +1763,19 @@ const isDelivered = status === 'entregue'
       setReviewLoading(true)
       setReviewError('')
 
-      const finalStoreId =
-        order.storeId ||
-        order.storeDocId ||
-        order.storeSlug ||
-        slug
-
-      const finalStoreSlug =
-        order.storeSlug ||
-        slug ||
-        order.storePublicId ||
-        order.storeId
-
-      const reviewStoreKeys = getOrderStoreKeys(order)
-
-      const reviewRef = doc(db, 'reviews', order.id)
-      await setDoc(reviewRef, {
-        storeId: finalStoreId,
-        storeSlug: finalStoreSlug,
-        storeDocId: order.storeDocId || order.storeId || null,
-        storeKeys: reviewStoreKeys,
-
+      const submitPublicOrderReview = httpsCallable(functions, 'submitPublicOrderReview')
+      await submitPublicOrderReview({
         orderId: order.id,
         trackingToken: order.trackingToken || order.id,
-
-        customerName: getCustomerName(order),
-        customerPhone: getCustomerPhone(order),
-
-        rating: Number(review.rating),
-        foodRating: Number(review.foodRating),
-        deliveryRating: Number(review.deliveryRating),
-        serviceRating: Number(review.serviceRating),
-        wouldOrderAgain: Boolean(review.wouldOrderAgain),
-        tags: review.tags,
-        comment: review.comment.trim(),
-
-        isPublic: false,
-        resolved: false,
-
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-
-      await updateDoc(doc(db, 'orders', order.id), {
-        reviewId: order.id,
         review: {
-          submitted: true,
           rating: Number(review.rating),
-          submittedAt: serverTimestamp(),
+          foodRating: Number(review.foodRating),
+          deliveryRating: Number(review.deliveryRating),
+          serviceRating: Number(review.serviceRating),
+          wouldOrderAgain: Boolean(review.wouldOrderAgain),
+          tags: review.tags,
+          comment: review.comment.trim(),
         },
-        updatedAt: serverTimestamp(),
       })
 
       setReviewSent(true)

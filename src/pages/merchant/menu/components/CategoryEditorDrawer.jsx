@@ -39,6 +39,16 @@ export default function CategoryEditorDrawer({ open, onClose, editingCategory, s
     )
   }, [open, editingCategory])
 
+  useEffect(() => {
+    if (open) {
+      const prevOverflow = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = prevOverflow
+      }
+    }
+  }, [open])
+
   const handleSave = async () => {
     if (!form.name.trim()) { onToast({ type: 'error', message: 'Nome da categoria é obrigatório.' }); return }
     setSaving(true)
@@ -93,53 +103,66 @@ export default function CategoryEditorDrawer({ open, onClose, editingCategory, s
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 10 }}
               transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-              className="relative max-h-[92dvh] w-full max-w-md overflow-y-auto overflow-x-hidden rounded-[2rem] border border-gray-100 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 [scrollbar-width:thin]"
+              className="relative flex flex-col max-h-[100dvh] w-full max-w-sm overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
             >
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
-                  {editingCategory ? 'Editar categoria' : 'Nova categoria'}
-                </h2>
-                <button type="button" onClick={onClose}
-                  className="grid h-9 w-9 place-items-center rounded-xl bg-gray-50 text-[#6b7280] transition hover:bg-gray-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label="Fechar">
-                  <FiX size={17} />
-                </button>
+              {/* Header fixo */}
+              <div className="shrink-0 border-b border-gray-100 dark:border-zinc-800 px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-[#111827] dark:text-zinc-100">
+                    {editingCategory ? 'Editar categoria' : 'Nova categoria'}
+                  </h2>
+                  <button type="button" onClick={onClose}
+                    className="grid h-8 w-8 place-items-center rounded-full bg-gray-50 text-[#6b7280] transition hover:bg-gray-200 hover:rotate-90 active:scale-95 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label="Fechar">
+                    <FiX size={16} />
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">Nome *</label>
-                  <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="Ex: Hambúrgueres, Bebidas, Sobremesas..." maxLength={60} autoFocus
-                    className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">Descrição (opcional)</label>
-                  <input type="text" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                    placeholder="Breve descrição" maxLength={200}
-                    className="h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-500/20" />
-                </div>
-                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/70">
+              {/* Corpo com scroll */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 [scrollbar-width:thin]">
+                <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Categoria ativa</p>
-                    <p className="text-xs text-[#9ca3af]">Aparece na loja quando ativa</p>
+                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">Nome *</label>
+                    <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="Ex: Hambúrgueres, Bebidas..." maxLength={60} autoFocus
+                      className="h-12 w-full rounded-xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none transition-all hover:border-orange-200 focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-900/30 shadow-sm" />
                   </div>
-                  <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
-                    className="h-4 w-4 accent-[#f97316]" />
-                </label>
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">Descrição (opcional)</label>
+                    <input type="text" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="Breve descrição" maxLength={200}
+                      className="h-12 w-full rounded-xl border border-orange-100/80 bg-white px-4 text-sm font-bold text-[#111827] outline-none transition-all hover:border-orange-200 focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-orange-900/30 shadow-sm" />
+                  </div>
+                  <label className="group flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/50 p-4 transition-all hover:border-orange-200 hover:bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70 dark:hover:border-slate-600 hover:shadow-md">
+                    <div>
+                      <p className="text-sm font-black text-[#111827] dark:text-zinc-100 transition-colors group-hover:text-[#f97316]">Categoria ativa</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">Aparece na loja quando ativa</p>
+                    </div>
+                    <div className="relative shrink-0">
+                      <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))} className="sr-only" />
+                      <div className={`h-6 w-11 rounded-full transition-colors duration-300 ${form.isActive ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-600 shadow-inner'}`}>
+                        <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${form.isActive ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                    </div>
+                  </label>
+                </div>
               </div>
 
-              <div className="mt-5 flex gap-3">
-                <button type="button" onClick={onClose} disabled={saving}
-                  className="flex-1 rounded-2xl border border-gray-200 py-3 text-sm font-black text-[#6b7280] transition hover:bg-gray-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
-                  Cancelar
-                </button>
-                <button type="button" onClick={handleSave} disabled={saving || !form.name.trim()}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f97316] py-3 text-sm font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] disabled:opacity-60 dark:shadow-orange-950/50">
-                  {saving
-                    ? <><FiLoader className="animate-spin" size={14} /> Salvando...</>
-                    : <><FiCheck size={14} />{editingCategory ? 'Salvar' : 'Criar'}</>
-                  }
-                </button>
+              {/* Footer fixo */}
+              <div className="shrink-0 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/50 px-5 py-4">
+                <div className="flex gap-2">
+                  <button type="button" onClick={onClose} disabled={saving}
+                    className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-slate-600 transition hover:bg-gray-50 active:scale-95 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={handleSave} disabled={saving || !form.name.trim()}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#f97316] to-[#ea580c] py-3 text-sm font-black text-white shadow-md shadow-orange-500/20 transition-all hover:-translate-y-0.5 hover:shadow-orange-500/40 active:scale-95 disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none">
+                    {saving
+                      ? <><FiLoader className="animate-spin" size={14} /> Salvando...</>
+                      : <><FiCheck size={14} />{editingCategory ? 'Salvar' : 'Criar'}</>
+                    }
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

@@ -35,17 +35,6 @@ function uniqueArray(values) {
   return [...new Set(values.filter(Boolean))]
 }
 
-function getStoreKeys(store) {
-  return uniqueArray([
-    ...(Array.isArray(store?.storeKeys) ? store.storeKeys : []),
-    store?.id,
-    store?.storeId,
-    store?.storeDocId,
-    store?.storeSlug,
-    store?.slug,
-  ]).slice(0, 10)
-}
-
 function normalizePhoneBR(value) {
   const digits = String(value || '').replace(/\D/g, '')
   if (!digits) return ''
@@ -154,17 +143,28 @@ function Toast({ toast, onClose }) {
   const Icon = isSuccess ? FiCheckCircle : FiAlertTriangle
 
   return (
-    <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50">
-      <div className="flex gap-3">
-        <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${isSuccess ? 'bg-orange-50 text-[#f97316]' : 'bg-red-50 text-red-600'}`}>
-          <Icon size={17} />
+    <div className="fixed right-4 top-4 z-[99] w-[calc(100vw-2rem)] max-w-sm">
+      <div
+        className={`flex items-start gap-3 rounded-[1.5rem] border px-4 py-3.5 shadow-2xl backdrop-blur-xl ${
+          isSuccess
+            ? 'border-orange-100 bg-white text-[#111827]'
+            : 'border-red-100 bg-white text-red-700'
+        }`}
+      >
+        <div className="mt-0.5 shrink-0">
+          <Icon size={18} className={isSuccess ? 'text-[#f97316]' : 'text-red-500'} />
         </div>
-        <div>
-          <p className="text-sm font-black text-[#111827]">{isSuccess ? 'Sucesso' : 'Atenção'}</p>
-          <p className="mt-0.5 text-sm font-bold text-[#6b7280]">{toast.message}</p>
+        <div className="flex-1">
+          <p className="text-sm font-black leading-5">{isSuccess ? 'Sucesso' : 'Atenção'}</p>
+          <p className={`mt-0.5 text-[13px] font-bold leading-5 ${isSuccess ? 'text-[#6b7280]' : 'text-red-600'}`}>{toast.message}</p>
         </div>
-        <button type="button" onClick={onClose} className="ml-2 text-gray-400 transition hover:text-gray-700">
-          <FiX />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar"
+          className="shrink-0 rounded-xl p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+        >
+          <FiX size={15} />
         </button>
       </div>
     </div>
@@ -295,8 +295,8 @@ export default function Reviews() {
       return
     }
 
-    const storeKeys = getStoreKeys(selectedStore)
-    if (!storeKeys.length) {
+    const docId = selectedStore.id || selectedStore.docId || selectedStore.storeId
+    if (!docId) {
       setReviews([])
       setLoadingReviews(false)
       return
@@ -304,7 +304,7 @@ export default function Reviews() {
 
     setLoadingReviews(true)
 
-    const reviewsQuery = query(collection(db, 'reviews'), where('storeId', 'in', storeKeys))
+    const reviewsQuery = query(collection(db, 'reviews'), where('storeId', '==', docId))
     
     const unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
       const data = snapshot.docs
@@ -508,23 +508,18 @@ export default function Reviews() {
                   <span className="hidden items-center gap-2 text-sm font-black text-[#6b7280] xl:flex">
                     <FiFilter /> Status
                   </span>
-                  {[
-                    { id: 'todos', label: 'Todas' },
-                    { id: 'pendentes', label: 'Pendentes' },
-                    { id: 'resolvidas', label: 'Resolvidas' },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setFilter(tab.id)}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black transition ${
-                        filter === tab.id
-                          ? 'bg-[#111827] text-white shadow-sm'
-                          : 'bg-gray-50 text-[#6b7280] hover:bg-gray-100 hover:text-[#111827]'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
+                  <AnimatedSegmentedControl
+                    options={[
+                      { label: 'Todas', value: 'todos' },
+                      { label: 'Pendentes', value: 'pendentes' },
+                      { label: 'Resolvidas', value: 'resolvidas' },
+                    ]}
+                    value={filter}
+                    onChange={(newFilter) => setFilter(newFilter)}
+                    size="md"
+                    variant="primary"
+                    fullWidthMobile
+                  />
                 </div>
               </div>
             </div>

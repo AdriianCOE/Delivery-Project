@@ -18,6 +18,7 @@ import {
 import MenuEmptyState from './MenuEmptyState'
 import { formatMoney } from '../utils/menuFormatters'
 import { COUPON_STATUS_FILTERS } from '../utils/couponPayloads'
+import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
 
 // Formata data e hora para exibição amigável em PT-BR
 function formatDateTime(value) {
@@ -115,21 +116,18 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
         {/* Buttons / Actions */}
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           {/* Status Selectors */}
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-50 dark:bg-slate-800 p-1 sm:flex shrink-0">
-            {COUPON_STATUS_FILTERS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setFilter(s.id)}
-                className={`rounded-lg px-3.5 py-2 text-xs font-black transition-all duration-200 active:scale-95 sm:py-1.5 ${
-                  filter === s.id
-                    ? 'bg-white dark:bg-slate-700 text-[#f97316] shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-[#111827] dark:hover:text-slate-50'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+          <div className="w-full shrink-0 sm:w-auto">
+            <AnimatedSegmentedControl
+              size="md"
+              variant="neutral"
+              fullWidthMobile={true}
+              value={filter}
+              onChange={setFilter}
+              options={COUPON_STATUS_FILTERS.map((s) => ({
+                value: s.id,
+                label: s.label
+              }))}
+            />
           </div>
 
           {/* Create Button */}

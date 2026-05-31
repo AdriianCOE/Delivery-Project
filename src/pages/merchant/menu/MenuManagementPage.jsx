@@ -37,6 +37,7 @@ import CouponEditorDrawer    from './components/CouponEditorDrawer'
 import DeliveryAreaEditorDrawer from './components/DeliveryAreaEditorDrawer'
 import { BAIRROS_ARACAJU }   from './utils/deliveryPayloads'
 import DashboardFooter from '../../../components/layouts/DashboardFooter'
+import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl'
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -305,32 +306,34 @@ export default function MenuManagementPage() {
         />
 
         {/* ── TABS ── */}
-        <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none]">
-          {[
-            { id: 'products',   label: `Produtos (${stats.total})`,        icon: FiBox },
-            { id: 'categories', label: `Categorias (${stats.categories})`, icon: FiList },
-            { id: 'coupons',    label: `Cupons (${stats.couponsTotal})`,   icon: FiTag },
-            { id: 'delivery',   label: `Entrega (${stats.deliveryActive})`, icon: FiTruck },
-          ].map((tab) => (
-            <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
-              className={`flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black transition ${
-                activeTab === tab.id
-                  ? 'bg-[#f97316] text-white shadow-md shadow-orange-200'
-                  : 'bg-white text-[#6b7280] border border-gray-200 hover:border-orange-200 hover:text-[#f97316]'
-              }`}>
-              <tab.icon size={15} />
-              <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">
-                {tab.id === 'products'
-                  ? 'Produtos'
-                  : tab.id === 'categories'
-                  ? 'Categorias'
-                  : tab.id === 'coupons'
-                  ? 'Cupons'
-                  : 'Entrega'}
-              </span>
-            </button>
-          ))}
+        <div className="flex overflow-x-auto pb-4 px-4 sm:px-0 justify-start md:justify-center [scrollbar-width:none] w-full max-w-[100vw]">
+          <AnimatedSegmentedControl
+            size="md"
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              { 
+                value: 'products',   
+                label: <><span className="hidden sm:inline">Produtos ({stats.total})</span><span className="sm:inline-block sm:hidden">Produtos</span></>,
+                icon: FiBox 
+              },
+              { 
+                value: 'categories', 
+                label: <><span className="hidden sm:inline">Categorias ({stats.categories})</span><span className="sm:inline-block sm:hidden">Categorias</span></>,
+                icon: FiList 
+              },
+              { 
+                value: 'coupons',    
+                label: <><span className="hidden sm:inline">Cupons ({stats.couponsTotal})</span><span className="sm:inline-block sm:hidden">Cupons</span></>,
+                icon: FiTag 
+              },
+              { 
+                value: 'delivery',   
+                label: <><span className="hidden sm:inline">Entrega ({stats.deliveryActive})</span><span className="sm:inline-block sm:hidden">Entrega</span></>,
+                icon: FiTruck 
+              },
+            ]}
+          />
         </div>
 
         {/* ── TAB CONTENT WITH ANIMATION ── */}

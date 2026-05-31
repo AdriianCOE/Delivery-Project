@@ -17,6 +17,8 @@ node --check scripts/backfillPublicCatalog.js
 
 Faça o deploy das regras antes dos lotes de Functions. As regras do Realtime Database são necessárias para o presence público (`presence` e `presenceCounts`).
 
+Exceção: quando a mudança remover writes diretos do client em `orders`, publique primeiro as novas Functions de tracking e o Hosting correspondente; depois aplique `firestore:rules`. Isso evita quebrar clientes com bundle antigo durante a janela de deploy.
+
 ```bash
 firebase deploy --only firestore:rules,firestore:indexes
 firebase deploy --only database
@@ -28,7 +30,7 @@ Para não esbarrar na cota de "CPU quotas for region southamerica-east1", realiz
 
 ### Lote 1: Pedidos Públicos
 ```bash
-firebase deploy --only functions:createPublicOrder,functions:validateOrderPricing,functions:auditOrderChanges
+firebase deploy --only functions:createPublicOrder,functions:confirmCustomerDelivery,functions:markCustomerPixProofSent,functions:requestCustomerOrderCancellation,functions:submitPublicOrderReview,functions:validateOrderPricing,functions:auditOrderChanges
 ```
 
 ### Lote 2: Billing & Asaas

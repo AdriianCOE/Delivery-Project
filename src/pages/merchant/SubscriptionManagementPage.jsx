@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -14,6 +15,7 @@ import {
   normalizeBillingCycle,
 } from '../../utils/billingStatus'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
+import { cleanBrazilianDocument, getBrazilianDocumentType } from '../../utils/brazilianDocuments'
 import {
   FiShield,
   FiLock,
@@ -332,6 +334,17 @@ export default function SubscriptionManagementPage() {
   const isActive = subscriptionStatus === 'active'
   const isPastDue = subscriptionStatus === 'past_due'
   const isPending = subscriptionStatus === 'checkout_pending'
+  const billingDocument = cleanBrazilianDocument(
+    store?.cnpj ||
+      store?.cpf ||
+      store?.cpfCnpj ||
+      store?.billingData?.cpfCnpj ||
+      userData?.cnpj ||
+      userData?.cpf ||
+      userData?.cpfCnpj ||
+      userData?.billingData?.cpfCnpj ||
+      ''
+  )
   const currentPlanPresentation = getBillingPlanPresentation(currentPlan)
   const currentPlanOption = PLAN_OPTIONS.find((planOption) => planOption.id === currentPlan)
   const currentPlanDisplayAmount = Number.isFinite(Number(managementData?.plan?.amountCents))
@@ -537,6 +550,16 @@ export default function SubscriptionManagementPage() {
     if (submittingPaymentMethod) return
     if (!subscriptionActions.canUpdatePaymentMethod) {
       setToast({ type: 'info', message: getUnavailableActionMessage('canUpdatePaymentMethod') })
+      return
+    }
+    if (!getBrazilianDocumentType(billingDocument)) {
+      setToast({
+        type: 'error',
+        message: 'Atualize um CPF/CNPJ válido na página de faturamento antes de abrir o checkout.',
+      })
+      setTimeout(() => {
+        navigate('/dashboard/billing')
+      }, 900)
       return
     }
 
@@ -962,7 +985,7 @@ export default function SubscriptionManagementPage() {
       </motion.div>
 
       {/* MODAL 1: Alterar Plano */}
-      {showPlanModal && (
+      {showPlanModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             
@@ -1106,11 +1129,12 @@ export default function SubscriptionManagementPage() {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 2: Alterar Vencimento */}
-      {showDueDateModal && (
+      {showDueDateModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             
@@ -1181,11 +1205,12 @@ export default function SubscriptionManagementPage() {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 3: Cancelamento de Assinatura */}
-      {showCancelModal && (
+      {showCancelModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             
@@ -1269,11 +1294,12 @@ export default function SubscriptionManagementPage() {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 4: WhatsApp Support Fallback */}
-      {showSupportFallbackModal && (
+      {showSupportFallbackModal && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             
@@ -1337,11 +1363,12 @@ export default function SubscriptionManagementPage() {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Global Toast */}
-      {toast && (
+      {toast && createPortal(
         <div className="fixed bottom-5 right-5 z-[150] max-w-sm rounded-lg border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/40 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/30">
           <div className="flex gap-3">
             <div
@@ -1362,7 +1389,8 @@ export default function SubscriptionManagementPage() {
               <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">{toast.message}</p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </main>

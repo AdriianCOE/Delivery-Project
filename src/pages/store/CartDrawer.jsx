@@ -157,6 +157,14 @@ function normalizeForMatch(value) {
     .trim()
 }
 
+function getNeighborhoodAliases(item) {
+  return [
+    item.neighborhood,
+    item.name,
+    ...(Array.isArray(item.aliases) ? item.aliases : []),
+  ].filter(Boolean)
+}
+
 function findDeliveryNeighborhoodMatch(neighborhood, deliveryNeighborhoods = []) {
   const normalizedNeighborhood = normalizeForMatch(neighborhood)
 
@@ -164,9 +172,51 @@ function findDeliveryNeighborhoodMatch(neighborhood, deliveryNeighborhoods = [])
 
   return (
     deliveryNeighborhoods.find((item) => {
-      return normalizeForMatch(item.neighborhood) === normalizedNeighborhood
+      return getNeighborhoodAliases(item).some((alias) => {
+        return normalizeForMatch(alias) === normalizedNeighborhood
+      })
     }) || null
   )
+}
+
+function getNeighborhoodSelectionError({
+  nextNeighborhood,
+  customer,
+  cepLookupStatus,
+  deliveryAreaMessage,
+  deliveryNeighborhoods = [],
+}) {
+  if (!nextNeighborhood) {
+    return 'Selecione um bairro para entrega.'
+  }
+
+  if (cepLookupStatus === 'unsupported') {
+    return deliveryAreaMessage || 'Bairro fora da área de entrega.'
+  }
+
+  if (customer.cepValidated && customer.cepNeighborhood) {
+    const cepMatchedNeighborhood = findDeliveryNeighborhoodMatch(
+      customer.cepNeighborhood,
+      deliveryNeighborhoods
+    )
+
+    if (deliveryNeighborhoods.length > 0 && !cepMatchedNeighborhood) {
+      return deliveryAreaMessage || `A loja não entrega no bairro ${customer.cepNeighborhood}.`
+    }
+
+    if (cepMatchedNeighborhood) {
+      const normalizedSelected = normalizeForMatch(nextNeighborhood)
+
+      const selectedMatchesCepNeighborhood = getNeighborhoodAliases(cepMatchedNeighborhood)
+        .some((alias) => normalizeForMatch(alias) === normalizedSelected)
+
+      if (!selectedMatchesCepNeighborhood) {
+        return `O bairro do CEP é ${customer.cepNeighborhood}. Para evitar erro na entrega, use o bairro retornado pelo CEP.`
+      }
+    }
+  }
+
+  return ''
 }
 
 function isSameAddressText(a, b) {
@@ -1418,6 +1468,26 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     const cepCity = data.localidade || ''
     const cepState = data.uf || ''
 
+    if (deliveryNeighborhoods.length > 0 && !cepNeighborhood) {
+      setCustomer((prev) => ({
+        ...prev,
+        cep: formatCep(digits),
+        street: cepStreet || prev.street,
+        city: cepCity || prev.city || '',
+        state: cepState || prev.state || '',
+        cepNeighborhood: '',
+        cepStreet,
+        cepCity,
+        cepState,
+        cepValidated: false,
+      }))
+
+      setCepError('Não conseguimos identificar o bairro pelo CEP. Selecione o bairro manualmente.')
+      setCepLookupStatus('manual')
+
+      return null
+    }
+
     const matchedNeighborhood = findDeliveryNeighborhoodMatch(
       cepNeighborhood,
       deliveryNeighborhoods
@@ -1527,7 +1597,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     return deliveryNeighborhoods.map((item) => item.neighborhood).join(', ')
   }, [deliveryNeighborhoods])
   const deliveryAreaMessage = deliveryNeighborhoodList
-    ? `A loja entrega apenas nos bairros listados.`
+    ? `A loja entrega apenas em: ${deliveryNeighborhoodList}.`
     : ''
   const blockingCepError = isBlockingCepError(cepError)
 
@@ -1885,12 +1955,16 @@ if (orderType === 'delivery') {
   if (!customer.neighborhood.trim()) return 'Selecione ou informe o bairro.'
   if (addressNumber !== customer.number.trim()) return 'O número deve conter apenas dígitos.'
 
-  if (
-    hasDeliveryNeighborhoodRules &&
-    customer.cepNeighborhood &&
-    normalizeForMatch(customer.cepNeighborhood) !== normalizeForMatch(customer.neighborhood)
-  ) {
-    return `O CEP informado pertence ao bairro ${customer.cepNeighborhood}, mas o bairro selecionado foi ${customer.neighborhood}.`
+  const neighborhoodError = getNeighborhoodSelectionError({
+    nextNeighborhood: customer.neighborhood,
+    customer,
+    cepLookupStatus,
+    deliveryAreaMessage: deliveryAreaMessage || 'Bairro fora da área de entrega.',
+    deliveryNeighborhoods,
+  })
+
+  if (neighborhoodError) {
+    return neighborhoodError
   }
 
   if (
@@ -2441,7 +2515,7 @@ if (orderType === 'delivery') {
 
   {deliveryNeighborhoodList && (
     <p className="mt-2 text-xs font-bold leading-5 text-[#6b7280]">
-      Entregamos apenas nos bairros listados:
+      Entregamos apenas em: {deliveryNeighborhoodList}.
     </p>
   )}
 </div>
@@ -2455,27 +2529,25 @@ if (orderType === 'delivery') {
                             value={customer.neighborhood}
                             aria-invalid={!!getFieldError('neighborhood')}
                             onChange={(event) => {
-  const nextNeighborhood = event.target.value
+                              const nextNeighborhood = event.target.value
 
-  setCustomer((prev) => ({
-    ...prev,
-    neighborhood: nextNeighborhood,
-  }))
+                              const nextCustomer = {
+                                ...customer,
+                                neighborhood: nextNeighborhood,
+                              }
 
-  if (cepLookupStatus === 'unsupported') {
-    setCepError(deliveryAreaMessage || 'Bairro fora da área de entrega.')
-  } else if (
-    customer.cepValidated &&
-    customer.cepNeighborhood &&
-    normalizeForMatch(customer.cepNeighborhood) !== normalizeForMatch(nextNeighborhood)
-  ) {
-    setCepError(
-      `O bairro do CEP é ${customer.cepNeighborhood}. Para evitar erro na entrega, use o bairro retornado pelo CEP.`
-    )
-  } else {
-    setCepError('')
-  }
-}}
+                              setCustomer(nextCustomer)
+
+                              const errorMessage = getNeighborhoodSelectionError({
+                                nextNeighborhood,
+                                customer: nextCustomer,
+                                cepLookupStatus,
+                                deliveryAreaMessage,
+                                deliveryNeighborhoods,
+                              })
+
+                              setCepError(errorMessage)
+                            }}
                             className="h-12 w-full rounded-2xl border border-gray-100 bg-[#F9FAFB] px-4 text-sm font-medium text-[#111827] outline-none transition focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
                           >
                             <option value="">Selecione o bairro</option>
@@ -2501,12 +2573,12 @@ if (orderType === 'delivery') {
                           placeholder="Digite seu bairro"
                           value={customer.neighborhood}
                           onChange={(event) =>
-                          setCustomer((prev) => ({
-                            ...prev,
-                            neighborhood: event.target.value,
-                            cepValidated: prev.cep ? prev.cepValidated : false,
-                          }))
-                        }
+                            setCustomer((prev) => ({
+                              ...prev,
+                              neighborhood: event.target.value,
+                              cepValidated: prev.cep ? prev.cepValidated : false,
+                            }))
+                          }
                         />
                       )}
 

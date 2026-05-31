@@ -178,8 +178,41 @@ function buildSlug(value) {
 
 function normalizeCpfCnpj(value) {
   const digits = String(value || '').replace(/\D/g, '')
-  if (digits.length !== 11 && digits.length !== 14) return null
+  if (!isValidCpf(digits) && !isValidCnpj(digits)) return null
   return digits
+}
+
+function hasRepeatedDigits(value) {
+  return /^(\d)\1+$/.test(value)
+}
+
+function isValidCpf(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (digits.length !== 11 || hasRepeatedDigits(digits)) return false
+  const numbers = digits.split('').map(Number)
+  let sum = 0
+  for (let i = 0; i < 9; i += 1) sum += numbers[i] * (10 - i)
+  const firstCheck = (sum * 10) % 11
+  if ((firstCheck === 10 ? 0 : firstCheck) !== numbers[9]) return false
+  sum = 0
+  for (let i = 0; i < 10; i += 1) sum += numbers[i] * (11 - i)
+  const secondCheck = (sum * 10) % 11
+  return (secondCheck === 10 ? 0 : secondCheck) === numbers[10]
+}
+
+function isValidCnpj(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (digits.length !== 14 || hasRepeatedDigits(digits)) return false
+  const numbers = digits.split('').map(Number)
+  const calcCheckDigit = (length) => {
+    const weights = length === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    const sum = weights.reduce((total, weight, index) => total + numbers[index] * weight, 0)
+    const rest = sum % 11
+    return rest < 2 ? 0 : 11 - rest
+  }
+  return calcCheckDigit(12) === numbers[12] && calcCheckDigit(13) === numbers[13]
 }
 
 function normalizePostalCode(value) {
@@ -2426,6 +2459,9 @@ function createAsaasFunctions({ db, admin, logger }) {
 
           transaction.set(checkoutRef, checkoutData)
 
+          const documentToSave = billingData?.cpfCnpj || lockState.userData?.cpfCnpj || lockState.storeData?.cpfCnpj || lockState.userData?.billingData?.cpfCnpj || lockState.storeData?.billingData?.cpfCnpj || null
+          const normalizedDocumentToSave = normalizeCpfCnpj(documentToSave)
+          
           const mirroredPayload = {
             subscriptionStatus: BILLING_PENDING_PAYMENT_METHOD_STATUS,
             onboardingStatus: 'billing_pending',
@@ -2438,6 +2474,7 @@ function createAsaasFunctions({ db, admin, logger }) {
             asaasCheckoutId,
             asaasCheckoutUrl: checkoutUrl,
             asaasCheckoutExpiresAt: checkoutExpiresAt,
+            ...(normalizedDocumentToSave ? { cpfCnpj: normalizedDocumentToSave } : {}),
             updatedAt: now,
           }
 
@@ -3053,6 +3090,39 @@ function createAsaasFunctions({ db, admin, logger }) {
           }
         }
 
+        const providerSubId = context.existingReference?.providerSubscriptionId
+        let nextPaymentInvoiceUrl = null
+        
+        if (providerSubId) {
+          try {
+            const params = new URLSearchParams({
+              subscription: providerSubId,
+              limit: '10',
+            })
+            const paymentsResponse = await asaasRequest(`/payments?${params.toString()}`)
+            const charge = paymentsResponse?.data?.find((payment) => ['PENDING', 'OVERDUE'].includes(payment.status))
+            
+            if (charge) {
+              nextPaymentInvoiceUrl = charge.invoiceUrl || charge.bankSlipUrl || null
+            }
+          } catch (error) {
+            logger.error('Failed to fetch pending payment for card update', { 
+              error: error.message,
+              providerSubscriptionId: providerSubId
+            })
+          }
+        }
+
+        if (nextPaymentInvoiceUrl) {
+          return {
+            ok: true,
+            status: 'checkout_reused',
+            checkoutUrl: nextPaymentInvoiceUrl,
+            paymentUrl: nextPaymentInvoiceUrl,
+            message: 'Encontramos uma cobrança pendente. Redirecionando para regularizar o pagamento.',
+          }
+        }
+
         const requestResult = await createManagementRequestInTransaction({
           db,
           transaction,
@@ -3184,8 +3254,33 @@ function createAsaasFunctions({ db, admin, logger }) {
       try {
         const processResult = await db.runTransaction(async (transaction) => {
           const eventDoc = await transaction.get(eventRef)
-          const subscriptionDoc = await transaction.get(subscriptionRef)
+          let subscriptionDoc = await transaction.get(subscriptionRef)
           const now = admin.firestore.Timestamp.now()
+          let autoDiscoveredSubscriptionData = null
+
+          if (!subscriptionDoc.exists && payment?.checkoutSession) {
+            const checkoutDocRef = db.collection('billingCheckouts').doc(safeDocId(payment.checkoutSession))
+            const checkoutDoc = await transaction.get(checkoutDocRef)
+            
+            if (checkoutDoc.exists) {
+              const oldSubId = `asaas_checkout_${safeDocId(payment.checkoutSession)}`
+              const oldSubDoc = await transaction.get(db.collection('subscriptions').doc(oldSubId))
+              
+              if (oldSubDoc.exists) {
+                logger.warn('Recovered subscription from legacy checkout id', {
+                  checkoutSession: payment.checkoutSession,
+                  localSubscriptionId,
+                  providerSubscriptionId,
+                })
+                autoDiscoveredSubscriptionData = {
+                  ...oldSubDoc.data(),
+                  id: localSubscriptionId,
+                  providerSubscriptionId,
+                  updatedAt: now,
+                }
+              }
+            }
+          }
 
           if (eventDoc.exists && ['processed', 'ignored'].includes(eventDoc.data().status)) {
             return { duplicate: true, status: eventDoc.data().status }
@@ -3202,7 +3297,7 @@ function createAsaasFunctions({ db, admin, logger }) {
             now,
           })
 
-          if (!subscriptionDoc.exists) {
+          if (!subscriptionDoc.exists && !autoDiscoveredSubscriptionData) {
             transaction.set(
               eventRef,
               {
@@ -3228,7 +3323,23 @@ function createAsaasFunctions({ db, admin, logger }) {
             return { ignored: true, reason: 'subscription_not_found' }
           }
 
-          const subscriptionData = subscriptionDoc.data()
+          const subscriptionData = subscriptionDoc.exists ? subscriptionDoc.data() : autoDiscoveredSubscriptionData
+          
+          if (autoDiscoveredSubscriptionData) {
+            transaction.set(subscriptionRef, autoDiscoveredSubscriptionData, { merge: true })
+            const mirrorPayload = {
+              asaasSubscriptionId: providerSubscriptionId,
+              subscriptionId: localSubscriptionId,
+              updatedAt: now,
+            }
+            if (subscriptionData.storeId) {
+              transaction.set(db.collection('stores').doc(subscriptionData.storeId), mirrorPayload, { merge: true })
+            }
+            if (subscriptionData.uid) {
+              transaction.set(db.collection('users').doc(subscriptionData.uid), mirrorPayload, { merge: true })
+            }
+          }
+
           const previousStatus = subscriptionData.status || 'trialing'
 
           if (!INTERNAL_STATUSES.has(previousStatus)) {

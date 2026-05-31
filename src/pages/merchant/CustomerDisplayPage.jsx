@@ -9,6 +9,10 @@
  *
  * Pedidos "pronto" somem após READY_TTL_MINUTES (45min) usando updatedAt ou createdAt.
  *
+ * TODO P1 publicDisplays:
+ * materializar publicDisplays/{storeId}/activeOrders/{orderId} apenas com
+ * orderNumber, status, displayStatus, timestamps e type, sem PII.
+ *
  * Layout:
  *   Desktop/TV: Em preparo (40%) | Prontos para retirada (60%)
  *   Mobile/tablet: empilhado, Prontos primeiro

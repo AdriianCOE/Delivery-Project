@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import {
   FiBox,
   FiCopy,
@@ -22,7 +23,7 @@ import {
   FiAlertTriangle
 } from 'react-icons/fi'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
 import {
   getStoreDocId,
   getStorePublicSlug,
@@ -245,9 +246,12 @@ export default function MerchantDrawer({
     if (!storeDocId) return
     setLoading(true)
     try {
-      await updateDoc(doc(db, 'stores', storeDocId), {
-        isOpen: newStatus,
-        updatedAt: serverTimestamp(),
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId: storeDocId,
+        payload: {
+          isOpen: newStatus,
+        },
       })
       showToast(newStatus ? 'Boas vendas! A loja foi aberta.' : 'Loja fechada com sucesso.')
     } catch (error) {

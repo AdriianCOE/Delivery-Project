@@ -45,9 +45,7 @@ import {
   FiTag,
   FiUsers,
   FiChevronRight,
-  FiX,
   FiCheckCircle,
-  FiTrash2,
 } from 'react-icons/fi'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -328,16 +326,16 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
 
   const fulfillmentType = getOrderFulfillmentType(order)
 
-  const handleRemove = useCallback(async () => {
+  const handleFinish = useCallback(async () => {
     if (loading) return
-    if (!window.confirm('Remover este pedido pronto da tela da cozinha?')) return
+    if (!window.confirm('Finalizar este pedido? Ele será removido da cozinha.')) return
     setActionError('')
     setLoading(true)
     try {
       await onUpdateStatus(order.id, 'entregue')
     } catch (err) {
-      console.error('[KDS] Erro ao remover:', err)
-      setActionError(err?.message || 'Erro ao remover pedido.')
+      console.error('[KDS] Erro ao finalizar:', err)
+      setActionError(err?.message || 'Erro ao finalizar pedido.')
     } finally {
       setLoading(false)
     }
@@ -389,20 +387,6 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
         <div className="flex items-center gap-2 shrink-0">
           <OrderTypeBadge order={order} t={t} />
           <ElapsedBadge createdAt={order.createdAt} status={normalizedStatus} t={t} />
-          {normalizedStatus === 'pronto' && fulfillmentType !== 'delivery' && (
-            <button
-              onClick={handleRemove}
-              disabled={loading}
-              title="Remover da tela"
-              aria-label="Remover pedido pronto da tela da cozinha"
-              className={cn(
-                'ml-1 flex h-7 w-7 items-center justify-center rounded-full transition-colors active:scale-95 disabled:opacity-50',
-                t('bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200', 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800')
-              )}
-            >
-              <FiX size={16} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -557,6 +541,23 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
             <FiTruck size={14} />
             Delivery: Despache pela tela de Pedidos
           </div>
+        </div>
+      ) : normalizedStatus === 'pronto' ? (
+        <div className="px-4 pb-4 pt-2">
+          <button
+            type="button"
+            onClick={handleFinish}
+            disabled={loading}
+            title="Finalizar pedido"
+            aria-label="Finalizar pedido pronto"
+            className={cn(
+              'flex w-full items-center justify-center gap-2.5 rounded-xl py-3.5 text-base font-black text-white transition-all active:scale-[0.98] disabled:opacity-60',
+              cfg.actionBg[isDark ? 'dark' : 'light']
+            )}
+          >
+            {loading ? <FiRefreshCw size={18} className="animate-spin" /> : <FiCheckCircle size={18} />}
+            {loading ? 'Finalizando...' : 'Finalizar pedido'}
+          </button>
         </div>
       ) : null}
     </article>

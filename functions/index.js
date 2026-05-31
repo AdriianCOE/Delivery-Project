@@ -64,6 +64,110 @@ if (process.env.FUNCTIONS_EMULATOR !== 'true') {
   }
 }
 
+function sanitizePublicTrackingOrderId(value) {
+  const orderId = String(value || '').trim()
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(orderId)) {
+    throw new HttpsError('invalid-argument', 'Pedido invalido.')
+  }
+  return orderId
+}
+
+function normalizePublicOrderStatus(status) {
+  const value = String(status || 'pendente').toLowerCase().trim()
+  return {
+    pronto: 'pronto',
+    ready: 'pronto',
+    em_rota: 'em_rota',
+    entregando: 'em_rota',
+    out_for_delivery: 'em_rota',
+    entregue: 'entregue',
+    delivered: 'entregue',
+    cancelado: 'cancelado',
+    canceled: 'cancelado',
+  }[value] || value || 'pendente'
+}
+
+function uniquePublicOrderKeys(values) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+function getPublicOrderStoreKeys(orderData) {
+  return uniquePublicOrderKeys([
+    orderData?.storeId,
+    orderData?.storeSlug,
+    orderData?.storeDocId,
+    ...(Array.isArray(orderData?.storeKeys) ? orderData.storeKeys : []),
+  ])
+}
+
+function getPublicOrderCustomerName(orderData) {
+  return String(
+    orderData?.customer?.name ||
+      orderData?.customerName ||
+      orderData?.clientName ||
+      ''
+  ).trim()
+}
+
+function getPublicOrderCustomerPhone(orderData) {
+  return String(
+    orderData?.customer?.phone ||
+      orderData?.customerPhone ||
+      orderData?.phone ||
+      ''
+  ).trim()
+}
+
+function assertPublicTrackingAccess(orderId, trackingToken, orderData) {
+  const expectedToken = String(orderData?.trackingToken || '').trim()
+  const providedToken = String(trackingToken || orderId).trim()
+
+  if (!expectedToken || expectedToken !== orderId || providedToken !== expectedToken) {
+    throw new HttpsError('permission-denied', 'Link de acompanhamento invalido.')
+  }
+}
+
+function isManualPixPublicOrder(orderData) {
+  const method = String(
+    orderData?.payment?.method ||
+      orderData?.paymentMethod ||
+      orderData?.paymentType ||
+      ''
+  ).toLowerCase().trim()
+
+  return ['pix', 'pix_manual', 'manual_pix', 'pix_manual_store'].includes(method)
+}
+
+function sanitizeReviewRating(value, fieldName) {
+  const rating = Number(value)
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new HttpsError('invalid-argument', `${fieldName} invalida.`)
+  }
+  return rating
+}
+
+function sanitizeReviewTags(tags) {
+  if (!Array.isArray(tags)) return []
+
+  return uniquePublicOrderKeys(tags)
+    .map((tag) => tag.slice(0, 60))
+    .slice(0, 8)
+}
+
+async function writePublicOrderAudit(action, orderId, orderData, changedFields) {
+  await db.collection('auditLogs').add({
+    action,
+    entity: 'order',
+    entityId: orderId,
+    storeId: orderData.storeId || orderData.storeDocId || '',
+    storeSlug: orderData.storeSlug || '',
+    actorUid: null,
+    changedFields,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    source: 'tracking_callable',
+  })
+}
+
 exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
 exports.getSubscriptionManagementData = asaasFunctions.getSubscriptionManagementData
 exports.changeSubscriptionPlan = asaasFunctions.changeSubscriptionPlan
@@ -113,7 +217,217 @@ const PUBLIC_READ_RATE_LIMITS = {
   getPublicStoreProfile: 120,
   getPublicCatalog: 120,
   validatePublicCoupon: 30,
+  confirmCustomerDelivery: 20,
+  markCustomerPixProofSent: 20,
+  requestCustomerOrderCancellation: 20,
+  submitPublicOrderReview: 20,
 }
+
+exports.confirmCustomerDelivery = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+  await assertPublicCallableRateLimit('confirmCustomerDelivery', request)
+
+  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
+  const trackingToken = request.data?.trackingToken
+  const orderRef = db.collection('orders').doc(orderId)
+
+  const result = await db.runTransaction(async (transaction) => {
+    const orderSnapshot = await transaction.get(orderRef)
+    if (!orderSnapshot.exists) {
+      throw new HttpsError('not-found', 'Pedido nao encontrado.')
+    }
+
+    const orderData = orderSnapshot.data() || {}
+    assertPublicTrackingAccess(orderId, trackingToken, orderData)
+
+    const currentStatus = normalizePublicOrderStatus(orderData.status)
+    if (!['pronto', 'em_rota'].includes(currentStatus)) {
+      throw new HttpsError('failed-precondition', 'Pedido ainda nao pode ser confirmado como entregue.')
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp()
+    const patch = {
+      status: 'entregue',
+      deliveredAt: now,
+      customerConfirmedDeliveryAt: now,
+      updatedAt: now,
+    }
+
+    transaction.update(orderRef, patch)
+
+    return { orderData, changedFields: Object.keys(patch) }
+  })
+
+  await writePublicOrderAudit('customer_confirm_delivery', orderId, result.orderData, result.changedFields)
+
+  return { ok: true, orderId, status: 'entregue' }
+})
+
+exports.markCustomerPixProofSent = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+  await assertPublicCallableRateLimit('markCustomerPixProofSent', request)
+
+  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
+  const trackingToken = request.data?.trackingToken
+  const orderRef = db.collection('orders').doc(orderId)
+
+  const result = await db.runTransaction(async (transaction) => {
+    const orderSnapshot = await transaction.get(orderRef)
+    if (!orderSnapshot.exists) {
+      throw new HttpsError('not-found', 'Pedido nao encontrado.')
+    }
+
+    const orderData = orderSnapshot.data() || {}
+    assertPublicTrackingAccess(orderId, trackingToken, orderData)
+
+    if (['entregue', 'cancelado'].includes(normalizePublicOrderStatus(orderData.status))) {
+      throw new HttpsError('failed-precondition', 'Pedido finalizado nao pode receber comprovante.')
+    }
+
+    if (!isManualPixPublicOrder(orderData)) {
+      throw new HttpsError('failed-precondition', 'Este pedido nao usa Pix manual.')
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp()
+    const patch = {
+      'payment.proofSentAt': now,
+      'payment.proofSource': 'whatsapp',
+      'payment.proofWhatsappOpened': true,
+      paymentProofRequestedAt: now,
+      updatedAt: now,
+    }
+
+    transaction.update(orderRef, patch)
+
+    return { orderData, changedFields: Object.keys(patch) }
+  })
+
+  await writePublicOrderAudit('customer_pix_proof_sent', orderId, result.orderData, result.changedFields)
+
+  return { ok: true, orderId }
+})
+
+exports.requestCustomerOrderCancellation = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+  await assertPublicCallableRateLimit('requestCustomerOrderCancellation', request)
+
+  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
+  const trackingToken = request.data?.trackingToken
+  const orderRef = db.collection('orders').doc(orderId)
+
+  const result = await db.runTransaction(async (transaction) => {
+    const orderSnapshot = await transaction.get(orderRef)
+    if (!orderSnapshot.exists) {
+      throw new HttpsError('not-found', 'Pedido nao encontrado.')
+    }
+
+    const orderData = orderSnapshot.data() || {}
+    assertPublicTrackingAccess(orderId, trackingToken, orderData)
+
+    if (['entregue', 'cancelado'].includes(normalizePublicOrderStatus(orderData.status))) {
+      throw new HttpsError('failed-precondition', 'Pedido finalizado nao pode receber solicitacao de cancelamento.')
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp()
+    const patch = {
+      customerCancelRequested: true,
+      customerCancelRequestedAt: now,
+      cancelRequestSource: 'tracking',
+      updatedAt: now,
+    }
+
+    transaction.update(orderRef, patch)
+
+    return { orderData, changedFields: Object.keys(patch) }
+  })
+
+  await writePublicOrderAudit('customer_cancel_requested', orderId, result.orderData, result.changedFields)
+
+  return { ok: true, orderId }
+})
+
+exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
+  await assertPublicCallableRateLimit('submitPublicOrderReview', request)
+
+  const orderId = sanitizePublicTrackingOrderId(request.data?.orderId)
+  const trackingToken = request.data?.trackingToken
+  const reviewInput = request.data?.review || {}
+  const orderRef = db.collection('orders').doc(orderId)
+  const reviewRef = db.collection('reviews').doc(orderId)
+
+  const rating = sanitizeReviewRating(reviewInput.rating, 'Nota geral')
+  const foodRating = sanitizeReviewRating(reviewInput.foodRating, 'Nota da comida')
+  const deliveryRating = sanitizeReviewRating(reviewInput.deliveryRating, 'Nota da entrega')
+  const serviceRating = sanitizeReviewRating(reviewInput.serviceRating, 'Nota do atendimento')
+  const tags = sanitizeReviewTags(reviewInput.tags)
+  const comment = String(reviewInput.comment || '').trim().slice(0, 1000)
+
+  const result = await db.runTransaction(async (transaction) => {
+    const [orderSnapshot, reviewSnapshot] = await Promise.all([
+      transaction.get(orderRef),
+      transaction.get(reviewRef),
+    ])
+
+    if (!orderSnapshot.exists) {
+      throw new HttpsError('not-found', 'Pedido nao encontrado.')
+    }
+
+    if (reviewSnapshot.exists) {
+      throw new HttpsError('already-exists', 'Esse pedido ja foi avaliado.')
+    }
+
+    const orderData = orderSnapshot.data() || {}
+    assertPublicTrackingAccess(orderId, trackingToken, orderData)
+
+    if (normalizePublicOrderStatus(orderData.status) !== 'entregue') {
+      throw new HttpsError('failed-precondition', 'A avaliacao so fica disponivel apos a entrega.')
+    }
+
+    if (orderData.review?.submitted || orderData.reviewId) {
+      throw new HttpsError('already-exists', 'Esse pedido ja foi avaliado.')
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp()
+    const finalStoreId = orderData.storeId || orderData.storeDocId || orderData.storeSlug || ''
+    const finalStoreSlug = orderData.storeSlug || orderData.storePublicId || orderData.storeId || ''
+    const reviewPayload = {
+      storeId: finalStoreId,
+      storeSlug: finalStoreSlug,
+      storeDocId: orderData.storeDocId || orderData.storeId || null,
+      storeKeys: getPublicOrderStoreKeys(orderData),
+      orderId,
+      trackingToken: orderData.trackingToken || orderId,
+      customerName: getPublicOrderCustomerName(orderData),
+      customerPhone: getPublicOrderCustomerPhone(orderData),
+      rating,
+      foodRating,
+      deliveryRating,
+      serviceRating,
+      wouldOrderAgain: Boolean(reviewInput.wouldOrderAgain),
+      tags,
+      comment,
+      isPublic: false,
+      resolved: false,
+      createdAt: now,
+      updatedAt: now,
+    }
+    const orderPatch = {
+      reviewId: orderId,
+      review: {
+        submitted: true,
+        rating,
+        submittedAt: now,
+      },
+      updatedAt: now,
+    }
+
+    transaction.set(reviewRef, reviewPayload)
+    transaction.update(orderRef, orderPatch)
+
+    return { orderData, changedFields: ['reviewId', 'review', 'updatedAt'] }
+  })
+
+  await writePublicOrderAudit('customer_review_submitted', orderId, result.orderData, result.changedFields)
+
+  return { ok: true, orderId, reviewId: orderId }
+})
 
 const PUBLIC_STORE_FIELDS = [
   'name', 'storeName', 'description', 'segment', 'category',

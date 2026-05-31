@@ -2671,7 +2671,9 @@ export default function OrdersPage() {
   const [selectedStoreId, setSelectedStoreId] = useState('')
   const [selectedOrderId, setSelectedOrderId] = useState('')
   const [statusFilter, setStatusFilter] = useState('todos')
+  const [dateFilter, setDateFilter] = useState('hoje')
   const [search, setSearch] = useState('')
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [loadingStores, setLoadingStores] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState('')
@@ -3531,50 +3533,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
           />
         ) : (
           <>
-            <div className="mb-6 rounded-[1.8rem] bg-[#111827] p-5 text-white shadow-xl shadow-black/20 ring-1 ring-white/5">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black text-orange-50">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)] ${
-                        selectedStore?.isOpen ? 'bg-[#00FF00] shadow-[#00FF00]/40' : 'bg-red-500 shadow-red-500/40'
-                      }`}
-                    />
-                    {selectedStore?.isOpen ? 'Loja aberta' : 'Loja fechada'}
-                  </div>
 
-                  <h2 className="mt-3 text-2xl font-black tracking-tight">
-                    {selectedStore.name || 'Sua loja'}
-                  </h2>
-
-                  <p className="mt-1 text-sm font-medium text-gray-400">
-                    /{getStoreSlug(selectedStore)}
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-4 lg:min-w-[640px]">
-                  <div className="rounded-[1.2rem] border border-blue-900/30 bg-blue-950/20 p-4 transition hover:bg-blue-950/30">
-                    <p className="text-[11px] font-black uppercase tracking-wide text-blue-400">Hoje</p>
-                    <p className="mt-1.5 text-2xl font-black text-white">{summary.todayCount}</p>
-                  </div>
-
-                  <div className="rounded-[1.2rem] border border-emerald-900/30 bg-emerald-950/20 p-4 transition hover:bg-emerald-950/30">
-                    <p className="text-[11px] font-black uppercase tracking-wide text-emerald-400">Faturamento</p>
-                    <p className="mt-1.5 text-xl font-black text-white">{formatMoney(summary.revenueToday)}</p>
-                  </div>
-
-                  <div className="rounded-[1.2rem] border border-amber-900/30 bg-amber-950/20 p-4 transition hover:bg-amber-950/30">
-                    <p className="text-[11px] font-black uppercase tracking-wide text-amber-400">Ativos</p>
-                    <p className="mt-1.5 text-2xl font-black text-white">{summary.activeCount}</p>
-                  </div>
-
-                  <div className="rounded-[1.2rem] border border-red-900/30 bg-red-950/20 p-4 transition hover:bg-red-950/30">
-                    <p className="text-[11px] font-black uppercase tracking-wide text-red-400">Atenção</p>
-                    <p className="mt-1.5 text-2xl font-black text-white">{summary.latePendingCount}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {summary.latePendingCount > 0 && (
   <div className="mb-6 rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-red-700 shadow-lg shadow-red-100/70 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200 dark:shadow-red-950/20">
@@ -3650,48 +3609,87 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               />
             </div>
 
-            <div className="mb-5 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="relative flex-1">
-                  <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280] dark:text-zinc-500" />
+            <div className="mb-5 flex flex-col gap-4">
+              {/* Row 1: Status Filters */}
+              <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  {STATUS_TABS.map((tab) => {
+                    const meta = STATUS_META[tab.key]
+                    const Icon = meta?.icon
+                    const isSelected = statusFilter === tab.key
+                    const hasItems = (statusCounts[tab.key] || 0) > 0
+                    
+                    const iconColorClass = meta?.dotClass ? meta.dotClass.replace('bg-', 'text-') : 'text-gray-400 dark:text-zinc-500'
 
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setStatusFilter(tab.key)}
+                        className={`group inline-flex shrink-0 items-center gap-2.5 rounded-2xl px-4 py-2.5 text-sm font-black transition-all ${
+                          isSelected
+                            ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/20 ring-1 ring-orange-500/50'
+                            : 'bg-white text-gray-600 ring-1 ring-gray-100 hover:bg-gray-50 hover:text-gray-900 dark:bg-[#18181b] dark:text-zinc-400 dark:ring-white/5 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-200'
+                        }`}
+                      >
+                        {Icon && (
+                          <Icon 
+                            size={15} 
+                            className={`transition-transform duration-300 ${isSelected ? 'text-white/90 scale-110' : iconColorClass} ${isSelected ? '' : 'group-hover:scale-125'}`} 
+                          />
+                        )}
+                        
+                        {tab.label}
+
+                        {hasItems && (
+                          <span
+                            className={`flex h-5 items-center justify-center rounded-full px-2 text-xs font-bold tracking-wide transition-colors ${
+                              isSelected
+                                ? 'bg-white/25 text-white'
+                                : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-400'
+                            }`}
+                          >
+                            {statusCounts[tab.key]}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Row 2: Search Bar & Date Filters */}
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                <div className={`relative transition-all duration-500 ease-out ${isSearchFocused ? 'w-full lg:flex-[1.5]' : 'w-full lg:flex-1'}`}>
+                  <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280] dark:text-zinc-500" />
                   <input
                     type="text"
-                    placeholder="Buscar por cliente, telefone, endereço, produto, opção ou código..."
+                    placeholder="Buscar por cliente, telefone, endereço, pedido..."
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] pl-12 pr-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:ring-orange-500/10"
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
+                    className="h-14 w-full rounded-[1.5rem] border border-gray-100 bg-white pl-12 pr-4 text-sm font-medium text-[#111827] shadow-sm outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/10"
                   />
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
-                  <span className="hidden items-center gap-2 text-sm font-black text-[#6b7280] dark:text-zinc-400 xl:flex">
-                    <FiFilter />
-                    Filtros
-                  </span>
-
-                  {STATUS_TABS.map((tab) => (
+                <div className="flex shrink-0 items-center overflow-x-auto rounded-[1.5rem] border border-gray-100 bg-white p-1.5 shadow-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] dark:border-zinc-800 dark:bg-zinc-900">
+                  {[
+                    { key: 'hoje', label: 'Hoje' },
+                    { key: '7d', label: '7 dias' },
+                    { key: '30d', label: '30 dias' },
+                    { key: 'all', label: 'Todo período' },
+                  ].map((filter) => (
                     <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setStatusFilter(tab.key)}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black transition ${
-                        statusFilter === tab.key
-                          ? 'bg-[#f97316] text-white shadow-sm'
-                          : 'bg-gray-50 text-[#6b7280] hover:bg-orange-50 hover:text-[#f97316] dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-orange-500/10 dark:hover:text-orange-300'
+                      key={filter.key}
+                      onClick={() => setDateFilter(filter.key)}
+                      className={`inline-flex shrink-0 items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black transition-all ${
+                        dateFilter === filter.key
+                          ? 'bg-gray-100 text-[#111827] dark:bg-zinc-800 dark:text-white'
+                          : 'text-[#6b7280] hover:bg-gray-50 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-200'
                       }`}
                     >
-                      {tab.label}
-
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
-                          statusFilter === tab.key
-                            ? 'bg-white/20 text-white'
-                            : 'bg-white text-[#6b7280] dark:bg-zinc-900 dark:text-zinc-400'
-                        }`}
-                      >
-                        {statusCounts[tab.key] || 0}
-                      </span>
+                      {filter.label}
                     </button>
                   ))}
                 </div>

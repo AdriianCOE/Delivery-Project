@@ -73,13 +73,13 @@ export default function MenuStatsCards({ store, stats, activeTab, filterStatus, 
   }
 
   return (
-    <AnimatePresence mode="popLayout">
+    <AnimatePresence mode="wait">
       {!isCouponsTab && !isDeliveryTab && (
         <motion.div
           key="products-stats"
-          initial={{ opacity: 0, y: -15, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -15, scale: 0.95 }}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
         >
@@ -119,9 +119,9 @@ export default function MenuStatsCards({ store, stats, activeTab, filterStatus, 
       {isCouponsTab && (
         <motion.div
           key="coupons-stats"
-          initial={{ opacity: 0, y: -15, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -15, scale: 0.95 }}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="grid grid-cols-2 gap-3 sm:grid-cols-3"
         >
@@ -146,9 +146,9 @@ export default function MenuStatsCards({ store, stats, activeTab, filterStatus, 
       {isDeliveryTab && (
         <motion.div
           key="delivery-stats"
-          initial={{ opacity: 0, y: -15, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -15, scale: 0.95 }}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="grid grid-cols-1 gap-3 sm:grid-cols-3"
         >

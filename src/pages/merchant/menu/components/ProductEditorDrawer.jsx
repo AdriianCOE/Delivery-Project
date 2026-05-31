@@ -337,7 +337,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
           <motion.div
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            className="fixed inset-y-0 right-0 z-[70] flex w-full flex-col bg-white dark:bg-slate-900 shadow-2xl md:w-[640px] lg:w-[720px] ring-1 ring-black/5 dark:ring-white/10"
+            className="fixed top-0 bottom-0 right-0 z-[70] flex h-[100dvh] max-h-[100dvh] w-full flex-col bg-white dark:bg-slate-900 shadow-2xl md:w-[640px] lg:w-[720px] ring-1 ring-black/5 dark:ring-white/10"
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 dark:border-slate-800 px-6 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-10 sticky top-0">

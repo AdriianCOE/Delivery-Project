@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -15,6 +16,12 @@ import {
   toDate,
 } from '../../utils/billingStatus'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
+import {
+  cleanBrazilianDocument,
+  formatBrazilianDocument,
+  getBrazilianDocumentType,
+} from '../../utils/brazilianDocuments'
+import { scrollToFirstError } from '../../utils/scroll'
 import {
   FiAlertTriangle,
   FiArrowRight,
@@ -460,7 +467,7 @@ export default function BillingPage() {
     setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
     setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
     setBillingPhone(formatPhoneBR(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || ''))
-    setBillingCpfCnpj(store.cnpj || store.cpf || '')
+    setBillingCpfCnpj(formatBrazilianDocument(store.cnpj || store.cpf || ''))
     setBillingPostalCode(formatCep(cep))
     setBillingAddress(street)
     setBillingAddressNumber(number)
@@ -640,7 +647,7 @@ export default function BillingPage() {
     if (!billingName) setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
     if (!billingEmail) setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
     if (!billingPhone) setBillingPhone(formatPhoneBR(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || ''))
-    if (!billingCpfCnpj) setBillingCpfCnpj(store.cnpj || store.cpf || '')
+    if (!billingCpfCnpj) setBillingCpfCnpj(formatBrazilianDocument(store.cnpj || store.cpf || ''))
     if (!billingPostalCode) setBillingPostalCode(formatCep(cep))
     if (!billingAddress) setBillingAddress(street)
     if (!billingAddressNumber) setBillingAddressNumber(number)
@@ -664,7 +671,6 @@ export default function BillingPage() {
     if (isCheckingBillingStatus) return
 
     setIsCheckingBillingStatus(true)
-    setLoadingStore(true)
     try {
       if (auth.refreshUserData) {
         await auth.refreshUserData()
@@ -717,11 +723,13 @@ export default function BillingPage() {
     const errors = {}
     if (!billingName.trim()) errors.name = 'Nome ou Razão Social é obrigatório'
 
-    const cleanCpfCnpj = billingCpfCnpj.replace(/\D/g, '')
+    const cleanCpfCnpj = cleanBrazilianDocument(billingCpfCnpj)
     if (!billingCpfCnpj.trim()) {
       errors.cpfCnpj = 'CPF ou CNPJ é obrigatório'
     } else if (cleanCpfCnpj.length !== 11 && cleanCpfCnpj.length !== 14) {
       errors.cpfCnpj = 'CPF deve ter 11 dígitos e CNPJ deve ter 14 dígitos'
+    } else if (!getBrazilianDocumentType(cleanCpfCnpj)) {
+      errors.cpfCnpj = cleanCpfCnpj.length === 11 ? 'CPF inválido' : 'CNPJ inválido'
     }
 
     if (!billingEmail.trim()) {
@@ -749,10 +757,19 @@ export default function BillingPage() {
 
   async function handleConfirmSubscription(e) {
     if (e) e.preventDefault()
-    if (submitting || !validateBillingForm()) return
+    if (submitting) return
+    if (!validateBillingForm()) {
+      setToast({
+        type: 'error',
+        message: 'Revise os dados de cobrança destacados antes de abrir o checkout.',
+      })
+      scrollToFirstError()
+      return
+    }
 
     setSubmitting(true)
     try {
+      const documentDigits = cleanBrazilianDocument(billingCpfCnpj)
       const startSubscriptionFn = httpsCallable(functions, 'startAsaasSubscription')
       const response = await startSubscriptionFn({
         storeId: store.id,
@@ -760,7 +777,7 @@ export default function BillingPage() {
         billingCycle: pendingCycle,
         billingData: {
           name: billingName.trim(),
-          cpfCnpj: billingCpfCnpj.replace(/\D/g, ''),
+          cpfCnpj: documentDigits,
           email: billingEmail.trim().toLowerCase(),
           phone: billingPhone.trim(),
           postalCode: billingPostalCode.replace(/\D/g, ''),
@@ -1488,7 +1505,8 @@ export default function BillingPage() {
       {/* Rodapé Premium de Faturamento */}
       <BillingFooter />
 
-      {showBillingModal && (
+      {/* Modal - Configuração de Faturamento */}
+      {showBillingModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             {/* Header */}
@@ -1543,9 +1561,10 @@ export default function BillingPage() {
                         type="text"
                         inputMode="numeric"
                         value={billingCpfCnpj}
-                        onChange={(e) => setBillingCpfCnpj(e.target.value)}
+                        onChange={(e) => setBillingCpfCnpj(formatBrazilianDocument(e.target.value))}
                         disabled={submitting}
-                        placeholder="Apenas números"
+                        placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                        aria-invalid={!!billingErrors.cpfCnpj}
                         className={getBillingInputClass(billingErrors.cpfCnpj)}
                       />
                       {billingErrors.cpfCnpj && <p className="mt-1 text-xs font-bold text-red-600 dark:text-red-400">{billingErrors.cpfCnpj}</p>}
@@ -1701,10 +1720,11 @@ export default function BillingPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {toast && (
+      {toast && createPortal(
         <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-lg border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/40 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/30">
           <div className="flex gap-3">
             <div
@@ -1725,7 +1745,8 @@ export default function BillingPage() {
               <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">{toast.message}</p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       </div>
     </main>
