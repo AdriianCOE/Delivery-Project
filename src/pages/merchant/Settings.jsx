@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
 import { normalizeBrazilianPhoneForWhatsApp, formatBrazilianPhone, validateBrazilianMobilePhone } from '../../utils/phone'
+import { cleanBrazilianDocument, formatCnpj, formatCpf, isValidCnpj, isValidCpf } from '../../utils/brazilianDocuments'
 import { scrollToFirstError } from '../../utils/scroll'
 import {
   doc,
@@ -66,6 +67,15 @@ const SEGMENTS = [
   'Outro',
 ]
 
+const PIX_KEY_TYPES = ['phone', 'email', 'cpf', 'cnpj', 'random']
+const PIX_KEY_TYPE_LABELS = {
+  phone: 'Telefone',
+  cpf: 'CPF',
+  cnpj: 'CNPJ',
+  email: 'E-mail',
+  random: 'Chave aleatória',
+}
+
 const DEFAULT_FORM = {
   name: '',
   slug: '',
@@ -98,7 +108,7 @@ const DEFAULT_FORM = {
   printAfterConfirm: true,
   autoCloseEnabled: false,
   autoCloseGraceMinutes: '30',
-  paymentPix: true,
+  paymentPix: false,
   paymentCard: true,
   paymentCash: true,
   pixEnabled: false,
@@ -230,6 +240,91 @@ function userCanManageStore(user, store) {
 
 function sanitizeTextField(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength)
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value || '').trim())
+}
+
+function getPixMerchantNameFallback(form, store) {
+  return sanitizeTextField(form.pixMerchantName || form.name || store?.name || store?.storeName, 80)
+}
+
+function getPixMerchantCityFallback(form, store) {
+  return sanitizeTextField(
+    form.pixMerchantCity ||
+      form.city ||
+      store?.address?.city ||
+      store?.city,
+    60
+  )
+}
+
+function getPixConfigCompleteness(form, store) {
+  const keyType = PIX_KEY_TYPES.includes(form.pixKeyType) ? form.pixKeyType : 'phone'
+  const key = sanitizeTextField(form.pixKey, 120)
+  const merchantName = getPixMerchantNameFallback(form, store)
+  const merchantCity = getPixMerchantCityFallback(form, store)
+
+  return {
+    keyType,
+    hasKey: Boolean(key),
+    hasMerchantName: Boolean(merchantName),
+    hasMerchantCity: Boolean(merchantCity),
+    complete: Boolean(key && merchantName && merchantCity),
+  }
+}
+
+function formatPixKeyForInput(value, keyType) {
+  if (keyType === 'phone') return formatBrazilianPhone(value)
+  if (keyType === 'cpf') return formatCpf(value)
+  if (keyType === 'cnpj') return formatCnpj(value)
+  return value
+}
+
+function normalizePixKeyForInput(value, keyType) {
+  if (keyType === 'phone') {
+    const normalized = normalizeBrazilianPhoneForWhatsApp(value)
+    return normalized ? `+55${normalized.replace(/^55/, '')}` : value
+  }
+
+  if (keyType === 'cpf') return cleanBrazilianDocument(value).slice(0, 11)
+  if (keyType === 'cnpj') return cleanBrazilianDocument(value).slice(0, 14)
+  if (keyType === 'email') return String(value || '').trim().toLowerCase().slice(0, 120)
+  return String(value || '').trim().slice(0, 120)
+}
+
+function normalizePixKeyForSave(value, keyType) {
+  const key = sanitizeTextField(value, 120)
+
+  if (keyType === 'phone') {
+    const validatedPixPhone = validateBrazilianMobilePhone(key)
+    if (!validatedPixPhone.ok) {
+      return { ok: false, message: 'A chave Pix de telefone precisa ser um celular brasileiro válido.' }
+    }
+    return { ok: true, value: validatedPixPhone.phoneE164 }
+  }
+
+  if (keyType === 'cpf') {
+    if (!isValidCpf(key)) return { ok: false, message: 'A chave Pix CPF é inválida.' }
+    return { ok: true, value: cleanBrazilianDocument(key) }
+  }
+
+  if (keyType === 'cnpj') {
+    if (!isValidCnpj(key)) return { ok: false, message: 'A chave Pix CNPJ é inválida.' }
+    return { ok: true, value: cleanBrazilianDocument(key) }
+  }
+
+  if (keyType === 'email') {
+    if (!isValidEmail(key)) return { ok: false, message: 'A chave Pix de e-mail é inválida.' }
+    return { ok: true, value: key.toLowerCase() }
+  }
+
+  if (key.length < 8) {
+    return { ok: false, message: 'Informe uma chave Pix aleatória válida.' }
+  }
+
+  return { ok: true, value: key }
 }
 
 function normalizeThemeColor(value) {
@@ -400,6 +495,13 @@ function mapStoreToForm(store) {
   const address = getAddressFromStore(store)
   const settings = store?.settings || {}
   const pix = store?.pix || {}
+  const settingsPix = store?.paymentSettings?.pix || {}
+  const pixKey = pix?.key || settingsPix?.key || store?.pixKey || ''
+  const pixKeyType = pix?.keyType || settingsPix?.keyType || store?.pixKeyType || 'phone'
+  const hasPixConfig = Boolean(pixKey)
+  const paymentPix =
+    store?.paymentMethods?.pix === true ||
+    (store?.paymentMethods?.pix !== false && hasPixConfig)
 
   return {
     ...DEFAULT_FORM,
@@ -458,14 +560,14 @@ function mapStoreToForm(store) {
       store?.autoCloseGraceMinutes ??
       30
     ),
-    paymentPix: store?.paymentMethods?.pix ?? true,
+    paymentPix,
     paymentCard: store?.paymentMethods?.card ?? true,
     paymentCash: store?.paymentMethods?.cash ?? true,
-    pixEnabled: pix?.enabled ?? false,
-    pixKey: pix?.key || '',
-    pixKeyType: pix?.keyType || 'phone',
-    pixMerchantName: pix?.merchantName || store?.name || '',
-    pixMerchantCity: pix?.merchantCity || address.city || '',
+    pixEnabled: pix?.enabled === true || hasPixConfig,
+    pixKey,
+    pixKeyType: PIX_KEY_TYPES.includes(pixKeyType) ? pixKeyType : 'phone',
+    pixMerchantName: pix?.merchantName || settingsPix?.merchantName || store?.name || '',
+    pixMerchantCity: pix?.merchantCity || settingsPix?.merchantCity || address.city || '',
     ...address,
   }
 }
@@ -802,6 +904,12 @@ export default function Settings() {
     '--store-theme': form.themeColor || BRAND_GREEN,
   }), [form.themeColor])
 
+  const pixCompleteness = useMemo(() => {
+    return getPixConfigCompleteness(form, selectedStore)
+  }, [form, selectedStore])
+
+  const pixRequiredAndIncomplete = form.paymentPix && !pixCompleteness.complete
+
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
   }, [])
@@ -810,6 +918,36 @@ export default function Settings() {
     setForm((prev) => ({
       ...prev,
       [field]: value,
+    }))
+  }, [])
+
+  const updatePaymentPix = useCallback((value) => {
+    setForm((prev) => ({
+      ...prev,
+      paymentPix: value,
+      pixEnabled: value ? true : false,
+      pixMerchantName: value && !prev.pixMerchantName ? prev.name : prev.pixMerchantName,
+      pixMerchantCity: value && !prev.pixMerchantCity ? prev.city : prev.pixMerchantCity,
+    }))
+  }, [])
+
+  const updatePixEnabled = useCallback((value) => {
+    setForm((prev) => ({
+      ...prev,
+      pixEnabled: value,
+      paymentPix: value ? true : false,
+      pixMerchantName: value && !prev.pixMerchantName ? prev.name : prev.pixMerchantName,
+      pixMerchantCity: value && !prev.pixMerchantCity ? prev.city : prev.pixMerchantCity,
+    }))
+  }, [])
+
+  const updatePixKeyType = useCallback((value) => {
+    const nextType = PIX_KEY_TYPES.includes(value) ? value : 'phone'
+
+    setForm((prev) => ({
+      ...prev,
+      pixKeyType: nextType,
+      pixKey: normalizePixKeyForInput(prev.pixKey, nextType),
     }))
   }, [])
 
@@ -1000,33 +1138,35 @@ export default function Settings() {
       const logoUrl = sanitizeImageUrl(form.logoUrl)
       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
       let normalizedPixKey = sanitizeTextField(form.pixKey, 120)
+      const pixKeyType = PIX_KEY_TYPES.includes(form.pixKeyType) ? form.pixKeyType : 'phone'
+      const pixMerchantName = getPixMerchantNameFallback(form, selectedStore)
+      const pixMerchantCity = getPixMerchantCityFallback(form, selectedStore)
 
       if (logoUrl === null || bannerUrl === null) {
         throw new Error('Use imagens HTTPS do Cloudinary ou caminhos internos do PratoBy.')
       }
 
-      if (form.pixEnabled) {
-        if (
-          !['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType) ||
-          !form.pixKey?.trim() ||
-          !form.pixMerchantName?.trim() ||
-          !form.pixMerchantCity?.trim()
-        ) {
-          showToast('error', 'Preencha todos os dados do Pix manual.')
+      if (!form.paymentPix && !form.paymentCard && !form.paymentCash) {
+        showToast('error', 'Selecione pelo menos uma forma de pagamento.')
+        scrollToFirstError()
+        return
+      }
+
+      if (form.paymentPix) {
+        if (!form.pixEnabled || !pixCompleteness.complete) {
+          showToast('error', 'Para aceitar Pix, configure a chave, o nome e a cidade do Pix manual.')
           scrollToFirstError()
           return
         }
 
-        if (form.pixKeyType === 'phone') {
-          const validatedPixPhone = validateBrazilianMobilePhone(form.pixKey)
-          if (!validatedPixPhone.ok) {
-            showToast('error', 'A chave Pix (Telefone) informada é inválida.')
-            scrollToFirstError()
-            return
-          }
-
-          normalizedPixKey = validatedPixPhone.phoneE164
+        const pixKeyValidation = normalizePixKeyForSave(form.pixKey, pixKeyType)
+        if (!pixKeyValidation.ok) {
+          showToast('error', pixKeyValidation.message)
+          scrollToFirstError()
+          return
         }
+
+        normalizedPixKey = pixKeyValidation.value
       }
 
       if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
@@ -1110,19 +1250,17 @@ export default function Settings() {
         acceptDineIn: Boolean(form.acceptDineIn),
 
         paymentMethods: {
-        pix: Boolean(form.paymentPix),
-        card: Boolean(form.paymentCard),
-        cash: Boolean(form.paymentCash),
-      },
-      pix: {
-        enabled: Boolean(form.pixEnabled),
-        key: normalizedPixKey,
-        keyType: ['phone', 'email', 'cpf', 'cnpj', 'random'].includes(form.pixKeyType)
-          ? form.pixKeyType
-          : 'phone',
-        merchantName: sanitizeTextField(form.pixMerchantName, 80) || cleanName,
-        merchantCity: sanitizeTextField(form.pixMerchantCity, 60) || sanitizeTextField(form.city, 60),
-      },
+          pix: Boolean(form.paymentPix),
+          card: Boolean(form.paymentCard),
+          cash: Boolean(form.paymentCash),
+        },
+        pix: {
+          enabled: Boolean(form.paymentPix),
+          key: normalizedPixKey,
+          keyType: pixKeyType,
+          merchantName: pixMerchantName || cleanName,
+          merchantCity: pixMerchantCity || sanitizeTextField(form.city, 60),
+        },
 
         address: {
           cep: sanitizeTextField(form.cep, 12),
@@ -1175,7 +1313,7 @@ export default function Settings() {
     } finally {
       setSaving(false)
     }
-  }, [form, saving, selectedStore, showToast, user])
+  }, [form, pixCompleteness, saving, selectedStore, showToast, user])
 
   if (loadingStores) {
     return (
@@ -1696,9 +1834,9 @@ export default function Settings() {
             <div className="grid gap-4 md:grid-cols-3">
               <Toggle
                 checked={form.paymentPix}
-                onChange={(value) => updateField('paymentPix', value)}
+                onChange={updatePaymentPix}
                 label="Pix"
-                description="Aceitar pagamento via Pix."
+                description="Aceitar Pix exige chave manual configurada."
               />
 
               <Toggle
@@ -1716,12 +1854,18 @@ export default function Settings() {
               />
             </div>
 
+            {pixRequiredAndIncomplete && (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800 scroll-mt-24">
+                Para ativar Pix no cardápio público, preencha a chave, o nome do recebedor e a cidade abaixo.
+              </div>
+            )}
+
             <div className="mt-5 rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4">
               <Toggle
                 checked={form.pixEnabled}
-                onChange={(value) => updateField('pixEnabled', value)}
-                label="Gerar QR Code Pix manual"
-                description="Usa a chave Pix da loja para mostrar QR Code/copia e cola no pedido."
+                onChange={updatePixEnabled}
+                label="Configurar Pix manual"
+                description="Obrigatório para aceitar Pix. Mostra QR Code/copia e cola no pedido."
               />
 
               {form.pixEnabled && (
@@ -1729,35 +1873,28 @@ export default function Settings() {
                   <Select
                     label="Tipo de chave Pix"
                     value={form.pixKeyType}
-                    onChange={(event) => updateField('pixKeyType', event.target.value)}
+                    onChange={(event) => updatePixKeyType(event.target.value)}
                   >
-                    <option value="phone">Telefone</option>
-                    <option value="cpf">CPF</option>
-                    <option value="cnpj">CNPJ</option>
-                    <option value="email">E-mail</option>
-                    <option value="random">Chave aleatória</option>
+                    {PIX_KEY_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {PIX_KEY_TYPE_LABELS[type]}
+                      </option>
+                    ))}
                   </Select>
 
                   <Input
                     label="Chave Pix"
-                    aria-invalid={!form.pixKey?.trim() && form.pixEnabled}
-                    className={!form.pixKey?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
-                    value={form.pixKeyType === 'phone' ? formatBrazilianPhone(form.pixKey) : form.pixKey}
-                    onChange={(event) => {
-                      let val = event.target.value;
-                      if (form.pixKeyType === 'phone') {
-                        const normalized = normalizeBrazilianPhoneForWhatsApp(val);
-                        if (normalized) val = '+55' + normalized.replace(/^55/, '');
-                      }
-                      updateField('pixKey', val);
-                    }}
+                    aria-invalid={!pixCompleteness.hasKey && form.paymentPix}
+                    className={!pixCompleteness.hasKey && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500 scroll-mt-24' : 'scroll-mt-24'}
+                    value={formatPixKeyForInput(form.pixKey, form.pixKeyType)}
+                    onChange={(event) => updateField('pixKey', normalizePixKeyForInput(event.target.value, form.pixKeyType))}
                     placeholder="Chave Pix da loja"
                   />
 
                   <Input
                     label="Nome no Pix"
-                    aria-invalid={!form.pixMerchantName?.trim() && form.pixEnabled}
-                    className={!form.pixMerchantName?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                    aria-invalid={!pixCompleteness.hasMerchantName && form.paymentPix}
+                    className={!pixCompleteness.hasMerchantName && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500 scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixMerchantName}
                     onChange={(event) => updateField('pixMerchantName', event.target.value)}
                     placeholder="Titular da conta"
@@ -1765,8 +1902,8 @@ export default function Settings() {
 
                   <Input
                     label="Cidade no Pix"
-                    aria-invalid={!form.pixMerchantCity?.trim() && form.pixEnabled}
-                    className={!form.pixMerchantCity?.trim() && form.pixEnabled ? 'ring-2 ring-red-500 rounded-2xl scroll-mt-24' : 'scroll-mt-24'}
+                    aria-invalid={!pixCompleteness.hasMerchantCity && form.paymentPix}
+                    className={!pixCompleteness.hasMerchantCity && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500 scroll-mt-24' : 'scroll-mt-24'}
                     value={form.pixMerchantCity}
                     onChange={(event) => updateField('pixMerchantCity', event.target.value)}
                     placeholder="Ex: Aracaju"

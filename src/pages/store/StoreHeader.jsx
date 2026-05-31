@@ -850,8 +850,7 @@ function getAcceptedPaymentMethods(store) {
 
   const pixEnabled =
     paymentMethods.pix !== false &&
-    pixConfig.enabled !== false &&
-    Boolean(pixKey)
+    (pixConfig.enabled === true || Boolean(pixKey))
 
   const cardEnabled = paymentMethods.card !== false
   const cashEnabled = paymentMethods.cash !== false

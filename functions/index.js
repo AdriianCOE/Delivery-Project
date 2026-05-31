@@ -915,6 +915,30 @@ function sanitizeStoreSettingsPayload(payload) {
   }, {})
 }
 
+function assertPixPaymentSettingsPatch(patch) {
+  const touchesPaymentMethods = Object.prototype.hasOwnProperty.call(patch, 'paymentMethods')
+  const touchesPix = Object.prototype.hasOwnProperty.call(patch, 'pix')
+  if (!touchesPaymentMethods && !touchesPix) return
+
+  const paymentPixEnabled = patch.paymentMethods?.pix === true
+  const pixEnabled = patch.pix?.enabled === true
+
+  if (paymentPixEnabled && !pixEnabled) {
+    throw new HttpsError('failed-precondition', 'Para aceitar Pix, configure o Pix manual da loja.')
+  }
+
+  if (!paymentPixEnabled && !pixEnabled) return
+
+  const pix = patch.pix || {}
+  const hasPixKey = Boolean(String(pix.key || '').trim())
+  const hasPixMerchantName = Boolean(String(pix.merchantName || '').trim())
+  const hasPixMerchantCity = Boolean(String(pix.merchantCity || '').trim())
+
+  if (!hasPixKey || !hasPixMerchantName || !hasPixMerchantCity) {
+    throw new HttpsError('failed-precondition', 'Preencha chave, nome e cidade para ativar Pix.')
+  }
+}
+
 async function findPublicCoupon(storeRecord, couponCode) {
   const code = String(couponCode || '').trim().toUpperCase().slice(0, 80)
   if (!code) return null
@@ -1144,6 +1168,7 @@ exports.updateStoreSettings = onCall(
 
     const settingsPayload = data.payload !== undefined ? data.payload : data.updates
     const patch = sanitizeStoreSettingsPayload(settingsPayload || {})
+    assertPixPaymentSettingsPatch(patch)
     if (Object.keys(patch).length === 0) {
       return { ok: true, updatedFields: [] }
     }

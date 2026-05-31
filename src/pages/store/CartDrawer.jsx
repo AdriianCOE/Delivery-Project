@@ -1606,15 +1606,20 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     const publicPaymentMethods = store?.publicPaymentMethods || {}
     const acceptedPaymentMethods = Array.isArray(store?.acceptedPaymentMethods) ? store.acceptedPaymentMethods : []
     const acceptedPaymentMethodKeys = acceptedPaymentMethods.map((m) => String(m).toLowerCase())
+    const pixConfig = getPixConfig(store)
 
     const pixEnabled =
       paymentMethods.pix !== false &&
-      (store?.pix?.enabled === true ||
+      publicPaymentMethods.pix !== false &&
+      pixConfig.enabled === true &&
+      (
         paymentMethods?.pix === true ||
         paymentMethods?.pix?.enabled === true ||
         publicPaymentMethods?.pix === true ||
         publicPaymentMethods?.pix?.enabled === true ||
-        acceptedPaymentMethodKeys.includes('pix'))
+        acceptedPaymentMethodKeys.includes('pix') ||
+        paymentMethods?.pix === undefined
+      )
 
     const cardEnabled = paymentMethods.card !== false
     const cashEnabled = paymentMethods.cash !== false
