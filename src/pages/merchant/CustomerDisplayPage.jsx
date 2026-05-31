@@ -716,7 +716,7 @@ export default function CustomerDisplayPage() {
             {isFullscreen ? <FiMinimize size={16} /> : <FiMaximize size={16} />}
           </CtrlBtn>
           <Link
-            to="/dashboard/out-screen"
+            to="/dashboard/"
             className={cn(
               'flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition',
               t(
@@ -726,7 +726,7 @@ export default function CustomerDisplayPage() {
             )}
           >
             <FiArrowLeft size={13} />
-            <span className="hidden sm:inline">Cozinha</span>
+            <span className="hidden sm:inline">Voltar</span>
           </Link>
         </div>
       </header>

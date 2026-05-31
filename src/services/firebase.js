@@ -1,11 +1,14 @@
 import { initializeApp } from 'firebase/app'
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  ReCaptchaV3Provider,
+} from 'firebase/app-check'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 import { getDatabase } from 'firebase/database'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
-
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -21,37 +24,50 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 
 function initializeOptionalAppCheck(firebaseApp) {
+  const enabled = String(import.meta.env.VITE_FIREBASE_APPCHECK_ENABLED || '').toLowerCase() === 'true'
+  const providerType = String(import.meta.env.VITE_FIREBASE_APPCHECK_PROVIDER || 'enterprise').toLowerCase()
   const siteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY
+  const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
 
-  if (!siteKey || typeof window === 'undefined') {
-    if (import.meta.env.DEV && !siteKey) {
+  if (!enabled || !siteKey || typeof window === 'undefined') {
+    if (import.meta.env.DEV && !enabled) {
+      console.info('[AppCheck] VITE_FIREBASE_APPCHECK_ENABLED diferente de true; App Check frontend desativado.')
+    } else if (import.meta.env.DEV && !siteKey) {
       console.info('[AppCheck] VITE_FIREBASE_APPCHECK_SITE_KEY ausente; App Check frontend desativado.')
     }
     return null
   }
 
   try {
+    if (debugToken) {
+      window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === 'true' ? true : debugToken
+    }
+
+    const provider = providerType === 'v3'
+      ? new ReCaptchaV3Provider(siteKey)
+      : new ReCaptchaEnterpriseProvider(siteKey)
+
     return initializeAppCheck(firebaseApp, {
-      provider: new ReCaptchaV3Provider(siteKey),
+      provider,
       isTokenAutoRefreshEnabled: true,
     })
   } catch (error) {
-    console.warn('[AppCheck] Nao foi possivel inicializar App Check.', error)
+    console.warn('[AppCheck] Não foi possível inicializar App Check.', error)
     return null
   }
 }
+
+export const appCheck = initializeOptionalAppCheck(app)
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
 export const rtdb = getDatabase(app)
 export const functions = getFunctions(app, 'southamerica-east1')
-export const appCheck = initializeOptionalAppCheck(app)
 
 export const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({
   prompt: 'select_account',
 })
-
 
 export default app

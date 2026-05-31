@@ -1,46 +1,19 @@
+import { lazy, Suspense } from 'react'
 import {
   Routes,
   Route,
   Navigate,
 } from 'react-router-dom'
 
-import LoginPage from '../pages/auth/LoginPage'
-import SignupPage from '../pages/auth/SignupPage'
-import OnboardingPage from '../pages/auth/OnboardingPage'
-import AuthActionPage from '../pages/auth/AuthActionPage'
 import ScrollToTop from '../utils/ScrollToTop'
 
 // Públicas
-import AboutPage from '../pages/AboutPage'
-import ContactPage from '../pages/ContactPage'
-import LandingPage from "../pages/landing/LandingPage"
-import NotFoundPage from '../pages/NotFoundPage'
-import StoreFrontPage from '../pages/store/StoreFrontPage'
-import OrderTrackingPage from '../pages/store/OrderTrackingPage'
-import PlansPage from '../pages/PlansPage'
-import ProfilePage from '../pages/merchant/ProfilePage'
-import RestaurantExamplesPage from '../pages/RestaurantExamplesPage'
-import PrivacyPage from '../pages/PrivacyPage'
-import TermsPage from '../pages/TermsPage'
 
 // Admin
 import AdminLayout from '../components/layouts/AdminLayout'
-import AdminDashboard from '../pages/admin/AdminDashboard'
-import CreateStorePage from '../pages/admin/CreateStorePage'
-import AdminSubscriptionsPage from '../pages/admin/AdminSubscriptionsPage'
 
 // Lojista
-import MerchantDashboard from '../pages/merchant/MerchantDashboard'
-import OrdersPage from '../pages/merchant/OrdersPage'
-import Statistics from '../pages/merchant/Statistics'
-import Settings from '../pages/merchant/Settings'
-import Reviews from '../pages/merchant/Reviews'
-import MenuManagementPage from '../pages/merchant/menu/MenuManagementPage'
 import { ComingSoon } from '../pages/merchant/ComingSoon'
-import BillingPage from '../pages/merchant/BillingPage'
-import SubscriptionManagementPage from '../pages/merchant/SubscriptionManagementPage'
-import KitchenDisplayPage from '../pages/merchant/KitchenDisplayPage'
-import CustomerDisplayPage from '../pages/merchant/CustomerDisplayPage'
 
 // Layouts / Proteção
 import ProtectedRoute from '../components/auth/ProtectedRoute'
@@ -62,6 +35,51 @@ import {
   FiSettings,
 } from 'react-icons/fi'
 
+const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
+const SignupPage = lazy(() => import('../pages/auth/SignupPage'))
+const OnboardingPage = lazy(() => import('../pages/auth/OnboardingPage'))
+const AuthActionPage = lazy(() => import('../pages/auth/AuthActionPage'))
+
+const AboutPage = lazy(() => import('../pages/AboutPage'))
+const ContactPage = lazy(() => import('../pages/ContactPage'))
+const LandingPage = lazy(() => import('../pages/landing/LandingPage'))
+const NotFoundPage = lazy(() => import('../pages/NotFoundPage'))
+const StoreFrontPage = lazy(() => import('../pages/store/StoreFrontPage'))
+const OrderTrackingPage = lazy(() => import('../pages/store/OrderTrackingPage'))
+const PlansPage = lazy(() => import('../pages/PlansPage'))
+const RestaurantExamplesPage = lazy(() => import('../pages/RestaurantExamplesPage'))
+const PrivacyPage = lazy(() => import('../pages/PrivacyPage'))
+const TermsPage = lazy(() => import('../pages/TermsPage'))
+
+const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'))
+const CreateStorePage = lazy(() => import('../pages/admin/CreateStorePage'))
+const AdminSubscriptionsPage = lazy(() => import('../pages/admin/AdminSubscriptionsPage'))
+
+const MerchantDashboard = lazy(() => import('../pages/merchant/MerchantDashboard'))
+const OrdersPage = lazy(() => import('../pages/merchant/OrdersPage'))
+const Statistics = lazy(() => import('../pages/merchant/Statistics'))
+const Settings = lazy(() => import('../pages/merchant/Settings'))
+const Reviews = lazy(() => import('../pages/merchant/Reviews'))
+const MenuManagementPage = lazy(() => import('../pages/merchant/menu/MenuManagementPage'))
+const BillingPage = lazy(() => import('../pages/merchant/BillingPage'))
+const SubscriptionManagementPage = lazy(() => import('../pages/merchant/SubscriptionManagementPage'))
+const ProfilePage = lazy(() => import('../pages/merchant/ProfilePage'))
+const KitchenDisplayPage = lazy(() => import('../pages/merchant/KitchenDisplayPage'))
+const CustomerDisplayPage = lazy(() => import('../pages/merchant/CustomerDisplayPage'))
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] px-6 text-[#111827]">
+      <div className="text-center">
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-orange-100 border-t-[#f97316]" />
+        <p className="mt-4 text-sm font-black text-[#6b7280]">
+          Carregando...
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function MerchantDashboardShell() {
   return (
     <>
@@ -76,7 +94,8 @@ export default function AppRoutes() {
     <>
       <ScrollToTop />
 
-      <Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
         {/* Públicas */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -211,7 +230,8 @@ export default function AppRoutes() {
 
         {/* 404 */}
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </>
   )
 }

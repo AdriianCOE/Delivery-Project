@@ -473,7 +473,7 @@ Não implementar sem aprovação:
 
 ## 11. Problemas conhecidos/TODOs
 
-- App Check frontend precisa de `VITE_FIREBASE_APPCHECK_SITE_KEY` configurado e testado antes do enforcement.
+- App Check frontend precisa de `VITE_FIREBASE_APPCHECK_ENABLED=true` e `VITE_FIREBASE_APPCHECK_SITE_KEY` configurados e testados antes do enforcement.
 - CustomerDisplay deve virar `publicDisplays` sem PII no futuro.
 - Bundle JS grande; aplicar lazy loading.
 - Firestore Rules precisam testes com Emulator.

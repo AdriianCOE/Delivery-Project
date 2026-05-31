@@ -694,7 +694,7 @@ Indexes deployados
 
 P1 recomendado:
 
-- App Check frontend com `VITE_FIREBASE_APPCHECK_SITE_KEY` + monitor mode + enforcement depois.
+- App Check frontend com `VITE_FIREBASE_APPCHECK_ENABLED=true` + `VITE_FIREBASE_APPCHECK_SITE_KEY` + monitor mode + enforcement depois.
 - Testes de Firestore Rules com Emulator.
 - Testes E2E com Playwright.
 - Lazy loading por rota para reduzir bundle.
@@ -720,7 +720,7 @@ P2:
 - O bundle JS está grande; considerar code-splitting/lazy loading.
 - Smart TVs antigas podem travar com animações; recomendar TV Box, tablet, Chromecast ou mini PC.
 - `CustomerDisplayPage` ainda lê `orders` no client autenticado; ideal futuro é `publicDisplays` sem PII.
-- App Check não deve ser ativado em enforcement enquanto frontend não tiver `VITE_FIREBASE_APPCHECK_SITE_KEY` configurado e monitorado.
+- App Check não deve ser ativado em enforcement enquanto frontend não tiver `VITE_FIREBASE_APPCHECK_ENABLED=true` e `VITE_FIREBASE_APPCHECK_SITE_KEY` configurados e monitorados.
 - `entregue` pode marcar pagamento como `paid`; revisar se essa regra serve para todos os métodos.
 
 ---

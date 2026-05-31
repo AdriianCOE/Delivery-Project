@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
 import { normalizeBrazilianPhoneForWhatsApp, formatBrazilianPhone, validateBrazilianMobilePhone } from '../../utils/phone'
@@ -582,9 +583,11 @@ function Toast({ toast, onClose }) {
 
   if (!toast) return null
 
+  if (typeof document === 'undefined') return null
+
   const isSuccess = toast.type === 'success'
 
-  return (
+  const toastContent = (
     <div className="fixed left-1/2 top-5 z-[200] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/30">
       <div className="flex items-start gap-3">
         <div
@@ -616,6 +619,8 @@ function Toast({ toast, onClose }) {
       </div>
     </div>
   )
+
+  return createPortal(toastContent, document.body)
 }
 
 function Section({ icon: Icon, title, description, children }) {
@@ -646,7 +651,7 @@ function Section({ icon: Icon, title, description, children }) {
 
 function Label({ children }) {
   return (
-    <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+    <label className="mb-2 block text-[11px] font-black uppercase tracking-[0.08em] text-gray-500 dark:text-zinc-500 leading-snug">
       {children}
     </label>
   )
@@ -659,12 +664,12 @@ function Input({ label, icon: Icon, className = '', ...props }) {
 
       <div className="relative">
         {Icon && (
-          <Icon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Icon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500" />
         )}
 
         <input
           {...props}
-          className={`h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 ${
+          className={`h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/20 ${
             Icon ? 'pl-11' : ''
           } ${props.className || ''}`}
         />
@@ -680,7 +685,7 @@ function Select({ label, children, className = '', ...props }) {
 
       <select
         {...props}
-        className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+        className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/20"
       >
         {children}
       </select>
@@ -695,7 +700,7 @@ function Textarea({ label, className = '', ...props }) {
 
       <textarea
         {...props}
-        className="min-h-[110px] w-full resize-none rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 py-3 text-sm font-medium leading-6 text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+        className="min-h-[110px] w-full resize-none rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 py-3 text-sm font-medium leading-6 text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/20"
       />
     </div>
   )
@@ -706,15 +711,15 @@ function Toggle({ checked, onChange, label, description }) {
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 text-left transition hover:bg-white"
+      className="flex h-full w-full items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 text-left transition hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:bg-zinc-800/80 cursor-pointer"
     >
       <div>
-        <p className="text-sm font-black text-[#111827]">
+        <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
           {label}
         </p>
 
         {description && (
-          <p className="mt-1 text-xs leading-5 text-[#6b7280]">
+          <p className="mt-1 text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
             {description}
           </p>
         )}
@@ -722,7 +727,7 @@ function Toggle({ checked, onChange, label, description }) {
 
       <span
         className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-          checked ? 'bg-[#f97316]' : 'bg-gray-300'
+          checked ? 'bg-[#f97316]' : 'bg-gray-300 dark:bg-zinc-700'
         }`}
       >
         <span
@@ -1748,9 +1753,9 @@ export default function Settings() {
             description="Configurações gerais de atendimento. Itens, cupons e taxas por bairro ficam no editor do cardápio."
           >
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
+              <div className="flex h-full flex-col justify-center rounded-2xl border border-orange-100 bg-orange-50/70 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
                 <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Abrir ou fechar a loja</p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                <p className="mt-1.5 text-xs font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
                   Use o controle rápido no dashboard ou na página de pedidos para alterar o atendimento agora.
                 </p>
               </div>
@@ -1777,7 +1782,7 @@ export default function Settings() {
               />
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="mt-5 grid gap-4 md:grid-cols-3 items-end">
               <Input
                 label="Tempo médio"
                 icon={FiClock}

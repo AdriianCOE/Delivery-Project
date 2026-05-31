@@ -47,64 +47,111 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
-const MAIN_ITEMS = [
+const NAV_SECTIONS = [
   {
-    label: 'Dashboard',
-    description: 'Visão geral da operação',
-    to: '/dashboard',
-    icon: FiHome,
-    end: true,
-  },
-  {
-    label: 'Pedidos',
-    description: 'Kanban e comandas',
-    to: '/dashboard/orders',
-    icon: FiShoppingBag,
-  },
-  {
-    label: 'Cardápio',
-    description: 'Produtos e categorias',
-    to: '/dashboard/menu',
-    icon: FiGrid,
-  },
-    {
-    label: 'Tela de Cozinha',
-    description: 'KDS em tempo real',
-    to: '/dashboard/out-screen',
-    icon: FiMonitor,
-  },
-    {
-    label: 'Avaliações',
-    description: 'Feedback dos clientes',
-    to: '/dashboard/reviews',
-    icon: FiStar,
+    title: 'Início',
+    items: [
+      {
+        label: 'Dashboard',
+        description: 'Visão geral da operação',
+        to: '/dashboard',
+        icon: FiHome,
+        end: true,
+        priority: 'normal',
+      },
+    ],
   },
   {
-    label: 'Estatísticas',
-    description: 'Resumo de vendas',
-    to: '/dashboard/stats',
-    icon: FiBarChart2,
+    title: 'Operação',
+    description: 'Rotina diária da loja',
+    items: [
+      {
+        label: 'Pedidos',
+        description: 'Tempo real',
+        to: '/dashboard/orders',
+        icon: FiShoppingBag,
+        priority: 'critical',
+      },
+      {
+        label: 'Tela de Cozinha',
+        description: 'Produção em tempo real',
+        to: '/dashboard/out-screen',
+        icon: FiMonitor,
+        priority: 'high',
+      },
+      {
+        label: 'Painel de Retirada',
+        description: 'Acompanhamento do cliente',
+        to: '/dashboard/out-screen/customer',
+        icon: FiMonitor,
+        priority: 'high',
+      },
+    ],
   },
   {
-    label: 'Assinatura',
-    description: 'Plano, teste e cobrança',
-    icon: FiCreditCard,
-    to: '/dashboard/billing',
+    title: 'Cardápio e vendas',
+    description: 'Produtos, vitrine e relacionamento',
+    items: [
+      {
+        label: 'Cardápio',
+        description: 'Produtos e categorias',
+        to: '/dashboard/menu',
+        icon: FiGrid,
+        priority: 'high',
+      },
+      {
+        label: 'Avaliações',
+        description: 'Feedback dos clientes',
+        to: '/dashboard/reviews',
+        icon: FiStar,
+        priority: 'normal',
+      },
+    ],
   },
   {
-    label: 'Configurações',
-    description: 'Loja, horários e Pix',
-    to: '/dashboard/settings',
-    icon: FiSettings,
+    title: 'Dados e financeiro',
+    description: 'Resultados e cobrança',
+    items: [
+      {
+        label: 'Estatísticas',
+        description: 'Resumo de vendas',
+        to: '/dashboard/stats',
+        icon: FiBarChart2,
+        priority: 'normal',
+      },
+      {
+        label: 'Assinatura',
+        description: 'Plano, teste e cobrança',
+        icon: FiCreditCard,
+        to: '/dashboard/billing',
+        priority: 'billing',
+      },
+    ],
   },
   {
-    label: 'Perfil',
-    description: 'Conta e segurança',
-    to: '/dashboard/profile',
-    action: 'PROFILE_MODAL',
-    icon: FiUser,
+    title: 'Loja e conta',
+    description: 'Configuração e perfil',
+    items: [
+      {
+        label: 'Configurações',
+        description: 'Loja, horários e Pix',
+        to: '/dashboard/settings',
+        icon: FiSettings,
+        priority: 'settings',
+      },
+      {
+        label: 'Perfil',
+        description: 'Conta e segurança',
+        to: '/dashboard/profile',
+        action: 'PROFILE_MODAL',
+        icon: FiUser,
+        priority: 'settings',
+      },
+    ],
   },
 ]
+
+const MAIN_ITEMS = NAV_SECTIONS.flatMap((section) => section.items)
 
 const FUTURE_SECTIONS = [
   {
@@ -253,9 +300,9 @@ function PratoByMark({ compact = false, collapsed = false }) {
 
 function SidebarSection({ title, children, collapsed = false }) {
   return (
-    <section className="min-w-0">
+    <section className={cn('min-w-0', !collapsed && 'rounded-[1.5rem] border border-gray-100 bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/60 p-2.5 mb-3')}>
       {!collapsed ? (
-        <p className="mb-2 px-3 text-[11px] font-black uppercase tracking-[0.16em] text-[#9ca3af]">
+        <p className="mb-2.5 px-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#9ca3af]">
           {title}
         </p>
       ) : (
@@ -274,6 +321,15 @@ function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false, badg
   const notificationLabel = badgeCount > 0
     ? `${item.label}, ${badgeCount > 99 ? '99 ou mais' : badgeCount} notificações não lidas`
     : `${item.label}, há notificação nova`
+
+  const priorityStyles = {
+    critical: 'text-orange-600 dark:text-orange-500',
+    high: 'text-zinc-800 dark:text-zinc-200',
+    normal: 'text-[#6b7280] dark:text-zinc-400',
+    billing: 'text-emerald-600 dark:text-emerald-500',
+    settings: 'text-[#6b7280] dark:text-zinc-400',
+  }
+  const colorClass = item.priority ? priorityStyles[item.priority] : priorityStyles.normal
 
   const handleClick = (e) => {
     if (item.action) {
@@ -299,7 +355,7 @@ function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false, badg
           collapsed ? 'justify-center px-1' : 'gap-3',
           isActive
             ? 'text-white'
-            : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white'
+            : cn(colorClass, 'hover:bg-[#f9fafb] hover:text-[#111827] dark:hover:bg-zinc-800 dark:hover:text-white')
         )
       }
     >
@@ -675,21 +731,23 @@ function MobileMoreSheet({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <SidebarSection title="Principal">
-            {MAIN_ITEMS.map((item) => (
-              <MainNavItem
-                key={item.to}
-                item={item}
-                badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
-                onNavigate={onClose}
-                onCustomAction={(action) => {
-                  if (action === 'PROFILE_MODAL') {
-                    onOpenProfileModal()
-                  }
-                }}
-              />
-            ))}
-          </SidebarSection>
+          {NAV_SECTIONS.map((section) => (
+            <SidebarSection key={section.title} title={section.title}>
+              {section.items.map((item) => (
+                <MainNavItem
+                  key={item.to}
+                  item={item}
+                  badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
+                  onNavigate={onClose}
+                  onCustomAction={(action) => {
+                    if (action === 'PROFILE_MODAL') {
+                      onOpenProfileModal()
+                    }
+                  }}
+                />
+              ))}
+            </SidebarSection>
+          ))}
 
           {FUTURE_SECTIONS.map((section) => (
             <SidebarSection key={section.title} title={section.title}>
@@ -927,21 +985,23 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
         </div>
 
         <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <SidebarSection title="Principal" collapsed={collapsed}>
-            {MAIN_ITEMS.map((item) => (
-              <MainNavItem
-                key={item.to}
-                item={item}
-                collapsed={collapsed}
-                badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
-                onCustomAction={(action) => {
-                  if (action === 'PROFILE_MODAL') {
-                    onOpenProfileModal()
-                  }
-                }}
-              />
-            ))}
-          </SidebarSection>
+          {NAV_SECTIONS.map((section) => (
+            <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
+              {section.items.map((item) => (
+                <MainNavItem
+                  key={item.to}
+                  item={item}
+                  collapsed={collapsed}
+                  badgeCount={notificationCounts[getNavNotificationArea(item)] || 0}
+                  onCustomAction={(action) => {
+                    if (action === 'PROFILE_MODAL') {
+                      onOpenProfileModal()
+                    }
+                  }}
+                />
+              ))}
+            </SidebarSection>
+          ))}
 
           {FUTURE_SECTIONS.map((section) => (
             <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
@@ -988,8 +1048,9 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
 }
 
 function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
-  const mobileItems = MAIN_ITEMS.slice(0, 4)
-  const hiddenHasNotification = MAIN_ITEMS.slice(4).some((item) => {
+  const desiredMobileKeys = ['/dashboard/orders', '/dashboard/menu', '/dashboard/out-screen', '/dashboard']
+  const mobileItems = desiredMobileKeys.map(to => MAIN_ITEMS.find(item => item.to === to)).filter(Boolean)
+  const hiddenHasNotification = MAIN_ITEMS.filter(item => !desiredMobileKeys.includes(item.to)).some((item) => {
     const area = getNavNotificationArea(item)
     return area && notificationCounts[area] > 0
   })
@@ -1238,9 +1299,12 @@ export default function DashboardLayout() {
       { id: 'dashboard', label: 'Dashboard', path: '/dashboard', description: 'Visão geral da operação' },
       { id: 'orders', label: 'Pedidos', path: '/dashboard/orders', description: 'Kanban e comandas em tempo real' },
       { id: 'menu', label: 'Cardápio', path: '/dashboard/menu', description: 'Gerenciar produtos e categorias' },
+      { id: 'out-screen', label: 'Tela de Cozinha', path: '/dashboard/out-screen', description: 'KDS em tempo real' },
+      { id: 'out-screen-customer', label: 'Painel de Retirada', path: '/dashboard/out-screen/customer', description: 'Acompanhamento do cliente' },
+      { id: 'reviews', label: 'Avaliações', path: '/dashboard/reviews', description: 'Feedback dos clientes' },
       { id: 'stats', label: 'Estatísticas', path: '/dashboard/stats', description: 'Resumo de vendas e faturamento' },
-      { id: 'settings', label: 'Configurações', path: '/dashboard/settings', description: 'Configurações da loja, horários e Pix' },
       { id: 'billing', label: 'Assinatura', path: '/dashboard/billing', description: 'Dados do plano, faturas e cobranças' },
+      { id: 'settings', label: 'Configurações', path: '/dashboard/settings', description: 'Configurações da loja, horários e Pix' },
     ]
 
     if (publicStoreHref) {

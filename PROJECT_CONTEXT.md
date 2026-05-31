@@ -27,7 +27,7 @@ O sistema está em fase de fechamento de MVP. Já existem:
 Principais riscos ainda conhecidos:
 
 - Confirmar deploy/backfill/indexes antes do piloto.
-- App Check frontend opcional via `VITE_FIREBASE_APPCHECK_SITE_KEY`; ainda deve ser testado em monitor mode antes de enforcement.
+- App Check frontend opcional via `VITE_FIREBASE_APPCHECK_ENABLED=true` + `VITE_FIREBASE_APPCHECK_SITE_KEY`; ainda deve ser testado em monitor mode antes de enforcement.
 - CustomerDisplay lê `orders` completos em client autenticado; futuro ideal é `publicDisplays` sem PII.
 - Regra de `entregue` marcando pagamento como `paid` precisa ser entendida/documentada.
 - Bundle grande; usar lazy loading no pós-MVP.
@@ -622,13 +622,13 @@ Presence:
 Estado:
 
 - Backend possui flags/opções de App Check.
-- Frontend inicializa App Check quando `VITE_FIREBASE_APPCHECK_SITE_KEY` esta configurado.
+- Frontend inicializa App Check somente quando `VITE_FIREBASE_APPCHECK_ENABLED=true` e `VITE_FIREBASE_APPCHECK_SITE_KEY` estao configurados.
 
 Regra:
 
 ```txt
 Não ativar ENFORCE_APP_CHECK=true sem:
-1. `VITE_FIREBASE_APPCHECK_SITE_KEY` configurado no frontend.
+1. `VITE_FIREBASE_APPCHECK_ENABLED=true` e `VITE_FIREBASE_APPCHECK_SITE_KEY` configurados no frontend.
 2. monitor mode.
 3. teste de loja pública, cupom, pedido, tracking, billing e merchant.
 ```
