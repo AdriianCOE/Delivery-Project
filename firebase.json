@@ -17,7 +17,7 @@
         ]
       },
       {
-        "regex": "/((?!.*\\.).*)",
+        "regex": "^/[^.]*$",
         "headers": [
           {
             "key": "Cache-Control",
