@@ -616,7 +616,7 @@ function KDSColumn({ status, orders, onUpdateStatus, compact, newIds, t, isDark 
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-4 overflow-y-auto flex-1 pb-2 [scrollbar-width:thin]">
+      <div className="flex flex-col gap-4 overflow-y-auto flex-1 pb-2 pratoby-scrollbar">
         {orders.length === 0 ? (
           <div className={cn(
             'flex flex-col items-center justify-center rounded-2xl border border-dashed py-14',
@@ -993,7 +993,7 @@ export default function KitchenDisplayPage() {
       )}
 
       {!loading && !error && (
-        <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
+        <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-5 pratoby-scrollbar">
           {totalActive === 0 ? (
             <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-6">
               <div className={cn('flex h-24 w-24 items-center justify-center rounded-3xl ring-1',

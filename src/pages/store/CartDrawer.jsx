@@ -1126,7 +1126,7 @@ function CartItemDetailsModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5 pratoby-scrollbar">
           <div>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -2273,7 +2273,7 @@ if (orderType === 'delivery') {
               </div>
             )}
 
-            <div className="flex-1 space-y-4 overflow-y-auto bg-[#F9FAFB] p-4">
+            <div className="flex-1 space-y-4 overflow-y-auto bg-[#F9FAFB] p-4 pratoby-scrollbar">
               {step === 'cart' && (
                 <>
                   <SectionCard

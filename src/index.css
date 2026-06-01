@@ -748,3 +748,44 @@
 .dark .dashboard-shell .hover\:text-purple-700:hover {
   color: #c084fc !important; /* Purple-400 */
 }
+
+/* PratoBy Scrollbar */
+
+.pratoby-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #f97316 transparent;
+}
+
+.pratoby-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.pratoby-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 8px;
+}
+
+.pratoby-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.2s ease;
+}
+
+.pratoby-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #f97316;
+}
+
+.dark .pratoby-scrollbar {
+  scrollbar-color: #ea580c transparent;
+}
+
+.dark .pratoby-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #3f3f46;
+}
+
+.dark .pratoby-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #ea580c;
+}

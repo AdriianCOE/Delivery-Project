@@ -755,7 +755,7 @@ export default function CustomerDisplayPage() {
 
       {/* ── Body ──────────────────────────────────────────────────────────── */}
       {!loading && !error && (
-        <main className="flex-1 overflow-y-auto p-5 sm:p-8">
+        <main className="flex-1 overflow-y-auto p-5 sm:p-8 pratoby-scrollbar">
           {/*
             Layout: mobile empilha Prontos primeiro.
             Desktop/TV: Em preparo 40% | Prontos 60%

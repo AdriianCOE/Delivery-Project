@@ -433,7 +433,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
               </div>
             </div>
 
-            <div className="max-h-[min(420px,70vh)] space-y-2 overflow-y-auto p-2.5 [scrollbar-width:thin]">
+            <div className="max-h-[min(420px,70vh)] space-y-2 overflow-y-auto p-2.5 pratoby-scrollbar">
               {view === 'settings' ? (
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/70">

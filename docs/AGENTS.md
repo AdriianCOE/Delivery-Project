@@ -42,7 +42,6 @@ Nunca fazer sem aprovação explícita:
 
 - Não reescrever arquivos inteiros sem necessidade.
 - Não implementar WhatsApp Cloud API.
-- Não implementar FCM/service worker.
 - Não alterar billing/Asaas de forma ampla.
 - Não afrouxar `firestore.rules`.
 - Não expor secrets no frontend.

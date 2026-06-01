@@ -43,6 +43,7 @@ import {
   uploadImageToCloudinary,
 } from '../../services/cloudinary'
 import AnimatedSegmentedControl from '../ui/AnimatedSegmentedControl'
+import FloatingToast from '../ui/FloatingToast'
 
 // ─── Cloud Function callable ────────────────────────────────
 const _fns = getFunctions(app, 'southamerica-east1')
@@ -111,36 +112,7 @@ function formatBillingCycle(cycle) {
 
 // ─── Small UI components ─────────────────────────────────────
 
-export function Toast({ toast, onClose }) {
-  if (!toast) return null
-  const isError = toast.type === 'error'
-  return (
-    <div className="fixed right-4 top-4 z-[99] w-[calc(100vw-2rem)] max-w-sm">
-      <div
-        className={`flex items-start gap-3 rounded-[1.5rem] border px-4 py-3.5 shadow-2xl backdrop-blur-xl ${
-          isError
-            ? 'border-red-100 bg-white text-red-700 dark:bg-zinc-900 dark:border-red-900/30 dark:text-red-400'
-            : 'border-orange-100 bg-white text-[#111827] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200'
-        }`}
-      >
-        {isError ? (
-          <FiAlertCircle className="mt-0.5 shrink-0 text-red-500" size={18} />
-        ) : (
-          <FiCheckCircle className="mt-0.5 shrink-0 text-[#f97316]" size={18} />
-        )}
-        <p className="flex-1 text-sm font-bold leading-5">{toast.message}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar"
-          className="shrink-0 rounded-xl p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
-        >
-          <FiX size={15} />
-        </button>
-      </div>
-    </div>
-  )
-}
+
 
 function Badge({ verified, labelTrue, labelFalse, unregistered }) {
   if (unregistered) {
@@ -854,7 +826,7 @@ export default function ProfilePanel({ onLogout }) {
 
   return (
     <div className="w-full">
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      <FloatingToast toast={toast} onClose={() => setToast(null)} />
       
       <div className="space-y-4">
         {/* Top Summary Cards */}

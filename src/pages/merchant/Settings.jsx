@@ -45,6 +45,8 @@ const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const BRAND_GREEN = '#f97316'
 const DEFAULT_THEME = '#f97316'
 
+import FloatingToast from '../../components/ui/FloatingToast'
+
 const DAYS_OF_WEEK = [
   { id: 'sun', short: 'Dom', label: 'Domingo' },
   { id: 'mon', short: 'Seg', label: 'Segunda' },
@@ -573,55 +575,7 @@ function mapStoreToForm(store) {
   }
 }
 
-function Toast({ toast, onClose }) {
-  useEffect(() => {
-    if (!toast) return
 
-    const timer = window.setTimeout(onClose, 3000)
-    return () => window.clearTimeout(timer)
-  }, [toast, onClose])
-
-  if (!toast) return null
-
-  if (typeof document === 'undefined') return null
-
-  const isSuccess = toast.type === 'success'
-
-  const toastContent = (
-    <div className="fixed left-1/2 top-5 z-[200] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/30">
-      <div className="flex items-start gap-3">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
-            isSuccess
-              ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10'
-              : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
-          }`}
-        >
-          {isSuccess ? <FiCheckCircle /> : <FiAlertCircle />}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
-            {isSuccess ? 'Tudo certo' : 'Atenção'}
-          </p>
-          <p className="mt-1 text-sm leading-5 text-[#6b7280] dark:text-zinc-400">
-            {toast.message}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-xl p-1 text-gray-400 transition hover:bg-gray-50 hover:text-[#111827] dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-        >
-          <FiX />
-        </button>
-      </div>
-    </div>
-  )
-
-  return createPortal(toastContent, document.body)
-}
 
 function Section({ icon: Icon, title, description, children }) {
   return (
@@ -1349,7 +1303,7 @@ export default function Settings() {
     <main style={themeVars}
       className="bg-[#f9fafb] text-[#111827]"
     >
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      <FloatingToast toast={toast} onClose={() => setToast(null)} />
 
       <DashboardPageHeader
         title="Configurações"
