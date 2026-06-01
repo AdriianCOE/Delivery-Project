@@ -27,7 +27,6 @@ const NOTIFICATION_FILTERS = [
   { id: 'unread', label: 'Nao lidas' },
   { id: 'orders', label: 'Pedidos' },
   { id: 'reviews', label: 'Avaliacoes' },
-  { id: 'billing', label: 'Assinatura' },
 ]
 
 const CHANNEL_SETTINGS = [
@@ -46,6 +45,61 @@ const EVENT_SETTINGS = [
   { group: 'events', key: 'settings', label: 'Configuracoes da loja' },
   { group: 'events', key: 'reports', label: 'Promocoes e relatorios', future: true },
 ]
+
+const DROPDOWN_VARIANTS = {
+  closed: {
+    opacity: 0,
+    y: -10,
+    scale: 0.96,
+    filter: 'blur(8px)',
+  },
+  open: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: {
+      type: 'spring',
+      stiffness: 420,
+      damping: 34,
+      mass: 0.75,
+      staggerChildren: 0.035,
+      delayChildren: 0.04,
+    },
+  },
+}
+
+const NOTIFICATION_ITEM_VARIANTS = {
+  closed: {
+    opacity: 0,
+    y: 8,
+    scale: 0.98,
+  },
+  open: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.18,
+      ease: [0.16, 1, 0.3, 1],
+    },
+  },
+}
+
+const SOFT_SECTION_VARIANTS = {
+  closed: {
+    opacity: 0,
+    y: 6,
+  },
+  open: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.18,
+      ease: [0.16, 1, 0.3, 1],
+    },
+  },
+}
 
 function NotificationIcon({ severity }) {
   if (severity === 'danger') {
@@ -146,7 +200,6 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     if (filter === 'unread') return !notification.read
     if (filter === 'orders') return notification.area === 'orders'
     if (filter === 'reviews') return notification.area === 'reviews'
-    if (filter === 'billing') return notification.area === 'billing'
     return true
   })
 
@@ -375,31 +428,60 @@ export default function DashboardNotificationBell({ notificationState, storeId }
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen((value) => !value)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 hover:text-gray-700 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-        aria-label={unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : 'Notificações'}
-        aria-expanded={isOpen}
+      <motion.button
+  type="button"
+  onClick={() => setIsOpen((value) => !value)}
+  whileHover={{ y: -2 }}
+  whileTap={{ scale: 0.96 }}
+  animate={isOpen ? { y: -1, scale: 1.02 } : { y: 0, scale: 1 }}
+  transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+  className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-100 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+  aria-label={unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : 'Notificações'}
+  aria-expanded={isOpen}
+>
+  <motion.span
+    animate={isOpen ? { rotate: -12, scale: 1.05 } : { rotate: 0, scale: 1 }}
+    transition={{ type: 'spring', stiffness: 360, damping: 22 }}
+    className="grid place-items-center"
+  >
+    <FiBell size={18} />
+  </motion.span>
+
+  <AnimatePresence>
+    {unreadCount > 0 && (
+      <motion.span
+        initial={{ opacity: 0, scale: 0.5, y: 4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.5, y: 4 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 24 }}
+        className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900"
       >
-        <FiBell size={18} />
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+        {unreadCount > 99 ? '99+' : unreadCount}
+      </motion.span>
+    )}
+  </AnimatePresence>
+</motion.button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed right-4 top-[4.75rem] z-[90] w-[calc(100vw-2rem)] max-w-[22.5rem] overflow-hidden rounded-[1.25rem] border border-gray-100 bg-white shadow-2xl shadow-gray-900/10 ring-1 ring-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-800 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-[22.5rem]"
-          >
-            <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-zinc-800">
+              variants={DROPDOWN_VARIANTS}
+              initial="closed"
+              animate="open"
+              exit="closed"
+              style={{ transformOrigin: 'top right' }}
+              transition={{
+                type: 'spring',
+                stiffness: 420,
+                damping: 34,
+                mass: 0.75,
+              }}
+              className="fixed right-4 top-[4.75rem] z-[90] w-[calc(100vw-2rem)] max-w-[22.5rem] overflow-hidden rounded-[1.25rem] border border-gray-100 bg-white shadow-2xl shadow-gray-900/10 ring-1 ring-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-800 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-[22.5rem]"
+            >
+            <motion.div
+                  variants={SOFT_SECTION_VARIANTS}
+                  className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-zinc-800"
+                >
               <div className="min-w-0">
                 <h3 className="text-sm font-black text-gray-900 dark:text-zinc-100">
                   Notificações
@@ -431,7 +513,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                   <FiSettings size={15} />
                 </button>
               </div>
-            </div>
+            </motion.div>
 
             <div className="max-h-[min(420px,70vh)] space-y-2 overflow-y-auto p-2.5 pratoby-scrollbar">
               {view === 'settings' ? (
@@ -482,6 +564,74 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     </div>
                   </div>
 
+                  <div className="rounded-2xl border border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-xs font-black text-gray-900 dark:text-zinc-100">
+                          Push FCM neste dispositivo
+                        </span>
+                        <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-zinc-400">
+                          {pushStatus === 'enabled'
+                            ? 'Ativo. Use o teste para conferir o aviso local.'
+                            : 'Ative manualmente para receber avisos do navegador.'}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${
+                        pushStatus === 'enabled'
+                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          : 'bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-300'
+                      }`}>
+                        {getPushStatusLabel(pushStatus, pushLoading)}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {pushStatus === 'enabled' ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleSendPushTest}
+                            disabled={pushLoading || !storeId}
+                            className="inline-flex h-8 items-center justify-center rounded-xl bg-emerald-600 px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Enviar teste
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDisablePushNotifications}
+                            disabled={pushLoading || !storeId}
+                            className="inline-flex h-8 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          >
+                            Desativar push
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleEnablePushNotifications}
+                          disabled={pushLoading || !storeId || pushStatus === 'unsupported' || pushStatus === 'denied'}
+                          className="inline-flex h-8 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Ativar notificacoes push
+                        </button>
+                      )}
+                    </div>
+
+                    <AnimatePresence>
+                      {pushTestMessage && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                          className="mt-2 text-[10px] font-bold leading-4 text-emerald-700 dark:text-emerald-300"
+                        >
+                          {pushTestMessage}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
                   <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-3 dark:border-orange-900/30 dark:bg-orange-950/15">
                     <div className="flex items-start justify-between gap-3">
                       <span className="min-w-0">
@@ -500,11 +650,19 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                         Testar som
                       </button>
                     </div>
-                    {soundTestMessage && (
-                      <p className="mt-2 text-[10px] font-bold leading-4 text-orange-700 dark:text-orange-300">
-                        {soundTestMessage}
-                      </p>
-                    )}
+                    <AnimatePresence>
+                      {soundTestMessage && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                          className="mt-2 text-[10px] font-bold leading-4 text-orange-700 dark:text-orange-300"
+                        >
+                          {soundTestMessage}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>  
                   </div>
 
                   <div className="rounded-2xl border border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
@@ -560,6 +718,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                 ))}
               </div>
 
+              {pushStatus !== 'enabled' && (
               <div className="rounded-2xl border border-gray-100 bg-gray-50/70 px-3 py-3 dark:border-zinc-800 dark:bg-zinc-950/70">
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0">
@@ -623,7 +782,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     type="button"
                     onClick={handleEnablePushNotifications}
                     disabled={pushLoading || !storeId || pushStatus === 'unsupported' || pushStatus === 'denied'}
-                    className="mt-3 inline-flex h-8 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-3 inline-flex h-8 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Ativar notificacoes push
                   </button>
@@ -634,6 +793,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                   </p>
                 )}
               </div>
+              )}
 
               {preferences.channels.browser === true && supportsBrowserNotifications && browserPermission === 'default' && (
                 <button
@@ -683,17 +843,29 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                   const isUnread = !notification.read
 
                   return (
-                    <article
-                      key={notification.id}
-                      className={`group relative flex items-start gap-3 rounded-2xl border p-3 transition ${
-                        isUnread
-                          ? 'border-orange-100 bg-orange-50/60 hover:bg-orange-50 dark:border-orange-900/30 dark:bg-orange-950/10 dark:hover:bg-orange-950/20'
-                          : 'border-gray-100 bg-white hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40'
-                      }`}
-                    >
-                      {isUnread && (
-                        <span className="absolute left-2 top-2 h-2 w-2 rounded-full bg-[#f97316]" />
-                      )}
+                   <motion.article
+                          key={notification.id}
+                          layout
+                          variants={NOTIFICATION_ITEM_VARIANTS}
+                          whileHover={{ y: -2, scale: 1.01 }}
+                          transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                          className={`group relative flex items-start gap-3 rounded-2xl border p-3 transition-colors ${
+                            isUnread
+                              ? 'border-orange-100 bg-orange-50/60 hover:bg-orange-50 dark:border-orange-900/30 dark:bg-orange-950/10 dark:hover:bg-orange-950/20'
+                              : 'border-gray-100 bg-white hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/40'
+                          }`}
+                        >
+                      <AnimatePresence>
+                        {isUnread && (
+                          <motion.span
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 24 }}
+                            className="absolute left-2 top-2 h-2 w-2 rounded-full bg-[#f97316]"
+                          />
+                        )}
+                      </AnimatePresence>
 
                       <div className="shrink-0 pl-1">
                         <NotificationIcon severity={notification.severity} />
@@ -718,18 +890,6 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                             {notification.label} · {formatNotificationTime(notification.createdAt)}
                           </p>
                         </Link>
-                        {notification.area === 'billing' && (
-                          <Link
-                            to="/dashboard/billing"
-                            onClick={() => {
-                              markAsRead(notification.id)
-                              setIsOpen(false)
-                            }}
-                            className="mt-2 inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-950/25 dark:text-orange-300"
-                          >
-                            Assinatura
-                          </Link>
-                        )}
                       </div>
 
                       {isUnread && (
@@ -743,7 +903,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                           <FiX size={14} />
                         </button>
                       )}
-                    </article>
+                    </motion.article>
                   )
                 })
               )}

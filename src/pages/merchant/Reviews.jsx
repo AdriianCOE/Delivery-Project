@@ -27,6 +27,7 @@ import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
+import FloatingToast from '../../components/ui/FloatingToast'
 
 // --- UTILIDADES ---
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -74,18 +75,18 @@ START_OF_30_DAYS.setDate(START_OF_30_DAYS.getDate() - 30)
 // --- COMPONENTES MENORES ---
 function StatCard({ icon: Icon, label, value, description, tone = 'orange' }) {
   const tones = {
-    green: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
-    purple: 'bg-purple-50 text-purple-600',
-    red: 'bg-red-50 text-red-600',
-    orange: 'bg-orange-50 text-[#f97316]',
+    green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400',
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400',
+    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400',
+    purple: 'bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400',
+    red: 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400',
+    orange: 'bg-orange-50 text-[#f97316] dark:bg-orange-950/30 dark:text-orange-400',
   }
 
   return (
-    <article className="group min-w-0 rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-100 hover:shadow-xl hover:shadow-gray-200/60">
+    <article className="group min-w-0 rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-100 hover:shadow-xl hover:shadow-gray-200/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-orange-900/40 dark:hover:shadow-black/30">
       <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 text-xs font-black uppercase tracking-widest text-[#6b7280]">
+        <p className="min-w-0 text-xs font-black uppercase tracking-widest text-[#6b7280] dark:text-zinc-400">
           {label}
         </p>
 
@@ -99,11 +100,11 @@ function StatCard({ icon: Icon, label, value, description, tone = 'orange' }) {
       </div>
 
       <div className="mt-4">
-        <p className="truncate text-3xl font-black tracking-tight text-[#111827]">
+        <p className="truncate text-3xl font-black tracking-tight text-[#111827] dark:text-zinc-100">
           {value}
         </p>
         {description && (
-          <p className="mt-1.5 truncate text-sm font-bold text-[#6b7280]">
+          <p className="mt-1.5 truncate text-sm font-bold text-[#6b7280] dark:text-zinc-400">
             {description}
           </p>
         )}
@@ -114,15 +115,15 @@ function StatCard({ icon: Icon, label, value, description, tone = 'orange' }) {
 
 function EmptyState({ icon: Icon, title, description }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-8 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/30 dark:text-orange-400">
         <Icon size={28} />
       </div>
-      <h3 className="mt-5 text-lg font-black text-[#111827]">
+      <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">
         {title}
       </h3>
       {description && (
-        <p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#6b7280]">
+        <p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#6b7280] dark:text-zinc-400">
           {description}
         </p>
       )}
@@ -131,6 +132,12 @@ function EmptyState({ icon: Icon, title, description }) {
 }
 
 function Toast({ toast, onClose }) {
+  return toast?.legacy
+    ? <LegacyToast toast={toast} onClose={onClose} />
+    : <FloatingToast toast={toast} onClose={onClose} />
+}
+
+function LegacyToast({ toast, onClose }) {
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(onClose, 3000)
@@ -400,7 +407,7 @@ export default function Reviews() {
   }
 
   return (
-    <main className="bg-[#f9fafb] text-[#111827]">
+    <main className="bg-[#f9fafb] text-[#111827] dark:bg-zinc-950 dark:text-zinc-100">
       <DashboardPageHeader
         title="Avaliações"
         description="Gestão de qualidade e feedback dos seus clientes."
@@ -413,7 +420,7 @@ export default function Reviews() {
                 setSelectedStoreId(e.target.value)
                 localStorage.setItem(SELECTED_STORE_KEY, e.target.value)
               }}
-              className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+              className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-orange-500/10"
             >
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>{s.name || 'Loja'}</option>
@@ -427,7 +434,7 @@ export default function Reviews() {
         {loadingStores || loadingReviews ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((item) => (
-              <div key={item} className="h-32 animate-pulse rounded-[2rem] bg-white shadow-sm" />
+              <div key={item} className="h-32 animate-pulse rounded-[2rem] bg-white shadow-sm dark:bg-zinc-900" />
             ))}
           </div>
         ) : !selectedStore ? (
@@ -439,8 +446,8 @@ export default function Reviews() {
         ) : (
           <>
             {/* FILTRO DE TEMPO */}
-            <div className="mb-6 flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white p-1 shadow-sm sm:w-max">
-              <span className="hidden pl-3 pr-2 text-[#6b7280] sm:block">
+            <div className="mb-6 flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:w-max">
+              <span className="hidden pl-3 pr-2 text-[#6b7280] dark:text-zinc-400 sm:block">
                 <FiCalendar />
               </span>
               <AnimatedSegmentedControl
@@ -491,21 +498,21 @@ export default function Reviews() {
             </div>
 
             {/* BARRA DE PESQUISA E FILTROS DE STATUS */}
-            <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="relative flex-1">
-                  <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280]" />
+                  <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280] dark:text-zinc-500" />
                   <input
                     type="text"
                     placeholder="Buscar por cliente, número do pedido ou comentário..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] pl-12 pr-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] pl-12 pr-4 text-sm font-bold text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/10"
                   />
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
-                  <span className="hidden items-center gap-2 text-sm font-black text-[#6b7280] xl:flex">
+                  <span className="hidden items-center gap-2 text-sm font-black text-[#6b7280] dark:text-zinc-400 xl:flex">
                     <FiFilter /> Status
                   </span>
                   <AnimatedSegmentedControl
@@ -540,7 +547,7 @@ export default function Reviews() {
                   const isProblem = rating <= 3
 
                   return (
-                    <div key={review.id} className={`flex flex-col rounded-[2rem] border bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${isProblem && !review.resolved ? 'border-amber-200 ring-4 ring-amber-50' : 'border-gray-100 hover:border-orange-100'}`}>
+                    <div key={review.id} className={`flex flex-col rounded-[2rem] border bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:bg-zinc-900 dark:hover:shadow-black/30 ${isProblem && !review.resolved ? 'border-amber-200 ring-4 ring-amber-50 dark:border-amber-900/40 dark:ring-amber-950/20' : 'border-gray-100 hover:border-orange-100 dark:border-zinc-800 dark:hover:border-orange-900/40'}`}>
                       
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -548,7 +555,7 @@ export default function Reviews() {
                             {[1, 2, 3, 4, 5].map((star) => (
                               <FiStar 
                                 key={star} 
-                                className={`${star <= rating ? 'fill-amber-400 text-amber-400' : 'fill-gray-100 text-gray-200'}`} 
+                                className={`${star <= rating ? 'fill-amber-400 text-amber-400' : 'fill-gray-100 text-gray-200 dark:fill-zinc-800 dark:text-zinc-700'}`}
                                 size={16} 
                               />
                             ))}
@@ -566,11 +573,11 @@ export default function Reviews() {
 
                       {/* COMENTÁRIO */}
                       {review.comment ? (
-                        <p className="mt-5 flex-1 rounded-2xl bg-[#f9fafb] p-4 text-sm font-medium leading-6 text-[#111827]">
+                        <p className="mt-5 flex-1 rounded-2xl bg-[#f9fafb] p-4 text-sm font-medium leading-6 text-[#111827] dark:bg-zinc-950/70 dark:text-zinc-200">
                           "{review.comment}"
                         </p>
                       ) : (
-                        <p className="mt-5 flex-1 rounded-2xl border border-dashed border-gray-100 bg-[#f9fafb]/60 p-4 text-sm font-medium italic leading-6 text-[#9ca3af]">
+                        <p className="mt-5 flex-1 rounded-2xl border border-dashed border-gray-100 bg-[#f9fafb]/60 p-4 text-sm font-medium italic leading-6 text-[#9ca3af] dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-500">
                           O cliente não deixou comentário, apenas a nota.
                         </p>
                       )}
@@ -579,12 +586,12 @@ export default function Reviews() {
                       {(Array.isArray(review.tags) && review.tags.length > 0) || review.wouldOrderAgain !== undefined ? (
                         <div className="mt-4 flex flex-wrap gap-2">
                           {review.wouldOrderAgain !== undefined && (
-                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black ${review.wouldOrderAgain ? 'bg-orange-50 text-[#f97316]' : 'bg-red-50 text-red-600'}`}>
+                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black ${review.wouldOrderAgain ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/30 dark:text-orange-400' : 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'}`}>
                               {review.wouldOrderAgain ? '👍 Pediria novamente' : '👎 Não pediria novamente'}
                             </span>
                           )}
                           {review.tags?.map((tag) => (
-                            <span key={tag} className="rounded-full border border-gray-100 bg-[#f9fafb] px-3 py-1 text-[11px] font-black text-[#6b7280]">
+                            <span key={tag} className="rounded-full border border-gray-100 bg-[#f9fafb] px-3 py-1 text-[11px] font-black text-[#6b7280] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
                               {tag}
                             </span>
                           ))}
@@ -592,7 +599,7 @@ export default function Reviews() {
                       ) : null}
 
                       {/* AÇÕES (BOTÕES) */}
-                      <div className="mt-6 flex gap-3 border-t border-gray-100 pt-5">
+                      <div className="mt-6 flex gap-3 border-t border-gray-100 pt-5 dark:border-zinc-800">
                         <button
                           type="button"
                           onClick={() => handleOpenWhatsApp(review)}
@@ -606,8 +613,8 @@ export default function Reviews() {
                           onClick={() => handleResolveReview(review.id, review.resolved)}
                           className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border px-3 text-xs font-black shadow-sm transition ${
                             review.resolved
-                              ? 'border-gray-200 bg-white text-[#111827] hover:bg-gray-50'
-                              : 'border-orange-100 bg-orange-50 text-[#f97316] hover:bg-orange-100'
+                              ? 'border-gray-200 bg-white text-[#111827] hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                              : 'border-orange-100 bg-orange-50 text-[#f97316] hover:bg-orange-100 dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/30'
                           }`}
                         >
                           {review.resolved ? 'Reabrir caso' : 'Marcar resolvido'}

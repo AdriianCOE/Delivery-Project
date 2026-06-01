@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'motion/react'
@@ -552,8 +553,8 @@ function SoonToast({ feature, onClose }) {
 
   if (!feature) return null
 
-  return (
-    <div className="fixed right-4 top-4 z-[90] w-[calc(100vw-2rem)] max-w-sm rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-2xl shadow-gray-900/10 ring-1 ring-white/70 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/95 dark:ring-zinc-800">
+  return createPortal(
+    <div className="fixed left-1/2 top-4 z-[100] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-2xl shadow-gray-900/10 ring-1 ring-white/70 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/95 dark:ring-zinc-800">
       <div className="flex items-start gap-3">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-950/25">
           <FiClock />
@@ -578,7 +579,8 @@ function SoonToast({ feature, onClose }) {
           <FiX />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1724,7 +1726,7 @@ export default function DashboardLayout() {
             </div>
           </div>
 
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
+          <div className="pratoby-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
             {/* Trial Banner Global */}
             <DashboardTrialRibbon />
 
@@ -1954,7 +1956,7 @@ export default function DashboardLayout() {
               initial={{ opacity: 0, y: 30, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 30, scale: 0.9 }}
-              className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom))] lg:bottom-20 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700 shadow-xl dark:border-emerald-950/20 dark:bg-emerald-950/40 dark:text-emerald-400"
+              className="fixed left-1/2 top-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 items-center justify-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700 shadow-xl dark:border-emerald-950/20 dark:bg-emerald-950/40 dark:text-emerald-400"
             >
               <span>Link da loja copiado com sucesso!</span>
             </motion.div>
@@ -2059,7 +2061,7 @@ function CommandPalette({ open, onClose, commands, onSelect }) {
           </span>
         </div>
 
-        <div className="max-h-[350px] overflow-y-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="pratoby-scrollbar max-h-[350px] overflow-y-auto p-2">
           {filteredCommands.length === 0 ? (
             <div className="py-12 text-center text-xs font-semibold text-gray-400 dark:text-zinc-500">
               Nenhum comando ou página encontrada.

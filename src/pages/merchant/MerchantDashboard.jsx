@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { captureAppError } from '../../services/sentry'
 import { getPricingValidation } from '../../utils/orderValidation'
 import { Link } from 'react-router-dom'
@@ -16,6 +17,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../../services/firebase'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
+import FloatingToast from '../../components/ui/FloatingToast'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePresence } from '../../hooks/usePresence'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
@@ -680,6 +682,12 @@ function StoreLogo({
 }
 
 function Toast({ toast, onClose }) {
+  return toast?.legacy
+    ? <LegacyToast toast={toast} onClose={onClose} />
+    : <FloatingToast toast={toast} onClose={onClose} />
+}
+
+function LegacyToast({ toast, onClose }) {
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(onClose, 3200)
@@ -690,21 +698,22 @@ function Toast({ toast, onClose }) {
   const isSuccess = toast.type === 'success'
   const Icon = isSuccess ? FiCheckCircle : FiAlertTriangle
 
-  return (
-    <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50">
+  return createPortal(
+    <div className="fixed left-1/2 top-4 z-[100] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40">
       <div className="flex gap-3">
-        <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${isSuccess ? 'bg-orange-50 text-[#f97316]' : 'bg-red-50 text-red-600'}`}>
+        <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${isSuccess ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300' : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'}`}>
           <Icon size={17} />
         </div>
         <div>
-          <p className="text-sm font-bold text-[#111827]">{isSuccess ? 'Tudo certo' : 'Atenção'}</p>
-          <p className="mt-0.5 text-sm text-[#6b7280]">{toast.message}</p>
+          <p className="text-sm font-bold text-[#111827] dark:text-zinc-100">{isSuccess ? 'Tudo certo' : 'Atenção'}</p>
+          <p className="mt-0.5 text-sm text-[#6b7280] dark:text-zinc-400">{toast.message}</p>
         </div>
-        <button type="button" onClick={onClose} className="ml-2 text-gray-400 transition hover:text-gray-700">
+        <button type="button" onClick={onClose} className="ml-2 text-gray-400 transition hover:text-gray-700 dark:text-zinc-500 dark:hover:text-zinc-200">
           <FiX />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1509,7 +1518,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
   return (
     <div className="min-w-0 pb-24 lg:pb-0">
       {loadingStores ? (
-        <div className="bg-[#111827] border-b border-white/5 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="bg-[#111827] border-b border-white/5 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex animate-pulse items-center gap-4">
             <div className="h-16 w-16 rounded-2xl bg-white/10" />
             <div className="space-y-2">
@@ -1598,13 +1607,13 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3 xl:w-[360px] xl:items-end xl:justify-between">
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+              <div className="flex flex-col gap-3 xl:w-[520px] xl:items-end xl:justify-between">
+                <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_3rem] items-center gap-2 sm:flex sm:w-auto sm:flex-row sm:flex-nowrap sm:justify-end">
                   <button
                     type="button"
                     onClick={handleToggleStoreOpen}
                     disabled={storeActionLoading}
-                    className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:w-auto ${
+                    className={`inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl px-4 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:min-w-[140px] ${
                       isStoreOpen(selectedStore)
                         ? 'bg-red-50 text-red-700 ring-red-200 shadow-red-100/50 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/40 dark:hover:bg-red-900/40'
                         : 'bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40'
@@ -1612,41 +1621,47 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   >
                     {storeActionLoading ? (
                       <>
-                        <FiLoader size={16} className="animate-spin" />
-                        Atualizando...
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          <FiLoader size={16} className="animate-spin" />
+                        </span>
+                        <span className="min-w-[82px] text-center">Atualizando...</span>
                       </>
                     ) : isStoreOpen(selectedStore) ? (
                       <>
-                        <FiPower size={16} />
-                        Fechar loja
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          <FiPower size={16} />
+                        </span>
+                        <span className="min-w-[82px] text-center">Fechar loja</span>
                       </>
                     ) : (
                       <>
-                        <FiPower size={16} />
-                        Abrir loja
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          <FiPower size={16} />
+                        </span>
+                        <span className="min-w-[82px] text-center">Abrir loja</span>
                       </>
                     )}
                   </button>
 
-                  <div className="flex gap-2">
-                    <a
-                      href={storePublicUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-[#f97316] to-[#ea580c] px-5 text-[13px] font-black text-white shadow-[0_4px_12px_-2px_rgba(249,115,22,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] ring-1 ring-inset ring-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:from-[#ea580c] hover:to-[#c2410c] hover:shadow-[0_6px_16px_-3px_rgba(249,115,22,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.98] dark:shadow-[0_4px_16px_-2px_rgba(249,115,22,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] dark:hover:shadow-[0_6px_20px_-3px_rgba(249,115,22,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] dark:ring-white/10 sm:w-auto sm:flex-none"
-                    >
-                      <FiExternalLink size={16} />
-                      Ver cardápio
-                    </a>
-                    <button
-                      type="button"
-                      onClick={handleCopyStoreLink}
-                      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#6b7280] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
-                      title="Copiar link da loja"
-                    >
-                      <FiCopy size={16} />
-                    </button>
-                  </div>
+                  <a
+                    href={storePublicUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-[#f97316] to-[#ea580c] px-4 text-[13px] font-black text-white shadow-[0_4px_12px_-2px_rgba(249,115,22,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] ring-1 ring-inset ring-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:from-[#ea580c] hover:to-[#c2410c] hover:shadow-[0_6px_16px_-3px_rgba(249,115,22,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.98] dark:shadow-[0_4px_16px_-2px_rgba(249,115,22,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] dark:hover:shadow-[0_6px_20px_-3px_rgba(249,115,22,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] dark:ring-white/10 sm:min-w-[140px]"
+                  >
+                    <FiExternalLink size={16} className="shrink-0" />
+                    <span className="truncate">Ver cardápio</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyStoreLink}
+                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#6b7280] shadow-sm transition hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+                    title="Copiar link da loja"
+                    aria-label="Copiar link da loja"
+                  >
+                    <FiCopy size={16} />
+                  </button>
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 xl:w-full">
@@ -1776,9 +1791,12 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     type="button"
                     onClick={handleToggleStoreOpen}
                     disabled={storeActionLoading}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#111827] px-6 text-sm font-black text-white shadow-sm transition hover:bg-black active:scale-95 disabled:opacity-50"
+                    className="inline-flex h-11 min-w-[160px] items-center justify-center gap-2 rounded-2xl bg-[#111827] px-6 text-sm font-black text-white shadow-sm transition hover:bg-black active:scale-95 disabled:opacity-50"
                   >
-                    {storeActionLoading ? <FiLoader className="animate-spin" /> : 'Abrir loja agora'}
+                    <span className="flex h-4 w-4 items-center justify-center">
+                      {storeActionLoading ? <FiLoader className="animate-spin" /> : <FiPower />}
+                    </span>
+                    {storeActionLoading ? 'Atualizando...' : 'Abrir loja agora'}
                   </button>
                 </div>
               </div>
@@ -1806,13 +1824,15 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                     type="button"
                     disabled={storeActionLoading}
                     onClick={handleToggleStoreOpen}
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:w-auto bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40"
+                    className="inline-flex h-12 w-full min-w-[150px] items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:w-auto bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40"
                   >
-                    {storeActionLoading ? (
-                      <FiLoader size={16} className="animate-spin" />
-                    ) : (
-                      <FiPower size={16} />
-                    )}
+                    <span className="flex h-4 w-4 items-center justify-center">
+                      {storeActionLoading ? (
+                        <FiLoader size={16} className="animate-spin" />
+                      ) : (
+                        <FiPower size={16} />
+                      )}
+                    </span>
                     {storeActionLoading ? 'Atualizando...' : 'Abrir loja'}
                   </button>
                 ) : (
@@ -1916,7 +1936,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             {/* INSIGHTS RÁPIDOS */}
-            <div className="mt-6 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
+            <div className="mt-5 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
@@ -1974,7 +1994,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               </div>
             </div>
 
-            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+            <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
               <div className="min-w-0 rounded-[1.7rem] border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-zinc-800">
                   <div>
@@ -2001,7 +2021,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                 )}
               </div>
 
-              <div className="min-w-0 space-y-6">
+              <div className="min-w-0 space-y-5">
 <ProductRanking products={dashboardData.topProducts} />
 
 <PeakHoursCard
@@ -2031,7 +2051,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             {/* CHECKLIST DA LOJA PRONTA */}
-            <div className="mt-6 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
+            <div className="mt-5 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
@@ -2080,7 +2100,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
             </div>
 
             {/* MINI FOOTER */}
-            <div className="mt-8 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mt-5 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-black text-[#111827] dark:text-zinc-100">

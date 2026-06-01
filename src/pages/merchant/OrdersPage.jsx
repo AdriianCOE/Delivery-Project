@@ -60,6 +60,8 @@ import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
+import FloatingToast from '../../components/ui/FloatingToast'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'])
@@ -160,17 +162,116 @@ const STATUS_META = {
   },
 }
 
-const STATUS_TABS = [
+const MAIN_STATUS_TABS = [
   { key: 'todos', label: 'Todos' },
   { key: 'ativos', label: 'Ativos' },
   { key: 'pendente', label: 'Pendentes' },
-  { key: 'confirmado', label: 'Confirmados' },
-  { key: 'preparando', label: 'Preparando' },
+  { key: 'preparando', label: 'Em preparo' },
   { key: 'pronto', label: 'Prontos' },
+]
+
+const MORE_STATUS_TABS = [
+  { key: 'confirmado', label: 'Confirmados' },
   { key: 'em_rota', label: 'Em rota' },
   { key: 'entregue', label: 'Entregues' },
   { key: 'cancelado', label: 'Cancelados' },
 ]
+
+const STATUS_TABS = [...MAIN_STATUS_TABS, ...MORE_STATUS_TABS]
+const MORE_STATUS_FILTER_KEYS = new Set(MORE_STATUS_TABS.map((tab) => tab.key))
+
+const FILTER_BUTTON_MOTION = {
+  whileHover: { y: -1, scale: 1.015 },
+  whileTap: { scale: 0.96 },
+  transition: { type: 'spring', stiffness: 420, damping: 28 },
+}
+
+const FILTER_DROPDOWN_VARIANTS = {
+  hidden: {
+    opacity: 0,
+    y: 8,
+    scale: 0.96,
+    filter: 'blur(6px)',
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: {
+      type: 'spring',
+      stiffness: 420,
+      damping: 32,
+      mass: 0.75,
+      staggerChildren: 0.035,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: 8,
+    scale: 0.96,
+    filter: 'blur(6px)',
+    transition: { duration: 0.12 },
+  },
+}
+
+const FILTER_DROPDOWN_ITEM_VARIANTS = {
+  hidden: { opacity: 0, x: 8 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.16, ease: [0.16, 1, 0.3, 1] },
+  },
+}
+
+const ORDERS_LIST_VARIANTS = {
+  hidden: {
+    opacity: 0,
+    y: 10,
+    filter: 'blur(4px)',
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: 'blur(0px)',
+    transition: {
+      duration: 0.22,
+      ease: [0.16, 1, 0.3, 1],
+      staggerChildren: 0.035,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -6,
+    filter: 'blur(4px)',
+    transition: { duration: 0.14 },
+  },
+}
+
+const ORDER_ITEM_VARIANTS = {
+  hidden: {
+    opacity: 0,
+    y: 12,
+    scale: 0.985,
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 420,
+      damping: 34,
+      mass: 0.75,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    scale: 0.985,
+    transition: { duration: 0.12 },
+  },
+}
 
 const STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
 const ACTIVE_STATUSES = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota']
@@ -181,7 +282,7 @@ const DATE_FILTER_OPTIONS = [
   { key: 'ontem', label: 'Ontem' },
   { key: '7d', label: '7 dias' },
   { key: '30d', label: '30 dias' },
-  { key: 'all', label: 'Ultimos 250' },
+  { key: 'all', label: 'Todos' },
 ]
 
 function uniqueArray(values) {
@@ -317,6 +418,29 @@ function formatDate(order) {
   })
 }
 
+function formatDistanceToNow(date) {
+  if (!date) return ''
+
+  const value = date instanceof Date ? date.getTime() : new Date(date).getTime()
+  if (Number.isNaN(value)) return ''
+
+  const seconds = Math.round((value - Date.now()) / 1000)
+  const absSeconds = Math.abs(seconds)
+
+  const units = [
+    { limit: 60, value: 1, unit: 'second' },
+    { limit: 3600, value: 60, unit: 'minute' },
+    { limit: 86400, value: 3600, unit: 'hour' },
+    { limit: 2592000, value: 86400, unit: 'day' },
+    { limit: 31536000, value: 2592000, unit: 'month' },
+    { limit: Infinity, value: 31536000, unit: 'year' },
+  ]
+
+  const { value: unitValue, unit } = units.find((item) => absSeconds < item.limit)
+  const amount = Math.round(seconds / unitValue)
+
+  return new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' }).format(amount, unit)
+}
 
 function getOrderDisplayNumber(order) {
   const internalId = String(
@@ -1605,6 +1729,12 @@ function StatusBadge({ status }) {
 }
 
 function Toast({ toast, onClose }) {
+  return toast?.legacy
+    ? <LegacyToast toast={toast} onClose={onClose} />
+    : <FloatingToast toast={toast} onClose={onClose} />
+}
+
+function LegacyToast({ toast, onClose }) {
   useEffect(() => {
     if (!toast) return
 
@@ -1617,8 +1747,8 @@ function Toast({ toast, onClose }) {
   const isSuccess = toast.type === 'success'
   const Icon = isSuccess ? FiCheckCircle : FiAlertTriangle
 
-  return (
-    <div className="fixed bottom-5 right-5 z-[80] max-w-sm rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40">
+  return createPortal(
+    <div className="fixed left-1/2 top-4 z-[100] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl shadow-gray-300/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40">
       <div className="flex gap-3">
         <div
           className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
@@ -1647,7 +1777,8 @@ function Toast({ toast, onClose }) {
           <FiX />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1846,322 +1977,390 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
   const isFinalStatus = status === 'entregue' || status === 'cancelado'
   const isUpdatingThisOrder = updatingStatus === order.id
   const customerInitials = customerName
-    .split(/\\s+/)
+    .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0])
     .join('')
     .toUpperCase() || 'CL'
 
+  const customerPhone = phone ? formatBrazilianPhone(phone) : ''
+  const neighborhood = address?.neighborhood || ''
+  const itemSummary =
+    order.itemsSummary ||
+    order.items
+      ?.slice(0, 2)
+      ?.map((item) => `${item.quantity || item.qty || 1}x ${item.name}`)
+      ?.join(', ') ||
+    'Sem itens'
+
+  const itemCount = Array.isArray(order.items)
+    ? order.items.reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0)
+    : 0
+
+  const isFinished = isFinalStatus
+  const isCancelled = status === 'cancelado'
+  const isLatest = Boolean(isLatestNew)
+  const hasWhatsApp = Boolean(canOpenWhatsApp)
+
+  const orderCode =
+    order.shortCode ||
+    order.displayId ||
+    order.orderNumber ||
+    order.code ||
+    order.id?.slice(-4)?.toUpperCase() ||
+    '----'
+
+const paymentMethod =
+  order.payment?.methodLabel ||
+  order.payment?.method ||
+  order.paymentMethod ||
+  'Pagamento'
+
+const normalizedPaymentMethod = String(paymentMethod || '')
+  .trim()
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, '_')
+
+const paymentMethodLabelMap = {
+  pix_manual: 'Pix manual',
+  pix: 'Pix',
+  cash: 'Dinheiro',
+  money: 'Dinheiro',
+  dinheiro: 'Dinheiro',
+  cash_on_delivery: 'Dinheiro na entrega',
+  dinheiro_na_entrega: 'Dinheiro na entrega',
+  card_on_delivery: 'Cartao na entrega',
+  cartao_na_entrega: 'Cartao na entrega',
+  credit_card: 'Cartao de credito',
+  debit_card: 'Cartao de debito',
+  credito: 'Cartao de credito',
+  debito: 'Cartao de debito',
+  cartao_de_credito: 'Cartao de credito',
+  cartao_de_debito: 'Cartao de debito',
+}
+
+const paymentMethodLabel =
+  paymentMethodLabelMap[normalizedPaymentMethod] ||
+  (normalizedPaymentMethod.includes('pix')
+    ? 'Pix'
+    : normalizedPaymentMethod.includes('cash') ||
+        normalizedPaymentMethod.includes('money') ||
+        normalizedPaymentMethod.includes('dinheiro')
+      ? 'Dinheiro'
+      : normalizedPaymentMethod.includes('card') ||
+          normalizedPaymentMethod.includes('cartao') ||
+          normalizedPaymentMethod.includes('credit') ||
+          normalizedPaymentMethod.includes('debit')
+        ? 'Cartao'
+        : paymentMethod)
+
+const PaymentMethodIcon =
+  normalizedPaymentMethod.includes('pix')
+    ? FiZap
+    : normalizedPaymentMethod.includes('cash') ||
+        normalizedPaymentMethod.includes('money') ||
+        normalizedPaymentMethod.includes('dinheiro')
+      ? FiDollarSign
+      : normalizedPaymentMethod.includes('card') ||
+          normalizedPaymentMethod.includes('cartao') ||
+          normalizedPaymentMethod.includes('credit') ||
+          normalizedPaymentMethod.includes('debit')
+        ? FiCreditCard
+        : FiDollarSign
+
+  const paymentStatusLabel =
+    order.paymentStatusLabel ||
+    order.payment?.statusLabel ||
+    (order.paymentStatus === 'paid' || order.payment?.status === 'paid'
+      ? 'Valor validado'
+      : 'Pagamento pendente')
+
+  const isPaymentValidated =
+  paymentStatusLabel === 'Valor validado' ||
+  order.paymentStatus === 'paid' ||
+  order.payment?.status === 'paid'
+
+  const isPayOnDelivery =
+  normalizedPaymentMethod.includes('delivery') ||
+  normalizedPaymentMethod.includes('entrega') ||
+  normalizedPaymentMethod.includes('cash') ||
+  normalizedPaymentMethod.includes('money') ||
+  normalizedPaymentMethod.includes('dinheiro') ||
+  normalizedPaymentMethod.includes('card') ||
+  normalizedPaymentMethod.includes('cartao')
+
+  const paymentNeedsAttention = !isPaymentValidated && !isPayOnDelivery
+
+  const totalLabel = formatMoney(order.total || order.pricing?.total || 0)
+
+  const savingsValue = Number(order.savingsAmount || order.savings || savings || 0)
+
+  const savingsLabel = savingsValue > 0 ? formatMoney(savingsValue) : null
+
+  const createdDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt || Date.now())
+  const dateLabel = createdDate.toLocaleDateString('pt-BR')
+  const timeLabel = createdDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+  const relativeTimeLabel = formatDistanceToNow(createdDate)
+
+  const rawOrderType = String(
+  order.orderType ||
+  order.deliveryType ||
+  order.fulfillmentType ||
+  order.type ||
+  ''
+).toLowerCase()
+
+const orderTypeLabel =
+  order.fulfillmentTypeLabel ||
+  order.deliveryTypeLabel ||
+  (['delivery', 'entrega'].includes(rawOrderType)
+    ? 'Entrega'
+    : ['pickup', 'retirada', 'takeout', 'balcao', 'balcão'].includes(rawOrderType)
+      ? 'Retirada'
+      : ['local', 'dine_in', 'mesa'].includes(rawOrderType)
+        ? 'No local'
+        : isDeliveryOrder(order)
+          ? 'Entrega'
+          : 'Retirada')
+
+const statusMetaMap = {
+  pendente: {
+    label: 'Pendente',
+    tone: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
+    dot: 'bg-amber-400',
+    summary: 'Aguardando confirmação',
+  },
+  confirmado: {
+    label: 'Confirmado',
+    tone: 'border-sky-500/20 bg-sky-500/10 text-sky-300',
+    dot: 'bg-sky-400',
+    summary: 'Pedido confirmado',
+  },
+  preparando: {
+    label: 'Preparando',
+    tone: 'border-violet-500/20 bg-violet-500/10 text-violet-300',
+    dot: 'bg-violet-400',
+    summary: 'Em preparo pela cozinha',
+  },
+  pronto: {
+    label: 'Pronto',
+    tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    dot: 'bg-emerald-400',
+    summary: orderTypeLabel === 'Entrega' ? 'Pronto para despacho' : 'Pronto para retirada',
+  },
+  em_rota: {
+    label: 'Em rota',
+    tone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300',
+    dot: 'bg-cyan-400',
+    summary: 'Saiu para entrega',
+  },
+  entregue: {
+    label: 'Concluído',
+    tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    dot: 'bg-emerald-400',
+    summary: 'Pedido finalizado',
+  },
+  cancelado: {
+    label: 'Cancelado',
+    tone: 'border-red-500/20 bg-red-500/10 text-red-300',
+    dot: 'bg-red-400',
+    summary: 'Pedido cancelado',
+  },
+  canceled: {
+    label: 'Cancelado',
+    tone: 'border-red-500/20 bg-red-500/10 text-red-300',
+    dot: 'bg-red-400',
+    summary: 'Pedido cancelado',
+  },
+}
+
+const statusMeta = statusMetaMap[status] || {
+  label: order.status || 'Status',
+  tone: 'border-gray-100 bg-white text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300',
+  dot: 'bg-zinc-400',
+  summary: 'Status do pedido',
+}
+
   return (
+  <motion.article
+    layout
+    whileHover={{ y: -2 }}
+    transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+    className={`group relative overflow-hidden rounded-[1.6rem] border transition-all duration-200 ${
+      isFinished
+        ? 'border-gray-100 bg-white/75 opacity-80 hover:opacity-95 dark:border-white/6 dark:bg-[#0d0d11]/85'
+        : 'border-gray-100 bg-white dark:border-white/10 dark:bg-[#101015]'
+    } ${
+      isLatest
+        ? 'ring-1 ring-orange-400/60 shadow-[0_0_0_1px_rgba(249,115,22,0.12),0_18px_40px_-24px_rgba(249,115,22,0.5)] dark:ring-orange-500/50'
+        : 'shadow-sm shadow-gray-200/50 dark:shadow-black/20'
+    }`}
+  >
     <div
-      className={`group relative overflow-hidden rounded-[1.6rem] border p-4 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl ${
-        late && !isFinalStatus
-          ? 'border-red-300 bg-red-50/90 shadow-red-100/80 ring-2 ring-red-200 dark:border-red-500/35 dark:bg-red-950/20 dark:shadow-red-950/20 dark:ring-red-500/20'
-          : isFinalStatus
-            ? 'border-gray-100 bg-white/95 hover:shadow-gray-200/60 dark:border-white/10 dark:bg-zinc-900/80 dark:ring-1 dark:ring-white/[0.03] dark:hover:border-white/15'
-            : 'border-gray-100 bg-white hover:shadow-gray-200/60 dark:border-white/10 dark:bg-zinc-900/90 dark:ring-1 dark:ring-white/[0.03] dark:hover:border-white/15 dark:hover:shadow-black/30'
-      } ${isFinalStatus ? 'opacity-75 hover:opacity-100' : ''} ${isNew ? 'animate-pulse' : ''} ${isLatestNew ? 'ring-2 ring-orange-400 ring-offset-2 ring-offset-gray-50 dark:ring-orange-500 dark:ring-offset-zinc-950' : ''}`}
-    >
-      {/* Status color bar */}
-      <div className={`absolute inset-y-0 left-0 w-1 ${late && !isFinalStatus ? 'bg-red-500' : meta.dotClass}`} />
+      className={`absolute inset-y-0 left-0 w-1 ${
+        isCancelled
+          ? 'bg-gradient-to-b from-red-500 to-red-600'
+          : isFinished
+            ? 'bg-gradient-to-b from-orange-400 to-orange-500'
+            : 'bg-gradient-to-b from-[#fb923c] via-[#f97316] to-[#ea580c]'
+      }`}
+    />
 
-      {late && !isFinalStatus && (
-        <div className="mb-3 flex flex-col gap-2 rounded-2xl bg-red-600 px-4 py-3 text-white sm:flex-row sm:items-center sm:justify-between dark:bg-red-800">
-          <div className="flex items-center gap-2">
-            <FiAlertTriangle className="shrink-0 animate-pulse" size={18} />
-            <span className="text-sm font-black">
-              Pedido pendente há {getPendingMinutes(order)} min
-            </span>
-          </div>
-          <span className="text-xs font-bold text-white/85">
-            Aceite ou cancele para não deixar o cliente esperando.
-          </span>
-        </div>
-      )}
-
-      {/* DESKTOP GRID LAYOUT */}
-      <div className="hidden lg:grid lg:gap-4 lg:pl-1 lg:grid-cols-[92px_minmax(0,1fr)_140px_120px_145px_160px] lg:items-center">
-        <div className="block">
-          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
-            Pedido
-          </p>
-          <span className="inline-flex font-mono text-[13px] font-black text-gray-700 dark:text-zinc-200">
-            {getOrderDisplayNumber(order)}
-          </span>
-        </div>
-
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#9a3412] ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20 lg:hidden">
-              {customerInitials}
-            </div>
-
-            <div className={`h-2.5 w-2.5 rounded-full ${meta.dotClass}`} />
-
-            <p className="min-w-0 truncate text-base font-black text-[#111827] dark:text-zinc-100 lg:text-sm">
-              {customerName}
-            </p>
-
-            <StatusBadge status={order.status} />
-            <PricingValidationBadge order={order} />
-
-            {late && !isFinalStatus && (
-              <span className="rounded-full bg-red-600 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white ring-1 ring-red-700">
-                Urgente
-              </span>
-            )}
-          </div>
-
-          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-[#6b7280] dark:text-zinc-400 lg:truncate">
-            {getOrderItemsSummary(order)}
-          </p>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b7280] dark:text-zinc-400 lg:mt-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1.5 dark:bg-zinc-950/60 lg:bg-transparent lg:px-0 lg:py-0 lg:dark:bg-transparent">
-              <FiPhone size={13} />
-              {formatDisplayPhone(phone) || 'Sem telefone'}
-            </span>
-
-            <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1.5 dark:bg-zinc-950/60 lg:bg-transparent lg:px-0 lg:py-0 lg:dark:bg-transparent">
-              <FiMapPin size={13} />
-              {address.isPickup
-                ? 'Retirada'
-                : address.neighborhood || 'Bairro não informado'}
-            </span>
-          </div>
-
-          {status === 'cancelado' && cancellationReason && (
-            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
-              <span className="font-black">Motivo:</span> {cancellationReason}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
-            Status
-          </p>
-          <p className="mt-1 text-sm font-black text-[#111827] dark:text-zinc-100 lg:mt-0 lg:font-bold">
-            {meta.description}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
-            Total
-          </p>
-          <p className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100 lg:mt-0 lg:text-base">
-            {formatMoney(getOrderTotal(order))}
-          </p>
-          <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400 lg:font-normal">
-            {getPaymentMethod(order)}
-          </p>
-          {savings > 0 && (
-            <p className="mt-1 text-[11px] font-black text-[#f97316] dark:text-orange-400">
-              Economia {formatMoney(savings)}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-500 lg:hidden">
-            Horário
-          </p>
-          <p className="mt-1 text-sm font-bold text-[#111827] dark:text-zinc-100 lg:mt-0">
-            {formatDate(order)}
-          </p>
-          <p className="text-xs font-semibold text-[#6b7280] dark:text-zinc-400 lg:font-normal">
-            {timeAgo(order)}
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          {nextStatus && (
-            <button
-              type="button"
-              onClick={() => onQuickStatus(order, nextStatus)}
-              disabled={Boolean(updatingStatus)}
-              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-3 py-1.5 text-xs font-black text-white shadow-lg shadow-orange-600/15 transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-75"
-            >
-              <FiZap size={13} />
-              {isUpdatingThisOrder
-                ? 'Atualizando...'
-                : updatingStatus
-                  ? 'Aguarde...'
-                  : getNextStatusLabel(status, order)}
-            </button>
-          )}
-
-          <div className={`grid ${canOpenWhatsApp ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
-            <button
-              type="button"
-              onClick={() => onOpen(order)}
-              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-gray-100 bg-white px-2 py-1.5 text-xs font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10 dark:hover:text-orange-300"
-            >
-              Abrir
-            </button>
-            {canOpenWhatsApp && (
-              <button
-                type="button"
-                onClick={() => onOpenWhatsApp(order)}
-                className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-green-100 bg-green-50 px-2 py-1.5 text-xs font-black text-green-700 transition hover:bg-green-100/50 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/15"
-                title="Chamar cliente no WhatsApp"
-                aria-label="Chamar cliente no WhatsApp"
-              >
-                <FiMessageCircle size={14} />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onCopyOrder(order)}
-              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border border-gray-100 bg-white px-2 py-1.5 text-xs font-black text-[#6b7280] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10"
-              title="Copiar resumo do pedido"
-              aria-label="Copiar resumo do pedido"
-            >
-              <FiCopy size={14} />
-            </button>
-          </div>
-        </div>
+    <div className="grid gap-4 px-5 py-4 xl:grid-cols-[84px_minmax(0,2.2fr)_1.1fr_0.95fr_0.95fr_auto] xl:items-center">
+      {/* Coluna 1: ID */}
+      <div className="flex flex-col justify-center">
+        <span className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
+          Pedido
+        </span>
+        <span className="mt-1 text-[1rem] font-black text-[#111827] dark:text-zinc-100">
+          #{orderCode}
+        </span>
       </div>
 
-      {/* MOBILE: PREMIUM CARD LAYOUT */}
-      <div className="flex flex-col gap-3 pl-1 lg:hidden">
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#9a3412] ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20">
-              {customerInitials}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <div className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} />
-                <p className="truncate text-sm font-black text-gray-900 dark:text-zinc-100">
-                  {customerName}
-                </p>
-              </div>
-              <p className="mt-0.5 font-mono text-[11px] font-black text-gray-500 dark:text-zinc-400">
-                {getOrderDisplayNumber(order)}
-              </p>
-            </div>
+      {/* Coluna 2: cliente + itens + infos */}
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusMeta.dot} shadow-[0_0_0_4px_rgba(255,255,255,0.04)]`} />
+            <h3 className="truncate text-[15px] font-extrabold text-[#111827] dark:text-zinc-100">
+              {customerName}
+            </h3>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <StatusBadge status={order.status} />
-            <PricingValidationBadge order={order} />
-          </div>
+
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black ${statusMeta.tone}`}
+          >
+            {statusMeta.label}
+          </span>
+
+          {isLatest && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
+              <FiZap size={11} />
+              Último pedido
+            </span>
+          )}
+
+          <span className="inline-flex items-center rounded-full border border-gray-100 bg-white text-gray-700 px-2.5 py-1 text-[11px] font-black dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-300">
+            {orderTypeLabel}
+          </span>
         </div>
 
-        {/* Item summary */}
-        <p className="line-clamp-2 text-xs font-semibold leading-5 text-gray-600 dark:text-zinc-400">
-          {getOrderItemsSummary(order)}
+        {paymentNeedsAttention && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:text-amber-300">
+            <FiAlertTriangle size={11} />
+            {paymentStatusLabel || 'Pagamento pendente'}
+          </span>
+        )}
+
+        <p className="mt-2 truncate text-[14px] font-semibold text-gray-700 dark:text-zinc-300">
+          {itemSummary}
         </p>
 
-        {/* Info Chips */}
-        <div className="flex flex-wrap gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400">
-            <FiPhone size={11} />
-            {formatDisplayPhone(phone) || 'Sem telefone'}
-          </span>
-          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-            address.isPickup
-              ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400'
-              : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'
-          }`}>
-            {address.isPickup ? <FiShoppingBag size={11} /> : <FiTruck size={11} />}
-            {address.isPickup ? 'Retirada' : address.neighborhood || 'Bairro n/i'}
-          </span>
-        </div>
-
-        {/* Cancellation reason box */}
-        {status === 'cancelado' && cancellationReason && (
-          <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[11px] font-bold leading-4 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
-            <span className="font-black">Motivo:</span> {cancellationReason}
-          </div>
-        )}
-
-        <div className="my-1 border-t border-gray-100 dark:border-white/10" />
-
-        {/* Footer data grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-              Total
-            </p>
-            <p className="mt-0.5 text-sm font-black text-gray-900 dark:text-zinc-100">
-              {formatMoney(getOrderTotal(order))}
-            </p>
-            <p className="text-[10px] font-semibold text-gray-500 dark:text-zinc-400">
-              {getPaymentMethod(order)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-              Horário
-            </p>
-            <p className="mt-0.5 text-xs font-bold text-gray-900 dark:text-zinc-100">
-              {formatDate(order)}
-            </p>
-            <p className="text-[10px] font-semibold text-gray-500 dark:text-zinc-500">
-              {timeAgo(order)}
-            </p>
-          </div>
-        </div>
-
-        {/* Savings pill */}
-        {savings > 0 && (
-          <div className="self-start inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
-            Economia {formatMoney(savings)}
-          </div>
-        )}
-
-        {/* Action button row */}
-        <div className="grid grid-cols-3 gap-2">
-          {nextStatus && (
-            <button
-              type="button"
-              onClick={() => onQuickStatus(order, nextStatus)}
-              disabled={Boolean(updatingStatus)}
-              className="col-span-3 flex h-10 items-center justify-center gap-1.5 rounded-xl bg-orange-500 text-xs font-black text-white shadow-sm shadow-orange-500/20 transition active:scale-95"
-            >
-              <FiZap size={13} />
-              {isUpdatingThisOrder ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
-            </button>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
+          {itemCount > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <FiShoppingBag size={12} />
+              {itemCount} {itemCount === 1 ? 'item' : 'itens'}
+            </span>
           )}
 
-          <button
-            type="button"
-            onClick={() => onOpen(order)}
-            className="flex h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-gray-50 text-xs font-black text-gray-900 transition active:scale-95 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-100"
-          >
-            Abrir <FiChevronRight size={13} />
-          </button>
+          {customerPhone && (
+            <span className="inline-flex items-center gap-1.5">
+              <FiPhone size={12} />
+              {customerPhone}
+            </span>
+          )}
 
-          <button
-            type="button"
-            onClick={() => canOpenWhatsApp && onOpenWhatsApp(order)}
-            disabled={!canOpenWhatsApp}
-            aria-label="Chamar cliente no WhatsApp"
-            className={`flex h-10 items-center justify-center gap-1 rounded-xl border text-xs font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
-              canOpenWhatsApp
-                ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-400'
-                : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600'
-            }`}
-          >
-            <FiMessageCircle size={13} /> WhatsApp
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onCopyOrder(order)}
-            className="flex h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white text-xs font-black text-gray-500 transition active:scale-95 dark:border-zinc-700 dark:bg-white/[0.06] dark:text-zinc-400"
-            aria-label="Copiar resumo do pedido"
-          >
-            <FiCopy size={12} /> Copiar
-          </button>
+          {neighborhood && (
+            <span className="inline-flex items-center gap-1.5">
+              <FiMapPin size={12} />
+              {neighborhood}
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Coluna 3: status/resumo */}
+      <div className="min-w-0">
+        <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 dark:border-white/6 dark:bg-white/[0.03]">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
+            Situação
+          </p>
+          <p className="mt-1 text-[14px] font-extrabold text-[#111827] dark:text-zinc-100">
+            {statusMeta.summary}
+          </p>
+          <p className="mt-1 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
+            {isFinished
+              ? 'Concluido no historico'
+              : 'Acompanhe a proxima etapa'}
+          </p>
+        </div>
+      </div>
+
+      {/* Coluna 4: total */}
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
+          Total
+        </p>
+        <p className="mt-1 text-[1.55rem] font-black leading-none text-[#111827] dark:text-zinc-100">
+          {totalLabel}
+        </p>
+        <div className="mt-2 space-y-1">
+          <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-700 dark:text-zinc-300">
+            <PaymentMethodIcon size={13} />
+            {paymentMethodLabel}
+          </p>
+          {savingsLabel && (
+            <p className="text-[12px] font-black text-orange-400">
+              Economia {savingsLabel}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Coluna 5: data/hora */}
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
+          Horário
+        </p>
+        <p className="mt-1 text-[14px] font-extrabold text-[#111827] dark:text-zinc-100">
+          {dateLabel}, {timeLabel}
+        </p>
+        <p className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
+          <FiClock size={12} />
+          {relativeTimeLabel || 'Agora há pouco'}
+        </p>
+      </div>
+
+      {/* Coluna 6: ações */}
+      <div className="grid gap-2 sm:flex sm:items-center xl:justify-end">
+        <button
+          type="button"
+          onClick={() => onOpen(order)}
+          className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-4 text-[13px] font-black text-[#111827] transition hover:bg-gray-100 dark:border-white/8 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.09] sm:flex-none"
+        >
+          Abrir
+        </button>
+
+        {hasWhatsApp && (
+          <button
+            type="button"
+            onClick={() => onOpenWhatsApp(order)}
+            className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 transition hover:bg-emerald-500/15 sm:w-11"
+            aria-label="Abrir WhatsApp"
+            title="Abrir WhatsApp"
+          >
+            <FiMessageCircle size={16} />
+          </button>
+        )}
+      </div>
     </div>
-  )
+  </motion.article>
+)
 }
 
 function OrderItemsList({ items }) {
@@ -2426,16 +2625,16 @@ function OrderModal({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
-  const variants = isMobile ? {
-    initial: { y: '100%' },
-    animate: { y: 0 },
-    exit: { y: '100%' },
-    transition: { type: 'spring', damping: 25, stiffness: 280 }
+    const variants = isMobile ? {
+    initial: { y: '100%', opacity: 0.96 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: '100%', opacity: 0.96 },
+    transition: { type: 'spring', damping: 28, stiffness: 300 }
   } : {
-    initial: { opacity: 0, scale: 0.96, y: 20 },
-    animate: { opacity: 1, scale: 1, y: 0 },
-    exit: { opacity: 0, scale: 0.96, y: 20 },
-    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
+    initial: { opacity: 0, scale: 0.94, y: 24, filter: 'blur(8px)' },
+    animate: { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' },
+    exit: { opacity: 0, scale: 0.96, y: 18, filter: 'blur(8px)' },
+    transition: { type: 'spring', stiffness: 360, damping: 34, mass: 0.85 }
   }
 
   if (typeof window === 'undefined') return null
@@ -2445,7 +2644,7 @@ function OrderModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
     >
@@ -2533,11 +2732,6 @@ function OrderModal({
                 className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-black text-white transition hover:bg-black dark:bg-white/12 dark:text-zinc-50 dark:ring-1 dark:ring-white/10 dark:hover:bg-white/16">
                 <FiPrinter size={16}/> Comanda
               </button>
-              <button onClick={() => onCopyOrder(order)}
-                aria-label="Copiar resumo do pedido"
-                className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-800 transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:bg-white/[0.08]">
-                <FiCopy size={16}/> Copiar
-              </button>
             </div>
           </div>
           <PricingValidationAlert order={order} />
@@ -2556,10 +2750,10 @@ function OrderModal({
           )}
         </div>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-4 dark:bg-[#0b0b0d] sm:p-5 xl:overflow-hidden">
-          <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[320px_1fr_280px] xl:h-full xl:overflow-hidden">
+        <main className="pratoby-scrollbar flex-1 overflow-y-auto bg-gray-50 p-4 dark:bg-[#0b0b0d] sm:p-5">
+          <div className="grid min-h-0 gap-4 xl:grid-cols-[320px_1fr_280px]">
             {/* Left Column: Customer & Delivery & Payment */}
-            <div className="min-h-0 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="min-h-0 space-y-4">
               {/* Customer card */}
               <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-start justify-between gap-3">
@@ -2711,7 +2905,7 @@ function OrderModal({
             </div>
 
             {/* Middle Column: Items List */}
-            <section className="flex min-h-0 flex-col rounded-[1.35rem] border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03] xl:h-full xl:overflow-hidden">
+            <section className="flex min-h-[360px] flex-col rounded-[1.35rem] border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03] xl:min-h-0">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 p-4 dark:border-white/10">
                 <p className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-zinc-100">
                   <FiShoppingBag className="text-orange-500" /> Itens do Pedido
@@ -2720,13 +2914,13 @@ function OrderModal({
                   {items.length} item{items.length === 1 ? '' : 's'}
                 </span>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="min-h-0 flex-1 p-4">
                 <OrderItemsList items={items} />
               </div>
             </section>
 
             {/* Right Column: Status & Resumo Financeiro & Forçar Alteração */}
-            <aside className="min-h-0 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:h-full xl:overflow-hidden">
+            <aside className="min-h-0 space-y-4">
               {/* Status card */}
               <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-center gap-2">
@@ -2791,6 +2985,21 @@ function OrderModal({
                       </button>
                     )
                   })}
+
+                  {/* TODO: futura agenda de alteração manual de status. Visual apenas; não salva nem chama updateMerchantOrder. */}
+                  <button
+                    type="button"
+                    disabled
+                    title="Agendamento de alteração em breve"
+                    aria-label="Agendado em breve"
+                    className="flex min-h-[58px] cursor-not-allowed flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-gray-100 bg-gray-50/80 p-2 text-center text-[10px] font-black text-gray-400 opacity-75 transition dark:border-zinc-800 dark:bg-white/[0.04] dark:text-zinc-500"
+                  >
+                    <FiClock size={14} />
+                    <span>Agendado</span>
+                    <span className="text-[9px] font-black uppercase tracking-wide text-gray-300 dark:text-zinc-600">
+                      Em breve
+                    </span>
+                  </button>
                 </div>
               </section>
             </aside>
@@ -2828,6 +3037,7 @@ export default function OrdersPage() {
   const [selectedStoreId, setSelectedStoreId] = useState('')
   const [selectedOrderId, setSelectedOrderId] = useState('')
   const [statusFilter, setStatusFilter] = useState('todos')
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [dateFilter, setDateFilter] = useState('hoje')
   const [search, setSearch] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
@@ -2841,6 +3051,7 @@ export default function OrdersPage() {
   const seenOrderIdsRef = useRef(new Set())
   const firstOrdersSnapshotRef = useRef(true)
   const newOrderTimersRef = useRef({})
+  const moreFiltersRef = useRef(null)
 
   const selectedStore = useMemo(() => {
     if (!stores.length) return null
@@ -2863,6 +3074,19 @@ export default function OrdersPage() {
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
   }, [])
+
+  useEffect(() => {
+    if (!moreFiltersOpen) return undefined
+
+    const handlePointerDown = (event) => {
+      if (!moreFiltersRef.current?.contains(event.target)) {
+        setMoreFiltersOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [moreFiltersOpen])
 
   const handleSelectStore = useCallback((storeId) => {
     setSelectedStoreId(storeId)
@@ -3280,20 +3504,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         paymentLabel: getPaymentMethod(order),
         totalLabel: formatMoney(getOrderTotal(order)),
       })
-
-      try {
-        if (!navigator?.clipboard?.writeText) {
-          throw new Error('clipboard-unavailable')
-        }
-
-        await navigator.clipboard.writeText(text)
-        showToast('success', 'Resumo do pedido copiado.')
-      } catch (error) {
-        console.warn('[OrdersPage] Não foi possível copiar resumo do pedido:', error)
-        showToast('error', 'Não foi possível copiar o resumo.')
-      }
     },
-    [showToast]
   )
 
   useEffect(() => {
@@ -3553,6 +3764,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       todos: orders.length,
       ativos: 0,
       pendente: 0,
+      confirmado: 0,
       preparando: 0,
       pronto: 0,
       em_rota: 0,
@@ -3574,6 +3786,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
     return counts
   }, [orders])
+
+  const moreFiltersActive = MORE_STATUS_FILTER_KEYS.has(statusFilter)
+  const moreFiltersCount = MORE_STATUS_TABS.reduce(
+    (total, tab) => total + (statusCounts[tab.key] || 0),
+    0
+  )
 
   const summary = useMemo(() => {
     const startOfToday = new Date()
@@ -3827,8 +4045,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             <div className="mb-5 flex flex-col gap-4">
               {/* Row 1: Status Filters */}
               <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                  {STATUS_TABS.map((tab) => {
+                <div className="flex items-center gap-2">
+                  <div className="pratoby-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
+                    {MAIN_STATUS_TABS.map((tab) => {
                     const meta = tab.key === 'ativos'
                       ? { icon: FiZap, dotClass: 'bg-orange-500' }
                       : STATUS_META[tab.key]
@@ -3839,7 +4058,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     const iconColorClass = meta?.dotClass ? meta.dotClass.replace('bg-', 'text-') : 'text-gray-400 dark:text-zinc-500'
 
                     return (
-                      <button
+                      <motion.button
+                      layout
+                      {...FILTER_BUTTON_MOTION}
                         key={tab.key}
                         type="button"
                         onClick={() => setStatusFilter(tab.key)}
@@ -3869,9 +4090,92 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                             {statusCounts[tab.key]}
                           </span>
                         )}
-                      </button>
+                      </motion.button>
                     )
-                  })}
+                    })}
+                  </div>
+
+                  <div ref={moreFiltersRef} className="relative shrink-0">
+                    <motion.button
+                      layout
+                      {...FILTER_BUTTON_MOTION}
+                      type="button"
+                      onClick={() => setMoreFiltersOpen((open) => !open)}
+                      className={`group inline-flex shrink-0 items-center gap-2.5 rounded-2xl px-4 py-2.5 text-sm font-black transition-all ${
+                        moreFiltersActive
+                          ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/20 ring-1 ring-orange-500/50'
+                          : 'bg-white text-gray-600 ring-1 ring-gray-100 hover:bg-gray-50 hover:text-gray-900 dark:bg-[#18181b] dark:text-zinc-400 dark:ring-white/5 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-200'
+                      }`}
+                      aria-expanded={moreFiltersOpen}
+                      aria-haspopup="menu"
+                    >
+                      <FiFilter
+                        size={15}
+                        className={`transition-transform duration-300 ${moreFiltersActive ? 'text-white/90 scale-110' : 'text-gray-400 group-hover:scale-125 dark:text-zinc-500'}`}
+                      />
+                      Mais filtros
+                      {moreFiltersCount > 0 && (
+                        <span
+                          className={`flex h-5 items-center justify-center rounded-full px-2 text-xs font-bold tracking-wide transition-colors ${
+                            moreFiltersActive
+                              ? 'bg-white/25 text-white'
+                              : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-400'
+                          }`}
+                        >
+                          {moreFiltersCount}
+                        </span>
+                      )}
+                    </motion.button>  
+
+                    <AnimatePresence>
+                      {moreFiltersOpen && (
+                        <motion.div
+                          variants={FILTER_DROPDOWN_VARIANTS}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          style={{ transformOrigin: 'top right' }}
+                          className="absolute right-0 top-full z-30 mt-2 w-56 rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl shadow-gray-200/70 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40"
+                          role="menu"
+                        >
+                          {MORE_STATUS_TABS.map((tab) => {
+                            const meta = STATUS_META[tab.key]
+                            const Icon = meta?.icon
+                            const isSelected = statusFilter === tab.key
+                            const count = statusCounts[tab.key] || 0
+
+                            return (
+                              <motion.button
+                                variants={FILTER_DROPDOWN_ITEM_VARIANTS}
+                                key={tab.key}
+                                type="button"
+                                onClick={() => {
+                                  setStatusFilter(tab.key)
+                                  setMoreFiltersOpen(false)
+                                }}
+                                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-black transition ${
+                                  isSelected
+                                    ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
+                                }`}
+                                role="menuitem"
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  {Icon && <Icon size={14} className={meta?.dotClass ? meta.dotClass.replace('bg-', 'text-') : 'text-gray-400'} />}
+                                  <span className="truncate">{tab.label}</span>
+                                </span>
+                                {count > 0 && (
+                                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-black text-gray-500 dark:bg-white/5 dark:text-zinc-400">
+                                    {count}
+                                  </span>
+                                )}
+                              </motion.button>
+                            )
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
 
@@ -3890,20 +4194,19 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                   />
                 </div>
 
-                <div className="flex shrink-0 items-center overflow-x-auto rounded-[1.5rem] border border-gray-100 bg-white p-1.5 shadow-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] dark:border-zinc-800 dark:bg-zinc-900">
-                  {DATE_FILTER_OPTIONS.map((filter) => (
-                    <button
-                      key={filter.key}
-                      onClick={() => setDateFilter(filter.key)}
-                      className={`inline-flex shrink-0 items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black transition-all ${
-                        dateFilter === filter.key
-                          ? 'bg-gray-100 text-[#111827] dark:bg-zinc-800 dark:text-white'
-                          : 'text-[#6b7280] hover:bg-gray-50 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-200'
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
+                <div className="pratoby-scrollbar max-w-full overflow-x-auto">
+                  <AnimatedSegmentedControl
+                    options={DATE_FILTER_OPTIONS.map((filter) => ({
+                      label: filter.label,
+                      value: filter.key,
+                    }))}
+                    value={dateFilter}
+                    onChange={setDateFilter}
+                    size="lg"
+                    variant="neutral"
+                    fullWidthMobile
+                    ariaLabel="Filtrar pedidos por data"
+                  />
                 </div>
               </div>
             </div>
@@ -3917,40 +4220,57 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               <div className="text-right">Ações</div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {loading ? (
-                [1, 2, 3, 4, 5].map((item) => (
-                  <div
-                    key={item}
-                    className="h-28 animate-pulse rounded-[1.5rem] bg-white dark:bg-zinc-900"
-                  />
-                ))
-              ) : filteredOrders.length === 0 ? (
-                <EmptyState
-                  icon={FiShoppingBag}
-                  title="Nenhum pedido encontrado"
-                  description={
-                    search || statusFilter !== 'todos'
-                      ? 'Tente limpar a busca ou alterar o filtro de status.'
-                      : 'Quando novos pedidos entrarem, eles aparecerão aqui em tempo real.'
-                  }
-                />
-              ) : (
-                filteredOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    onOpen={(nextOrder) => setSelectedOrderId(nextOrder.id)}
-                    onQuickStatus={handleUpdateStatus}
-                    onOpenWhatsApp={handleOpenWhatsApp}
-                    onCopyOrder={handleCopyOrder}
-                    updatingStatus={updatingStatus}
-                    isNew={newOrderIds.has(order.id)}
-                    isLatestNew={latestNewOrderId === order.id}
-                  />
-                ))
-              )}
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${statusFilter}-${dateFilter}-${loading ? 'loading' : 'ready'}`}
+                variants={ORDERS_LIST_VARIANTS}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="mt-4 space-y-3 rounded-[2rem] border border-gray-100/80 bg-gray-50/50 p-2 dark:border-zinc-800 dark:bg-white/[0.02] sm:p-3"
+              >
+                {loading ? (
+                  [1, 2, 3, 4, 5].map((item) => (
+                    <motion.div
+                      key={item}
+                      variants={ORDER_ITEM_VARIANTS}
+                      className="h-28 animate-pulse rounded-[1.5rem] bg-white dark:bg-zinc-900"
+                    />
+                  ))
+                ) : filteredOrders.length === 0 ? (
+                  <motion.div variants={ORDER_ITEM_VARIANTS}>
+                    <EmptyState
+                      icon={FiShoppingBag}
+                      title="Nenhum pedido encontrado"
+                      description={
+                        search || statusFilter !== 'todos'
+                          ? 'Tente limpar a busca ou alterar o filtro de status.'
+                          : 'Quando novos pedidos entrarem, eles aparecerão aqui em tempo real.'
+                      }
+                    />
+                  </motion.div>
+                ) : (
+                  filteredOrders.map((order, index) => (
+                    <motion.div
+                      key={order.id}
+                      layout
+                      variants={ORDER_ITEM_VARIANTS}
+                    >
+                      <OrderCard
+                        order={order}
+                        onOpen={(nextOrder) => setSelectedOrderId(nextOrder.id)}
+                        onQuickStatus={handleUpdateStatus}
+                        onOpenWhatsApp={handleOpenWhatsApp}
+                        onCopyOrder={handleCopyOrder}
+                        updatingStatus={updatingStatus}
+                        isNew={newOrderIds.has(order.id)}
+                        isLatestNew={latestNewOrderId === order.id || index === 0}
+                      />
+                    </motion.div>
+                  ))
+                )}
+              </motion.div>
+            </AnimatePresence>
           </>
         )}
         
