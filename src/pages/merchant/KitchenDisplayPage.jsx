@@ -180,6 +180,17 @@ function getKdsNextAction(_order, _status, cfg) {
   return cfg.nextAction
 }
 
+function getCustomerName(order) {
+  return (
+    order?.customerName ||
+    order?.clientName ||
+    order?.customer?.name ||
+    order?.customer?.fullName ||
+    order?.customer?.displayName ||
+    'Cliente'
+  )
+}
+
 // ─── Sound engine ─────────────────────────────────────────────────────────────
 
 function useSoundEngine() {
@@ -188,8 +199,8 @@ function useSoundEngine() {
     try { return localStorage.getItem('pratoby_kds_sound') !== 'false' } catch { return true }
   })
 
-  const play = useCallback((type = 'new') => {
-    if (!enabled) return
+  const play = useCallback((type = 'new', force = false) => {
+    if (!enabled && !force) return
     try {
       if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)()
       const ctx = ctxRef.current
@@ -218,13 +229,15 @@ function useSoundEngine() {
       const next = !prev
       try { localStorage.setItem('pratoby_kds_sound', String(next)) } catch {}
       if (next) {
-        setTimeout(() => play('new'), 50)
+        setTimeout(() => play('new', true), 50)
       }
       return next
     })
   }, [play])
 
-  return { enabled, toggle, play }
+  const test = useCallback(() => play('ready', true), [play])
+
+  return { enabled, toggle, play, test }
 }
 
 // ─── Theme hook ───────────────────────────────────────────────────────────────
@@ -348,13 +361,14 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
   const items = order.items || order.cart || []
   const customerNote = order.customerNote || order.note || order.observations || ''
   const internalNote = order.internalNote || order.kitchenNote || ''
+  const customerName = getCustomerName(order)
 
   return (
     <article className={cn(
       'relative flex flex-col rounded-2xl border transition-all duration-300',
       t('bg-zinc-900', 'bg-white shadow-md'),
       cfg.border[isDark ? 'dark' : 'light'],
-      isNew && 'ring-2 ring-orange-500 ring-offset-2',
+      isNew && 'ring-2 ring-orange-500 ring-offset-2 scale-[1.01] shadow-2xl',
       isNew && t('ring-offset-zinc-950', 'ring-offset-gray-100'),
     )}>
       {/* NEW flash overlay */}
@@ -409,6 +423,14 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
             </div>
           </>
         )}
+
+        <span className={t('text-zinc-700', 'text-gray-300')}>·</span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <FiUsers size={12} />
+          <span className="truncate font-semibold">
+            {fulfillmentType === 'delivery' ? 'Delivery' : customerName}
+          </span>
+        </div>
 
         <span className={t('text-zinc-700', 'text-gray-300')}>·</span>
         <span className={cn('font-bold truncate', cfg.color[isDark ? 'dark' : 'light'])}>
@@ -857,9 +879,38 @@ export default function KitchenDisplayPage() {
           <div className={cn('w-px h-8 mx-1', t('bg-zinc-800', 'bg-gray-200'))} />
 
           {/* Sound */}
-          <CtrlButton onClick={sound.toggle} title={sound.enabled ? 'Desativar som' : 'Ativar som'} t={t}>
-            {sound.enabled ? <FiVolume2 size={16} /> : <FiVolumeX size={16} />}
-          </CtrlButton>
+          <div className={cn(
+            'flex items-center gap-1 rounded-2xl border px-1 py-1',
+            sound.enabled
+              ? t('border-orange-500/30 bg-orange-500/10', 'border-orange-200 bg-orange-50')
+              : t('border-zinc-800 bg-zinc-900', 'border-gray-200 bg-white')
+          )}>
+            <button
+              type="button"
+              onClick={sound.toggle}
+              title={sound.enabled ? 'Desativar som' : 'Ativar som'}
+              className={cn(
+                'flex h-9 items-center gap-2 rounded-xl px-3 text-xs font-black transition active:scale-95',
+                sound.enabled
+                  ? t('bg-orange-500 text-white hover:bg-orange-400', 'bg-orange-500 text-white hover:bg-orange-600')
+                  : t('text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100', 'text-gray-500 hover:bg-gray-50 hover:text-gray-900')
+              )}
+            >
+              {sound.enabled ? <FiVolume2 size={15} /> : <FiVolumeX size={15} />}
+              <span className="hidden lg:inline">{sound.enabled ? 'Som ativo' : 'Som off'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={sound.test}
+              title="Testar som"
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-xl transition active:scale-95',
+                t('text-orange-300 hover:bg-orange-500/15', 'text-orange-600 hover:bg-orange-100')
+              )}
+            >
+              <FiZap size={15} />
+            </button>
+          </div>
 
           {/* Compact */}
           <CtrlButton onClick={() => setCompact(v => !v)} title={compact ? 'Expandido' : 'Compacto'} t={t}>

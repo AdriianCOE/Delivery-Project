@@ -42,6 +42,11 @@ const NEW_ORDER_STATUSES = new Set([
   'aguardando_confirmacao',
 ])
 
+function shouldUseNativeNotificationForOpenDashboard() {
+  if (typeof document === 'undefined') return false
+  return document.visibilityState !== 'visible' || document.hasFocus?.() !== true
+}
+
 function uniqueArray(values) {
   return [...new Set(values.filter(Boolean).map(String))]
 }
@@ -321,7 +326,11 @@ export function GlobalOrderAlert() {
       createdAt: order?.createdAt || Date.now(),
     })
 
-    if (allowBrowser && getBrowserNotificationPermission() === 'granted') {
+    if (
+      allowBrowser &&
+      shouldUseNativeNotificationForOpenDashboard() &&
+      getBrowserNotificationPermission() === 'granted'
+    ) {
       showNewOrderBrowserNotification(order, {
         orderId,
         body: publicBody,

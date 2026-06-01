@@ -26,6 +26,11 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
     const orderId = String(data.orderId || '').trim()
     const orderNumber = orderId ? `#${orderId.slice(-4).toUpperCase()}` : '#----'
     const isCustomerStatusUpdate = data.type === 'order_status_update'
+    console.info('[FCM SW] background message', {
+      type: data.type || 'new_order',
+      hasOrderId: Boolean(orderId),
+      status: data.status || '',
+    })
     const title = isCustomerStatusUpdate
       ? data.title || 'Pedido atualizado'
       : 'Novo pedido recebido'
@@ -36,8 +41,8 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
       icon: '/android-chrome-512x512.png',
       badge: '/favicon.png',
       tag: isCustomerStatusUpdate
-        ? `order-status-${data.orderId || Date.now()}-${data.status || 'updated'}`
-        : data.orderId ? `new-order-${data.orderId}` : 'new-order',
+        ? `pratoby-order-status-${data.orderId || 'unknown'}-${data.status || 'updated'}`
+        : `pratoby-new-order-${data.orderId || 'unknown'}`,
       renotify: true,
       data: {
         type: data.type || 'new_order',

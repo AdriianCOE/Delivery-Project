@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import {
   doc,
+  getDoc,
   onSnapshot,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -34,6 +35,7 @@ import { db, functions } from '../../services/firebase'
 import StoreFooter from '../../components/layouts/StoreFooter'
 import {
   disableCustomerOrderFcmToken,
+  ensureCustomerOrderForegroundFcmListener,
   isFcmSupported,
   requestCustomerOrderFcmPermissionAndToken,
   saveCustomerOrderFcmToken,
@@ -47,10 +49,22 @@ const DELIVERY_STATUS_STEPS = [
     icon: FiClock,
   },
   {
+    id: 'confirmado',
+    label: 'Confirmado',
+    description: 'A loja aceitou seu pedido.',
+    icon: FiCheckCircle,
+  },
+  {
     id: 'preparando',
     label: 'Preparando',
-    description: 'Seu pedido está sendo preparado.',
+    description: 'Seu pedido esta sendo preparado.',
     icon: FiPackage,
+  },
+  {
+    id: 'pronto',
+    label: 'Pronto',
+    description: 'Seu pedido esta pronto e aguarda saida para entrega.',
+    icon: FiCheck,
   },
   {
     id: 'em_rota',
@@ -74,15 +88,21 @@ const PICKUP_STATUS_STEPS = [
     icon: FiClock,
   },
   {
+    id: 'confirmado',
+    label: 'Confirmado',
+    description: 'A loja aceitou seu pedido.',
+    icon: FiCheckCircle,
+  },
+  {
     id: 'preparando',
     label: 'Preparando',
-    description: 'Seu pedido está sendo preparado.',
+    description: 'Seu pedido esta sendo preparado.',
     icon: FiPackage,
   },
   {
     id: 'pronto',
     label: 'Pronto',
-    description: 'Seu pedido está pronto para retirada.',
+    description: 'Seu pedido esta pronto para retirada.',
     icon: FiCheck,
   },
   {
@@ -131,9 +151,10 @@ function normalizeStatus(status) {
     pending: 'pendente',
     pendente: 'pendente',
 
-    accepted: 'preparando',
-    aceito: 'preparando',
-    confirmado: 'preparando',
+    accepted: 'confirmado',
+    aceito: 'confirmado',
+    confirmed: 'confirmado',
+    confirmado: 'confirmado',
     em_preparo: 'preparando',
     in_preparation: 'preparando',
     preparing: 'preparando',
@@ -846,6 +867,15 @@ if (status === 'cancelado') {
     }
   }
 
+  if (status === 'confirmado') {
+    return {
+      title: 'Pedido confirmado',
+      description: 'A loja aceitou seu pedido. Em breve ele entra em preparo.',
+      tone: 'green',
+      icon: FiCheckCircle,
+    }
+  }
+
   if (status === 'preparando') {
     return {
       title: 'Pedido em preparo',
@@ -856,9 +886,13 @@ if (status === 'cancelado') {
   }
 
   if (status === 'pronto') {
+    const isDelivery = getOrderType(order) === 'delivery'
+
     return {
-      title: 'Pedido pronto',
-      description: 'Seu pedido está pronto. Fale com a loja se precisar de ajuda.',
+      title: isDelivery ? 'Pedido pronto para sair' : 'Pedido pronto para retirada',
+      description: isDelivery
+        ? 'A loja finalizou o preparo. Em breve o pedido sai para entrega.'
+        : 'Seu pedido esta pronto para retirada. Fale com a loja se precisar de ajuda.',
       tone: 'blue',
       icon: FiCheck,
     }
@@ -893,6 +927,12 @@ function getStepTime(order, stepId) {
   if (stepId === 'preparando') {
     return (
       order?.preparingAt ||
+      order?.acceptedAt
+    )
+  }
+
+  if (stepId === 'confirmado') {
+    return (
       order?.confirmedAt ||
       order?.acceptedAt
     )
@@ -1563,6 +1603,19 @@ export default function OrderTrackingPage() {
     let isMounted = true
 
     async function loadPublicStore() {
+      async function loadPublicStoreSnapshot() {
+        const publicStoreId = String(order?.storeId || order?.storeDocId || '').trim()
+        if (!publicStoreId) return null
+
+        const storeSnap = await getDoc(doc(db, 'publicStores', publicStoreId))
+        if (!storeSnap.exists()) return null
+
+        return {
+          id: storeSnap.id,
+          ...storeSnap.data(),
+        }
+      }
+
       try {
         const getPublicStoreProfile = httpsCallable(functions, 'getPublicStoreProfile')
         const result = await getPublicStoreProfile({
@@ -1570,11 +1623,12 @@ export default function OrderTrackingPage() {
           storeDocId: order?.storeDocId,
           storeSlug: storeKey,
         })
-        const publicStore = result?.data?.store || null
+        const publicStore = result?.data?.store || await loadPublicStoreSnapshot()
 
         if (isMounted) setStore(publicStore)
       } catch {
-        if (isMounted) setStore(null)
+        const publicStore = await loadPublicStoreSnapshot().catch(() => null)
+        if (isMounted) setStore(publicStore)
       }
     }
 
@@ -1619,6 +1673,9 @@ export default function OrderTrackingPage() {
         if (saved?.enabled && saved?.tokenHash) {
           setCustomerPushTokenHash(saved.tokenHash)
           setCustomerPushStatus('enabled')
+          ensureCustomerOrderForegroundFcmListener({ orderId: order.id }).catch((error) => {
+            console.warn('[FCM] Nao foi possivel ativar listener foreground do tracking.', error)
+          })
           return
         }
       } catch {
@@ -1684,7 +1741,9 @@ const isDelivered = status === 'entregue'
     const directIndex = statusSteps.findIndex((step) => step.id === status)
 
     if (directIndex >= 0) return directIndex
-    if (status === 'em_rota' && getOrderType(order) !== 'delivery') return 2
+    if (status === 'em_rota' && getOrderType(order) !== 'delivery') {
+      return statusSteps.findIndex((step) => step.id === 'pronto')
+    }
 
     return 0
   }, [order, status, statusSteps])
@@ -1733,6 +1792,7 @@ const isDelivered = status === 'entregue'
         trackingToken,
         token: result.token,
       })
+      await ensureCustomerOrderForegroundFcmListener({ orderId: order.id })
 
       setCustomerPushTokenHash(result.tokenHash)
       setCustomerPushStatus('enabled')
@@ -2019,14 +2079,6 @@ const isDelivered = status === 'entregue'
             </div>
           </div>
     
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-[#111827] px-5 py-4 text-sm font-black text-white transition hover:bg-black"
-          >
-            <FiDownload />
-            Baixar recibo
-          </button>
         </div>
       </header>
 
@@ -2651,7 +2703,7 @@ const isDelivered = status === 'entregue'
           <button
             type="button"
             onClick={handlePrint}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-[#111827] px-5 py-4 text-sm font-black text-white transition hover:bg-black"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-[#111827] px-5 py-4 text-sm font-black text-white shadow-lg shadow-gray-900/10 transition hover:bg-black active:scale-[0.98]"
           >
             <FiDownload />
             Baixar recibo

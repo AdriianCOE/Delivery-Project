@@ -1,4 +1,4 @@
-import { deleteToken, getToken } from 'firebase/messaging'
+import { deleteToken, getToken, onMessage } from 'firebase/messaging'
 import {
   doc,
   getDoc,
@@ -14,6 +14,15 @@ import {
   getSupportedMessaging,
 } from '../services/firebase'
 import { httpsCallable } from 'firebase/functions'
+import { notificationPreferenceEnabled } from './notificationPreferences'
+
+let foregroundFcmUnsubscribe = null
+const foregroundFcmConfig = {
+  merchantEnabled: false,
+  merchantPreferences: null,
+  customerEnabled: false,
+  customerOrderIds: new Set(),
+}
 
 function hasNotificationApi() {
   return typeof window !== 'undefined' && 'Notification' in window
@@ -104,6 +113,125 @@ function getFcmErrorReason(error) {
   }
 
   return 'token-error'
+}
+
+function getOrderShortCode(orderId) {
+  return String(orderId || '').trim().slice(-4).toUpperCase() || '----'
+}
+
+function openNotificationTarget(url) {
+  if (typeof window === 'undefined') return
+  const targetUrl = String(url || '/dashboard/orders')
+  window.focus?.()
+  window.location.assign(targetUrl)
+}
+
+function isFocusedVisiblePage() {
+  if (typeof document === 'undefined') return false
+  return document.visibilityState === 'visible' && document.hasFocus?.() === true
+}
+
+function getFcmPayloadType(data = {}) {
+  const type = String(data.type || '').trim()
+  if (type === 'order_status_update') return 'order_status_update'
+  return 'new_order'
+}
+
+function getFcmNotificationUrl(data = {}, type = 'new_order') {
+  if (type === 'order_status_update') {
+    return data.url || data.trackingUrl || data.trackingPath || '/pedido'
+  }
+
+  return data.url || '/dashboard/orders'
+}
+
+function getFcmNotificationTag({ type, orderId, status }) {
+  if (type === 'order_status_update') {
+    return `pratoby-order-status-${orderId || 'unknown'}-${status || 'updated'}`
+  }
+
+  return `pratoby-new-order-${orderId || 'unknown'}`
+}
+
+function canShowForegroundBrowserNotification({ type, data, ignoreFocus = false, ignorePreferences = false }) {
+  if (getNotificationPermission() !== 'granted') {
+    return { allowed: false, reason: 'permission-not-granted' }
+  }
+
+  if (!ignoreFocus && isFocusedVisiblePage()) {
+    return { allowed: false, reason: 'focused-visible' }
+  }
+
+  if (type === 'new_order' && !ignorePreferences) {
+    if (!foregroundFcmConfig.merchantEnabled) {
+      return { allowed: false, reason: 'merchant-listener-disabled' }
+    }
+
+    if (
+      !notificationPreferenceEnabled(foregroundFcmConfig.merchantPreferences, 'channels', 'browser') ||
+      !notificationPreferenceEnabled(foregroundFcmConfig.merchantPreferences, 'events', 'newOrder')
+    ) {
+      return { allowed: false, reason: 'preference-disabled' }
+    }
+  }
+
+  if (type === 'order_status_update' && foregroundFcmConfig.customerEnabled) {
+    const orderId = String(data?.orderId || '').trim()
+    if (foregroundFcmConfig.customerOrderIds.size && !foregroundFcmConfig.customerOrderIds.has(orderId)) {
+      return { allowed: false, reason: 'order-not-registered' }
+    }
+  }
+
+  if (type === 'order_status_update' && !foregroundFcmConfig.customerEnabled) {
+    return { allowed: false, reason: 'customer-listener-disabled' }
+  }
+
+  return { allowed: true }
+}
+
+function showForegroundFcmBrowserNotification(payload, options = {}) {
+  const data = payload?.data || {}
+  const type = getFcmPayloadType(data)
+  const permission = canShowForegroundBrowserNotification({
+    type,
+    data,
+    ignoreFocus: options.ignoreFocus === true,
+    ignorePreferences: options.ignorePreferences === true,
+  })
+
+  if (!permission.allowed) {
+    return { shown: false, reason: permission.reason }
+  }
+
+  const orderId = data.orderId || ''
+  const orderNumber = `#${getOrderShortCode(orderId)}`
+  const title = type === 'order_status_update'
+    ? data.title || 'Pedido atualizado'
+    : 'Novo pedido recebido'
+  const body = type === 'order_status_update'
+    ? data.body || `Pedido ${orderNumber} foi atualizado.`
+    : `Pedido ${orderNumber} aguardando confirmacao.`
+
+  const notification = new Notification(title, {
+    body,
+    icon: '/android-chrome-512x512.png',
+    badge: '/favicon.png',
+    tag: getFcmNotificationTag({ type, orderId, status: data.status }),
+    renotify: true,
+    data: {
+      url: getFcmNotificationUrl(data, type),
+      type,
+      orderId,
+      status: data.status || '',
+    },
+  })
+
+  notification.onclick = () => {
+    notification.close()
+    openNotificationTarget(notification.data?.url)
+  }
+
+  return { shown: true }
 }
 
 async function clearMessagingPushSubscription(registration) {
@@ -282,6 +410,72 @@ export async function requestFcmPermissionAndToken() {
     token,
     tokenHash,
     reason: token ? 'token-created' : 'token-empty',
+  }
+}
+
+async function ensureForegroundFcmListener() {
+  if (foregroundFcmUnsubscribe) {
+    return { registered: true, alreadyRegistered: true }
+  }
+
+  const support = await isFcmSupported()
+  if (!support.supported || support.permission !== 'granted') {
+    return { registered: false, reason: support.reason || support.permission }
+  }
+
+  const messaging = await getSupportedMessaging()
+  if (!messaging) {
+    return { registered: false, reason: 'messaging-unavailable' }
+  }
+
+  foregroundFcmUnsubscribe = onMessage(messaging, (payload) => {
+    const data = payload?.data || {}
+    if (!['new_order', 'order_status_update'].includes(data.type || 'new_order')) return
+
+    try {
+      showForegroundFcmBrowserNotification(payload)
+    } catch (error) {
+      console.warn('[FCM] Nao foi possivel mostrar push em primeiro plano.', error)
+    }
+  })
+
+  return { registered: true, alreadyRegistered: false }
+}
+
+export async function ensureMerchantForegroundFcmListener(options = {}) {
+  foregroundFcmConfig.merchantEnabled = true
+
+  if (options.preferences) {
+    foregroundFcmConfig.merchantPreferences = options.preferences
+  }
+
+  return ensureForegroundFcmListener()
+}
+
+export async function ensureCustomerOrderForegroundFcmListener({ orderId } = {}) {
+  foregroundFcmConfig.customerEnabled = true
+
+  const normalizedOrderId = String(orderId || '').trim()
+  if (normalizedOrderId) {
+    foregroundFcmConfig.customerOrderIds.add(normalizedOrderId)
+  }
+
+  return ensureForegroundFcmListener()
+}
+
+export function showLocalMerchantPushTestNotification() {
+  // TODO: trocar por callable de loopback FCM quando houver rotina operacional de diagnostico de push.
+  const result = showForegroundFcmBrowserNotification({
+    data: {
+      type: 'new_order',
+      orderId: 'TEST',
+      url: '/dashboard/orders',
+    },
+  }, { ignoreFocus: true, ignorePreferences: true })
+
+  return {
+    ...result,
+    reason: result.shown ? 'test-shown' : result.reason,
   }
 }
 

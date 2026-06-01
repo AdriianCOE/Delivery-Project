@@ -232,8 +232,17 @@ const BILLING_BLOCKED_PUBLIC_STATUSES = new Set([
   'billing_pending_payment_method',
 ])
 const BILLING_PUBLICLY_READABLE_STATUSES = new Set(['trialing', 'active', 'past_due'])
+const PUBLIC_CALLABLE_CORS_ORIGINS = [
+  'https://pratoby.com',
+  'https://www.pratoby.com',
+  'https://borapedir-f529a.web.app',
+  'https://borapedir-f529a.firebaseapp.com',
+  /^http:\/\/localhost:\d+$/,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
+]
 const PUBLIC_CALLABLE_OPTIONS = {
   region: REGION,
+  cors: PUBLIC_CALLABLE_CORS_ORIGINS,
   timeoutSeconds: 30,
   memory: '256MiB',
   maxInstances: 10,

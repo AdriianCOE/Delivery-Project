@@ -3,7 +3,7 @@ const { onCall } = require('firebase-functions/v2/https')
 const MERCHANT_ORDER_STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
 const MERCHANT_ORDER_STATUSES = new Set(MERCHANT_ORDER_STATUS_FLOW)
 const MERCHANT_ORDER_FINAL_STATUSES = new Set(['entregue', 'cancelado'])
-const MERCHANT_ORDER_NOTIFY_STATUSES = new Set(['preparando', 'em_rota', 'entregue', 'cancelado'])
+const MERCHANT_ORDER_NOTIFY_STATUSES = new Set(['confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado'])
 const MERCHANT_ORDER_RATE_LIMIT_WINDOW_MS = 60 * 1000
 const MERCHANT_ORDER_RATE_LIMIT_MAX = 60
 
@@ -37,6 +37,7 @@ function normalizeMerchantOrderStatus(status) {
     pendente: 'pendente',
     aceito: 'confirmado',
     confirmado: 'confirmado',
+    confirmed: 'confirmado',
     em_preparo: 'preparando',
     preparo: 'preparando',
     preparando: 'preparando',
@@ -165,7 +166,7 @@ function shouldBlockMerchantPreparationUntilPayment(orderData) {
   const status = normalizeMerchantOrderStatus(orderData?.status)
   const paymentStatus = getOrderPaymentStatusId(orderData)
   return isManualPixOrder(orderData)
-    && status === 'pendente'
+    && ['pendente', 'confirmado'].includes(status)
     && !isOrderPaymentPaid(orderData)
     && ['pending', 'proof_sent', 'manual', ''].includes(paymentStatus)
 }
@@ -319,7 +320,7 @@ function buildMerchantPixPatch({ HttpsError, orderData, uid, now }) {
   }
 
   const currentStatus = normalizeMerchantOrderStatus(orderData?.status)
-  const shouldStartPreparing = currentStatus === 'pendente'
+  const shouldConfirmOrder = currentStatus === 'pendente'
   const method = getOrderPaymentMethodId(orderData) || 'pix_manual'
 
   return {
@@ -327,7 +328,7 @@ function buildMerchantPixPatch({ HttpsError, orderData, uid, now }) {
     statusUpdatedBy: uid,
     statusUpdatedAt: now,
     statusUpdatedFrom: currentStatus,
-    statusUpdatedTo: shouldStartPreparing ? 'preparando' : currentStatus,
+    statusUpdatedTo: shouldConfirmOrder ? 'confirmado' : currentStatus,
     'payment.method': method,
     'payment.status': 'paid',
     'payment.paidAt': now,
@@ -337,10 +338,10 @@ function buildMerchantPixPatch({ HttpsError, orderData, uid, now }) {
     paymentStatus: 'paid',
     paymentRequiresConfirmation: false,
     paidAt: now,
-    ...(shouldStartPreparing
+    ...(shouldConfirmOrder
       ? {
-          status: 'preparando',
-          preparingAt: now,
+          status: 'confirmado',
+          confirmedAt: now,
         }
       : {}),
   }

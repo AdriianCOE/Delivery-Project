@@ -10,9 +10,11 @@ import {
 } from '../../utils/browserNotifications'
 import {
   disableMerchantFcmToken,
+  ensureMerchantForegroundFcmListener,
   isFcmSupported,
   requestFcmPermissionAndToken,
   saveMerchantFcmToken,
+  showLocalMerchantPushTestNotification,
 } from '../../utils/fcmNotifications'
 import { formatNotificationTime } from '../../utils/notificationFormatters'
 import {
@@ -89,6 +91,33 @@ function getPushStatusLabel(status, loading) {
   return 'Desativado'
 }
 
+function playNotificationSoundPreview() {
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextCtor) return false
+
+  const context = new AudioContextCtor()
+  const sequence = [
+    { frequency: 784, start: 0, duration: 0.16 },
+    { frequency: 988, start: 0.18, duration: 0.2 },
+  ]
+
+  sequence.forEach(({ frequency, start, duration }) => {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.type = 'sine'
+    oscillator.frequency.value = frequency
+    const startsAt = context.currentTime + start
+    gain.gain.setValueAtTime(0.2, startsAt)
+    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration)
+    oscillator.start(startsAt)
+    oscillator.stop(startsAt + duration)
+  })
+
+  return true
+}
+
 export default function DashboardNotificationBell({ notificationState, storeId }) {
   const {
     notifications = [],
@@ -107,6 +136,8 @@ export default function DashboardNotificationBell({ notificationState, storeId }
   const [browserPermission, setBrowserPermission] = useState(() => getBrowserNotificationPermission())
   const [pushStatus, setPushStatus] = useState('disabled')
   const [pushStatusReason, setPushStatusReason] = useState('')
+  const [pushTestMessage, setPushTestMessage] = useState('')
+  const [soundTestMessage, setSoundTestMessage] = useState('')
   const [pushLoading, setPushLoading] = useState(false)
   const dropdownRef = useRef(null)
   const supportsBrowserNotifications = isBrowserNotificationsSupported()
@@ -143,6 +174,11 @@ export default function DashboardNotificationBell({ notificationState, storeId }
           const saved = localStorage.getItem(`pratoby:fcm-enabled:${storeId || 'none'}`)
           setPushStatus(saved === 'true' ? 'enabled' : 'disabled')
           setPushStatusReason(saved === 'true' ? 'token-saved' : 'permission-granted')
+          if (saved === 'true') {
+            ensureMerchantForegroundFcmListener({ preferences }).catch((error) => {
+              console.warn('[FCM] Nao foi possivel ativar listener foreground.', error)
+            })
+          }
         } catch {
           setPushStatus('disabled')
           setPushStatusReason('permission-granted')
@@ -160,6 +196,21 @@ export default function DashboardNotificationBell({ notificationState, storeId }
       mounted = false
     }
   }, [storeId])
+
+  useEffect(() => {
+    if (pushStatus !== 'enabled') return undefined
+
+    let mounted = true
+    ensureMerchantForegroundFcmListener({ preferences }).catch((error) => {
+      if (mounted) {
+        console.warn('[FCM] Nao foi possivel atualizar listener foreground.', error)
+      }
+    })
+
+    return () => {
+      mounted = false
+    }
+  }, [preferences, pushStatus])
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -240,6 +291,11 @@ export default function DashboardNotificationBell({ notificationState, storeId }
         console.warn('[FCM] Nao foi possivel salvar preferencia local.', storageError)
       }
 
+      await ensureMerchantForegroundFcmListener({ preferences })
+      const testResult = showLocalMerchantPushTestNotification()
+      setPushTestMessage(testResult.shown
+        ? 'Notificacao de teste enviada neste navegador.'
+        : 'Push ativado. O navegador nao exibiu o teste local.')
       setPushStatus('enabled')
       setPushStatusReason('token-saved')
     } catch (error) {
@@ -267,6 +323,25 @@ export default function DashboardNotificationBell({ notificationState, storeId }
 
       setPushStatus('disabled')
       setPushStatusReason('disabled-by-user')
+      setPushTestMessage('')
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  const handleSendPushTest = async () => {
+    if (pushLoading || pushStatus !== 'enabled') return
+
+    try {
+      setPushLoading(true)
+      await ensureMerchantForegroundFcmListener({ preferences })
+      const result = showLocalMerchantPushTestNotification()
+      setPushTestMessage(result.shown
+        ? 'Notificacao de teste enviada neste navegador.'
+        : 'Nao foi possivel exibir o teste. Confira a permissao do navegador.')
+    } catch (error) {
+      console.warn('[FCM] Falha ao exibir notificacao de teste.', error)
+      setPushTestMessage('Nao foi possivel exibir o teste neste navegador.')
     } finally {
       setPushLoading(false)
     }
@@ -288,6 +363,14 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     }
 
     setNotificationPreference(group, key, value)
+  }
+
+  const handleTestSound = () => {
+    setNotificationPreference('channels', 'sound', true)
+    const played = playNotificationSoundPreview()
+    setSoundTestMessage(played
+      ? 'Som de teste reproduzido neste dispositivo.'
+      : 'Este navegador nao liberou o som de teste.')
   }
 
   return (
@@ -399,6 +482,31 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     </div>
                   </div>
 
+                  <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-3 dark:border-orange-900/30 dark:bg-orange-950/15">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-xs font-black text-gray-900 dark:text-zinc-100">
+                          Som de novo pedido
+                        </span>
+                        <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-zinc-400">
+                          Teste o aviso sonoro sem precisar criar um pedido.
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleTestSound}
+                        className="inline-flex h-8 shrink-0 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition hover:bg-[#ea580c]"
+                      >
+                        Testar som
+                      </button>
+                    </div>
+                    {soundTestMessage && (
+                      <p className="mt-2 text-[10px] font-bold leading-4 text-orange-700 dark:text-orange-300">
+                        {soundTestMessage}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="rounded-2xl border border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                     <p className="text-[11px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">
                       Tipos de evento
@@ -492,14 +600,24 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                 </div>
 
                 {pushStatus === 'enabled' ? (
-                  <button
-                    type="button"
-                    onClick={handleDisablePushNotifications}
-                    disabled={pushLoading || !storeId}
-                    className="mt-3 inline-flex h-8 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  >
-                    Desativar push
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSendPushTest}
+                      disabled={pushLoading || !storeId}
+                      className="inline-flex h-8 items-center justify-center rounded-xl bg-emerald-600 px-3 text-[11px] font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Enviar teste
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisablePushNotifications}
+                      disabled={pushLoading || !storeId}
+                      className="inline-flex h-8 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Desativar push
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
@@ -509,6 +627,11 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                   >
                     Ativar notificacoes push
                   </button>
+                )}
+                {pushTestMessage && (
+                  <p className="mt-2 text-[10px] font-bold leading-4 text-emerald-700 dark:text-emerald-300">
+                    {pushTestMessage}
+                  </p>
                 )}
               </div>
 
@@ -595,6 +718,18 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                             {notification.label} · {formatNotificationTime(notification.createdAt)}
                           </p>
                         </Link>
+                        {notification.area === 'billing' && (
+                          <Link
+                            to="/dashboard/billing"
+                            onClick={() => {
+                              markAsRead(notification.id)
+                              setIsOpen(false)
+                            }}
+                            className="mt-2 inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-950/25 dark:text-orange-300"
+                          >
+                            Assinatura
+                          </Link>
+                        )}
                       </div>
 
                       {isUnread && (

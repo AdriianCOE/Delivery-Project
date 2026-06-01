@@ -32,9 +32,22 @@ function getOrderShortCode(orderId) {
   return String(orderId || '').trim().slice(-4).toUpperCase() || '----'
 }
 
-function getCustomerStatusPushContent(status, orderId) {
+function isDeliveryOrder(orderData) {
+  const type = String(
+    orderData?.orderType ||
+    orderData?.deliveryType ||
+    orderData?.fulfillmentType ||
+    orderData?.type ||
+    ''
+  ).toLowerCase().trim()
+
+  return !['pickup', 'retirada', 'takeout', 'balcao', 'local', 'dine_in', 'mesa'].includes(type)
+}
+
+function getCustomerStatusPushContent(status, orderId, orderData = null) {
   const orderNumber = `#${getOrderShortCode(orderId)}`
   const normalizedStatus = normalizeOrderStatus(status)
+  const deliveryOrder = isDeliveryOrder(orderData)
 
   const map = {
     confirmado: {
@@ -47,7 +60,9 @@ function getCustomerStatusPushContent(status, orderId) {
     },
     pronto: {
       title: 'Pedido pronto',
-      body: `Pedido ${orderNumber} pronto para retirada.`,
+      body: deliveryOrder
+        ? `Pedido ${orderNumber} pronto e aguardando saida para entrega.`
+        : `Pedido ${orderNumber} pronto para retirada.`,
     },
     em_rota: {
       title: 'Pedido saiu para entrega',
@@ -199,6 +214,10 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
     .get()
 
   if (tokenSnapshot.empty) {
+    logger.info('[fcm] No enabled merchant tokens for new order push.', {
+      storeId: normalizedStoreId,
+      orderId: normalizedOrderId,
+    })
     return { sent: 0, failed: 0, invalidated: 0 }
   }
 
@@ -207,6 +226,11 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
     .filter((entry) => typeof entry.data.token === 'string' && entry.data.token.trim())
 
   if (tokenDocs.length === 0) {
+    logger.warn('[fcm] Enabled merchant token docs without token payload.', {
+      storeId: normalizedStoreId,
+      orderId: normalizedOrderId,
+      docCount: tokenSnapshot.size,
+    })
     return { sent: 0, failed: 0, invalidated: 0 }
   }
 
@@ -302,7 +326,7 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
     return { sent: 0, failed: 0, invalidated: 0 }
   }
 
-  const content = getCustomerStatusPushContent(normalizedStatus, normalizedOrderId)
+  const content = getCustomerStatusPushContent(normalizedStatus, normalizedOrderId, currentOrderData)
   const response = await admin.messaging().sendEachForMulticast({
     tokens: tokenDocs.map((entry) => entry.data.token),
     data: {

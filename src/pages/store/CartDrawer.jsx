@@ -1589,7 +1589,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       .filter(([, value]) => value !== '' && value !== null && value !== undefined)
       .map(([neighborhood, value]) => ({
         neighborhood,
-        fee: normalizeMoney(value),
+        name: value?.name || neighborhood,
+        aliases: Array.isArray(value?.aliases) ? value.aliases : [],
+        fee: normalizeMoney(value?.fee ?? value, value?.feeCents),
       }))
       .sort((a, b) => a.neighborhood.localeCompare(b.neighborhood))
   }, [deliveryFees])
@@ -2152,9 +2154,10 @@ if (orderType === 'delivery') {
       />
 
       <motion.aside
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 34 }}
+        initial={{ x: '100%', opacity: 0.92 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: '100%', opacity: 0.92 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 38, mass: 0.9 }}
         className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl"
       >
         <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white px-4 py-4">
@@ -2284,8 +2287,13 @@ if (orderType === 'delivery') {
                       const extrasSummary = getItemOptionsSummary(item)
 
                       return (
-                        <div
+                        <motion.div
                           key={itemKey}
+                          layout
+                          initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                          whileTap={{ scale: 0.99 }}
                           role="button"
                           tabIndex={0}
                           onClick={() => setSelectedCartItem(item)}
@@ -2382,7 +2390,7 @@ if (orderType === 'delivery') {
                               Remover
                             </button>
                           </div>
-                        </div>
+                        </motion.div>
                       )
                     })}
 

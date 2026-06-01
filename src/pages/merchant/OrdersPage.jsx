@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
@@ -16,6 +16,7 @@ import {
 import {
   collection,
   doc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -161,6 +162,7 @@ const STATUS_META = {
 
 const STATUS_TABS = [
   { key: 'todos', label: 'Todos' },
+  { key: 'ativos', label: 'Ativos' },
   { key: 'pendente', label: 'Pendentes' },
   { key: 'confirmado', label: 'Confirmados' },
   { key: 'preparando', label: 'Preparando' },
@@ -172,6 +174,15 @@ const STATUS_TABS = [
 
 const STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
 const ACTIVE_STATUSES = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota']
+const DAY_MS = 24 * 60 * 60 * 1000
+const MAX_ALL_ORDERS = 250
+const DATE_FILTER_OPTIONS = [
+  { key: 'hoje', label: 'Hoje' },
+  { key: 'ontem', label: 'Ontem' },
+  { key: '7d', label: '7 dias' },
+  { key: '30d', label: '30 dias' },
+  { key: 'all', label: 'Ultimos 250' },
+]
 
 function uniqueArray(values) {
   return [...new Set(values.filter(Boolean))]
@@ -188,6 +199,8 @@ function normalizeStatus(status) {
     pendente: 'pendente',
 
     aceito: 'confirmado',
+    accepted: 'confirmado',
+    confirmed: 'confirmado',
     confirmado: 'confirmado',
     em_preparo: 'preparando',
     preparo: 'preparando',
@@ -247,6 +260,47 @@ function getOrderDate(order) {
   const date = new Date(createdAt)
 
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function startOfLocalDay(date = new Date()) {
+  const value = new Date(date)
+  value.setHours(0, 0, 0, 0)
+  return value
+}
+
+function getDateFilterRange(filter) {
+  const today = startOfLocalDay()
+
+  if (filter === 'ontem') {
+    const start = new Date(today.getTime() - DAY_MS)
+    return { start, end: today, limitCount: null }
+  }
+
+  if (filter === '7d') {
+    return { start: new Date(today.getTime() - 6 * DAY_MS), end: null, limitCount: null }
+  }
+
+  if (filter === '30d') {
+    return { start: new Date(today.getTime() - 29 * DAY_MS), end: null, limitCount: null }
+  }
+
+  if (filter === 'all') {
+    return { start: null, end: null, limitCount: MAX_ALL_ORDERS }
+  }
+
+  return { start: today, end: new Date(today.getTime() + DAY_MS), limitCount: null }
+}
+
+function isOrderInDateFilter(order, filter) {
+  const date = getOrderDate(order)
+  if (!date) return filter === 'all'
+
+  const { start, end } = getDateFilterRange(filter)
+
+  if (start && date < start) return false
+  if (end && date >= end) return false
+
+  return true
 }
 
 function formatDate(order) {
@@ -435,7 +489,7 @@ function isPixPaymentPending(order) {
 }
 
 function shouldBlockPreparationUntilPayment(order) {
-  return isPixPaymentPending(order) && normalizeStatus(order?.status) === 'pendente'
+  return isPixPaymentPending(order) && ['pendente', 'confirmado'].includes(normalizeStatus(order?.status))
 }
 
 function getPaymentProofUrl(order) {
@@ -920,7 +974,9 @@ function getStoreKeys(store) {
 function getStatusField(status) {
   const map = {
     pendente: 'pendingAt',
+    confirmado: 'confirmedAt',
     preparando: 'preparingAt',
+    pronto: 'readyAt',
     em_rota: 'outForDeliveryAt',
     entregue: 'deliveredAt',
     cancelado: 'canceledAt',
@@ -929,22 +985,38 @@ function getStatusField(status) {
   return map[normalizeStatus(status)]
 }
 
-function getNextStatus(status) {
+function isDeliveryOrder(order) {
+  const type = String(
+    order?.orderType ||
+    order?.deliveryType ||
+    order?.fulfillmentType ||
+    order?.type ||
+    ''
+  ).toLowerCase()
+
+  return !['pickup', 'retirada', 'takeout', 'balcao', 'local', 'dine_in', 'mesa'].includes(type)
+}
+
+function getNextStatus(status, order = null) {
   const current = normalizeStatus(status)
 
-  if (current === 'pendente') return 'preparando'
-  if (current === 'preparando') return 'em_rota'
+  if (current === 'pendente') return 'confirmado'
+  if (current === 'confirmado') return 'preparando'
+  if (current === 'preparando') return 'pronto'
+  if (current === 'pronto') return isDeliveryOrder(order) ? 'em_rota' : 'entregue'
   if (current === 'em_rota') return 'entregue'
 
   return null
 }
 
-function getNextStatusLabel(status) {
-  const next = getNextStatus(status)
+function getNextStatusLabel(status, order = null) {
+  const next = getNextStatus(status, order)
 
-  if (next === 'preparando') return 'Aceitar pedido'
+  if (next === 'confirmado') return 'Aceitar pedido'
+  if (next === 'preparando') return 'Iniciar preparo'
+  if (next === 'pronto') return 'Marcar pronto'
   if (next === 'em_rota') return 'Saiu para entrega'
-  if (next === 'entregue') return 'Marcar como entregue'
+  if (next === 'entregue') return isDeliveryOrder(order) ? 'Marcar entregue' : 'Finalizar pedido'
 
   return ''
 }
@@ -1680,11 +1752,87 @@ function PricingValidationAlert({ order }) {
   )
 }
 
+function OrderContactTimeline({ order }) {
+  const status = normalizeStatus(order.status)
+  const statusIndex = STATUS_FLOW.indexOf(status)
+  const whatsappSent = Boolean(
+    order?.customerLastNotifiedAt ||
+      order?.customerConfirmationMessageSentAt ||
+      order?.storeThankedCustomerAt ||
+      order?.customerLastNotifiedStatus
+  )
+  const steps = [
+    { key: 'pendente', label: 'Pendente', done: statusIndex >= STATUS_FLOW.indexOf('pendente'), current: status === 'pendente' },
+    { key: 'whatsapp', label: 'WhatsApp', done: whatsappSent, current: !whatsappSent && statusIndex >= STATUS_FLOW.indexOf('confirmado') },
+    { key: 'confirmado', label: 'Confirmado', done: statusIndex >= STATUS_FLOW.indexOf('confirmado'), current: status === 'confirmado' },
+    { key: 'preparando', label: 'Preparo', done: statusIndex >= STATUS_FLOW.indexOf('preparando'), current: status === 'preparando' },
+    { key: 'pronto', label: 'Pronto', done: statusIndex >= STATUS_FLOW.indexOf('pronto'), current: status === 'pronto' },
+    { key: 'em_rota', label: 'Em rota', done: statusIndex >= STATUS_FLOW.indexOf('em_rota'), current: status === 'em_rota' },
+    {
+      key: status === 'cancelado' ? 'cancelado' : 'entregue',
+      label: status === 'cancelado' ? 'Cancelado' : 'Entregue',
+      done: ['entregue', 'cancelado'].includes(status),
+      current: ['entregue', 'cancelado'].includes(status),
+    },
+  ]
 
-function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-gray-100 bg-white px-3 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">
+          Contato e status
+        </p>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+          whatsappSent
+            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+            : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+        }`}>
+          {whatsappSent ? 'Cliente avisado' : 'WhatsApp pendente'}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-7 gap-1.5">
+        {steps.map((step, index) => (
+          <div key={step.key} className="min-w-0">
+            <div className="flex items-center">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ring-1 ${
+                step.done
+                  ? status === 'cancelado' && step.key === 'cancelado'
+                    ? 'bg-red-500 text-white ring-red-500'
+                    : 'bg-emerald-500 text-white ring-emerald-500'
+                  : step.current
+                    ? 'bg-orange-500 text-white ring-orange-500'
+                    : 'bg-gray-100 text-gray-400 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-500 dark:ring-zinc-700'
+              }`}>
+                {step.done ? <FiCheckCircle size={12} /> : index + 1}
+              </span>
+              {index < steps.length - 1 && (
+                <span className={`h-0.5 min-w-0 flex-1 ${
+                  step.done ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-zinc-800'
+                }`} />
+              )}
+            </div>
+            <p className={`mt-1 truncate text-[9px] font-black ${
+              step.current
+                ? 'text-orange-600 dark:text-orange-300'
+                : step.done
+                  ? 'text-emerald-700 dark:text-emerald-300'
+                  : 'text-gray-400 dark:text-zinc-500'
+            }`}>
+              {step.label}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+
+function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
   const status = normalizeStatus(order.status)
   const meta = STATUS_META[status] || STATUS_META.pendente
-  const nextStatus = getNextStatus(status)
+  const nextStatus = getNextStatus(status, order)
   const address = getAddress(order)
   const late = isLatePending(order)
   const promotionSavings = getOrderPromotionSavings(order)
@@ -1707,13 +1855,13 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-[1.6rem] border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl ${
+      className={`group relative overflow-hidden rounded-[1.6rem] border p-4 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl ${
         late && !isFinalStatus
           ? 'border-red-300 bg-red-50/90 shadow-red-100/80 ring-2 ring-red-200 dark:border-red-500/35 dark:bg-red-950/20 dark:shadow-red-950/20 dark:ring-red-500/20'
           : isFinalStatus
             ? 'border-gray-100 bg-white/95 hover:shadow-gray-200/60 dark:border-white/10 dark:bg-zinc-900/80 dark:ring-1 dark:ring-white/[0.03] dark:hover:border-white/15'
             : 'border-gray-100 bg-white hover:shadow-gray-200/60 dark:border-white/10 dark:bg-zinc-900/90 dark:ring-1 dark:ring-white/[0.03] dark:hover:border-white/15 dark:hover:shadow-black/30'
-      }`}
+      } ${isFinalStatus ? 'opacity-75 hover:opacity-100' : ''} ${isNew ? 'animate-pulse' : ''} ${isLatestNew ? 'ring-2 ring-orange-400 ring-offset-2 ring-offset-gray-50 dark:ring-orange-500 dark:ring-offset-zinc-950' : ''}`}
     >
       {/* Status color bar */}
       <div className={`absolute inset-y-0 left-0 w-1 ${late && !isFinalStatus ? 'bg-red-500' : meta.dotClass}`} />
@@ -1841,7 +1989,7 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
                 ? 'Atualizando...'
                 : updatingStatus
                   ? 'Aguarde...'
-                  : getNextStatusLabel(status)}
+                  : getNextStatusLabel(status, order)}
             </button>
           )}
 
@@ -1976,7 +2124,7 @@ function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, 
               className="col-span-3 flex h-10 items-center justify-center gap-1.5 rounded-xl bg-orange-500 text-xs font-black text-white shadow-sm shadow-orange-500/20 transition active:scale-95"
             >
               <FiZap size={13} />
-              {isUpdatingThisOrder ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status)}
+              {isUpdatingThisOrder ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
             </button>
           )}
 
@@ -2239,7 +2387,7 @@ function OrderModal({
   const meta = STATUS_META[status] || STATUS_META.pendente
   const address = getAddress(order)
   const items = getOrderItems(order)
-  const nextStatus = getNextStatus(status)
+  const nextStatus = getNextStatus(status, order)
   const changeForLabel = getChangeForLabel(order)
 
   const pixPending = shouldBlockPreparationUntilPayment(order)
@@ -2362,6 +2510,14 @@ function OrderModal({
             </div>
             {/* Right: action buttons */}
             <div className="flex items-center gap-2">
+              {canOpenWhatsApp && (
+                <button
+                  onClick={() => onOpenWhatsApp(order)}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-green-700 disabled:opacity-60"
+                >
+                  <FiMessageCircle size={16}/> WhatsApp
+                </button>
+              )}
               {pixPending ? (
                 <button onClick={() => onConfirmPixPayment(order)} disabled={Boolean(updatingStatus)}
                   className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-green-700 disabled:opacity-60">
@@ -2370,7 +2526,7 @@ function OrderModal({
               ) : nextStatus ? (
                 <button onClick={() => onUpdateStatus(order, nextStatus)} disabled={Boolean(updatingStatus)}
                   className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:opacity-60 animate-pulse-slow">
-                  <FiZap size={16}/> {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status)}
+                  <FiZap size={16}/> {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
                 </button>
               ) : null}
               <button onClick={() => printComanda(order, store)}
@@ -2385,6 +2541,7 @@ function OrderModal({
             </div>
           </div>
           <PricingValidationAlert order={order} />
+          <OrderContactTimeline order={order} />
           {showCustomerThanksAction && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
               <div>
@@ -2679,6 +2836,11 @@ export default function OrdersPage() {
   const [updatingStatus, setUpdatingStatus] = useState('')
   const [storeActionLoading, setStoreActionLoading] = useState(false)
   const [toast, setToast] = useState(null)
+  const [newOrderIds, setNewOrderIds] = useState(() => new Set())
+  const [latestNewOrderId, setLatestNewOrderId] = useState('')
+  const seenOrderIdsRef = useRef(new Set())
+  const firstOrdersSnapshotRef = useRef(true)
+  const newOrderTimersRef = useRef({})
 
   const selectedStore = useMemo(() => {
     if (!stores.length) return null
@@ -2939,21 +3101,21 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     
     if (shouldWarnOrderAcceptance(order)) {
       const confirmedReview = window.confirm(
-        'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar o Pix e enviar para preparo mesmo assim?'
+        'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar o Pix e aceitar o pedido mesmo assim?'
       )
     
       if (!confirmedReview) return
     }
 
     const confirmed = window.confirm(
-      'Confirmar pagamento Pix e enviar o pedido para preparo?'
+      'Confirmar pagamento Pix e aceitar o pedido?'
     )
 
     if (!confirmed) return
 
     const now = Timestamp.now()
     const currentStatus = normalizeStatus(order.status)
-    const shouldStartPreparing = currentStatus === 'pendente'
+    const shouldConfirmOrder = currentStatus === 'pendente'
 
     try {
       setUpdatingStatus(order.id)
@@ -2961,7 +3123,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       const updateMerchantOrder = httpsCallable(functions, 'updateMerchantOrder')
       const nextOrder = {
         ...order,
-        status: shouldStartPreparing ? 'preparando' : order.status,
+        status: shouldConfirmOrder ? 'confirmado' : order.status,
         payment: {
           ...(order.payment || {}),
           method: getPaymentMethodId(order) || 'pix_manual',
@@ -2983,22 +3145,16 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
       showToast(
         'success',
-        shouldStartPreparing
-          ? 'Pagamento confirmado e pedido enviado para preparo.'
+        shouldConfirmOrder
+          ? 'Pagamento confirmado e pedido aceito.'
           : 'Pagamento Pix confirmado.'
       )
 
-      if (shouldStartPreparing) {
-        setTimeout(() => {
-          printComanda(nextOrder, selectedStore)
-        }, 500)
-      }
-
       const phone = normalizeBrazilianPhoneForWhatsApp(getCustomerPhone(order))
 
-      if (phone && shouldStartPreparing) {
+      if (phone && shouldConfirmOrder) {
         const shouldNotify = window.confirm(
-          'Deseja enviar a confirmação completa do pedido para o cliente?'
+          'Deseja enviar a confirmação do pedido para o cliente?'
         )
 
         if (shouldNotify) {
@@ -3014,7 +3170,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             await updateMerchantOrder({
               orderId: order.id,
               action: 'markCustomerNotified',
-              status: 'preparando',
+              status: 'confirmado',
             })
           } catch (notificationError) {
             console.warn('Pix confirmado, mas o aviso ao cliente não foi marcado:', notificationError)
@@ -3265,6 +3421,10 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     const unsubscribers = []
     let receivedAnySnapshot = false
     let errorShown = false
+    firstOrdersSnapshotRef.current = true
+    seenOrderIdsRef.current = new Set()
+    setNewOrderIds(new Set())
+    setLatestNewOrderId('')
 
     const updateOrders = () => {
       const nextOrders = Array.from(ordersMap.values()).sort((a, b) => {
@@ -3280,14 +3440,42 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
     const handleSnapshot = (snapshot) => {
       receivedAnySnapshot = true
+      const docs = snapshot.docs.map((orderDoc) => ({
+        ...orderDoc.data(),
+        id: orderDoc.id,
+        firestoreId: orderDoc.id,
+      }))
+      const incoming = firstOrdersSnapshotRef.current
+        ? []
+        : docs.filter((order) => !seenOrderIdsRef.current.has(order.id))
 
-      snapshot.docs.forEach((orderDoc) => {
-        ordersMap.set(orderDoc.id, {
-          ...orderDoc.data(),
-          id: orderDoc.id,
-          firestoreId: orderDoc.id,
-        })
+      docs.forEach((order) => {
+        ordersMap.set(order.id, order)
       })
+      firstOrdersSnapshotRef.current = false
+      seenOrderIdsRef.current = new Set(docs.map((order) => order.id))
+
+      if (incoming.length) {
+        const newestIncoming = [...incoming].sort((a, b) => {
+          const dateA = getOrderDate(a)?.getTime() || 0
+          const dateB = getOrderDate(b)?.getTime() || 0
+          return dateB - dateA
+        })[0]
+
+        setLatestNewOrderId(newestIncoming.id)
+        setNewOrderIds((current) => new Set([...current, ...incoming.map((order) => order.id)]))
+
+        incoming.forEach((order) => {
+          clearTimeout(newOrderTimersRef.current[order.id])
+          newOrderTimersRef.current[order.id] = window.setTimeout(() => {
+            setNewOrderIds((current) => {
+              const next = new Set(current)
+              next.delete(order.id)
+              return next
+            })
+          }, 9000)
+        })
+      }
 
       updateOrders()
     }
@@ -3309,7 +3497,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       }
     }
 
-    const cutoffDate = Timestamp.fromDate(new Date(Date.now() - 31 * 86400000))
+    const dateRange = getDateFilterRange(dateFilter)
 
     // Simplifica a busca para usar apenas o docId principal.
     // Garante que a regra de segurança passe tranquilamente sem analisar slugs.
@@ -3329,24 +3517,41 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     }
 
     storeKeySet.forEach((key) => {
+      const constraints = [
+        collection(db, 'orders'),
+        where('storeId', '==', key),
+      ]
+
+      if (dateRange.start) {
+        constraints.push(where('createdAt', '>=', Timestamp.fromDate(dateRange.start)))
+      }
+
+      if (dateRange.end) {
+        constraints.push(where('createdAt', '<', Timestamp.fromDate(dateRange.end)))
+      }
+
+      constraints.push(orderBy('createdAt', 'desc'))
+
+      if (dateRange.limitCount) {
+        constraints.push(limit(dateRange.limitCount))
+      }
+
       subscribeOrders(
-        query(
-          collection(db, 'orders'),
-          where('storeId', '==', key),
-          where('createdAt', '>=', cutoffDate),
-          orderBy('createdAt', 'desc')
-        )
+        query(...constraints)
       )
     })
 
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe())
+      Object.values(newOrderTimersRef.current).forEach((timer) => clearTimeout(timer))
+      newOrderTimersRef.current = {}
     }
-  }, [authLoading, canReadOrders, selectedStore, showToast])
+  }, [authLoading, canReadOrders, dateFilter, selectedStore, showToast])
 
   const statusCounts = useMemo(() => {
     const counts = {
       todos: orders.length,
+      ativos: 0,
       pendente: 0,
       preparando: 0,
       pronto: 0,
@@ -3357,6 +3562,10 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
     orders.forEach((order) => {
       const status = normalizeStatus(order.status)
+
+      if (ACTIVE_STATUSES.includes(status)) {
+        counts.ativos += 1
+      }
 
       if (counts[status] !== undefined) {
         counts[status] += 1
@@ -3410,7 +3619,13 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     return orders.filter((order) => {
       const status = normalizeStatus(order.status)
 
-      if (statusFilter !== 'todos' && status !== statusFilter) {
+      if (statusFilter === 'ativos') {
+        if (!ACTIVE_STATUSES.includes(status)) return false
+      } else if (statusFilter !== 'todos' && status !== statusFilter) {
+        return false
+      }
+
+      if (!isOrderInDateFilter(order, dateFilter)) {
         return false
       }
 
@@ -3436,7 +3651,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
       return searchableText.includes(term)
     })
-  }, [orders, search, statusFilter])
+  }, [dateFilter, orders, search, statusFilter])
 
   return (
     <main className="min-h-full">
@@ -3614,7 +3829,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   {STATUS_TABS.map((tab) => {
-                    const meta = STATUS_META[tab.key]
+                    const meta = tab.key === 'ativos'
+                      ? { icon: FiZap, dotClass: 'bg-orange-500' }
+                      : STATUS_META[tab.key]
                     const Icon = meta?.icon
                     const isSelected = statusFilter === tab.key
                     const hasItems = (statusCounts[tab.key] || 0) > 0
@@ -3674,12 +3891,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                 </div>
 
                 <div className="flex shrink-0 items-center overflow-x-auto rounded-[1.5rem] border border-gray-100 bg-white p-1.5 shadow-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] dark:border-zinc-800 dark:bg-zinc-900">
-                  {[
-                    { key: 'hoje', label: 'Hoje' },
-                    { key: '7d', label: '7 dias' },
-                    { key: '30d', label: '30 dias' },
-                    { key: 'all', label: 'Todo período' },
-                  ].map((filter) => (
+                  {DATE_FILTER_OPTIONS.map((filter) => (
                     <button
                       key={filter.key}
                       onClick={() => setDateFilter(filter.key)}
@@ -3733,6 +3945,8 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     onOpenWhatsApp={handleOpenWhatsApp}
                     onCopyOrder={handleCopyOrder}
                     updatingStatus={updatingStatus}
+                    isNew={newOrderIds.has(order.id)}
+                    isLatestNew={latestNewOrderId === order.id}
                   />
                 ))
               )}

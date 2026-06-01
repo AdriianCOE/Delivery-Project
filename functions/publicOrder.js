@@ -86,6 +86,24 @@ function formatCep(value) {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`
 }
 
+function getDeliveryNeighborhoodAliases(name, value) {
+  const aliases = [name]
+
+  if (value && typeof value === 'object') {
+    aliases.push(value.name, value.neighborhood)
+    if (Array.isArray(value.aliases)) aliases.push(...value.aliases)
+  }
+
+  return uniqueArray(aliases)
+}
+
+function matchesNeighborhoodAlias(item, neighborhood) {
+  const normalizedNeighborhood = normalizeForMatch(neighborhood)
+  if (!normalizedNeighborhood) return false
+
+  return (item.aliases || []).some((alias) => normalizeForMatch(alias) === normalizedNeighborhood)
+}
+
 function getPriceCents(data) {
   if (!data) return 0
   if (hasValue(data.priceCents)) return toCents(data.priceCents)
@@ -899,7 +917,7 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
     .filter(([, value]) => value !== '' && value !== null && value !== undefined)
     .map(([name, value]) => ({
       name,
-      normalized: normalizeForMatch(name),
+      aliases: getDeliveryNeighborhoodAliases(name, value),
       feeCents: hasValue(value?.feeCents)
         ? toCents(value.feeCents)
         : hasValue(value?.fee)
@@ -908,12 +926,17 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
     }))
 
   if (activeNeighborhoods.length > 0) {
-    const match = activeNeighborhoods.find((item) => item.normalized === normalizeForMatch(cleanNeighborhood))
+    const match = activeNeighborhoods.find((item) => matchesNeighborhoodAlias(item, cleanNeighborhood))
     if (!match) {
       const availableNeighborhoods = activeNeighborhoods.map((item) => item.name).join(', ')
       fail('failed-precondition', `A loja entrega apenas em: ${availableNeighborhoods}.`)
     }
-    return { deliveryType: 'delivery', neighborhood: match.name, deliveryFeeCents: Math.max(0, match.feeCents) }
+    return {
+      deliveryType: 'delivery',
+      neighborhood: match.name,
+      neighborhoodAliases: match.aliases,
+      deliveryFeeCents: Math.max(0, match.feeCents),
+    }
   }
 
   if (!cleanNeighborhood) fail('invalid-argument', 'Bairro obrigatorio para entrega.')
@@ -921,6 +944,7 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
   return {
     deliveryType: 'delivery',
     neighborhood: cleanNeighborhood,
+    neighborhoodAliases: [cleanNeighborhood],
     deliveryFeeCents: getPriceCents({ price: store?.deliveryFee, priceCents: store?.deliveryFeeCents }),
   }
 }
@@ -1145,6 +1169,34 @@ function buildDeliveryAddress(input, deliveryType, neighborhood) {
   }
 }
 
+function assertDeliveryAddressMatchesCepNeighborhood(delivery, deliveryAddress) {
+  if (delivery?.deliveryType !== 'delivery' || !deliveryAddress) return
+
+  const cep = onlyDigits(deliveryAddress.cep)
+  const cepNeighborhood = sanitizeText(deliveryAddress.cepNeighborhood, 120)
+
+  // TODO(server-side ViaCEP): validate CEP directly in Cloud Functions before creating the order.
+  // Until then, reject mismatches when the client provides the ViaCEP neighborhood and always
+  // recalculate the delivery fee from the store delivery table.
+  if (deliveryAddress.cepValidated && cep && !cepNeighborhood) {
+    fail('invalid-argument', 'Nao foi possivel confirmar o bairro do CEP. Busque o CEP novamente ou selecione o bairro manualmente.')
+  }
+
+  if (!cepNeighborhood) return
+
+  const aliases = uniqueArray([
+    delivery.neighborhood,
+    ...(Array.isArray(delivery.neighborhoodAliases) ? delivery.neighborhoodAliases : []),
+  ])
+  const cepMatchesSelectedNeighborhood = aliases.some((alias) => {
+    return normalizeForMatch(alias) === normalizeForMatch(cepNeighborhood)
+  })
+
+  if (!cepMatchesSelectedNeighborhood) {
+    fail('failed-precondition', `O bairro do CEP (${cepNeighborhood}) nao corresponde ao bairro selecionado para entrega.`)
+  }
+}
+
 function createPublicOrderHandler({
   db,
   admin,
@@ -1221,6 +1273,7 @@ function createPublicOrderHandler({
         neighborhood: input.neighborhood || input.bairro || input.address?.neighborhood,
       })
       const deliveryAddress = buildDeliveryAddress(input, delivery.deliveryType, delivery.neighborhood)
+      assertDeliveryAddressMatchesCepNeighborhood(delivery, deliveryAddress)
       const trackingToken = crypto.randomBytes(16).toString('hex')
       const orderRef = db.collection('orders').doc(trackingToken)
       const couponCode = sanitizeText(input.couponCode || input.coupon?.code, 80).toUpperCase()
