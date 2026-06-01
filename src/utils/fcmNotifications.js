@@ -79,6 +79,60 @@ function waitForServiceWorkerActivation(worker) {
   })
 }
 
+function getFcmErrorReason(error) {
+  const message = String(error?.message || error?.name || error || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+
+  if (code.includes('permission') || message.includes('permission')) {
+    return 'permission-denied'
+  }
+
+  if (
+    error?.name === 'AbortError' ||
+    message.includes('push service') ||
+    message.includes('registration failed')
+  ) {
+    return 'push-service-error'
+  }
+
+  if (message.includes('vapid')) {
+    return 'invalid-vapid-key'
+  }
+
+  if (message.includes('service worker')) {
+    return 'service-worker-error'
+  }
+
+  return 'token-error'
+}
+
+async function clearMessagingPushSubscription(registration) {
+  try {
+    const subscription = await registration?.pushManager?.getSubscription?.()
+    if (subscription) await subscription.unsubscribe()
+  } catch (error) {
+    console.warn('[FCM] Nao foi possivel limpar push subscription antiga.', error)
+  }
+}
+
+async function resetMessagingServiceWorker() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(registrations.map(async (registration) => {
+      const scriptUrl = registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL || ''
+
+      if (!scriptUrl.includes('/firebase-messaging-sw.js')) return
+
+      await clearMessagingPushSubscription(registration)
+      await registration.unregister()
+    }))
+  } catch (error) {
+    console.warn('[FCM] Nao foi possivel reiniciar service worker FCM.', error)
+  }
+}
+
 async function registerMessagingServiceWorker() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     return null
@@ -88,6 +142,8 @@ async function registerMessagingServiceWorker() {
     scope: '/',
   })
 
+  registration.update().catch(() => {})
+
   if (!registration.active) {
     await waitForServiceWorkerActivation(registration.installing || registration.waiting)
   }
@@ -95,6 +151,31 @@ async function registerMessagingServiceWorker() {
   return registration.active
     ? registration
     : navigator.serviceWorker.ready
+}
+
+async function getFcmTokenWithRecovery(messaging, vapidKey) {
+  const serviceWorkerRegistration = await registerMessagingServiceWorker()
+
+  try {
+    return await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration,
+    })
+  } catch (error) {
+    if (getFcmErrorReason(error) !== 'push-service-error') {
+      throw error
+    }
+
+    console.warn('[FCM] Falha no push service. Limpando subscription antiga e tentando novamente.', error)
+    await clearMessagingPushSubscription(serviceWorkerRegistration)
+    await resetMessagingServiceWorker()
+
+    const freshRegistration = await registerMessagingServiceWorker()
+    return getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration: freshRegistration,
+    })
+  }
 }
 
 function getPlatform() {
@@ -174,11 +255,25 @@ export async function requestFcmPermissionAndToken() {
   }
 
   const messaging = await getSupportedMessaging()
-  const serviceWorkerRegistration = await registerMessagingServiceWorker()
-  const token = await getToken(messaging, {
-    vapidKey,
-    serviceWorkerRegistration,
-  })
+  let token = ''
+
+  try {
+    token = await getFcmTokenWithRecovery(messaging, vapidKey)
+  } catch (error) {
+    const reason = getFcmErrorReason(error)
+
+    console.error('[FCM] Erro ao obter token push.', error)
+
+    return {
+      supported: true,
+      permission,
+      token: '',
+      tokenHash: '',
+      reason,
+      errorMessage: String(error?.message || error?.name || error || ''),
+    }
+  }
+
   const tokenHash = await getMerchantTokenHash(token)
 
   return {

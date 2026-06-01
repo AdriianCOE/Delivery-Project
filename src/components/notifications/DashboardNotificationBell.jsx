@@ -83,6 +83,9 @@ function getPushStatusLabel(status, loading) {
   if (status === 'denied') return 'Permissao negada'
   if (status === 'unsupported') return 'Sem suporte'
   if (status === 'missing-vapid-key') return 'VAPID ausente'
+  if (status === 'push-service-error') return 'Erro no push'
+  if (status === 'invalid-vapid-key') return 'VAPID invalida'
+  if (status === 'service-worker-error') return 'Erro no service worker'
   return 'Desativado'
 }
 
@@ -215,7 +218,11 @@ export default function DashboardNotificationBell({ notificationState, storeId }
       }
 
       if (!result.token || !result.tokenHash) {
-        setPushStatus('disabled')
+        setPushStatus([
+          'push-service-error',
+          'invalid-vapid-key',
+          'service-worker-error',
+        ].includes(result.reason) ? result.reason : 'disabled')
         setPushStatusReason(result.reason || 'token-empty')
         return
       }
@@ -461,11 +468,21 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                         Configure VITE_FIREBASE_MESSAGING_VAPID_KEY.
                       </span>
                     )}
+                    {pushStatusReason === 'push-service-error' && (
+                      <span className="mt-1 block text-[10px] font-bold text-amber-600 dark:text-amber-300">
+                        O navegador falhou ao registrar no servico push. Tente outro perfil/navegador ou confira bloqueios de push.
+                      </span>
+                    )}
+                    {pushStatusReason === 'invalid-vapid-key' && (
+                      <span className="mt-1 block text-[10px] font-bold text-amber-600 dark:text-amber-300">
+                        A chave VAPID publicada nao foi aceita pelo navegador.
+                      </span>
+                    )}
                   </span>
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${
                     pushStatus === 'enabled'
                       ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
-                      : pushStatus === 'denied' || pushStatus === 'unsupported' || pushStatus === 'missing-vapid-key'
+                      : pushStatus === 'denied' || pushStatus === 'unsupported' || pushStatus === 'missing-vapid-key' || pushStatus === 'push-service-error' || pushStatus === 'invalid-vapid-key' || pushStatus === 'service-worker-error'
                         ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
                         : 'bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-300'
                   }`}
