@@ -454,11 +454,27 @@ function validPublicOrderCreate(orderId) {
       allow delete: if isAdmin();
 
       match /notificationTokens/{tokenId} {
-        allow get: if isAdmin() || (signedInNonAnonymous() && resource.data.uid == request.auth.uid && canManageStoreId(storeId));
+        allow get: if isAdmin()
+          || (
+            signedInNonAnonymous()
+            && canManageStoreId(storeId)
+            && tokenId is string
+            && tokenId.size() == 64
+          );
+
         allow list: if false;
+
         allow create: if validNotificationTokenCreate(storeId, tokenId);
+
         allow update: if validNotificationTokenUpdate(storeId, tokenId);
-        allow delete: if isAdmin() || (signedInNonAnonymous() && resource.data.uid == request.auth.uid && canManageStoreId(storeId));
+
+        allow delete: if isAdmin()
+          || (
+            signedInNonAnonymous()
+            && canManageStoreId(storeId)
+            && resource.data.uid == request.auth.uid
+            && resource.data.storeId == storeId
+          );
       }
     }
 
