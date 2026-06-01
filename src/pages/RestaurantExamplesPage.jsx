@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import SEO from '../components/seo/SEO'
 import {
   FiArrowRight,
   FiCheck,
@@ -256,7 +257,14 @@ export default function RestaurantExamplesPage() {
   const location = useLocation()
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f9fafb] pt-[76px] text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased">
+    <>
+      <SEO
+        title="Exemplos de cardápio digital | PratoBy"
+        description="Veja modelos de cardápio digital para pizzaria, hamburgueria, açaiteria, japonês e lojas de delivery no PratoBy."
+        path="/exemplos"
+      />
+
+      <main className="min-h-screen overflow-x-hidden bg-[#f9fafb] pt-[76px] text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased">
       
       {/* NAVBAR PADRONIZADO */}
       <nav className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/90 shadow-sm backdrop-blur-xl">
@@ -528,7 +536,8 @@ export default function RestaurantExamplesPage() {
           </div>
         </div>
       </footer>
-    </main>
+      </main>
+    </>
   )
 }
 
