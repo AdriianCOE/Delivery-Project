@@ -126,7 +126,7 @@ function getUserAgent(value) {
   return String(value || '').trim().slice(0, 600)
 }
 
-async function registerCustomerOrderPushToken({ db, admin, HttpsError, orderId, trackingToken, token, platform, userAgent }) {
+async function registerCustomerOrderPushToken({ db, admin, HttpsError, logger, orderId, trackingToken, token, platform, userAgent }) {
   const safeToken = sanitizeFcmToken(token, HttpsError)
   const orderRef = db.collection('orders').doc(orderId)
   const orderSnapshot = await orderRef.get()
@@ -156,10 +156,16 @@ async function registerCustomerOrderPushToken({ db, admin, HttpsError, orderId, 
     lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true })
 
+  logger?.info?.('[fcm] Customer order push token registered.', {
+    orderId,
+    hasTrackingToken: Boolean(String(trackingToken || '').trim()),
+    tokenHash,
+  })
+
   return { ok: true, orderId, tokenHash }
 }
 
-async function disableCustomerOrderPushToken({ db, admin, HttpsError, orderId, trackingToken, token, tokenHash }) {
+async function disableCustomerOrderPushToken({ db, admin, HttpsError, logger, orderId, trackingToken, token, tokenHash }) {
   const orderRef = db.collection('orders').doc(orderId)
   const orderSnapshot = await orderRef.get()
 
@@ -189,6 +195,12 @@ async function disableCustomerOrderPushToken({ db, admin, HttpsError, orderId, t
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true })
+
+  logger?.info?.('[fcm] Customer order push token disabled.', {
+    orderId,
+    hasTrackingToken: Boolean(String(trackingToken || '').trim()),
+    tokenHash: resolvedTokenHash,
+  })
 
   return { ok: true, orderId, tokenHash: resolvedTokenHash }
 }
@@ -304,9 +316,17 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
 
   if (!currentOrderData) {
     const orderSnapshot = await orderRef.get()
-    if (!orderSnapshot.exists) return { sent: 0, failed: 0, invalidated: 0 }
+    if (!orderSnapshot.exists) {
+      logger.warn('[fcm] Customer status push skipped; order not found.', {
+        orderId: normalizedOrderId,
+        status: normalizedStatus,
+      })
+      return { sent: 0, failed: 0, invalidated: 0, tokenDocs: 0 }
+    }
     currentOrderData = orderSnapshot.data() || {}
   }
+
+  const hasTrackingToken = Boolean(String(currentOrderData?.trackingToken || '').trim())
 
   const tokenSnapshot = await orderRef
     .collection('customerNotificationTokens')
@@ -315,7 +335,13 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
     .get()
 
   if (tokenSnapshot.empty) {
-    return { sent: 0, failed: 0, invalidated: 0 }
+    logger.info('[fcm] No enabled customer tokens for status push.', {
+      orderId: normalizedOrderId,
+      status: normalizedStatus,
+      hasTrackingToken,
+      tokenDocs: 0,
+    })
+    return { sent: 0, failed: 0, invalidated: 0, tokenDocs: 0 }
   }
 
   const tokenDocs = tokenSnapshot.docs
@@ -323,7 +349,13 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
     .filter((entry) => typeof entry.data.token === 'string' && entry.data.token.trim())
 
   if (tokenDocs.length === 0) {
-    return { sent: 0, failed: 0, invalidated: 0 }
+    logger.warn('[fcm] Enabled customer token docs without token payload.', {
+      orderId: normalizedOrderId,
+      status: normalizedStatus,
+      hasTrackingToken,
+      tokenDocs: tokenSnapshot.size,
+    })
+    return { sent: 0, failed: 0, invalidated: 0, tokenDocs: tokenSnapshot.size }
   }
 
   const content = getCustomerStatusPushContent(normalizedStatus, normalizedOrderId, currentOrderData)
@@ -371,6 +403,9 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
   logger.info('[fcm] Customer order status push sent.', {
     orderId: normalizedOrderId,
     status: normalizedStatus,
+    hasTrackingToken,
+    tokenDocs: tokenSnapshot.size,
+    tokensWithPayload: tokenDocs.length,
     successCount: response.successCount,
     failureCount: response.failureCount,
     invalidated,
@@ -380,6 +415,7 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
     sent: response.successCount,
     failed: response.failureCount,
     invalidated,
+    tokenDocs: tokenSnapshot.size,
   }
 }
 

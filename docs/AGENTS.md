@@ -457,7 +457,7 @@ Se ocorrer quota CPU em `southamerica-east1`, reduzir lote.
 Não implementar sem aprovação:
 
 - WhatsApp Cloud API.
-- FCM/Web Push.
+- Reescrever ou trocar o fluxo FCM/Web Push existente sem necessidade comprovada.
 - publicDisplays sem PII.
 - Next.js/SSR.
 - TypeScript total.
@@ -467,6 +467,25 @@ Não implementar sem aprovação:
 - Cardápio por dia/horário.
 - Equipe/permissões complexas.
 - Reorganização completa de arquitetura, rotas ou design system.
+
+### FCM/Web Push existente
+
+O FCM/Web Push ja existe no MVP. Nao remover nem desativar sem aprovacao.
+
+Responsabilidades atuais:
+
+- `src/utils/fcmNotifications.js`: tokens, listener foreground e preferencias.
+- `public/firebase-messaging-sw.js`: background push e click de notificacao.
+- `functions/fcmNotifications.js`: envio e registro seguro via Functions.
+- `functions/publicOrder.js`: push de novo pedido para lojista.
+- `functions/merchantOrder.js`: push de status apos mutacao real do pedido.
+
+Regras:
+
+- Nao enviar PII no payload.
+- Cliente registra token de tracking via callable, nao por escrita direta em `orders`.
+- Lojista salva tokens apenas nos caminhos permitidos.
+- Falha de push nao pode quebrar criacao de pedido nem alteracao de status.
 
 ---
 

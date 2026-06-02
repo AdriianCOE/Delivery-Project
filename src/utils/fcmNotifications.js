@@ -17,11 +17,19 @@ import { httpsCallable } from 'firebase/functions'
 import { notificationPreferenceEnabled } from './notificationPreferences'
 
 let foregroundFcmUnsubscribe = null
+let warnedMissingVapidKey = false
 const foregroundFcmConfig = {
   merchantEnabled: false,
   merchantPreferences: null,
   customerEnabled: false,
   customerOrderIds: new Set(),
+}
+
+function warnMissingVapidKeyOnce() {
+  if (warnedMissingVapidKey || !import.meta.env.DEV) return
+
+  warnedMissingVapidKey = true
+  console.warn('[FCM] VITE_FIREBASE_MESSAGING_VAPID_KEY nao configurada. Push nao funcionara neste ambiente.')
 }
 
 function hasNotificationApi() {
@@ -352,12 +360,14 @@ export async function isFcmSupported() {
   }
 }
 
-export async function requestFcmPermissionAndToken() {
+export async function requestFcmPermissionAndToken({ skipPermissionPrompt = false } = {}) {
   const support = await isFcmSupported()
   if (!support.supported) return support
 
   const vapidKey = import.meta.env.VITE_FIREBASE_MESSAGING_VAPID_KEY
   if (!vapidKey) {
+    warnMissingVapidKeyOnce()
+
     return {
       supported: true,
       permission: getNotificationPermission(),
@@ -369,6 +379,15 @@ export async function requestFcmPermissionAndToken() {
 
   let permission = getNotificationPermission()
   if (permission === 'default') {
+    if (skipPermissionPrompt) {
+      return {
+        supported: true,
+        permission,
+        token: '',
+        tokenHash: '',
+        reason: 'permission-not-granted',
+      }
+    }
     permission = await Notification.requestPermission()
   }
 
@@ -479,8 +498,8 @@ export function showLocalMerchantPushTestNotification() {
   }
 }
 
-export async function requestCustomerOrderFcmPermissionAndToken({ orderId, trackingToken }) {
-  const result = await requestFcmPermissionAndToken()
+export async function requestCustomerOrderFcmPermissionAndToken({ orderId, trackingToken, skipPermissionPrompt = false }) {
+  const result = await requestFcmPermissionAndToken({ skipPermissionPrompt })
 
   if (!result.token) return result
 
@@ -539,6 +558,7 @@ export async function disableMerchantFcmToken({ storeId, token, tokenHash }) {
   try {
     const permission = getNotificationPermission()
     const vapidKey = import.meta.env.VITE_FIREBASE_MESSAGING_VAPID_KEY
+    if (permission === 'granted' && !vapidKey) warnMissingVapidKeyOnce()
 
     if ((!resolvedToken || !resolvedTokenHash) && permission === 'granted' && vapidKey) {
       const messaging = await getSupportedMessaging()
@@ -603,6 +623,7 @@ export async function disableCustomerOrderFcmToken({ orderId, trackingToken, tok
   try {
     const permission = getNotificationPermission()
     const vapidKey = import.meta.env.VITE_FIREBASE_MESSAGING_VAPID_KEY
+    if (permission === 'granted' && !vapidKey) warnMissingVapidKeyOnce()
 
     if ((!resolvedToken || !resolvedTokenHash) && permission === 'granted' && vapidKey) {
       const messaging = await getSupportedMessaging()

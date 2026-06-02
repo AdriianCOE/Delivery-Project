@@ -133,6 +133,9 @@ const INITIAL_REVIEW = {
   comment: '',
 }
 
+const CUSTOMER_PUSH_OPT_IN_KEY = 'pratoby:customerPushOptIn'
+const CUSTOMER_PUSH_OPT_IN_AT_KEY = 'pratoby:customerPushOptInAt'
+
 function uniqueArray(values) {
   return [...new Set(values.filter(Boolean))]
 }
@@ -1497,6 +1500,7 @@ export default function OrderTrackingPage() {
 
   const audioRef = useRef(null)
   const previousStatusRef = useRef(null)
+  const customerPushAutoRegisterRef = useRef('')
 
   const trackingToken = String(order?.trackingToken || '').trim()
   const customerPushStorageKey = order?.id && trackingToken
@@ -1692,6 +1696,88 @@ export default function OrderTrackingPage() {
     }
   }, [customerPushStorageKey, order?.id, trackingToken])
 
+  useEffect(() => {
+    if (!order?.id || !trackingToken) return undefined
+
+    let mounted = true
+    const autoRegisterKey = `${order.id}:${trackingToken}`
+
+    async function autoRegisterCustomerPushToken() {
+      if (customerPushAutoRegisterRef.current === autoRegisterKey) return
+
+      let optedIn = false
+      try {
+        optedIn = localStorage.getItem(CUSTOMER_PUSH_OPT_IN_KEY) === 'true'
+        const saved = customerPushStorageKey ? JSON.parse(localStorage.getItem(customerPushStorageKey) || 'null') : null
+        if (saved?.enabled && saved?.tokenHash) return
+      } catch {
+        optedIn = false
+      }
+
+      if (!optedIn || typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+        return
+      }
+
+      customerPushAutoRegisterRef.current = autoRegisterKey
+
+      try {
+        setCustomerPushLoading(true)
+        const result = await requestCustomerOrderFcmPermissionAndToken({
+          orderId: order.id,
+          trackingToken,
+          skipPermissionPrompt: true,
+        })
+
+        if (!mounted) return
+
+        if (!result.supported || !result.token || !result.tokenHash) {
+          setCustomerPushStatus(result.reason === 'missing-vapid-key' ? 'missing-vapid-key' : 'error')
+          customerPushAutoRegisterRef.current = ''
+          return
+        }
+
+        await saveCustomerOrderFcmToken({
+          orderId: order.id,
+          trackingToken,
+          token: result.token,
+        })
+        await ensureCustomerOrderForegroundFcmListener({ orderId: order.id })
+
+        if (!mounted) return
+
+        setCustomerPushTokenHash(result.tokenHash)
+        setCustomerPushStatus('enabled')
+
+        if (customerPushStorageKey) {
+          localStorage.setItem(customerPushStorageKey, JSON.stringify({
+            enabled: true,
+            tokenHash: result.tokenHash,
+            updatedAt: Date.now(),
+          }))
+        }
+      } catch (error) {
+        customerPushAutoRegisterRef.current = ''
+
+        if (mounted) {
+          console.warn('[FCM] Auto-registro de push do pedido falhou.', {
+            orderId: order.id,
+            hasTrackingToken: Boolean(trackingToken),
+            error: error?.message || String(error),
+          })
+          setCustomerPushStatus('error')
+        }
+      } finally {
+        if (mounted) setCustomerPushLoading(false)
+      }
+    }
+
+    autoRegisterCustomerPushToken()
+
+    return () => {
+      mounted = false
+    }
+  }, [customerPushStorageKey, order?.id, trackingToken])
+
 
   const status = normalizeStatus(order?.status)
 
@@ -1804,6 +1890,9 @@ const isDelivered = status === 'entregue'
           updatedAt: Date.now(),
         }))
       }
+
+      localStorage.setItem(CUSTOMER_PUSH_OPT_IN_KEY, 'true')
+      localStorage.setItem(CUSTOMER_PUSH_OPT_IN_AT_KEY, String(Date.now()))
     } catch (error) {
       console.error('[FCM] Erro ao ativar push do pedido:', error)
       setCustomerPushStatus('error')
@@ -1834,6 +1923,8 @@ const isDelivered = status === 'entregue'
       if (customerPushStorageKey) {
         localStorage.removeItem(customerPushStorageKey)
       }
+
+      localStorage.setItem(CUSTOMER_PUSH_OPT_IN_KEY, 'false')
     } finally {
       setCustomerPushLoading(false)
     }
@@ -2141,7 +2232,9 @@ const isDelivered = status === 'entregue'
                     Receber atualizacoes do pedido
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-[#6b7280]">
-                    Ative neste dispositivo para ser avisado quando o status mudar.
+                    {customerPushStatus === 'enabled'
+                      ? 'Avisos ativados neste navegador.'
+                      : 'Ative neste dispositivo para ser avisado quando o status mudar.'}
                   </p>
 
                   {customerPushStatus === 'denied' && (
@@ -2159,6 +2252,12 @@ const isDelivered = status === 'entregue'
                   {customerPushStatus === 'missing-tracking-token' && (
                     <p className="mt-1 text-xs font-bold text-amber-700">
                       Este pedido nao possui token de acompanhamento para ativar avisos.
+                    </p>
+                  )}
+
+                  {customerPushStatus === 'error' && (
+                    <p className="mt-1 text-xs font-bold text-amber-700">
+                      Nao foi possivel ativar os avisos. Tente novamente.
                     </p>
                   )}
                 </div>
@@ -2188,7 +2287,7 @@ const isDelivered = status === 'entregue'
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-xs font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {customerPushLoading ? <FiLoader className="animate-spin" /> : <FiBell />}
-                  Ativar avisos
+                  {customerPushStatus === 'error' ? 'Tentar novamente' : 'Ativar avisos'}
                 </button>
               )}
             </div>

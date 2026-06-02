@@ -141,7 +141,7 @@ function compareOrdersOldestFirst(a, b) {
  * Metas: 1-3 → enorme (TV de longe), 4-8 → médio, 9+ → compacto legível.
  */
 function readyLayoutConfig(count) {
-  if (count <= 1)  return { grid: 'grid-cols-1 max-w-xs mx-auto w-full', size: 'xl' }
+  if (count <= 1)  return { grid: 'grid-cols-1 max-w-md mx-auto w-full', size: 'xl' }
   if (count <= 2)  return { grid: 'grid-cols-2', size: 'xl' }
   if (count <= 3)  return { grid: 'grid-cols-3', size: 'lg' }
   if (count <= 6)  return { grid: 'grid-cols-2 sm:grid-cols-3', size: 'md' }
@@ -327,19 +327,19 @@ function PreparingCard({ order, isNew, t }) {
 
 const READY_SIZE_STYLES = {
   xl: {
-    wrapper: 'gap-5 rounded-3xl p-8 sm:p-10',
-    icon: 'h-20 w-20 rounded-2xl',
-    iconSize: 40,
-    num: 'text-6xl sm:text-7xl lg:text-9xl',
-    label: 'text-xl',
+    wrapper: 'gap-4 rounded-3xl p-6 sm:p-8',
+    icon: 'h-16 w-16 rounded-2xl',
+    iconSize: 30,
+    num: 'text-[clamp(4rem,8vw,8.5rem)]',
+    label: 'text-lg',
     time: 'text-base',
   },
   lg: {
-    wrapper: 'gap-4 rounded-3xl p-6 sm:p-8',
-    icon: 'h-16 w-16 rounded-2xl',
-    iconSize: 32,
-    num: 'text-5xl sm:text-6xl lg:text-8xl',
-    label: 'text-lg',
+    wrapper: 'gap-3 rounded-3xl p-5 sm:p-6',
+    icon: 'h-14 w-14 rounded-2xl',
+    iconSize: 26,
+    num: 'text-[clamp(3.4rem,6.5vw,6.75rem)]',
+    label: 'text-base',
     time: 'text-sm',
   },
   md: {
@@ -368,9 +368,9 @@ function ReadyCard({ order, isNew, t, isDark, size = 'lg' }) {
 
   return (
     <div className={cn(
-      'flex flex-col items-center justify-center text-center border-2 transition-all duration-500',
+      'flex flex-col items-center justify-center text-center border transition-all duration-500 shadow-lg',
       s.wrapper,
-      t('border-emerald-500/40 bg-emerald-500/10', 'border-emerald-400 bg-emerald-50'),
+      t('border-emerald-500/25 bg-emerald-500/10 shadow-emerald-950/20', 'border-emerald-200 bg-emerald-50 shadow-emerald-200/40'),
       // Destaque para recém-prontos: ring pulsante ao invés de pulsar o card todo
       isNew && 'ring-4 ring-emerald-400',
       isNew && t('ring-offset-2 ring-offset-zinc-950', 'ring-offset-2 ring-offset-gray-100'),
@@ -435,29 +435,30 @@ function CtrlBtn({ onClick, title, children, t }) {
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
-function EmptyState({ icon: Icon, title, subtitle, t, size = 'md', isPremiumReady = false }) {
+function EmptyState({ icon: Icon, title, subtitle, t, size = 'md', isPremiumReady = false, compact = false }) {
   const isLg = size === 'lg'
   return (
     <div className={cn(
-      'flex flex-1 flex-col items-center justify-center text-center p-8 rounded-3xl border border-dashed transition-all duration-300',
+      'flex flex-col items-center justify-center text-center rounded-3xl border border-dashed transition-all duration-300',
+      compact ? 'min-h-[150px] p-5' : 'flex-1 p-8',
       t('border-zinc-800/80 bg-zinc-900/10', 'border-gray-200/80 bg-gray-50/20'),
       isPremiumReady && t('border-emerald-500/20 bg-emerald-500/[0.02]', 'border-emerald-200 bg-emerald-50/[0.02]')
     )}>
       {Icon && (
         <div className={cn(
           'flex items-center justify-center rounded-2xl mb-4 shrink-0 transition-transform duration-300 hover:scale-105',
-          isLg ? 'h-16 w-16' : 'h-12 w-12',
+          compact ? 'h-10 w-10' : isLg ? 'h-16 w-16' : 'h-12 w-12',
           isPremiumReady
             ? t('bg-emerald-500/10 text-emerald-400', 'bg-emerald-50 text-emerald-600')
             : t('bg-zinc-900 text-zinc-500', 'bg-zinc-100 text-zinc-400')
         )}>
-          <Icon size={isLg ? 28 : 22} />
+          <Icon size={compact ? 18 : isLg ? 28 : 22} />
         </div>
       )}
       <div className="space-y-2 max-w-sm">
         <h3 className={cn(
           'font-black tracking-tight leading-snug',
-          isLg ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl',
+          compact ? 'text-base sm:text-lg' : isLg ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl',
           isPremiumReady
             ? t('text-emerald-400', 'text-emerald-600')
             : t('text-zinc-300', 'text-gray-700')
@@ -761,10 +762,10 @@ export default function CustomerDisplayPage() {
             Desktop/TV: Em preparo 40% | Prontos 60%
             Grid com order- para mobile (ready aparece acima)
           */}
-          <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-8 min-h-full">
+          <div className="grid min-h-full grid-cols-1 gap-5 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,2fr)] lg:gap-7">
 
             {/* ── Em preparo — mobile: order-2, desktop: order-1 ─────────── */}
-            <section className="flex flex-col order-2 lg:order-1 h-full min-h-[50vh]">
+            <section className="flex flex-col order-2 min-h-0 lg:order-1">
               <div className={cn(
                 'flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 mb-6 shrink-0',
                 t('bg-zinc-900/40 border-zinc-800/80 text-zinc-400', 'bg-white border-gray-200 text-gray-500')
@@ -787,6 +788,7 @@ export default function CustomerDisplayPage() {
                   title="Nenhum pedido em preparo"
                   subtitle="Os pedidos em produção aparecerão aqui."
                   t={t}
+                  compact
                 />
               ) : (
                 <div className={cn('grid gap-3', prepGrid)}>
@@ -800,8 +802,8 @@ export default function CustomerDisplayPage() {
 
             {/* ── Prontos para retirada — mobile: order-1, desktop: order-2 */}
             <section className={cn(
-              'flex flex-col order-1 lg:order-2 h-full min-h-[50vh]',
-              'border-b-2 lg:border-b-0 lg:border-l-2 pb-8 lg:pb-0 lg:pl-8 border-dashed',
+              'flex flex-col order-1 min-h-[42vh] lg:order-2 lg:min-h-0',
+              'border-b-2 lg:border-b-0 lg:border-l-2 pb-6 lg:pb-0 lg:pl-7 border-dashed',
               t('border-zinc-800', 'border-gray-200')
             )}>
               <div className={cn(

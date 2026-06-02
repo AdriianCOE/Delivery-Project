@@ -140,9 +140,9 @@ function getPublicOrderCustomerPhone(orderData) {
 
 function assertPublicTrackingAccess(orderId, trackingToken, orderData) {
   const expectedToken = String(orderData?.trackingToken || '').trim()
-  const providedToken = String(trackingToken || orderId).trim()
+  const providedToken = String(trackingToken || '').trim()
 
-  if (!expectedToken || expectedToken !== orderId || providedToken !== expectedToken) {
+  if (!expectedToken || !providedToken || providedToken !== expectedToken) {
     throw new HttpsError('permission-denied', 'Link de acompanhamento invalido.')
   }
 }
@@ -271,6 +271,7 @@ exports.registerCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (
     db,
     admin,
     HttpsError,
+    logger,
     orderId,
     trackingToken,
     token: request.data?.token,
@@ -289,6 +290,7 @@ exports.disableCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (r
     db,
     admin,
     HttpsError,
+    logger,
     orderId,
     trackingToken,
     token: request.data?.token,
@@ -466,7 +468,7 @@ exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request
       storeDocId: orderData.storeDocId || orderData.storeId || null,
       storeKeys: getPublicOrderStoreKeys(orderData),
       orderId,
-      trackingToken: orderData.trackingToken || orderId,
+      trackingToken: orderData.trackingToken || null,
       customerName: getPublicOrderCustomerName(orderData),
       customerPhone: getPublicOrderCustomerPhone(orderData),
       rating,

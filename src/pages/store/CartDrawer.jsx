@@ -2091,7 +2091,7 @@ if (orderType === 'delivery') {
       })
 
       const createdOrder = result?.data || {}
-      const trackingToken = createdOrder.trackingToken || createdOrder.orderId
+      const trackingToken = createdOrder.trackingToken
 
       if (!trackingToken) {
         throw new Error('Pedido criado sem token de acompanhamento.')

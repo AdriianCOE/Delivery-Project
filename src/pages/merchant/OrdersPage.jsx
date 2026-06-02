@@ -2094,7 +2094,7 @@ const PaymentMethodIcon =
 
   const paymentNeedsAttention = !isPaymentValidated && !isPayOnDelivery
 
-  const totalLabel = formatMoney(order.total || order.pricing?.total || 0)
+  const totalLabel = formatMoney(getOrderTotal(order))
 
   const savingsValue = Number(order.savingsAmount || order.savings || savings || 0)
 
@@ -2126,6 +2126,12 @@ const orderTypeLabel =
         : isDeliveryOrder(order)
           ? 'Entrega'
           : 'Retirada')
+
+const OrderTypeIcon = orderTypeLabel === 'Entrega'
+  ? FiTruck
+  : orderTypeLabel === 'No local'
+    ? FiHome
+    : FiShoppingBag
 
 const statusMetaMap = {
   pendente: {
@@ -2244,7 +2250,8 @@ const statusMeta = statusMetaMap[status] || {
             </span>
           )}
 
-          <span className="inline-flex items-center rounded-full border border-gray-100 bg-white text-gray-700 px-2.5 py-1 text-[11px] font-black dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-300">
+          <span className="inline-flex items-center gap-1 rounded-full border border-gray-100 bg-white text-gray-700 px-2.5 py-1 text-[11px] font-black dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-300">
+            <OrderTypeIcon size={11} />
             {orderTypeLabel}
           </span>
         </div>
@@ -2357,6 +2364,16 @@ const statusMeta = statusMetaMap[status] || {
             <FiMessageCircle size={16} />
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={() => onCopyOrder(order)}
+          className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-gray-100 bg-white px-3 text-[13px] font-black text-gray-500 transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:bg-orange-500/10 sm:w-11"
+          aria-label="Copiar resumo do pedido"
+          title="Copiar resumo do pedido"
+        >
+          <FiCopy size={15} />
+        </button>
       </div>
     </div>
   </motion.article>
@@ -2653,7 +2670,7 @@ function OrderModal({
         animate={variants.animate}
         exit={variants.exit}
         transition={variants.transition}
-        className="flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-gray-100 bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5 dark:border-white/10 dark:bg-[#0f0f11] dark:shadow-black/60 dark:ring-white/[0.03] sm:h-[90vh] sm:rounded-3xl"
+        className="flex h-[96dvh] max-h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-gray-100 bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5 dark:border-white/10 dark:bg-[#0f0f11] dark:shadow-black/60 dark:ring-white/[0.03] sm:h-auto sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
       >
         <header className="animate-fade-in shrink-0 border-b border-gray-100 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#111114]">
           <div className="flex items-start justify-between gap-4">
