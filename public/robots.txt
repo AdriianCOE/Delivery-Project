@@ -9,5 +9,9 @@ Disallow: /auth/action
 Disallow: /pedido/
 Disallow: /order/
 Disallow: /tracking/
+Disallow: /*/pedido/
+Disallow: /*/order/
+Disallow: /store/*/pedido/
+Disallow: /store/*/order/
 
 Sitemap: https://pratoby.com/sitemap.xml
