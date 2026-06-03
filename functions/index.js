@@ -7,6 +7,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onValueWritten } = require('firebase-functions/v2/database')
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { logger } = require('firebase-functions')
+const { defineSecret } = require('firebase-functions/params')
 const admin = require('firebase-admin')
 const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
@@ -48,6 +49,7 @@ admin.initializeApp()
 const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
 const REGION = 'southamerica-east1'
+const CLOUDINARY_API_SECRET = defineSecret('CLOUDINARY_API_SECRET')
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
 const LEGAL_CONFIG_COLLECTION = 'config'
 const LEGAL_CONFIG_DOC = 'legal'
@@ -69,18 +71,6 @@ const merchantOrderFunctions = createMerchantOrderFunctions({
 
 if (!ENFORCE_APP_CHECK && process.env.FUNCTIONS_EMULATOR !== 'true') {
   logger.warn('[appCheck] Public callables are running without App Check enforcement. Use monitor mode first, then set ENFORCE_APP_CHECK=true after validating public store, coupon and order flows.')
-}
-
-if (process.env.FUNCTIONS_EMULATOR !== 'true') {
-  if (!BREVO_TEMPLATES.trialEnding.id) {
-    logger.warn('[brevo] BREVO_TRIAL_ENDING_TEMPLATE_ID is not configured; trial ending emails will be skipped.')
-  }
-  if (!BREVO_TEMPLATES.weeklyReport.id) {
-    logger.warn('[brevo] BREVO_WEEKLY_REPORT_TEMPLATE_ID is not configured; weekly performance emails will be skipped.')
-  }
-  if (!process.env.SUPPORT_WHATSAPP_URL) {
-    logger.warn('[brevo] SUPPORT_WHATSAPP_URL is not configured; support WhatsApp links will be omitted from transactional email params.')
-  }
 }
 
 function normalizeLegalVersion(value) {
@@ -983,6 +973,57 @@ function assertStoreOwnerOrAdmin(storeData, uid, userData) {
   }
 }
 
+function assertNonAnonymousDashboardUser(request) {
+  const uid = request.auth?.uid
+  const provider = request.auth?.token?.firebase?.sign_in_provider || ''
+
+  if (!uid || provider === 'anonymous') {
+    throw new HttpsError('unauthenticated', 'Acesso negado.')
+  }
+
+  return uid
+}
+
+function getCloudinaryEnvValue(name, viteName = '') {
+  return String(process.env[name] || (viteName ? process.env[viteName] : '') || '').trim()
+}
+
+function getCloudinaryApiSecret() {
+  try {
+    return CLOUDINARY_API_SECRET.value() || process.env.CLOUDINARY_API_SECRET || ''
+  } catch (_error) {
+    return process.env.CLOUDINARY_API_SECRET || ''
+  }
+}
+
+function sanitizeCloudinaryFolder(value) {
+  const folder = String(value || 'PratoBy').trim().replace(/^\/+|\/+$/g, '')
+
+  if (
+    !folder ||
+    folder.length > 120 ||
+    folder.includes('..') ||
+    !/^PratoBy(?:\/[A-Za-z0-9_-]+){0,4}$/.test(folder)
+  ) {
+    throw new HttpsError('invalid-argument', 'Pasta de upload invalida.')
+  }
+
+  return folder
+}
+
+function signCloudinaryParams(params, apiSecret) {
+  const payload = Object.keys(params)
+    .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
+    .sort()
+    .map((key) => `${key}=${params[key]}`)
+    .join('&')
+
+  return crypto
+    .createHash('sha1')
+    .update(`${payload}${apiSecret}`)
+    .digest('hex')
+}
+
 function hasForbiddenSettingsKeyDeep(value, depth = 0) {
   if (!value || typeof value !== 'object' || depth > 8) return false
   return Object.entries(value).some(([key, entry]) => (
@@ -1234,6 +1275,64 @@ exports.validatePublicCoupon = onCall(
       },
       discountCents: validation.discountCents,
       eligibleSubtotalCents: validation.eligibleSubtotalCents,
+    }
+  }
+)
+
+exports.createCloudinaryUploadSignature = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    memory: '256MiB',
+    maxInstances: 10,
+    secrets: [CLOUDINARY_API_SECRET],
+  },
+  async (request) => {
+    const uid = assertNonAnonymousDashboardUser(request)
+    const userSnapshot = await db.collection('users').doc(uid).get()
+
+    if (!userSnapshot.exists) {
+      throw new HttpsError('permission-denied', 'Usuario nao encontrado.')
+    }
+
+    const userData = userSnapshot.data() || {}
+    const role = String(userData.role || '').toLowerCase()
+    if (!['merchant', 'lojista', 'admin', 'developer', 'dev'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Permissao negada para upload.')
+    }
+
+    const data = request.data || {}
+    const storeId = String(data.storeId || '').trim()
+
+    if (storeId) {
+      const storeSnapshot = await db.collection('stores').doc(storeId).get()
+      if (!storeSnapshot.exists) throw new HttpsError('not-found', 'Loja nao encontrada.')
+      assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userData)
+    }
+
+    const cloudName = getCloudinaryEnvValue('CLOUDINARY_CLOUD_NAME', 'VITE_CLOUDINARY_CLOUD_NAME')
+    const apiKey = getCloudinaryEnvValue('CLOUDINARY_API_KEY', 'VITE_CLOUDINARY_API_KEY')
+    const apiSecret = getCloudinaryApiSecret()
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      logger.error('[cloudinary] Missing signed upload configuration.')
+      throw new HttpsError('failed-precondition', 'Upload seguro nao configurado.')
+    }
+
+    const folder = sanitizeCloudinaryFolder(data.folder)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const paramsToSign = {
+      folder,
+      timestamp,
+    }
+
+    return {
+      ok: true,
+      cloudName,
+      apiKey,
+      folder,
+      timestamp,
+      signature: signCloudinaryParams(paramsToSign, apiSecret),
     }
   }
 )

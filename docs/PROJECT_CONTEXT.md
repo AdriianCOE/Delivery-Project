@@ -56,7 +56,7 @@ Decisões operacionais atuais:
 - React Icons.
 - Alguns componentes TSX na landing.
 - Sentry frontend.
-- Cloudinary para upload de imagens via unsigned upload.
+- Cloudinary para upload de imagens via assinatura gerada por Cloud Function.
 
 ### Backend/Firebase
 

@@ -21,6 +21,8 @@ Antes de vender para lojista real, confirme estes pontos fora do codigo:
 - Build do frontend com `VITE_FIREBASE_APPCHECK_ENABLED=true` e `VITE_FIREBASE_APPCHECK_SITE_KEY` validado em producao assistida.
 - Somente depois dos testes publicos, ativar `ENFORCE_APP_CHECK=true` nas Functions publicas.
 - `/config/legal` criado no Firestore antes de publicar Rules, Functions e Hosting que leem `termsVersion`/`privacyVersion`.
+- Cloudinary assinado configurado: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` e secret `CLOUDINARY_API_SECRET`.
+- Frontend publicado sem `VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK=true`, salvo janela de migracao controlada.
 - `cleanupAnonymousUsers` conferida em dry run antes de qualquer delecao real.
 - Para limpeza real monitorada, configurar em producao `CLEANUP_ANONYMOUS_USERS_ENABLED=true` e `CLEANUP_ANONYMOUS_USERS_DRY_RUN=false` somente durante a janela operacional; depois voltar `CLEANUP_ANONYMOUS_USERS_DRY_RUN=true` se a limpeza nativa do Firebase nao estiver habilitada.
 - Push FCM de novo pedido validado em runtime com token real em `stores/{storeId}/notificationTokens`, permission/subscription ativa no navegador do lojista e pedido criado via loja publica.
@@ -43,6 +45,12 @@ Fluxo minimo para validar FCM merchant:
 4. Confirmar log de envio de `sendNewOrderPushToStore`.
 5. Confirmar notificacao recebida no navegador do lojista.
 6. Se houver falha, registrar navegador, service worker ativo, token hash, `storeId` e erro de push.
+
+Comando para configurar o secret Cloudinary antes do deploy da assinatura:
+
+```bash
+firebase functions:secrets:set CLOUDINARY_API_SECRET
+```
 
 ## Deploy de Rules e Índices
 
@@ -76,7 +84,7 @@ firebase deploy --only functions:getPublicCatalog,functions:getPublicStoreProfil
 
 ### Lote 4: Configurações e Onboarding
 ```bash
-firebase deploy --only functions:updateStoreSettings,functions:updateMyProfile,functions:adminCreateStore,functions:materializePublicStoreProfile,functions:materializePublicProduct,functions:materializePublicCategory,functions:precheckFirebasePhoneClaim,functions:confirmFirebasePhoneVerified,functions:startFreeTrial,functions:acceptLatestTerms,functions:updateBillingNotificationPreferences
+firebase deploy --only functions:updateStoreSettings,functions:updateMyProfile,functions:createCloudinaryUploadSignature,functions:adminCreateStore,functions:materializePublicStoreProfile,functions:materializePublicProduct,functions:materializePublicCategory,functions:precheckFirebasePhoneClaim,functions:confirmFirebasePhoneVerified,functions:startFreeTrial,functions:acceptLatestTerms,functions:updateBillingNotificationPreferences
 ```
 
 ### Lote 5: Presença e Auditorias
@@ -89,7 +97,7 @@ firebase deploy --only functions:aggregateStorePresence,functions:auditStoreChan
 
 Pendências ainda relevantes
 
-Cloudinary ainda usa upload unsigned no frontend.
+Cloudinary deve usar assinatura via `createCloudinaryUploadSignature`; fallback unsigned so deve ser habilitado temporariamente com `VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK=true`.
 App Check ainda precisa ser ativado/configurado no Firebase Console e no client para endurecer de verdade.
 npm audit tinha vulnerabilidades moderadas em dependências; não atualizei pacotes nesta rodada.
 presence no Realtime Database ainda pode ser poluído por usuários autenticados/anonymous, embora o impacto seja baixo.
