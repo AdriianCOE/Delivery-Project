@@ -17,7 +17,7 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
 
 ## Plano seguro
 
-1. Configurar App Check no Firebase Console para Web App e Hosting.
+1. Configurar App Check no Firebase Console para Web App e Hosting, mantendo monitoramento sem bloqueio.
 2. Configurar `VITE_FIREBASE_APPCHECK_SITE_KEY` no ambiente de build do frontend.
 3. Definir `VITE_FIREBASE_APPCHECK_ENABLED=true` somente no ambiente em monitoramento.
 4. Ativar modo monitor primeiro, sem enforcement.
@@ -30,7 +30,8 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
    - confirmar recebimento no tracking;
    - enviar avaliacao no tracking.
 6. Conferir metricas/logs de App Check no Console.
-7. So depois ativar enforcement nas Functions publicas.
+7. So depois ativar enforcement nas Functions publicas com `ENFORCE_APP_CHECK=true`.
+8. Repetir os testes publicos depois do enforcement.
 
 ## Variavel
 
@@ -53,3 +54,13 @@ VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=true
 Na primeira execução, copie o debug token exibido no console do navegador e cadastre em Firebase Console > App Check > Manage debug tokens. Depois substitua `true` pelo token cadastrado se quiser deixar fixo no `.env.local`.
 
 Nao defina `VITE_FIREBASE_APPCHECK_ENABLED=true` em dev/local sem chave reCAPTCHA valida para o dominio atual. Nao defina `ENFORCE_APP_CHECK=true` antes de validar a loja publica, cupom, pedido e tracking com tokens App Check reais.
+
+## Gate de producao
+
+Este item nao fecha por codigo local. Ele so esta concluido quando o Console mostra requisicoes validas em monitoramento para o dominio de producao e a build publicada contem:
+
+- `VITE_FIREBASE_APPCHECK_ENABLED=true`
+- `VITE_FIREBASE_APPCHECK_PROVIDER=enterprise`
+- `VITE_FIREBASE_APPCHECK_SITE_KEY`
+
+Depois do enforcement, qualquer falha em storefront, cupom, pedido ou tracking deve ser tratada como rollback imediato de `ENFORCE_APP_CHECK=true`.

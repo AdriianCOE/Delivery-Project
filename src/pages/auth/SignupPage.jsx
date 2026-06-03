@@ -68,9 +68,8 @@ const CITIES = [
   'Outro',
 ]
 
-const TERMS_VERSION = '2026-05-24'
-const PRIVACY_VERSION = '2026-05-24'
 const TERMS_REQUIRED_MESSAGE = 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para continuar.'
+const LEGAL_VERSION_REQUIRED_MESSAGE = 'Não foi possível carregar as versões vigentes dos termos. Tente novamente.'
 
 // ─────────────────────────────────────────────────────────────
 // FUNÇÕES AUXILIARES E FORMATAÇÃO BRL
@@ -103,6 +102,11 @@ function getBrazilianPhoneDigits(value) {
     return digits.slice(2, 13)
   }
   return digits.slice(0, 11)
+}
+
+function normalizeLegalVersion(value) {
+  const version = String(value || '').trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(version) ? version : ''
 }
 
 function formatPhoneBR(value) {
@@ -653,6 +657,8 @@ export default function SignupPage() {
   const [marketingOptIn, setMarketingOptIn] = useState(false)
   const [termsModalOpen, setTermsModalOpen] = useState(false)
   const [termsModalSubmitting, setTermsModalSubmitting] = useState(false)
+  const [legalVersions, setLegalVersions] = useState(null)
+  const [legalVersionsError, setLegalVersionsError] = useState('')
 
   // Estados de visualização de senha
   const [showPassword, setShowPassword] = useState(false)
@@ -670,11 +676,45 @@ export default function SignupPage() {
     }
   }, [formError])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadLegalVersions() {
+      try {
+        const snapshot = await getDoc(doc(db, 'config', 'legal'))
+        const data = snapshot.exists() ? snapshot.data() || {} : {}
+        const termsVersion = normalizeLegalVersion(data.termsVersion)
+        const privacyVersion = normalizeLegalVersion(data.privacyVersion)
+
+        if (!termsVersion || !privacyVersion) {
+          throw new Error('legal/config-missing')
+        }
+
+        if (!active) return
+        setLegalVersions({ termsVersion, privacyVersion })
+        setLegalVersionsError('')
+      } catch (error) {
+        console.warn('[Signup] Nao foi possivel carregar config/legal.', error)
+        if (!active) return
+        setLegalVersions(null)
+        setLegalVersionsError(LEGAL_VERSION_REQUIRED_MESSAGE)
+      }
+    }
+
+    void loadLegalVersions()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   // ── Derivados ──────────────────────────────
   const selectedPlan = useMemo(
     () => PLANS.find((p) => p.id === selectedPlanId) ?? PLANS[1],
     [selectedPlanId]
   )
+  const termsVersion = legalVersions?.termsVersion || ''
+  const privacyVersion = legalVersions?.privacyVersion || ''
 
   const canSubmit = useMemo(
     () =>
@@ -685,10 +725,11 @@ export default function SignupPage() {
           form.storeName.trim() &&
           form.password.trim() &&
           form.confirmPassword.trim() &&
+          legalVersions &&
           getPasswordStrength(form.password).level !== 'weak' &&
           !isLoading
       ),
-    [form, isLoading]
+    [form, isLoading, legalVersions]
   )
 
   // ── Handlers ──────────────────────────────
@@ -707,6 +748,8 @@ export default function SignupPage() {
       return 'Esta conta já possui um cadastro pendente. Use o login para continuar.'
     if (error?.message?.includes('signup/terms-required'))
       return TERMS_REQUIRED_MESSAGE
+    if (error?.message?.includes('signup/legal-version-unavailable'))
+      return LEGAL_VERSION_REQUIRED_MESSAGE
     if (error?.message?.includes('signup/account-already-has-store'))
       return 'Esta conta já possui uma loja. Entre pelo login.'
     if (error?.message?.includes('permission-denied'))
@@ -715,11 +758,15 @@ export default function SignupPage() {
   }
 
   const buildComplianceFields = useCallback(() => {
+    if (!termsVersion || !privacyVersion) {
+      throw new Error('signup/legal-version-unavailable')
+    }
+
     const fields = {
       termsAccepted: true,
       termsAcceptedAt: serverTimestamp(),
-      termsVersion: TERMS_VERSION,
-      privacyVersion: PRIVACY_VERSION,
+      termsVersion,
+      privacyVersion,
       marketingOptIn: Boolean(marketingOptIn),
     }
 
@@ -729,7 +776,7 @@ export default function SignupPage() {
     }
 
     return fields
-  }, [marketingOptIn])
+  }, [marketingOptIn, privacyVersion, termsVersion])
 
   const saveUserDocument = useCallback(async (user, authProvider, displayNameOverride) => {
     if (!termsAccepted) {
@@ -825,6 +872,7 @@ export default function SignupPage() {
   }, [termsModalSubmitting])
 
   const validateGoogleProfileFields = useCallback(() => {
+    if (!legalVersions) return legalVersionsError || LEGAL_VERSION_REQUIRED_MESSAGE
     if (!termsAccepted) return TERMS_REQUIRED_MESSAGE
     if (!form.whatsapp.trim()) return 'Preencha seu WhatsApp primeiro.'
     if (!isValidBrazilianMobilePhone(form.whatsapp)) {
@@ -832,10 +880,14 @@ export default function SignupPage() {
     }
     if (!form.storeName.trim()) return 'Preencha o nome da sua loja primeiro.'
     return ''
-  }, [form.storeName, form.whatsapp, termsAccepted])
+  }, [form.storeName, form.whatsapp, legalVersions, legalVersionsError, termsAccepted])
 
   const handleGoogleSignup = useCallback(async () => {
     setFormError('')
+    if (!legalVersions) {
+      setFormError(legalVersionsError || LEGAL_VERSION_REQUIRED_MESSAGE)
+      return
+    }
 
     setIsLoading(true)
     try {
@@ -849,8 +901,8 @@ export default function SignupPage() {
         const profile = existingProfile.data() || {}
         if (
           profile.termsAccepted === true &&
-          profile.termsVersion === TERMS_VERSION &&
-          profile.privacyVersion === PRIVACY_VERSION
+          profile.termsVersion === termsVersion &&
+          profile.privacyVersion === privacyVersion
         ) {
           if (refreshUserData) {
             await refreshUserData()
@@ -898,7 +950,7 @@ export default function SignupPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [navigate, refreshUserData, saveUserDocument, validateGoogleProfileFields])
+  }, [legalVersions, legalVersionsError, navigate, privacyVersion, refreshUserData, saveUserDocument, termsVersion, validateGoogleProfileFields])
 
   const handleContinue = useCallback(
     async (e) => {
@@ -920,6 +972,7 @@ export default function SignupPage() {
         return setFormError('Use uma senha mais forte, com pelo menos 8 caracteres, letras e números.')
       }
       if (form.password !== form.confirmPassword) return setFormError('As senhas não coincidem.')
+      if (!legalVersions) return setFormError(legalVersionsError || LEGAL_VERSION_REQUIRED_MESSAGE)
       if (!termsAccepted) return setFormError(TERMS_REQUIRED_MESSAGE)
 
       setIsLoading(true)
@@ -958,7 +1011,7 @@ export default function SignupPage() {
         setIsLoading(false)
       }
     },
-    [customCity, form, navigate, saveUserDocument, termsAccepted]
+    [customCity, form, legalVersions, legalVersionsError, navigate, saveUserDocument, termsAccepted]
   )
 
   // ─────────────────────────────────────────────────────────
@@ -1552,7 +1605,7 @@ export default function SignupPage() {
               </div>
 
               <div className="mt-4 rounded-2xl bg-orange-50/70 p-4 text-xs font-semibold leading-5 text-[#9a3412]">
-                Versões vigentes: Termos {TERMS_VERSION} e Privacidade {PRIVACY_VERSION}.
+                Versões vigentes: Termos {termsVersion || '...'} e Privacidade {privacyVersion || '...'}.
               </div>
 
               <div className="mt-5 flex flex-col gap-3 sm:flex-row">

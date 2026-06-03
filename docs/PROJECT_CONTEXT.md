@@ -717,7 +717,7 @@ Backfill:
 ```bash
 cd functions
 npm run backfill:public-catalog -- --dry-run --storeId=STORE_ID
-npm run backfill:public-catalog -- --storeId=STORE_ID
+npm run backfill:public-catalog -- --write --storeId=STORE_ID
 ```
 
 ---

@@ -13,20 +13,199 @@ import {
   ChevronRight,
 } from 'lucide-react'
 
+const LAST_UPDATED = '24 de maio de 2026'
+const SUPPORT_EMAIL = 'contato@pratoby.com'
+
 const SECTIONS = [
-  { id: 'coleta', title: '1. Informações que Coletamos', icon: Eye, summary: 'Coletamos dados cadastrais dos lojistas para faturamento e dados básicos dos clientes finais apenas para que o restaurante consiga processar e entregar o pedido.' },
-  { id: 'uso', title: '2. Como Usamos os Dados', icon: Settings, summary: 'Os dados servem unicamente para fazer o sistema funcionar: emitir o pedido no painel ao vivo e calcular a taxa de entrega por bairro.' },
-  { id: 'cookies', title: '3. Cookies e Armazenamento Local', icon: Database, summary: 'Usamos o localStorage do navegador do cliente para guardar o nome e endereço de forma segura, evitando que o cliente tenha de digitar tudo novamente no próximo pedido.' },
-  { id: 'seguranca', title: '4. Segurança da Informação', icon: Lock, summary: 'Garantimos proteção reforçada através de firewalls e regras de segurança automatizadas na nuvem para blindar o acesso ao banco de dados.' },
-  { id: 'direitos', title: '5. Direitos do Titular (LGPD)', icon: ShieldCheck, summary: 'Em conformidade total com a LGPD, o titular da conta ou cliente final pode pedir a alteração ou exclusão total dos seus dados a qualquer momento.' },
+  {
+    id: 'escopo',
+    title: '1. Escopo desta Política',
+    shortTitle: 'Escopo',
+    icon: Eye,
+    summary:
+      'Esta Política explica como o PratoBy trata dados de lojistas, usuários do painel e clientes finais que fazem pedidos nas lojas publicadas.',
+    content: (
+      <>
+        <p>
+          Esta Política de Privacidade se aplica ao uso do PratoBy, incluindo painel administrativo, loja pública, cardápio digital, checkout, notificações, páginas institucionais e demais recursos relacionados à operação da plataforma.
+        </p>
+        <p>
+          O PratoBy é uma plataforma SaaS para que estabelecimentos de alimentação vendam diretamente para seus clientes. Por isso, alguns dados são tratados para permitir que o lojista configure a loja, receba pedidos, acompanhe a operação e mantenha seu histórico comercial.
+        </p>
+        <p>
+          Quando o consumidor final faz um pedido pelo link de uma loja, os dados informados são usados para viabilizar aquele pedido e ficam relacionados à operação do lojista responsável pelo atendimento, preparo, cobrança e entrega.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'coleta',
+    title: '2. Informações que Coletamos',
+    shortTitle: 'Dados coletados',
+    icon: Database,
+    summary:
+      'Coletamos somente os dados necessários para criar a loja, processar pedidos, calcular entrega, enviar notificações e manter a segurança da plataforma.',
+    content: (
+      <>
+        <p>
+          Para fazer o PratoBy funcionar, podemos coletar e tratar diferentes tipos de dados, conforme o perfil de uso:
+        </p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>
+            <strong>Dados do lojista e da conta:</strong> nome, e-mail, telefone, credenciais de acesso, dados da loja, configurações operacionais, informações de cobrança e histórico de assinatura.
+          </li>
+          <li>
+            <strong>Dados da loja pública:</strong> nome do estabelecimento, slug/link público, endereço ou área de atendimento, horários, produtos, categorias, preços, adicionais, imagens, cupons e taxas configuradas pelo lojista.
+          </li>
+          <li>
+            <strong>Dados do consumidor final:</strong> nome, telefone, itens do pedido, observações, forma de pagamento escolhida, endereço, número, complemento, bairro e CEP, quando necessários para retirada, entrega ou contato sobre o pedido.
+          </li>
+          <li>
+            <strong>Dados técnicos e de segurança:</strong> endereço IP, identificadores de sessão, informações do navegador, logs de erro, eventos de autenticação, tokens de notificação e registros necessários para prevenir abuso, fraude e instabilidade.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'uso',
+    title: '3. Como Usamos os Dados',
+    shortTitle: 'Uso dos dados',
+    icon: Settings,
+    summary:
+      'Os dados são usados para operar o sistema: exibir cardápio, criar pedidos, avisar o lojista, calcular taxas e manter o serviço seguro.',
+    content: (
+      <>
+        <p>
+          Não vendemos dados pessoais. Usamos as informações coletadas para finalidades ligadas ao funcionamento do PratoBy e à prestação do serviço contratado pelo lojista.
+        </p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>criar e manter a conta do lojista;</li>
+          <li>publicar a loja, cardápio, produtos, preços, cupons e configurações comerciais;</li>
+          <li>processar pedidos enviados pelo consumidor final e exibi-los no painel do lojista;</li>
+          <li>calcular taxa de entrega por bairro, CEP ou regra definida pela loja;</li>
+          <li>enviar notificações transacionais sobre novos pedidos, status, assinatura, trial, alertas operacionais e suporte;</li>
+          <li>prevenir fraudes, abuso, spam, scraping indevido, tentativas de invasão e uso fora das regras da plataforma;</li>
+          <li>melhorar estabilidade, desempenho, segurança e experiência de uso do produto.</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'compartilhamento',
+    title: '4. Compartilhamento com Terceiros',
+    shortTitle: 'Terceiros',
+    icon: ShieldCheck,
+    summary:
+      'Compartilhamos dados apenas quando necessário para infraestrutura, cobrança, e-mails, notificações, suporte, obrigação legal ou operação do pedido.',
+    content: (
+      <>
+        <p>
+          O PratoBy pode utilizar provedores de tecnologia para hospedar dados, autenticar usuários, processar cobrança, enviar e-mails transacionais, entregar notificações push, monitorar erros e manter a plataforma funcionando.
+        </p>
+        <p>
+          Esses provedores recebem apenas os dados necessários para executar suas funções e devem observar medidas adequadas de segurança, confidencialidade e proteção de dados.
+        </p>
+        <p>
+          Também podemos compartilhar informações quando necessário para cumprir obrigação legal, atender ordem de autoridade competente, investigar fraude, proteger direitos do PratoBy, do lojista, do consumidor final ou de terceiros.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'armazenamento-local',
+    title: '5. Cookies, LocalStorage e Preferências',
+    shortTitle: 'Cookies',
+    icon: Database,
+    summary:
+      'Usamos armazenamento local e recursos do navegador para lembrar preferências, facilitar o checkout e manter sessões de uso.',
+    content: (
+      <>
+        <p>
+          Podemos usar cookies, localStorage e tecnologias semelhantes para manter sessão, lembrar preferências, melhorar a experiência do checkout e evitar que o cliente precise digitar os mesmos dados repetidamente no mesmo dispositivo.
+        </p>
+        <p>
+          Dados salvos localmente ficam no navegador ou dispositivo utilizado. Se o aparelho for compartilhado com outras pessoas, recomendamos limpar os dados do navegador ou evitar salvar informações pessoais no checkout.
+        </p>
+        <p>
+          O usuário pode bloquear cookies ou apagar dados locais pelas configurações do navegador. Algumas funções, como login, carrinho, checkout, preferências e notificações, podem deixar de funcionar corretamente se esses recursos forem bloqueados.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'seguranca',
+    title: '6. Segurança e Retenção',
+    shortTitle: 'Segurança',
+    icon: Lock,
+    summary:
+      'Adotamos medidas técnicas e operacionais para proteger os dados, mas nenhum sistema online é totalmente imune a riscos.',
+    content: (
+      <>
+        <p>
+          O PratoBy adota medidas técnicas e organizacionais para proteger dados contra acessos não autorizados, alterações indevidas, perda, uso abusivo e exposição desnecessária. Isso inclui controles de acesso, autenticação, regras de segurança, logs, segregação de permissões e monitoramento operacional.
+        </p>
+        <p>
+          Apesar desses cuidados, nenhum serviço digital é 100% livre de riscos. Por isso, também recomendamos que lojistas usem senhas fortes, protejam seus dispositivos, evitem compartilhar credenciais e revisem permissões de acesso sempre que necessário.
+        </p>
+        <p>
+          Os dados são mantidos pelo tempo necessário para prestar o serviço, cumprir obrigações legais, resolver disputas, prevenir fraude, manter histórico operacional da loja ou atender solicitações legítimas de suporte e auditoria.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'direitos',
+    title: '7. Direitos do Titular de Dados',
+    shortTitle: 'Direitos LGPD',
+    icon: ShieldCheck,
+    summary:
+      'Titulares podem solicitar confirmação, acesso, correção, exclusão, portabilidade e outras medidas previstas na LGPD.',
+    content: (
+      <>
+        <p>
+          Nos termos da Lei Geral de Proteção de Dados, titulares podem solicitar informações e providências sobre seus dados pessoais, incluindo confirmação de tratamento, acesso, correção, anonimização, bloqueio, eliminação, portabilidade, informação sobre compartilhamento e revogação de consentimento quando aplicável.
+        </p>
+        <p>
+          Para exercer seus direitos, entre em contato pelo e-mail <a href={`mailto:${SUPPORT_EMAIL}`} className="font-black text-[#f97316] hover:text-orange-600">{SUPPORT_EMAIL}</a>. Dependendo do tipo de dado e da relação com o pedido, poderemos solicitar informações adicionais para confirmar identidade ou direcionar a solicitação ao lojista responsável pela relação com o consumidor final.
+        </p>
+        <p>
+          Algumas solicitações podem não ser atendidas integralmente quando houver obrigação legal de retenção, necessidade de prevenção à fraude, exercício regular de direitos, cumprimento de contrato ou outra base legal aplicável.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'alteracoes',
+    title: '8. Alterações desta Política',
+    shortTitle: 'Alterações',
+    icon: Clock,
+    summary:
+      'Esta Política pode ser atualizada para acompanhar mudanças no produto, na operação, em provedores ou na legislação.',
+    content: (
+      <>
+        <p>
+          Podemos atualizar esta Política de Privacidade para refletir novos recursos, mudanças técnicas, alterações de fornecedores, ajustes de segurança, exigências legais ou evolução do PratoBy.
+        </p>
+        <p>
+          Quando a alteração for relevante, poderemos comunicar os lojistas pelo painel, e-mail ou outro canal disponível. A versão mais recente ficará sempre publicada nesta página.
+        </p>
+      </>
+    ),
+  },
 ]
 
+function getSectionLabel(section) {
+  return section.shortTitle || section.title.replace(/^\d+\.\s*/, '')
+}
+
 export default function PrivacyPage() {
-  const [activeSection, setActiveSection] = useState('coleta')
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id)
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY + 200
+
       for (const section of SECTIONS) {
         const el = document.getElementById(section.id)
         if (el && el.offsetTop <= scrollPosition && el.offsetTop + el.offsetHeight > scrollPosition) {
@@ -35,247 +214,153 @@ export default function PrivacyPage() {
         }
       }
     }
-    window.addEventListener('scroll', handleScroll)
+
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
   const scrollToSection = (id) => {
     const el = document.getElementById(id)
-    if (el) {
-      window.scrollTo({
-        top: el.offsetTop - 110,
-        behavior: 'smooth',
-      })
-      setActiveSection(id)
-    }
+    if (!el) return
+
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    window.scrollTo({
+      top: el.offsetTop - 110,
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    })
+    setActiveSection(id)
   }
 
   return (
     <MarketingLayout>
       <SEO
-        title="Privacidade | PratoBy"
-        description="Política de privacidade do PratoBy e informações sobre tratamento de dados, pedidos, clientes e lojistas."
+        title="Política de Privacidade | PratoBy"
+        description="Política de privacidade do PratoBy sobre dados de lojistas, clientes, pedidos, notificações, segurança e direitos previstos na LGPD."
         path="/privacidade"
       />
-  
+
       <div className="w-full font-sans text-[#111827] selection:bg-orange-100 selection:text-[#f97316]">
-        {/* HEADER NAV (Corrigido: agora rola junto com a página) */}
         <nav className="w-full border-b border-gray-100 bg-white">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-            <Link to="/" className="group flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-[#111827] transition-colors">
+            <Link to="/" className="group flex items-center gap-2 text-sm font-bold text-gray-500 transition-colors hover:text-[#111827]">
               <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-0.5" />
-              Voltar para a Home
+              Voltar para o início
             </Link>
             <div className="text-sm font-black tracking-tight">
-              Prato<span className="text-[#f97316]">By</span> <span className="text-gray-400 font-medium">· Privacidade</span>
+              Prato<span className="text-[#f97316]">By</span> <span className="font-medium text-gray-400">· Privacidade</span>
             </div>
           </div>
         </nav>
 
-{/* HERO SECTION */}
-<header className="bg-white border-b border-gray-100 py-12 sm:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          
-          {/* Contêiner Flex: items-center alinha na mesma linha, mb-6 afasta do título */}
-          <div className="flex flex-wrap items-center gap-3 mb-6">
-            
-            {/* Badge 1 (Sem mb-4) */}
-            <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500">
-              <Clock size={13} />
-              Última atualização: 19 de Maio de 2026
-            </div>
-            
-            {/* Badge 2 (Sem mb-4) */}
-            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-700">
-              <ShieldCheck size={13} />
-              Em conformidade com a LGPD
+        <header className="border-b border-gray-100 bg-white px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-6 flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-500">
+                <Clock size={13} />
+                Última atualização: {LAST_UPDATED}
+              </div>
+              <div className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                <ShieldCheck size={13} />
+                Alinhada à LGPD
+              </div>
             </div>
 
+            <h1 className="text-4xl font-black tracking-tight text-[#111827] sm:text-5xl">
+              Política de Privacidade
+            </h1>
+            <p className="mt-4 max-w-3xl text-base font-medium leading-relaxed text-gray-500 sm:text-lg">
+              Entenda como o PratoBy usa dados para manter sua loja funcionando, entregar pedidos com segurança e respeitar os direitos de lojistas e consumidores.
+            </p>
           </div>
+        </header>
 
-          <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-[#111827]">
-            Política de Privacidade
-          </h1>
-          <p className="mt-4 text-base sm:text-lg text-gray-500 max-w-2xl font-medium leading-relaxed">
-            Entenda detalhadamente como protegemos as suas informações operacionais e quais os dados coletados para a entrega de pedidos.
-          </p>
-        </div>
-      </header>
+        <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-4">
+            <aside className="sticky top-28 hidden rounded-3xl border border-gray-100 bg-white p-4 shadow-sm lg:block">
+              <p className="mb-3 px-3 text-xs font-black uppercase tracking-wider text-gray-400">Tópicos</p>
+              <nav className="space-y-1" aria-label="Navegação da política de privacidade">
+                {SECTIONS.map((section) => {
+                  const Icon = section.icon
+                  const isActive = activeSection === section.id
 
-      {/* MAIN CONTENT GRID */}
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-          
-          {/* STICKY SIDEBAR NAVIGATION */}
-          <aside className="sticky top-28 hidden lg:block bg-white border border-gray-100 p-4 rounded-3xl shadow-sm">
-            <p className="text-xs font-black uppercase tracking-wider text-gray-400 px-3 mb-3">Tópicos</p>
-            <nav className="space-y-1">
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => scrollToSection(section.id)}
+                      aria-current={isActive ? 'true' : undefined}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-bold transition-all ${
+                        isActive
+                          ? 'bg-orange-50 text-[#f97316]'
+                          : 'text-gray-500 hover:bg-gray-50 hover:text-[#111827]'
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <Icon size={16} className={isActive ? 'text-[#f97316]' : 'text-gray-400'} />
+                        <span className="truncate">{getSectionLabel(section)}</span>
+                      </div>
+                      {isActive && <ChevronRight size={14} className="text-[#f97316]" />}
+                    </button>
+                  )
+                })}
+              </nav>
+            </aside>
+
+            <div className="-mx-4 flex shrink-0 gap-2 overflow-x-auto px-4 pb-3 lg:hidden [&::-webkit-scrollbar]:hidden">
+              {SECTIONS.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => scrollToSection(section.id)}
+                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold shadow-sm ring-1 ring-gray-100 ${
+                    activeSection === section.id
+                      ? 'bg-[#111827] text-white ring-gray-900'
+                      : 'bg-white text-gray-500'
+                  }`}
+                >
+                  {getSectionLabel(section)}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-10 lg:col-span-3">
+              <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50/60 p-5 text-sm font-semibold leading-relaxed text-emerald-950 sm:p-6">
+                <p>
+                  <span className="font-black text-emerald-700">Transparência prática:</span> o PratoBy usa dados para o pedido chegar ao painel certo, para o lojista atender o cliente e para manter a plataforma segura. Não vendemos dados pessoais.
+                </p>
+              </div>
+
               {SECTIONS.map((section) => {
                 const Icon = section.icon
-                const isActive = activeSection === section.id
+
                 return (
-                  <button
+                  <section
                     key={section.id}
-                    onClick={() => scrollToSection(section.id)}
-                    className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-bold transition-all ${
-                      isActive
-                        ? 'bg-orange-50 text-[#f97316]'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-[#111827]'
-                    }`}
+                    id={section.id}
+                    className="scroll-mt-32 rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm sm:p-10"
                   >
-                    <div className="flex items-center gap-2.5 truncate">
-                      <Icon size={16} className={isActive ? 'text-[#f97316]' : 'text-gray-400'} />
-                      <span className="truncate">{section.title.split('. ')[1]}</span>
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-orange-100 bg-orange-50 text-[#f97316]">
+                        <Icon size={20} />
+                      </div>
+                      <h2 className="text-xl font-black text-[#111827] sm:text-2xl">{section.title}</h2>
                     </div>
-                    {isActive && <ChevronRight size={14} className="text-[#f97316]" />}
-                  </button>
+
+                    <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs font-semibold leading-relaxed text-orange-950 sm:text-sm">
+                      <span className="font-black text-[#f97316]">Em poucas palavras:</span> {section.summary}
+                    </div>
+
+                    <div className="space-y-4 text-sm font-medium leading-relaxed text-gray-600 sm:text-base">
+                      {section.content}
+                    </div>
+                  </section>
                 )
               })}
-            </nav>
-          </aside>
-
-          {/* MOBILE QUICK MENU */}
-          <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 -mx-4 px-4 [&::-webkit-scrollbar]:hidden shrink-0">
-            {SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => scrollToSection(section.id)}
-                className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold ring-1 ring-gray-100 shadow-sm ${
-                  activeSection === section.id
-                    ? 'bg-[#111827] text-white ring-gray-900'
-                    : 'bg-white text-gray-500'
-                }`}
-              >
-                {section.title.split('. ')[1]}
-              </button>
-            ))}
+            </div>
           </div>
-
-          {/* PRIVACY POLICY CONTENT */}
-          <div className="lg:col-span-3 space-y-12">
-            
-            {/* SECTION 1 */}
-            <section id="coleta" className="scroll-mt-32 bg-white border border-gray-100 p-6 sm:p-10 rounded-[2rem] shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
-                  <Eye size={20} />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">1. Informações que Coletamos</h2>
-              </div>
-              
-              <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
-                <span className="font-black text-[#f97316]">Em poucas palavras:</span> {SECTIONS[0].summary}
-              </div>
-
-              <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
-                <p>
-                  Para o funcionamento regular da plataforma, coletamos dados em dois fluxos distintos:
-                </p>
-                <ul className="list-disc pl-5 space-y-2 mt-2">
-                  <li><strong>Dados do Lojista:</strong> Nome completo, e-mail comercial, número de telefone, credenciais administrativas e informações para cobrança recorrente.</li>
-                  <li><strong>Dados do Consumidor Final:</strong> Quando um cliente faz um pedido através do link do restaurante, solicitamos o nome, telefone de contato e dados de endereço completo (rua, número, CEP, complemento e bairro) essenciais para a rota de entrega.</li>
-                </ul>
-              </div>
-            </section>
-
-            {/* SECTION 2 */}
-            <section id="uso" className="scroll-mt-32 bg-white border border-gray-100 p-6 sm:p-10 rounded-[2rem] shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
-                  <Settings size={20} />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">2. Como Usamos as Informações</h2>
-              </div>
-              
-              <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
-                <span className="font-black text-[#f97316]">Em poucas palavras:</span> {SECTIONS[1].summary}
-              </div>
-
-              <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
-                <p>
-                  Não vendemos, compartilhamos ou alugamos dados pessoais para empresas de marketing terceiras. Toda a informação coletada é aplicada rigorosamente para os seguintes fins estruturais:
-                </p>
-                <ul className="list-disc pl-5 space-y-2 mt-2">
-                  <li>Processar, validar e notificar os lojistas em tempo real sobre pedidos recebidos.</li>
-                  <li>Calcular dinamicamente a taxa de entrega estipulada pelo lojista para o bairro correspondente do cliente.</li>
-                  <li>Gerenciar o status de presença online da loja para a correta exibição do cardápio digital aos visitantes.</li>
-                </ul>
-              </div>
-            </section>
-
-            {/* SECTION 3 */}
-            <section id="cookies" className="scroll-mt-32 bg-white border border-gray-100 p-6 sm:p-10 rounded-[2rem] shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
-                  <Database size={20} />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">3. Uso de Armazenamento Local e Cookies</h2>
-              </div>
-              
-              <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
-                <span className="font-black text-[#f97316]">Em poucas palavras:</span> {SECTIONS[2].summary}
-              </div>
-
-              <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
-                <p>
-                  Para garantir uma experiência de checkout fluida e ágil (Experiência One-Click), usamos o mecanismo de <strong>localStorage</strong> do próprio navegador do dispositivo do usuário final.
-                </p>
-                <p>
-                  Esse recurso permite armazenar localmente no celular do cliente as informações básicas inseridas no último pedido (como Nome e Endereço). Assim, o cliente não precisa reinserir todos os campos repetidamente a cada nova compra no mesmo restaurante. Estes dados permanecem armazenados estritamente na sandbox do navegador do usuário.
-                </p>
-              </div>
-            </section>
-
-            {/* SECTION 4 */}
-            <section id="seguranca" className="scroll-mt-32 bg-white border border-gray-100 p-6 sm:p-10 rounded-[2rem] shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
-                  <Lock size={20} />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">4. Segurança da Informação</h2>
-              </div>
-              
-              <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
-                <span className="font-black text-[#f97316]">Em poucas palavras:</span> {SECTIONS[3].summary}
-              </div>
-
-              <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
-                <p>
-                  O PratoBy usa infraestrutura moderna baseada em cloud computing para o processamento das transações. Adotamos rígidos protocolos de criptografia de tráfego e firewalls ativos.
-                </p>
-                <p>
-                  Todas as comunicações com as nossas bases de dados de armazenamento contam com regras automáticas severas de leitura e gravação server-side. Isso impede que terceiros mal-intencionados ou agentes externos consigam interceptar os logs operacionais ou desviar relatórios confidenciais de faturamento das lojas.
-                </p>
-              </div>
-            </section>
-
-            {/* SECTION 5 */}
-            <section id="direitos" className="scroll-mt-32 bg-white border border-gray-100 p-6 sm:p-10 rounded-[2rem] shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#f97316] border border-orange-100">
-                  <ShieldCheck size={20} />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#111827]">5. Direitos do Titular de Dados (LGPD)</h2>
-              </div>
-              
-              <div className="mb-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50/40 p-4 text-xs sm:text-sm font-semibold text-orange-950 leading-relaxed">
-                <span className="font-black text-[#f97316]">Em poucas palavras:</span> {SECTIONS[4].summary}
-              </div>
-
-              <div className="prose text-sm sm:text-base text-gray-600 space-y-4 font-medium leading-relaxed">
-                <p>
-                  Em conformidade com as diretrizes legais vigentes da Lei Geral de Proteção de Dados (LGPD), asseguramos aos titulares todos os direitos fundamentais sobre as suas informações armazenadas na nuvem.
-                </p>
-                <p>
-                  Você pode, a qualquer momento, entrar em contato com o nosso canal oficial de suporte para requerer a <strong>confirmação da existência de tratamento, a correção de dados incompletos ou a exclusão definitiva e total</strong> dos seus dados dos nossos servidores, sem custos ou burocracias desnecessárias.
-                </p>
-              </div>
-            </section>
-
-          </div>
-        </div>
-      </main>
+        </main>
       </div>
-  </MarketingLayout>
+    </MarketingLayout>
   )
 }

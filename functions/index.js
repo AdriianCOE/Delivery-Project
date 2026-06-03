@@ -47,11 +47,10 @@ admin.initializeApp()
 
 const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
-// Keep these aligned with Firestore Rules until docs/legal-version-rollout.md is executed.
-const TERMS_VERSION = '2026-05-24'
-const PRIVACY_VERSION = '2026-05-24'
 const REGION = 'southamerica-east1'
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
+const LEGAL_CONFIG_COLLECTION = 'config'
+const LEGAL_CONFIG_DOC = 'legal'
 const merchantOrderFunctions = createMerchantOrderFunctions({
   db,
   admin,
@@ -82,6 +81,28 @@ if (process.env.FUNCTIONS_EMULATOR !== 'true') {
   if (!process.env.SUPPORT_WHATSAPP_URL) {
     logger.warn('[brevo] SUPPORT_WHATSAPP_URL is not configured; support WhatsApp links will be omitted from transactional email params.')
   }
+}
+
+function normalizeLegalVersion(value) {
+  const version = String(value || '').trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(version) ? version : ''
+}
+
+async function getLatestLegalVersions() {
+  const snapshot = await db.collection(LEGAL_CONFIG_COLLECTION).doc(LEGAL_CONFIG_DOC).get()
+  const data = snapshot.exists ? snapshot.data() || {} : {}
+  const termsVersion = normalizeLegalVersion(data.termsVersion)
+  const privacyVersion = normalizeLegalVersion(data.privacyVersion)
+
+  if (!termsVersion || !privacyVersion) {
+    logger.error('[legal] config/legal is missing valid termsVersion/privacyVersion.')
+    throw new HttpsError(
+      'failed-precondition',
+      'Versao vigente dos termos nao configurada.'
+    )
+  }
+
+  return { termsVersion, privacyVersion }
 }
 
 function sanitizePublicTrackingOrderId(value) {
@@ -2478,18 +2499,20 @@ exports.acceptLatestTerms = onCall(
       throw new HttpsError('failed-precondition', 'Perfil do usuário não encontrado.')
     }
 
+    const legalVersions = await getLatestLegalVersions()
+
     await userRef.update({
       termsAccepted: true,
       termsAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-      termsVersion: TERMS_VERSION,
-      privacyVersion: PRIVACY_VERSION,
+      termsVersion: legalVersions.termsVersion,
+      privacyVersion: legalVersions.privacyVersion,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
 
     return {
       ok: true,
-      termsVersion: TERMS_VERSION,
-      privacyVersion: PRIVACY_VERSION,
+      termsVersion: legalVersions.termsVersion,
+      privacyVersion: legalVersions.privacyVersion,
     }
   }
 )

@@ -15,7 +15,12 @@ const FieldValue = admin.firestore.FieldValue
 const BILLING_BLOCKED_PUBLIC_STATUSES = new Set(['blocked', 'canceled'])
 
 const args = new Set(process.argv.slice(2))
-const dryRun = args.has('--dry-run')
+const writeEnabled = args.has('--write')
+const dryRun = !writeEnabled
+
+if (writeEnabled && args.has('--dry-run')) {
+  throw new Error('Use either --dry-run or --write, not both.')
+}
 const storeIdArg = process.argv
   .slice(2)
   .find((arg) => arg.startsWith('--storeId='))
@@ -461,6 +466,7 @@ async function backfillStore(storeDoc, summary) {
 async function main() {
   const summary = {
     dryRun,
+    writeEnabled,
     onlyStoreId: onlyStoreId || null,
     storesScanned: 0,
     publicStoresWritten: 0,
@@ -470,6 +476,10 @@ async function main() {
     categoriesWritten: 0,
     categoriesRemoved: 0,
     batchesCommitted: 0,
+  }
+
+  if (dryRun) {
+    console.log('[publicCatalogBackfill] dry run enabled by default; pass --write to commit changes.')
   }
 
   if (onlyStoreId) {

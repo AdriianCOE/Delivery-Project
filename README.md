@@ -470,8 +470,8 @@ Script de backfill:
 ```bash
 cd functions
 npm run backfill:public-catalog -- --dry-run
-npm run backfill:public-catalog -- --storeId=STORE_ID
-npm run backfill:public-catalog
+npm run backfill:public-catalog -- --write --storeId=STORE_ID
+npm run backfill:public-catalog -- --write
 ```
 
 Para a loja de teste citada nas conversas:
@@ -479,7 +479,7 @@ Para a loja de teste citada nas conversas:
 ```bash
 cd functions
 npm run backfill:public-catalog -- --dry-run --storeId=2pdPYIKOofJjdRwvCKad
-npm run backfill:public-catalog -- --storeId=2pdPYIKOofJjdRwvCKad
+npm run backfill:public-catalog -- --write --storeId=2pdPYIKOofJjdRwvCKad
 ```
 
 ---

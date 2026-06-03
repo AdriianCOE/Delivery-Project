@@ -384,8 +384,7 @@ export default function Statistics() {
   const knownStoreIds = useMemo(() => {
     const raw = [authStoreId, ...(Array.isArray(authStoreIds) ? authStoreIds : []), user?.storeId, ...(Array.isArray(user?.storeIds) ? user.storeIds : [])]
     return [...new Set(raw.map(id => String(id || '').trim()).filter(Boolean))].slice(0, 10)
-  }, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
-  const knownStoreIdsKey = useMemo(() => knownStoreIds.join('|'), [knownStoreIds])
+  }, [authStoreId, authStoreIds, user])
 
   const [orders, setOrders] = useState([])
   const [stores, setStores] = useState([])
@@ -409,8 +408,19 @@ export default function Statistics() {
 
   // ── Store listeners (one per known storeId)
   useEffect(() => {
-    if (!user?.uid || !knownStoreIds.length) { setStores([]); setOrders([]); setLoading(false); return }
-    setLoading(true)
+    let cancelled = false
+    const scheduleState = (callback) => {
+      queueMicrotask(() => {
+        if (!cancelled) callback()
+      })
+    }
+
+    if (!user?.uid || !knownStoreIds.length) {
+      scheduleState(() => { setStores([]); setOrders([]); setLoading(false) })
+      return () => { cancelled = true }
+    }
+
+    scheduleState(() => setLoading(true))
     const map = new Map()
     const unsubs = []
     function publish() {
@@ -426,36 +436,88 @@ export default function Statistics() {
       }, err => { console.error('[Stats] store err', err); publish() })
       unsubs.push(u)
     })
-    if (!unsubs.length) { setStores([]); setOrders([]); setLoading(false) }
-    return () => unsubs.forEach(u => u())
-  }, [user?.uid, knownStoreIdsKey])
+    if (!unsubs.length) {
+      scheduleState(() => { setStores([]); setOrders([]); setLoading(false) })
+    }
+    return () => {
+      cancelled = true
+      unsubs.forEach(u => u())
+    }
+  }, [user?.uid, knownStoreIds])
 
   // ── Auto-select store
   useEffect(() => {
-    if (!stores.length) { setSelectedStoreId(''); return }
-    setSelectedStoreId(cur => {
-      if (stores.some(s => storeKeys(s).includes(cur))) return cur
-      const saved = safeLS(SELECTED_STATISTICS_STORE_KEY)
-      if (stores.some(s => storeKeys(s).includes(saved))) return saved
-      return storeKeys(stores[0])[0] || stores[0].id
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      if (!stores.length) { setSelectedStoreId(''); return }
+      setSelectedStoreId(cur => {
+        if (stores.some(s => storeKeys(s).includes(cur))) return cur
+        const saved = safeLS(SELECTED_STATISTICS_STORE_KEY)
+        if (stores.some(s => storeKeys(s).includes(saved))) return saved
+        return storeKeys(stores[0])[0] || stores[0].id
+      })
     })
+
+    return () => { cancelled = true }
   }, [stores])
 
-  // ── Orders listener (62-day window so prev-period comparison works)
+  // ── Orders load (62-day window so prev-period comparison works)
   useEffect(() => {
-    if (authLoading) { setOrders([]); setLoading(true); return }
-    if (!selectedStore || !canRead) { setOrders([]); setLoading(false); return }
+    let mounted = true
+    const scheduleState = (callback) => {
+      queueMicrotask(() => {
+        if (mounted) callback()
+      })
+    }
+
+    if (authLoading) {
+      scheduleState(() => { setOrders([]); setLoading(true) })
+      return () => { mounted = false }
+    }
+    if (!selectedStore || !canRead) {
+      scheduleState(() => { setOrders([]); setLoading(false) })
+      return () => { mounted = false }
+    }
 
     const idKeys = [selectedStore?.id, selectedStore?.storeId, selectedStore?.storeDocId].filter(Boolean).map(String).filter((v, i, a) => a.indexOf(v) === i).slice(0, 10)
     const slugKeys = [selectedStore?.storeSlug, selectedStore?.slug].filter(Boolean).map(String).filter((v, i, a) => a.indexOf(v) === i && !idKeys.includes(v)).slice(0, 10)
-    if (!idKeys.length) { setOrders([]); setLoading(false); return }
+    if (!idKeys.length) {
+      scheduleState(() => { setOrders([]); setLoading(false) })
+      return () => { mounted = false }
+    }
 
-    setLoading(true)
+    scheduleState(() => setLoading(true))
     const cutoff = Timestamp.fromDate(new Date(Date.now() - 62 * 86400000))
-    const map = new Map()
-    let slugDone = false, mounted = true
 
-    function publish() {
+    async function loadOrders() {
+      const map = new Map()
+
+      try {
+        const idSnap = await getDocs(query(collection(db, 'orders'), where('storeId', 'in', idKeys), where('createdAt', '>=', cutoff), orderBy('createdAt', 'desc')))
+        idSnap.docs.forEach(d => map.set(d.id, { id: d.id, ...d.data() }))
+
+        if (slugKeys.length) {
+          try {
+            const slugSnap = await getDocs(query(collection(db, 'orders'), where('storeSlug', 'in', slugKeys), where('createdAt', '>=', cutoff), orderBy('createdAt', 'desc')))
+            slugSnap.docs.forEach(d => { if (!map.has(d.id)) map.set(d.id, { id: d.id, ...d.data() }) })
+          } catch (e) {
+            if (e?.code !== 'permission-denied') console.warn('[Stats] slug fallback', e.message)
+          }
+        }
+      } catch (e) {
+        if (e?.code !== 'permission-denied') console.error('[Stats] orders err', e)
+
+        if (slugKeys.length) {
+          try {
+            const slugSnap = await getDocs(query(collection(db, 'orders'), where('storeSlug', 'in', slugKeys), where('createdAt', '>=', cutoff), orderBy('createdAt', 'desc')))
+            slugSnap.docs.forEach(d => map.set(d.id, { id: d.id, ...d.data() }))
+          } catch (slugError) {
+            if (slugError?.code !== 'permission-denied') console.warn('[Stats] slug fallback after id query error', slugError.message)
+          }
+        }
+      }
+
       if (!mounted) return
       const data = Array.from(map.values()).sort((a, b) => (getOrderDate(b)?.getTime() || 0) - (getOrderDate(a)?.getTime() || 0))
       setOrders(data)
@@ -463,30 +525,9 @@ export default function Statistics() {
       setLoading(false)
     }
 
-    async function slugFallback(why) {
-      if (slugDone || !slugKeys.length) return
-      slugDone = true
-      try {
-        const snap = await getDocs(query(collection(db, 'orders'), where('storeSlug', 'in', slugKeys), where('createdAt', '>=', cutoff), orderBy('createdAt', 'desc')))
-        snap.docs.forEach(d => { if (!map.has(d.id)) map.set(d.id, { id: d.id, ...d.data() }) })
-      } catch (e) { if (e?.code !== 'permission-denied') console.warn('[Stats] slug fallback', why, e.message) }
-      finally { publish() }
-    }
+    void loadOrders()
 
-    const unsub = onSnapshot(
-      query(collection(db, 'orders'), where('storeId', 'in', idKeys), where('createdAt', '>=', cutoff), orderBy('createdAt', 'desc')),
-      snap => {
-        snap.docs.forEach(d => map.set(d.id, { id: d.id, ...d.data() }))
-        if (slugKeys.length && !slugDone) { void slugFallback('compat'); if (snap.empty) return }
-        publish()
-      },
-      err => {
-        if (err?.code !== 'permission-denied') console.error('[Stats] orders err', err)
-        void slugFallback('id query error')
-        publish()
-      }
-    )
-    return () => { mounted = false; unsub() }
+    return () => { mounted = false }
   }, [authLoading, canRead, selectedStore, _refreshNonce])
 
   const handleRefresh = useCallback(() => { setRefreshNonce((value) => value + 1); setOrders([]); setLoading(true) }, [])

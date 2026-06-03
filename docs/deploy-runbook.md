@@ -13,6 +13,37 @@ node --check publicOrder.js
 node --check scripts/backfillPublicCatalog.js
 ```
 
+## Gates Operacionais Antes do Piloto
+
+Antes de vender para lojista real, confirme estes pontos fora do codigo:
+
+- App Check no Firebase Console em modo monitor para o Web App e Hosting.
+- Build do frontend com `VITE_FIREBASE_APPCHECK_ENABLED=true` e `VITE_FIREBASE_APPCHECK_SITE_KEY` validado em producao assistida.
+- Somente depois dos testes publicos, ativar `ENFORCE_APP_CHECK=true` nas Functions publicas.
+- `/config/legal` criado no Firestore antes de publicar Rules, Functions e Hosting que leem `termsVersion`/`privacyVersion`.
+- `cleanupAnonymousUsers` conferida em dry run antes de qualquer delecao real.
+- Para limpeza real monitorada, configurar em producao `CLEANUP_ANONYMOUS_USERS_ENABLED=true` e `CLEANUP_ANONYMOUS_USERS_DRY_RUN=false` somente durante a janela operacional; depois voltar `CLEANUP_ANONYMOUS_USERS_DRY_RUN=true` se a limpeza nativa do Firebase nao estiver habilitada.
+- Push FCM de novo pedido validado em runtime com token real em `stores/{storeId}/notificationTokens`, permission/subscription ativa no navegador do lojista e pedido criado via loja publica.
+
+Fluxo minimo para validar App Check antes de enforcement:
+
+1. Abrir uma loja publica por slug.
+2. Carregar catalogo.
+3. Validar cupom valido e invalido.
+4. Criar pedido publico.
+5. Abrir tracking do pedido.
+6. Confirmar recebimento no tracking.
+7. Enviar avaliacao no tracking.
+
+Fluxo minimo para validar FCM merchant:
+
+1. Entrar no dashboard da loja em navegador real.
+2. Ativar notificacoes e confirmar token em `stores/{storeId}/notificationTokens/{tokenHash}`.
+3. Criar pedido real pela loja publica.
+4. Confirmar log de envio de `sendNewOrderPushToStore`.
+5. Confirmar notificacao recebida no navegador do lojista.
+6. Se houver falha, registrar navegador, service worker ativo, token hash, `storeId` e erro de push.
+
 ## Deploy de Rules e Índices
 
 Faça o deploy das regras antes dos lotes de Functions. As regras do Realtime Database são necessárias para o presence público (`presence` e `presenceCounts`).
