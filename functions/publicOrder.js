@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const { normalizeBrazilianPhone } = require('./shared/phone')
+const { buildOrderSchedulingDecision } = require('./shared/orderScheduling')
 
 class PublicOrderError extends Error {
   constructor(code, message) {
@@ -741,6 +742,7 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
 
   let subtotalCents = 0
   const items = []
+  const schedulingProducts = []
 
   for (const item of inputItems) {
     const product = await getProduct(db, item.productId, storeKeys)
@@ -769,6 +771,12 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
     const optionsSummary = buildOptionsSummary(optionGroupsSnapshot, addons.addonSnapshots)
     const oldPriceCents = getProductOldPriceCents(product)
     const acceptsCoupons = productAcceptsCoupons(product)
+
+    schedulingProducts.push({
+      productId: product.id,
+      name: sanitizeText(product.name || 'Produto', 160),
+      scheduling: product.scheduling,
+    })
 
     items.push({
       id: product.id,
@@ -803,7 +811,24 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
     })
   }
 
-  return { items, subtotalCents }
+  return { items, subtotalCents, schedulingProducts }
+}
+
+function buildFirestoreSchedulingFields(admin, decision) {
+  const toTimestamp = (value) => value ? admin.firestore.Timestamp.fromDate(value) : null
+
+  return {
+    orderTiming: decision.orderTiming,
+    scheduledFor: toTimestamp(decision.scheduledFor),
+    scheduledWindowStart: toTimestamp(decision.scheduledWindowStart),
+    scheduledWindowEnd: toTimestamp(decision.scheduledWindowEnd),
+    scheduledDateKey: decision.scheduledDateKey,
+    scheduledTimeLabel: decision.scheduledTimeLabel,
+    scheduledSlotKey: decision.scheduledSlotKey,
+    schedulingSnapshot: decision.schedulingSnapshot,
+    paymentPolicy: decision.paymentPolicy,
+    paymentPolicyReason: decision.paymentPolicyReason,
+  }
 }
 
 function couponDateToMillis(value) {
@@ -901,12 +926,22 @@ function calculateCouponDiscount({ coupon, items, subtotalCents }) {
 }
 
 function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
-  const normalizedType = String(deliveryType || '').trim().toLowerCase()
-  const isDelivery = ['delivery', 'entrega'].includes(normalizedType)
+  const normalizedType = normalizePublicOrderDeliveryType(deliveryType)
+  const isDelivery = normalizedType === 'delivery'
+  const isPickup = normalizedType === 'pickup'
 
-  if (!isDelivery) return { deliveryType: 'pickup', neighborhood: '', deliveryFeeCents: 0 }
+  if (!isDelivery && !isPickup) {
+    fail('invalid-argument', 'Tipo de pedido invalido. Escolha entrega ou retirada.')
+  }
 
   const settings = store?.settings || {}
+  if (isPickup) {
+    if (store?.acceptPickup === false || settings.acceptPickup === false) {
+      fail('failed-precondition', 'Retirada indisponivel para esta loja.')
+    }
+    return { deliveryType: 'pickup', neighborhood: '', deliveryFeeCents: 0 }
+  }
+
   if (store?.acceptDelivery === false || settings.acceptDelivery === false) {
     fail('failed-precondition', 'Entrega indisponivel para esta loja.')
   }
@@ -947,6 +982,23 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
     neighborhoodAliases: [cleanNeighborhood],
     deliveryFeeCents: getPriceCents({ price: store?.deliveryFee, priceCents: store?.deliveryFeeCents }),
   }
+}
+
+function normalizePublicOrderDeliveryType(value) {
+  const normalized = normalizeText(value).replace(/[\s-]+/g, '_')
+  if (!normalized) return 'pickup'
+  if (['delivery', 'entrega'].includes(normalized)) return 'delivery'
+  if ([
+    'pickup',
+    'retirada',
+    'retirar',
+    'takeaway',
+    'takeout',
+    'balcao',
+    'retirada_loja',
+    'retirada_na_loja',
+  ].includes(normalized)) return 'pickup'
+  return null
 }
 
 function normalizePixKey(key, keyType) {
@@ -1261,7 +1313,7 @@ function createPublicOrderHandler({
         }
       }
 
-      const { items, subtotalCents } = await buildServerOrderItems(db, input.items, storeKeys)
+      const { items, subtotalCents, schedulingProducts } = await buildServerOrderItems(db, input.items, storeKeys)
 
       if (subtotalCents <= 0 || subtotalCents > maxOrderCents) {
         fail('failed-precondition', 'Subtotal do pedido invalido.')
@@ -1279,6 +1331,31 @@ function createPublicOrderHandler({
       const couponCode = sanitizeText(input.couponCode || input.coupon?.code, 80).toUpperCase()
 
       const result = await db.runTransaction(async (transaction) => {
+        const liveStoreSnapshot = await transaction.get(db.collection('stores').doc(storeDocId))
+        if (!liveStoreSnapshot.exists) fail('failed-precondition', 'Loja indisponivel para pedidos.')
+
+        const liveStore = {
+          ...store,
+          ...(liveStoreSnapshot.data() || {}),
+          id: liveStoreSnapshot.id,
+          docId: liveStoreSnapshot.id,
+        }
+
+        if (!isPublicStoreActive(liveStore)) fail('failed-precondition', 'Loja indisponivel para pedidos.')
+        assertStoreBillingAllowsPublicOrder(liveStore, logger)
+
+        const schedulingDecision = buildOrderSchedulingDecision({
+          store: liveStore,
+          storeId: storeDocId,
+          products: schedulingProducts,
+          input,
+          deliveryType: delivery.deliveryType,
+          paymentMethod: input.paymentMethod,
+          now: new Date(),
+          fail,
+        })
+        const schedulingFields = buildFirestoreSchedulingFields(admin, schedulingDecision)
+
         // 1. Check phone rate limit
         const rateLimitRef = db.collection('rateLimits').doc(`createPublicOrder_${storeDocId}_${phoneHash}`)
         const rateLimitSnap = await transaction.get(rateLimitRef)
@@ -1360,7 +1437,7 @@ function createPublicOrderHandler({
         }
 
         const paymentSnapshot = getPaymentMethodSnapshot({
-          store,
+          store: liveStore,
           paymentMethod: input.paymentMethod,
           totalCents,
           changeFor: input.changeFor,
@@ -1428,6 +1505,7 @@ function createPublicOrderHandler({
           total: centsToMoney(totalCents),
           totalCents,
           ...paymentSnapshot,
+          ...schedulingFields,
           couponId: couponResult?.id || null,
           couponCode: couponResult?.code || null,
           coupon: couponResult
@@ -1490,6 +1568,7 @@ function createPublicOrderHandler({
           }, { merge: true })
         }
 
+        // TODO(v2): reserve scheduledSlotKey in a capacity document inside this transaction.
         transaction.set(orderRef, orderPayload)
 
         if (couponResult?.ref) {
@@ -1549,4 +1628,5 @@ function createPublicOrderHandler({
 
 module.exports = {
   createPublicOrderHandler,
+  normalizePublicOrderDeliveryType,
 }

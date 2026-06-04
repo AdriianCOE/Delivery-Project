@@ -16,6 +16,7 @@ import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
 import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
 import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
 import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
+import { getCallableErrorMessage } from '../../utils/callableError'
 
 import {
   FiBarChart2,
@@ -1344,7 +1345,7 @@ export default function DashboardLayout() {
       },
       (err) => {
         console.error('Erro ao escutar dados da loja no Topbar:', err)
-        setStoreError(err)
+        setStoreError('Não foi possível carregar o status atual da loja.')
         setStoreLoading(false)
       }
     )
@@ -1371,7 +1372,7 @@ export default function DashboardLayout() {
       setConfirmStatusModalOpen(false)
     } catch (err) {
       console.error('Erro ao alternar status da loja:', err)
-      setStoreError(err)
+      setStoreError(getCallableErrorMessage(err, 'Ocorreu um erro ao atualizar o status. Tente novamente.'))
     } finally {
       setStoreToggleLoading(false)
     }
@@ -1850,13 +1851,13 @@ export default function DashboardLayout() {
 
                   <p className="mt-2 text-xs font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
                     {storeData.isOpen
-                      ? 'Ao fechar a loja, clientes no site não conseguirão enviar novos pedidos no cardápio.'
+                      ? 'Finalize ou cancele os pedidos ativos antes de fechar. Depois disso, novos pedidos ficarão pausados.'
                       : 'Ao abrir a loja, novos pedidos começarão a chegar no painel.'}
                   </p>
 
                   {storeError && (
                     <p className="mt-2 text-xs font-semibold text-red-500">
-                      Ocorreu um erro ao atualizar o status. Tente novamente.
+                      {storeError}
                     </p>
                   )}
 

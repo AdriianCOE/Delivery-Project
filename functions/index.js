@@ -23,6 +23,11 @@ const {
   normalizeBrazilianPhone,
   validateBrazilianMobilePhone,
 } = require('./shared/phone')
+const {
+  sanitizePublicProductScheduling,
+  sanitizePublicStoreScheduling,
+  sanitizeStoreScheduling,
+} = require('./shared/publicScheduling')
 
 const {
   BREVO_API_KEY,
@@ -526,7 +531,7 @@ const PUBLIC_STORE_FIELDS = [
   'deliveryFeeCents', 'deliveryFees', 'acceptDelivery', 'acceptPickup', 'acceptDineIn',
   'paymentMethods', 'pix', 'pixKey', 'pixKeyType', 'address', 'cep', 'street', 'number',
   'neighborhood', 'city', 'state', 'rating', 'promoBanner', 'promotionBanner',
-  'marketingBanner', 'adBanner', 'promoBanners', 'banners',
+  'marketingBanner', 'adBanner', 'promoBanners', 'banners', 'publicScheduling',
 ]
 
 const PUBLIC_CATEGORY_FIELDS = [
@@ -542,7 +547,7 @@ const PUBLIC_PRODUCT_FIELDS = [
   'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
   'isPopular', 'isPromotion', 'isPromotional',
   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
-  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime',
+  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime', 'scheduling',
 ]
 
 const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
@@ -552,7 +557,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
-  'number', 'neighborhood', 'complement', 'city', 'state',
+  'number', 'neighborhood', 'complement', 'city', 'state', 'scheduling',
 ])
 
 const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
@@ -565,6 +570,15 @@ const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
   'lastPaymentId', 'lastPaymentStatus',
   'createdAt', 'createdBy', 'deletedAt', 'isDeleted',
 ])
+
+const STORE_ACTIVE_ORDER_STATUSES = [
+  'pendente', 'pending', 'novo', 'new', 'received', 'recebido', 'aguardando',
+  'aguardando_confirmacao', 'awaiting_confirmation',
+  'confirmado', 'confirmed', 'aceito', 'accepted',
+  'preparando', 'preparing', 'em_preparo', 'preparo', 'in_preparation', 'in_progress',
+  'pronto', 'pronta', 'ready', 'ready_for_pickup', 'aguardando_retirada',
+  'em_rota', 'out_for_delivery', 'entregando', 'saiu_para_entrega', 'saiu_entrega', 'em_entrega',
+]
 
 function uniqueTruthy(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
@@ -795,6 +809,7 @@ function sanitizePublicStore(data) {
   profile.pix = {
     enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
   }
+  profile.publicScheduling = sanitizePublicStoreScheduling(data)
 
   return profile
 }
@@ -804,7 +819,13 @@ function publicProductIsVisible(data) {
 }
 
 function sanitizePublicProduct(data) {
-  return pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
+  const product = pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
+  const scheduling = sanitizePublicProductScheduling(data?.scheduling)
+
+  if (scheduling) product.scheduling = scheduling
+  else delete product.scheduling
+
+  return product
 }
 
 function publicCategoryIsVisible(data) {
@@ -919,7 +940,7 @@ function isPublicItemVisible(item) {
     item?.showInStorefront !== false
 }
 
-async function loadPublicSubcollection(storeRecord, subcollection, publicFields) {
+async function loadPublicSubcollection(storeRecord, subcollection, sanitizePublic) {
   const results = new Map()
   const lookupKeys = getStoreLookupKeys(storeRecord)
 
@@ -928,7 +949,7 @@ async function loadPublicSubcollection(storeRecord, subcollection, publicFields)
     publicSnapshot.docs.forEach((docSnapshot) => {
       const data = docSnapshot.data() || {}
       results.set(docSnapshot.id, {
-        ...pickPublicFields(data, publicFields),
+        ...sanitizePublic(data),
         id: docSnapshot.id,
       })
     })
@@ -943,7 +964,7 @@ async function loadPublicSubcollection(storeRecord, subcollection, publicFields)
       snapshot.docs.forEach((docSnapshot) => {
         const data = docSnapshot.data() || {}
         results.set(docSnapshot.id, {
-          ...pickPublicFields(data, publicFields),
+          ...sanitizePublic(data),
           id: docSnapshot.id,
           storeId: data.storeId || key,
         })
@@ -1046,6 +1067,14 @@ function sanitizeStoreSettingsPayload(payload) {
       throw new HttpsError('permission-denied', `Campo "${key}" contém dados restritos.`)
     }
 
+    if (key === 'scheduling') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new HttpsError('invalid-argument', 'Configuracao de agendamento invalida.')
+      }
+      acc.scheduling = sanitizeStoreScheduling(value)
+      return acc
+    }
+
     const cleanValue = cleanCallableFirestoreValue(value)
     if (cleanValue !== undefined) acc[key] = cleanValue
     return acc
@@ -1073,6 +1102,31 @@ function assertPixPaymentSettingsPatch(patch) {
 
   if (!hasPixKey || !hasPixMerchantName || !hasPixMerchantCity) {
     throw new HttpsError('failed-precondition', 'Preencha chave, nome e cidade para ativar Pix.')
+  }
+}
+
+async function assertStoreHasNoActiveOrders(storeId, storeData) {
+  const storeKeys = buildPublicStoreKeys(storeId, storeData).slice(0, 10)
+
+  for (const key of storeKeys) {
+    const activeOrderSnapshot = await db.collection('orders')
+      .where('storeId', '==', key)
+      .where('status', 'in', STORE_ACTIVE_ORDER_STATUSES)
+      .limit(1)
+      .get()
+
+    if (!activeOrderSnapshot.empty) {
+      const activeOrder = activeOrderSnapshot.docs[0]
+      throw new HttpsError(
+        'failed-precondition',
+        'Finalize ou cancele os pedidos ativos antes de fechar a loja.',
+        {
+          reason: 'active-orders',
+          orderId: activeOrder.id,
+          status: activeOrder.data()?.status || 'pendente',
+        }
+      )
+    }
   }
 }
 
@@ -1211,8 +1265,8 @@ exports.getPublicCatalog = onCall(
     }
 
     const [categories, products] = await Promise.all([
-      loadPublicSubcollection(storeRecord, 'categories', PUBLIC_CATEGORY_FIELDS),
-      loadPublicSubcollection(storeRecord, 'products', PUBLIC_PRODUCT_FIELDS),
+      loadPublicSubcollection(storeRecord, 'categories', sanitizePublicCategory),
+      loadPublicSubcollection(storeRecord, 'products', sanitizePublicProduct),
     ])
 
     return {
@@ -1366,6 +1420,10 @@ exports.updateStoreSettings = onCall(
     assertPixPaymentSettingsPatch(patch)
     if (Object.keys(patch).length === 0) {
       return { ok: true, updatedFields: [] }
+    }
+
+    if (patch.isOpen === false && storeData.isOpen !== false) {
+      await assertStoreHasNoActiveOrders(storeId, storeData)
     }
 
     patch.updatedAt = admin.firestore.FieldValue.serverTimestamp()

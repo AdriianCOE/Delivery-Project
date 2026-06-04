@@ -53,6 +53,7 @@ import {
   getDisplayStoreName,
   getMerchantDisplayLogoUrl,
 } from '../../utils/merchantDisplayBranding'
+import { getOrderSlaState, getOrderStatusStartedAtMillis } from '../../utils/orderSla'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -138,16 +139,7 @@ function useElapsed(ts) {
 function cn(...classes) { return classes.filter(Boolean).join(' ') }
 
 function getSortTimestamp(order) {
-  const val = order.confirmedAt || order.acceptedAt || order.updatedAt || order.createdAt
-  if (!val) return 0
-  if (val.toDate) return val.toDate().getTime()
-  if (val instanceof Date) return val.getTime()
-  if (typeof val === 'number') return val
-  try {
-    return new Date(val).getTime()
-  } catch {
-    return 0
-  }
+  return getOrderStatusStartedAtMillis(order) || 0
 }
 
 function compareOrdersOldestFirst(a, b) {
@@ -265,20 +257,18 @@ function useKdsTheme() {
 
 // ─── Elapsed badge ────────────────────────────────────────────────────────────
 
-function ElapsedBadge({ createdAt, status, t }) {
-  const { elapsed, diffMin } = useElapsed(createdAt)
-  const showDelay = status === 'confirmado' || status === 'preparando'
-  const urgent = showDelay && diffMin >= 20
-  const warning = showDelay && diffMin >= 10
+function ElapsedBadge({ sla, t }) {
+  const warning = sla.active && !sla.overdue && sla.remainingMinutes <= 5
+
   return (
     <span className={cn(
       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums',
-      urgent ? 'animate-pulse bg-red-500/20 text-red-400 ring-1 ring-red-500/40'
+      sla.overdue ? 'animate-pulse bg-red-500/20 text-red-400 ring-1 ring-red-500/40'
         : warning ? t('bg-amber-500/15 text-amber-400', 'bg-amber-100 text-amber-700')
         : t('bg-zinc-800 text-zinc-400', 'bg-gray-100 text-gray-600')
     )}>
       <FiClock size={12} />
-      {elapsed}
+      {sla.elapsed} / {sla.thresholdMinutes}min
     </span>
   )
 }
@@ -320,6 +310,17 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
   const normalizedStatus = normalizeKdsStatus(order.status)
   const cfg = STATUS_CFG[normalizedStatus] || STATUS_CFG.pendente
   const nextAction = getKdsNextAction(order, normalizedStatus, cfg)
+  const baseSla = getOrderSlaState(order)
+  const elapsed = useElapsed(baseSla.startedAtMillis)
+  const sla = {
+    ...baseSla,
+    ...elapsed,
+    overdue: baseSla.active && elapsed.diffMin >= baseSla.thresholdMinutes,
+    remainingMinutes: Math.max(0, (baseSla.thresholdMinutes || 0) - elapsed.diffMin),
+    overdueMinutes: baseSla.active && elapsed.diffMin >= baseSla.thresholdMinutes
+      ? Math.max(1, elapsed.diffMin - baseSla.thresholdMinutes)
+      : 0,
+  }
   const [loading, setLoading] = useState(false)
   const [actionError, setActionError] = useState('')
 
@@ -367,7 +368,9 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
     <article className={cn(
       'relative flex flex-col rounded-2xl border transition-all duration-300',
       t('bg-zinc-900', 'bg-white shadow-md'),
-      cfg.border[isDark ? 'dark' : 'light'],
+      sla.overdue
+        ? t('border-red-500 ring-2 ring-red-500/50', 'border-red-500 ring-2 ring-red-300 shadow-red-100')
+        : cfg.border[isDark ? 'dark' : 'light'],
       isNew && 'ring-2 ring-orange-500 ring-offset-2 scale-[1.01] shadow-2xl',
       isNew && t('ring-offset-zinc-950', 'ring-offset-gray-100'),
     )}>
@@ -400,7 +403,7 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <OrderTypeBadge order={order} t={t} />
-          <ElapsedBadge createdAt={order.createdAt} status={normalizedStatus} t={t} />
+          <ElapsedBadge sla={sla} t={t} />
         </div>
       </div>
 
@@ -437,6 +440,16 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
           {cfg.label}
         </span>
       </div>
+
+      {sla.overdue && (
+        <div className={cn(
+          'mx-4 mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black',
+          t('border-red-500/30 bg-red-500/10 text-red-300', 'border-red-200 bg-red-50 text-red-700')
+        )}>
+          <FiAlertCircle size={14} className="animate-pulse" />
+          Etapa atrasada há {sla.overdueMinutes}min. Priorize este pedido.
+        </div>
+      )}
 
       {actionError && (
         <div className={cn(

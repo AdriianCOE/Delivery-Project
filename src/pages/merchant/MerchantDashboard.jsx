@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { captureAppError } from '../../services/sentry'
 import { getPricingValidation } from '../../utils/orderValidation'
+import { getCallableErrorMessage } from '../../utils/callableError'
+import { getOrderSlaState, isOrderActiveStatus } from '../../utils/orderSla'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -165,7 +167,6 @@ const PERIOD_OPTIONS = [
   { label: '30 dias', days: 30 },
 ]
 
-const ACTIVE_STATUSES = ['pendente', 'preparando', 'em_rota']
 const FINISHED_STATUSES = ['entregue']
 const CANCELED_STATUSES = ['cancelado']
 
@@ -520,24 +521,6 @@ function timeAgo(order) {
   return `${Math.floor(diff / 86400)}d atrás`
 }
 
-function getPendingMinutes(order) {
-  const date = getOrderDate(order)
-
-  if (!date) return 0
-
-  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
-}
-
-function isUrgentPending(order, minutes = 3) {
-  if (normalizeStatus(order?.status) !== 'pendente') return false
-
-  const date = getOrderDate(order)
-
-  if (!date) return false
-
-  return Date.now() - date.getTime() > minutes * 60 * 1000
-}
-
 function getOrderHour(order) {
   const date = getOrderDate(order)
 
@@ -766,8 +749,9 @@ function StatusPill({ status }) {
   )
 }
 
-function OrderRow({ order }) {
-  const urgent = isUrgentPending(order, 3)
+function OrderRow({ order, now }) {
+  const sla = getOrderSlaState(order, now)
+  const urgent = sla.overdue
   const customerName = getCustomerName(order)
   const initials = customerName.substring(0, 2).toUpperCase()
   const promoSavings = getOrderPromotionSavings(order)
@@ -796,7 +780,7 @@ function OrderRow({ order }) {
           {urgent && (
   <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
     <FiAlertTriangle size={11} />
-    {getPendingMinutes(order)}min parado
+    {sla.elapsedMinutes}min nesta etapa
   </span>
 )}
         </div>
@@ -951,6 +935,7 @@ export default function MerchantDashboard() {
   const [hasCatalog, setHasCatalog] = useState(true)
   const [loadingCatalog, setLoadingCatalog] = useState(true)
   const [storeActionLoading, setStoreActionLoading] = useState(false)
+  const [slaNow, setSlaNow] = useState(() => Date.now())
 
   const period = PERIOD_OPTIONS[periodIdx]
 
@@ -1006,6 +991,12 @@ const showToast = useCallback(
   (type, message) => setToast({ type, message }),
   []
 )
+
+useEffect(() => {
+  const interval = window.setInterval(() => setSlaNow(Date.now()), 30000)
+  return () => window.clearInterval(interval)
+}, [])
+
   const handleSelectStore = useCallback((storeId) => {
     setSelectedStoreId(storeId)
     safeSetLocalStorage(SELECTED_STORE_KEY, storeId)
@@ -1045,7 +1036,7 @@ const showToast = useCallback(
       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
     } catch (error) {
       console.error('Erro ao atualizar status da loja:', error)
-      showToast('error', 'Erro ao atualizar o status da loja.')
+      showToast('error', getCallableErrorMessage(error, 'Erro ao atualizar o status da loja.'))
     } finally {
       setStoreActionLoading(false)
     }
@@ -1298,17 +1289,17 @@ subscribeOrders(query(
 
     const validOrders = periodOrders.filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
     const deliveredOrders = validOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
-    const activeOrders = orders.filter((order) => ACTIVE_STATUSES.includes(normalizeStatus(order.status)))
+    const activeOrders = orders.filter((order) => isOrderActiveStatus(order.status))
 
-  const urgentOrders = activeOrders.filter((order) => isUrgentPending(order, 3))
+  const urgentOrders = activeOrders.filter((order) => getOrderSlaState(order, slaNow).overdue)
 const priceReviewOrders = activeOrders.filter((order) => {
   const status = order?.pricingValidation?.status
 
   return status === 'review' || status === 'invalid' || order?.requiresManualPriceReview === true
 })
 
-const oldestPendingMinutes = urgentOrders.reduce((max, order) => {
-  return Math.max(max, getPendingMinutes(order))
+const oldestOverdueMinutes = urgentOrders.reduce((max, order) => {
+  return Math.max(max, getOrderSlaState(order, slaNow).overdueMinutes)
 }, 0)
 
     const revenue = validOrders.reduce((acc, order) => acc + getOrderTotal(order), 0)
@@ -1405,7 +1396,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
       averageTicket,
       uniqueCustomers,
       completionRate,
-      oldestPendingMinutes,
+      oldestOverdueMinutes,
       previousRevenue,
       revenueDelta,
       ordersDelta,
@@ -1421,7 +1412,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
       routeCount: orders.filter((o) => normalizeStatus(o.status) === 'entregando').length,
       canceledCount: periodOrders.filter((o) => normalizeStatus(o.status) === 'cancelado').length,
     }
-  }, [orders, period.days])
+  }, [orders, period.days, slaNow])
 
   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
 
@@ -1695,8 +1686,8 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Atenção</p>
                   <p className="mt-1 text-xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.urgentOrders.length}</p>
                   <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
-                    {dashboardData.oldestPendingMinutes > 0
-                      ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
+                    {dashboardData.oldestOverdueMinutes > 0
+                      ? `Maior atraso de etapa: ${dashboardData.oldestOverdueMinutes} min`
                       : 'Nenhum pedido atrasado'}
                   </p>
                 </div>
@@ -1857,8 +1848,8 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   {dashboardData?.urgentOrders?.length || 0}
                 </p>
                 <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
-                  {dashboardData?.oldestPendingMinutes > 0
-                    ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
+                  {dashboardData?.oldestOverdueMinutes > 0
+                    ? `Maior atraso de etapa: ${dashboardData.oldestOverdueMinutes} min`
                     : 'Nenhum pedido crítico no momento'}
                 </p>
               </div>
@@ -2012,7 +2003,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
                   </div>
                 ) : recentOrders.length > 0 ? (
                   <div>
-                    {recentOrders.map((order) => <OrderRow key={order.id} order={order} />)}
+                    {recentOrders.map((order) => <OrderRow key={order.id} order={order} now={slaNow} />)}
                   </div>
                 ) : (
                   <div className="p-6">

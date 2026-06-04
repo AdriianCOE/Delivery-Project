@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 const admin = require('firebase-admin')
+const {
+  sanitizePublicProductScheduling,
+  sanitizePublicStoreScheduling,
+} = require('../shared/publicScheduling')
 
 admin.initializeApp({
   projectId:
@@ -208,6 +212,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
     isDeleted: data.isDeleted === true,
     address: sanitizePublicAddress(data),
     settings: sanitizePublicStoreSettings(data.settings),
+    publicScheduling: sanitizePublicStoreScheduling(data),
   }
 
   if (data.pix && typeof data.pix === 'object') {
@@ -311,6 +316,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
       'updatedAt',
       'createdAt',
     ]),
+    scheduling: sanitizePublicProductScheduling(data.scheduling),
     id: productId,
     productId,
     storeId,

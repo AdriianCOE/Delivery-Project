@@ -1,0 +1,498 @@
+diff --git a/functions/index.js b/functions/index.js
+index 41c840fd..81737b20 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -23,6 +23,11 @@ const {
+   normalizeBrazilianPhone,
+   validateBrazilianMobilePhone,
+ } = require('./shared/phone')
++const {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++  sanitizeStoreScheduling,
++} = require('./shared/publicScheduling')
+ 
+ const {
+   BREVO_API_KEY,
+@@ -526,7 +531,7 @@ const PUBLIC_STORE_FIELDS = [
+   'deliveryFeeCents', 'deliveryFees', 'acceptDelivery', 'acceptPickup', 'acceptDineIn',
+   'paymentMethods', 'pix', 'pixKey', 'pixKeyType', 'address', 'cep', 'street', 'number',
+   'neighborhood', 'city', 'state', 'rating', 'promoBanner', 'promotionBanner',
+-  'marketingBanner', 'adBanner', 'promoBanners', 'banners',
++  'marketingBanner', 'adBanner', 'promoBanners', 'banners', 'publicScheduling',
+ ]
+ 
+ const PUBLIC_CATEGORY_FIELDS = [
+@@ -542,7 +547,7 @@ const PUBLIC_PRODUCT_FIELDS = [
+   'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
+   'isPopular', 'isPromotion', 'isPromotional',
+   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
+-  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime',
++  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime', 'scheduling',
+ ]
+ 
+ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+@@ -552,7 +557,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
+-  'number', 'neighborhood', 'complement', 'city', 'state',
++  'number', 'neighborhood', 'complement', 'city', 'state', 'scheduling',
+ ])
+ 
+ const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
+@@ -795,6 +809,7 @@ function sanitizePublicStore(data) {
+   profile.pix = {
+     enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
+   }
++  profile.publicScheduling = sanitizePublicStoreScheduling(data)
+ 
+   return profile
+ }
+@@ -804,7 +819,13 @@ function publicProductIsVisible(data) {
+ }
+ 
+ function sanitizePublicProduct(data) {
+-  return pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
++  const product = pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
++  const scheduling = sanitizePublicProductScheduling(data?.scheduling)
++
++  if (scheduling) product.scheduling = scheduling
++  else delete product.scheduling
++
++  return product
+ }
+ 
+ function publicCategoryIsVisible(data) {
+@@ -919,7 +940,7 @@ function isPublicItemVisible(item) {
+     item?.showInStorefront !== false
+ }
+ 
+-async function loadPublicSubcollection(storeRecord, subcollection, publicFields) {
++async function loadPublicSubcollection(storeRecord, subcollection, sanitizePublic) {
+   const results = new Map()
+   const lookupKeys = getStoreLookupKeys(storeRecord)
+ 
+@@ -928,7 +949,7 @@ async function loadPublicSubcollection(storeRecord, subcollection, publicFields)
+     publicSnapshot.docs.forEach((docSnapshot) => {
+       const data = docSnapshot.data() || {}
+       results.set(docSnapshot.id, {
+-        ...pickPublicFields(data, publicFields),
++        ...sanitizePublic(data),
+         id: docSnapshot.id,
+       })
+     })
+@@ -943,7 +964,7 @@ async function loadPublicSubcollection(storeRecord, subcollection, publicFields)
+       snapshot.docs.forEach((docSnapshot) => {
+         const data = docSnapshot.data() || {}
+         results.set(docSnapshot.id, {
+-          ...pickPublicFields(data, publicFields),
++          ...sanitizePublic(data),
+           id: docSnapshot.id,
+           storeId: data.storeId || key,
+         })
+@@ -1046,6 +1067,14 @@ function sanitizeStoreSettingsPayload(payload) {
+       throw new HttpsError('permission-denied', `Campo "${key}" contém dados restritos.`)
+     }
+ 
++    if (key === 'scheduling') {
++      if (!value || typeof value !== 'object' || Array.isArray(value)) {
++        throw new HttpsError('invalid-argument', 'Configuracao de agendamento invalida.')
++      }
++      acc.scheduling = sanitizeStoreScheduling(value)
++      return acc
++    }
++
+     const cleanValue = cleanCallableFirestoreValue(value)
+     if (cleanValue !== undefined) acc[key] = cleanValue
+     return acc
+@@ -1211,8 +1265,8 @@ exports.getPublicCatalog = onCall(
+     }
+ 
+     const [categories, products] = await Promise.all([
+-      loadPublicSubcollection(storeRecord, 'categories', PUBLIC_CATEGORY_FIELDS),
+-      loadPublicSubcollection(storeRecord, 'products', PUBLIC_PRODUCT_FIELDS),
++      loadPublicSubcollection(storeRecord, 'categories', sanitizePublicCategory),
++      loadPublicSubcollection(storeRecord, 'products', sanitizePublicProduct),
+     ])
+ 
+     return {
+diff --git a/functions/scripts/backfillPublicCatalog.js b/functions/scripts/backfillPublicCatalog.js
+index 85b2f33c..1bfe62b9 100644
+--- a/functions/scripts/backfillPublicCatalog.js
++++ b/functions/scripts/backfillPublicCatalog.js
+@@ -1,6 +1,10 @@
+ #!/usr/bin/env node
+ 
+ const admin = require('firebase-admin')
++const {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++} = require('../shared/publicScheduling')
+ 
+ admin.initializeApp({
+   projectId:
+@@ -208,6 +212,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
+     isDeleted: data.isDeleted === true,
+     address: sanitizePublicAddress(data),
+     settings: sanitizePublicStoreSettings(data.settings),
++    publicScheduling: sanitizePublicStoreScheduling(data),
+   }
+ 
+   if (data.pix && typeof data.pix === 'object') {
+@@ -311,6 +316,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
+       'updatedAt',
+       'createdAt',
+     ]),
++    scheduling: sanitizePublicProductScheduling(data.scheduling),
+     id: productId,
+     productId,
+     storeId,
+diff --git a/functions/shared/publicScheduling.js b/functions/shared/publicScheduling.js
+new file mode 100644
+index 00000000..4dad3744
+--- /dev/null
++++ b/functions/shared/publicScheduling.js
+@@ -0,0 +1,171 @@
++const DAY_KEYS = [
++  'sunday',
++  'monday',
++  'tuesday',
++  'wednesday',
++  'thursday',
++  'friday',
++  'saturday',
++]
++const PRODUCT_MODES = new Set([
++  'store_default',
++  'asap_only',
++  'scheduled_only',
++  'asap_and_scheduled',
++])
++const STORE_PREPAYMENT_POLICIES = new Set([
++  'none',
++  'pix_required_for_scheduled',
++  'pix_required_for_custom_products',
++])
++const PRODUCT_PREPAYMENT_POLICIES = new Set([
++  'store_default',
++  'none',
++  'pix_required',
++])
++
++function isObject(value) {
++  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
++}
++
++function toBoundedInteger(value, fallback, min, max) {
++  if (value === undefined || value === null || value === '') return fallback
++  const parsed = Number(value)
++  if (!Number.isFinite(parsed)) return fallback
++  return Math.max(min, Math.min(max, Math.floor(parsed)))
++}
++
++function toNullableBoundedInteger(value, min, max) {
++  if (value === undefined || value === null || value === '') return null
++  const parsed = Number(value)
++  if (!Number.isFinite(parsed)) return null
++  return Math.max(min, Math.min(max, Math.floor(parsed)))
++}
++
++function parseTimeToMinutes(value, allowEndOfDay = false) {
++  const text = String(value || '').trim()
++  const match = /^(\d{2}):(\d{2})$/.exec(text)
++  if (!match) return null
++
++  const hour = Number(match[1])
++  const minute = Number(match[2])
++  if (allowEndOfDay && hour === 24 && minute === 0) return 24 * 60
++  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
++  return (hour * 60) + minute
++}
++
++function normalizeWindow(value) {
++  if (!isObject(value)) return null
++  const start = String(value.start || value.from || '').trim()
++  const end = String(value.end || value.to || '').trim()
++  const startMinute = parseTimeToMinutes(start)
++  const endMinute = parseTimeToMinutes(end, true)
++
++  if (startMinute === null || endMinute === null || endMinute <= startMinute) return null
++  return { start, end }
++}
++
++function emptyWeeklyWindows() {
++  return DAY_KEYS.reduce((acc, day) => {
++    acc[day] = []
++    return acc
++  }, {})
++}
++
++function normalizeWeeklyWindows(value, allowNull = false) {
++  if (!isObject(value)) return allowNull ? null : emptyWeeklyWindows()
++
++  return DAY_KEYS.reduce((acc, day) => {
++    const windows = Array.isArray(value[day]) ? value[day].slice(0, 24) : []
++    acc[day] = windows.map(normalizeWindow).filter(Boolean)
++    return acc
++  }, {})
++}
++
++function isValidDateKey(value) {
++  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim())
++  if (!match) return false
++
++  const year = Number(match[1])
++  const month = Number(match[2])
++  const day = Number(match[3])
++  const date = new Date(Date.UTC(year, month - 1, day))
++
++  return date.getUTCFullYear() === year
++    && date.getUTCMonth() === month - 1
++    && date.getUTCDate() === day
++}
++
++function normalizeBlockedDates(value) {
++  if (!Array.isArray(value)) return []
++  return [...new Set(value
++    .map((date) => String(date || '').trim())
++    .filter(isValidDateKey)
++    .slice(0, 400))]
++}
++
++function sanitizeStoreScheduling(value, {
++  acceptDelivery = true,
++  acceptPickup = true,
++} = {}) {
++  const raw = isObject(value) ? value : {}
++  const rawFulfillment = isObject(raw.fulfillmentTypes) ? raw.fulfillmentTypes : {}
++
++  return {
++    enabled: raw.enabled === true,
++    minLeadMinutes: toBoundedInteger(raw.minLeadMinutes, 0, 0, 525600),
++    maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, 30, 0, 365),
++    slotIntervalMinutes: toBoundedInteger(raw.slotIntervalMinutes, 30, 5, 1440),
++    fulfillmentTypes: {
++      delivery: acceptDelivery !== false && rawFulfillment.delivery !== false,
++      pickup: acceptPickup !== false && rawFulfillment.pickup !== false,
++    },
++    weeklyWindows: normalizeWeeklyWindows(raw.weeklyWindows),
++    blockedDates: normalizeBlockedDates(raw.blockedDates),
++    prepaymentPolicy: STORE_PREPAYMENT_POLICIES.has(raw.prepaymentPolicy)
++      ? raw.prepaymentPolicy
++      : 'none',
++  }
++}
++
++function sanitizePublicStoreScheduling(store = {}) {
++  const raw = isObject(store?.scheduling)
++    ? store.scheduling
++    : isObject(store?.publicScheduling)
++      ? store.publicScheduling
++      : {}
++
++  return sanitizeStoreScheduling(raw, {
++    acceptDelivery: store?.acceptDelivery !== false && store?.settings?.acceptDelivery !== false,
++    acceptPickup: store?.acceptPickup !== false && store?.settings?.acceptPickup !== false,
++  })
++}
++
++function sanitizePublicProductScheduling(value) {
++  if (!isObject(value)) return undefined
++  const rawFulfillment = isObject(value.fulfillmentTypes) ? value.fulfillmentTypes : null
++
++  return {
++    mode: PRODUCT_MODES.has(value.mode) ? value.mode : 'store_default',
++    minLeadMinutes: toNullableBoundedInteger(value.minLeadMinutes, 0, 525600),
++    maxDaysAhead: toNullableBoundedInteger(value.maxDaysAhead, 0, 365),
++    slotIntervalMinutes: toNullableBoundedInteger(value.slotIntervalMinutes, 5, 1440),
++    fulfillmentTypes: rawFulfillment
++      ? {
++          delivery: rawFulfillment.delivery !== false,
++          pickup: rawFulfillment.pickup !== false,
++        }
++      : null,
++    weeklyWindows: normalizeWeeklyWindows(value.weeklyWindows, true),
++    blockedDates: normalizeBlockedDates(value.blockedDates),
++    prepaymentPolicy: PRODUCT_PREPAYMENT_POLICIES.has(value.prepaymentPolicy)
++      ? value.prepaymentPolicy
++      : 'store_default',
++  }
++}
++
++module.exports = {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++  sanitizeStoreScheduling,
++}
+diff --git a/functions/shared/publicScheduling.test.js b/functions/shared/publicScheduling.test.js
+new file mode 100644
+index 00000000..2a5ecdf7
+--- /dev/null
++++ b/functions/shared/publicScheduling.test.js
+@@ -0,0 +1,165 @@
++const test = require('node:test')
++const assert = require('node:assert/strict')
++const {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++  sanitizeStoreScheduling,
++} = require('./publicScheduling')
++
++test('keeps stores without scheduling compatible with safe disabled defaults', () => {
++  assert.deepEqual(sanitizePublicStoreScheduling({
++    acceptDelivery: true,
++    acceptPickup: false,
++  }), {
++    enabled: false,
++    minLeadMinutes: 0,
++    maxDaysAhead: 30,
++    slotIntervalMinutes: 30,
++    fulfillmentTypes: {
++      delivery: true,
++      pickup: false,
++    },
++    weeklyWindows: {
++      sunday: [],
++      monday: [],
++      tuesday: [],
++      wednesday: [],
++      thursday: [],
++      friday: [],
++      saturday: [],
++    },
++    blockedDates: [],
++    prepaymentPolicy: 'none',
++  })
++})
++
++test('publishes only safe normalized store scheduling fields', () => {
++  const result = sanitizePublicStoreScheduling({
++    acceptDelivery: true,
++    acceptPickup: true,
++    scheduling: {
++      enabled: true,
++      minLeadMinutes: -20,
++      maxDaysAhead: 900,
++      slotIntervalMinutes: 2,
++      maxOrdersPerSlot: 12,
++      internalNote: 'secret',
++      fulfillmentTypes: { delivery: false },
++      weeklyWindows: {
++        monday: [
++          { start: '08:00', end: '18:00', capacity: 10 },
++          { start: '19:00', end: '18:00' },
++          { start: 'invalid', end: '20:00' },
++        ],
++        internalDay: [{ start: '00:00', end: '24:00' }],
++      },
++      blockedDates: ['2026-12-25', '2026-02-30', 'secret'],
++      prepaymentPolicy: 'pix_required_for_scheduled',
++      pixKey: 'sensitive',
++    },
++  })
++
++  assert.equal(result.enabled, true)
++  assert.equal(result.minLeadMinutes, 0)
++  assert.equal(result.maxDaysAhead, 365)
++  assert.equal(result.slotIntervalMinutes, 5)
++  assert.deepEqual(result.fulfillmentTypes, { delivery: false, pickup: true })
++  assert.deepEqual(result.weeklyWindows.monday, [{ start: '08:00', end: '18:00' }])
++  assert.deepEqual(result.blockedDates, ['2026-12-25'])
++  assert.equal(result.prepaymentPolicy, 'pix_required_for_scheduled')
++  assert.equal(Object.hasOwn(result, 'maxOrdersPerSlot'), false)
++  assert.equal(Object.hasOwn(result, 'internalNote'), false)
++  assert.equal(Object.hasOwn(result, 'pixKey'), false)
++})
++
++test('normalizes store settings writes without retaining unknown fields', () => {
++  const result = sanitizeStoreScheduling({
++    enabled: true,
++    minLeadMinutes: '120',
++    weeklyWindows: {
++      friday: [{ from: '09:00', to: '17:00', private: true }],
++    },
++    maxOrdersPerSlot: 4,
++  })
++
++  assert.equal(result.minLeadMinutes, 120)
++  assert.deepEqual(result.weeklyWindows.friday, [{ start: '09:00', end: '17:00' }])
++  assert.equal(Object.hasOwn(result, 'maxOrdersPerSlot'), false)
++})
++
++test('omits product scheduling when the product has no scheduling object', () => {
++  assert.equal(sanitizePublicProductScheduling(undefined), undefined)
++  assert.equal(sanitizePublicProductScheduling(null), undefined)
++})
++
++test('publishes only safe normalized product scheduling fields', () => {
++  const result = sanitizePublicProductScheduling({
++    mode: 'scheduled_only',
++    minLeadMinutes: 2880,
++    maxDaysAhead: 'invalid',
++    slotIntervalMinutes: 10,
++    fulfillmentTypes: { delivery: false },
++    weeklyWindows: {
++      friday: [{ start: '08:00', end: '20:00', capacity: 20 }],
++    },
++    blockedDates: ['2026-12-25', 'invalid'],
++    prepaymentPolicy: 'pix_required',
++    costPrice: 99,
++    supplier: 'internal',
++  })
++
++  assert.deepEqual(result, {
++    mode: 'scheduled_only',
++    minLeadMinutes: 2880,
++    maxDaysAhead: null,
++    slotIntervalMinutes: 10,
++    fulfillmentTypes: {
++      delivery: false,
++      pickup: true,
++    },
++    weeklyWindows: {
++      sunday: [],
++      monday: [],
++      tuesday: [],
++      wednesday: [],
++      thursday: [],
++      friday: [{ start: '08:00', end: '20:00' }],
++      saturday: [],
++    },
++    blockedDates: ['2026-12-25'],
++    prepaymentPolicy: 'pix_required',
++  })
++})
++
++test('normalizes invalid product scheduling values without throwing', () => {
++  assert.deepEqual(sanitizePublicProductScheduling({
++    mode: 'internal_mode',
++    minLeadMinutes: 'invalid',
++    maxDaysAhead: -5,
++    slotIntervalMinutes: 9999,
++    fulfillmentTypes: 'invalid',
++    weeklyWindows: {
++      monday: [{ start: '25:00', end: '26:00' }],
++    },
++    blockedDates: ['2026-13-01'],
++    prepaymentPolicy: 'internal_policy',
++    maxOrdersPerSlot: 10,
++  }), {
++    mode: 'store_default',
++    minLeadMinutes: null,
++    maxDaysAhead: 0,
++    slotIntervalMinutes: 1440,
++    fulfillmentTypes: null,
++    weeklyWindows: {
++      sunday: [],
++      monday: [],
++      tuesday: [],
++      wednesday: [],
++      thursday: [],
++      friday: [],
++      saturday: [],
++    },
++    blockedDates: [],
++    prepaymentPolicy: 'store_default',
++  })
++})

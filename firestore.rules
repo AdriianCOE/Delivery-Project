@@ -225,6 +225,7 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('staff')
         && storeFieldUnchanged('createdAt')
         && storeFieldUnchanged('createdBy')
+        && storeFieldUnchanged('isOpen')
         && storeFieldUnchanged('isBlocked')
         && storeFieldUnchanged('isBillingBlocked')
         && storeFieldUnchanged('isDeleted')
@@ -467,7 +468,8 @@ function validPublicOrderCreate(orderId) {
     match /stores/{storeId} {
       allow get, list: if canManageStoreData(resource.data);
       allow create: if isAdmin();
-      allow update: if isAdmin() || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
+      allow update: if (isAdmin() && storeFieldUnchanged('isOpen'))
+        || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
       allow delete: if isAdmin();
 
       match /notificationTokens/{tokenId} {

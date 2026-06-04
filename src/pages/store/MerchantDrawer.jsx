@@ -30,6 +30,7 @@ import {
   getStoreKeys,
   buildStoreScopedPayload,
 } from '../../utils/storeIdentity'
+import { getCallableErrorMessage } from '../../utils/callableError'
 
 import {
   isProductDeleted,
@@ -256,7 +257,7 @@ export default function MerchantDrawer({
       showToast(newStatus ? 'Boas vendas! A loja foi aberta.' : 'Loja fechada com sucesso.')
     } catch (error) {
       console.error(error)
-      showToast('Falha ao alterar status da loja.')
+      showToast(getCallableErrorMessage(error, 'Falha ao alterar status da loja.'))
     } finally {
       setLoading(false)
     }

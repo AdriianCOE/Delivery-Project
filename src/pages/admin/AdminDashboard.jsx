@@ -9,8 +9,10 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
-import { db } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
+import { getCallableErrorMessage } from '../../utils/callableError'
 
 import {
   FiActivity,
@@ -965,15 +967,25 @@ export default function AdminDashboard() {
         : store[field] ?? true
 
     try {
-      await updateDoc(doc(db, 'stores', storeDocId), {
-        [field]: !currentValue,
-        updatedAt: serverTimestamp(),
-      })
+      if (field === 'isOpen') {
+        const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+        await updateStoreSettings({
+          storeId: storeDocId,
+          payload: {
+            isOpen: !currentValue,
+          },
+        })
+      } else {
+        await updateDoc(doc(db, 'stores', storeDocId), {
+          [field]: !currentValue,
+          updatedAt: serverTimestamp(),
+        })
+      }
 
       showToast('success', 'Status da loja atualizado.')
     } catch (error) {
       console.error(error)
-      showToast('error', 'Erro ao atualizar loja.')
+      showToast('error', getCallableErrorMessage(error, 'Erro ao atualizar loja.'))
     }
   },
   [showToast]
@@ -1071,6 +1083,17 @@ export default function AdminDashboard() {
       const deliveryFee = parseCurrency(editForm.deliveryFee)
       const whatsapp = normalizePhoneBR(editForm.whatsapp)
       const instagram = sanitizeSocial(editForm.instagram)
+      const currentIsOpen = editingStore.isOpen ?? true
+
+      if (editForm.isOpen !== currentIsOpen) {
+        const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+        await updateStoreSettings({
+          storeId: storeDocId,
+          payload: {
+            isOpen: editForm.isOpen,
+          },
+        })
+      }
 
       await updateDoc(doc(db, 'stores', storeDocId), {
         name: editForm.name.trim(),
@@ -1091,7 +1114,6 @@ export default function AdminDashboard() {
         minOrderCents: Math.round(minOrder * 100),
         deliveryFee,
         deliveryFeeCents: Math.round(deliveryFee * 100),
-        isOpen: editForm.isOpen,
         isActive: editForm.isActive,
         isBlocked: editForm.isBlocked,
         updatedAt: serverTimestamp(),
@@ -1101,7 +1123,7 @@ export default function AdminDashboard() {
       closeEditModal()
     } catch (error) {
       console.error(error)
-      showToast('error', 'Erro ao salvar loja.')
+      showToast('error', getCallableErrorMessage(error, 'Erro ao salvar loja.'))
     } finally {
       setSaving(false)
     }

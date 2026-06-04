@@ -13,6 +13,8 @@ import {
   shouldBlockOrderAcceptance,
   shouldWarnOrderAcceptance,
 } from '../../utils/orderValidation'
+import { getCallableErrorMessage } from '../../utils/callableError'
+import { getOrderSlaState } from '../../utils/orderSla'
 import {
   collection,
   doc,
@@ -165,6 +167,7 @@ const STATUS_META = {
 const MAIN_STATUS_TABS = [
   { key: 'todos', label: 'Todos' },
   { key: 'ativos', label: 'Ativos' },
+  { key: 'atrasados', label: 'Atrasados' },
   { key: 'pendente', label: 'Pendentes' },
   { key: 'preparando', label: 'Em preparo' },
   { key: 'pronto', label: 'Prontos' },
@@ -479,24 +482,6 @@ function timeAgo(order) {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h atrás`
 
   return `${Math.floor(diff / 86400)}d atrás`
-}
-
-function getPendingMinutes(order) {
-  const date = getOrderDate(order)
-
-  if (!date) return 0
-
-  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
-}
-
-function isLatePending(order) {
-  if (normalizeStatus(order?.status) !== 'pendente') return false
-
-  const date = getOrderDate(order)
-
-  if (!date) return false
-
-  return Date.now() - date.getTime() > 3 * 60 * 1000
 }
 
 function shouldShowCustomerThanksAction(order) {
@@ -1960,12 +1945,13 @@ function OrderContactTimeline({ order }) {
 }
 
 
-function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
+function OrderCard({ order, now, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
   const status = normalizeStatus(order.status)
   const meta = STATUS_META[status] || STATUS_META.pendente
   const nextStatus = getNextStatus(status, order)
   const address = getAddress(order)
-  const late = isLatePending(order)
+  const sla = getOrderSlaState(order, now)
+  const isOverdue = sla.overdue
   const promotionSavings = getOrderPromotionSavings(order)
   const discount = getOrderDiscount(order)
   const cancellationReason = getCancellationReason(order)
@@ -2197,18 +2183,22 @@ const statusMeta = statusMetaMap[status] || {
     whileHover={{ y: -2 }}
     transition={{ type: 'spring', stiffness: 320, damping: 28 }}
     className={`group relative overflow-hidden rounded-[1.6rem] border transition-all duration-200 ${
-      isFinished
+      isOverdue
+        ? 'border-red-400 bg-red-50/40 ring-2 ring-red-500/40 shadow-lg shadow-red-200/50 dark:border-red-500/60 dark:bg-red-500/[0.08] dark:ring-red-500/30 dark:shadow-red-950/30'
+        : isFinished
         ? 'border-gray-100 bg-white/75 opacity-80 hover:opacity-95 dark:border-white/6 dark:bg-[#0d0d11]/85'
         : 'border-gray-100 bg-white dark:border-white/10 dark:bg-[#101015]'
     } ${
-      isLatest
+      isLatest && !isOverdue
         ? 'ring-1 ring-orange-400/60 shadow-[0_0_0_1px_rgba(249,115,22,0.12),0_18px_40px_-24px_rgba(249,115,22,0.5)] dark:ring-orange-500/50'
         : 'shadow-sm shadow-gray-200/50 dark:shadow-black/20'
     }`}
   >
     <div
       className={`absolute inset-y-0 left-0 w-1 ${
-        isCancelled
+        isOverdue
+          ? 'bg-gradient-to-b from-red-500 to-red-700'
+          : isCancelled
           ? 'bg-gradient-to-b from-red-500 to-red-600'
           : isFinished
             ? 'bg-gradient-to-b from-orange-400 to-orange-500'
@@ -2242,6 +2232,13 @@ const statusMeta = statusMetaMap[status] || {
           >
             {statusMeta.label}
           </span>
+
+          {isOverdue && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-600 bg-red-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm shadow-red-500/20">
+              <FiAlertTriangle size={11} className="animate-pulse" />
+              Atrasado {sla.overdueMinutes}min
+            </span>
+          )}
 
           {isLatest && (
             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
@@ -2293,17 +2290,27 @@ const statusMeta = statusMetaMap[status] || {
 
       {/* Coluna 3: status/resumo */}
       <div className="min-w-0">
-        <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 dark:border-white/6 dark:bg-white/[0.03]">
+        <div className={`rounded-2xl border px-4 py-3 ${
+          isOverdue
+            ? 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10'
+            : 'border-gray-100 bg-white dark:border-white/6 dark:bg-white/[0.03]'
+        }`}>
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
             Situação
           </p>
           <p className="mt-1 text-[14px] font-extrabold text-[#111827] dark:text-zinc-100">
             {statusMeta.summary}
           </p>
-          <p className="mt-1 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
-            {isFinished
-              ? 'Concluido no historico'
-              : 'Acompanhe a proxima etapa'}
+          <p className={`mt-1 text-[12px] font-bold ${
+            isOverdue ? 'text-red-700 dark:text-red-300' : 'text-gray-500 dark:text-zinc-500'
+          }`}>
+            {sla.active
+              ? isOverdue
+                ? `${sla.elapsedMinutes}min nesta etapa · limite ${sla.thresholdMinutes}min`
+                : `${sla.elapsedMinutes}min nesta etapa · alerta em ${sla.remainingMinutes}min`
+              : isFinished
+                ? 'Concluido no historico'
+                : 'Acompanhe a proxima etapa'}
           </p>
         </div>
       </div>
@@ -2589,6 +2596,7 @@ function FinancialSummary({ order }) {
 
 function OrderModal({
   order,
+  now,
   store,
   onClose,
   onUpdateStatus,
@@ -2600,6 +2608,7 @@ function OrderModal({
   updatingStatus,
 }) {
   const status = normalizeStatus(order.status)
+  const sla = getOrderSlaState(order, now)
   const meta = STATUS_META[status] || STATUS_META.pendente
   const address = getAddress(order)
   const items = getOrderItems(order)
@@ -2680,6 +2689,12 @@ function OrderModal({
                   Pedido {getOrderDisplayNumber(order)}
                 </h2>
                 <StatusBadge status={order.status} />
+                {sla.overdue && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white ring-1 ring-red-700">
+                    <FiAlertTriangle size={12} className="animate-pulse" />
+                    Etapa atrasada
+                  </span>
+                )}
                 <PricingValidationBadge order={order} />
                 {status === 'cancelado' && cancellationReason && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200 dark:bg-red-950/50 dark:text-red-400 dark:ring-red-900">
@@ -2752,6 +2767,17 @@ function OrderModal({
             </div>
           </div>
           <PricingValidationAlert order={order} />
+          {sla.overdue && (
+            <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              <FiAlertTriangle size={17} className="mt-0.5 shrink-0 animate-pulse" />
+              <div>
+                <p className="text-sm font-black">Este pedido ultrapassou o tempo esperado da etapa.</p>
+                <p className="mt-0.5 text-xs font-bold">
+                  {sla.elapsedMinutes}min nesta etapa · limite {sla.thresholdMinutes}min
+                </p>
+              </div>
+            </div>
+          )}
           <OrderContactTimeline order={order} />
           {showCustomerThanksAction && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
@@ -3062,6 +3088,7 @@ export default function OrdersPage() {
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState('')
   const [storeActionLoading, setStoreActionLoading] = useState(false)
+  const [slaNow, setSlaNow] = useState(() => Date.now())
   const [toast, setToast] = useState(null)
   const [newOrderIds, setNewOrderIds] = useState(() => new Set())
   const [latestNewOrderId, setLatestNewOrderId] = useState('')
@@ -3090,6 +3117,11 @@ export default function OrdersPage() {
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
+  }, [])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setSlaNow(Date.now()), 30000)
+    return () => window.clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -3134,7 +3166,11 @@ export default function OrdersPage() {
       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
     } catch (error) {
       console.error('Erro ao atualizar status da loja:', error)
-      showToast('error', 'Erro ao atualizar o status da loja.')
+      if (error?.details?.reason === 'active-orders') {
+        setDateFilter('all')
+        setStatusFilter('ativos')
+      }
+      showToast('error', getCallableErrorMessage(error, 'Erro ao atualizar o status da loja.'))
     } finally {
       setStoreActionLoading(false)
     }
@@ -3780,6 +3816,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     const counts = {
       todos: orders.length,
       ativos: 0,
+      atrasados: 0,
       pendente: 0,
       confirmado: 0,
       preparando: 0,
@@ -3796,13 +3833,17 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         counts.ativos += 1
       }
 
+      if (getOrderSlaState(order, slaNow).overdue) {
+        counts.atrasados += 1
+      }
+
       if (counts[status] !== undefined) {
         counts[status] += 1
       }
     })
 
     return counts
-  }, [orders])
+  }, [orders, slaNow])
 
   const moreFiltersActive = MORE_STATUS_FILTER_KEYS.has(statusFilter)
   const moreFiltersCount = MORE_STATUS_TABS.reduce(
@@ -3827,7 +3868,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       ACTIVE_STATUSES.includes(normalizeStatus(order.status))
     )
 
-    const latePendingOrders = orders.filter(isLatePending)
+    const overdueOrders = orders.filter((order) => getOrderSlaState(order, slaNow).overdue)
 
     const revenueToday = validTodayOrders.reduce(
       (acc, order) => acc + getOrderTotal(order),
@@ -3844,9 +3885,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       revenueToday,
       economyToday,
       activeCount: activeOrders.length,
-      latePendingCount: latePendingOrders.length,
+      overdueCount: overdueOrders.length,
     }
-  }, [orders])
+  }, [orders, slaNow])
 
   const filteredOrders = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -3856,6 +3897,8 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
       if (statusFilter === 'ativos') {
         if (!ACTIVE_STATUSES.includes(status)) return false
+      } else if (statusFilter === 'atrasados') {
+        if (!getOrderSlaState(order, slaNow).overdue) return false
       } else if (statusFilter !== 'todos' && status !== statusFilter) {
         return false
       }
@@ -3886,7 +3929,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
       return searchableText.includes(term)
     })
-  }, [dateFilter, orders, search, statusFilter])
+  }, [dateFilter, orders, search, slaNow, statusFilter])
 
   return (
     <main className="min-h-full">
@@ -3985,7 +4028,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
           <>
 
 
-            {summary.latePendingCount > 0 && (
+            {summary.overdueCount > 0 && (
   <div className="mb-6 rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-red-700 shadow-lg shadow-red-100/70 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200 dark:shadow-red-950/20">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
@@ -3995,23 +4038,22 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
         <div>
           <p className="text-sm font-black">
-            {summary.latePendingCount} pedido
-            {summary.latePendingCount > 1 ? 's' : ''} pendente
-            {summary.latePendingCount > 1 ? 's' : ''} há mais de 3 minutos
+            {summary.overdueCount} pedido
+            {summary.overdueCount > 1 ? 's' : ''} acima do tempo esperado
           </p>
 
           <p className="mt-1 text-xs font-bold leading-5 text-red-600 dark:text-red-300">
-            Priorize esses pedidos para não deixar o cliente esperando sem confirmação.
+            Priorize as etapas atrasadas para manter a operação e o cliente atualizados.
           </p>
         </div>
       </div>
 
       <button
         type="button"
-        onClick={() => setStatusFilter('pendente')}
+        onClick={() => setStatusFilter('atrasados')}
         className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-red-700"
       >
-        Ver pendentes
+        Ver atrasados
       </button>
     </div>
   </div>
@@ -4053,9 +4095,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               <StatCard
                 icon={FiAlertTriangle}
                 label="Precisam atenção"
-                value={loading ? '...' : summary.latePendingCount}
-                description="Pendentes acima de 3min"
-                tone={summary.latePendingCount > 0 ? 'red' : 'green'}
+                value={loading ? '...' : summary.overdueCount}
+                description="Acima do limite por etapa"
+                tone={summary.overdueCount > 0 ? 'red' : 'green'}
               />
             </div>
 
@@ -4067,7 +4109,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     {MAIN_STATUS_TABS.map((tab) => {
                     const meta = tab.key === 'ativos'
                       ? { icon: FiZap, dotClass: 'bg-orange-500' }
-                      : STATUS_META[tab.key]
+                      : tab.key === 'atrasados'
+                        ? { icon: FiAlertTriangle, dotClass: 'bg-red-500' }
+                        : STATUS_META[tab.key]
                     const Icon = meta?.icon
                     const isSelected = statusFilter === tab.key
                     const hasItems = (statusCounts[tab.key] || 0) > 0
@@ -4275,6 +4319,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     >
                       <OrderCard
                         order={order}
+                        now={slaNow}
                         onOpen={(nextOrder) => setSelectedOrderId(nextOrder.id)}
                         onQuickStatus={handleUpdateStatus}
                         onOpenWhatsApp={handleOpenWhatsApp}
@@ -4297,6 +4342,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         {selectedOrder && (
           <OrderModal
             order={selectedOrder}
+            now={slaNow}
             store={selectedStore}
             onClose={() => setSelectedOrderId('')}
             onUpdateStatus={handleUpdateStatus}

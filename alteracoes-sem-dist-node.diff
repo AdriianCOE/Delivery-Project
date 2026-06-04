@@ -1,0 +1,2675 @@
+diff --git a/firestore.rules b/firestore.rules
+index 22d62c8d..d72f998a 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -225,6 +225,7 @@ function orderStoreKeys(data) {
+         && storeFieldUnchanged('staff')
+         && storeFieldUnchanged('createdAt')
+         && storeFieldUnchanged('createdBy')
++        && storeFieldUnchanged('isOpen')
+         && storeFieldUnchanged('isBlocked')
+         && storeFieldUnchanged('isBillingBlocked')
+         && storeFieldUnchanged('isDeleted')
+@@ -467,7 +468,8 @@ function validPublicOrderCreate(orderId) {
+     match /stores/{storeId} {
+       allow get, list: if canManageStoreData(resource.data);
+       allow create: if isAdmin();
+-      allow update: if isAdmin() || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
++      allow update: if (isAdmin() && storeFieldUnchanged('isOpen'))
++        || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
+       allow delete: if isAdmin();
+ 
+       match /notificationTokens/{tokenId} {
+diff --git a/functions/index.js b/functions/index.js
+index 41c840fd..81737b20 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -23,6 +23,11 @@ const {
+   normalizeBrazilianPhone,
+   validateBrazilianMobilePhone,
+ } = require('./shared/phone')
++const {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++  sanitizeStoreScheduling,
++} = require('./shared/publicScheduling')
+ 
+ const {
+   BREVO_API_KEY,
+@@ -526,7 +531,7 @@ const PUBLIC_STORE_FIELDS = [
+   'deliveryFeeCents', 'deliveryFees', 'acceptDelivery', 'acceptPickup', 'acceptDineIn',
+   'paymentMethods', 'pix', 'pixKey', 'pixKeyType', 'address', 'cep', 'street', 'number',
+   'neighborhood', 'city', 'state', 'rating', 'promoBanner', 'promotionBanner',
+-  'marketingBanner', 'adBanner', 'promoBanners', 'banners',
++  'marketingBanner', 'adBanner', 'promoBanners', 'banners', 'publicScheduling',
+ ]
+ 
+ const PUBLIC_CATEGORY_FIELDS = [
+@@ -542,7 +547,7 @@ const PUBLIC_PRODUCT_FIELDS = [
+   'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
+   'isPopular', 'isPromotion', 'isPromotional',
+   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
+-  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime',
++  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime', 'scheduling',
+ ]
+ 
+ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+@@ -552,7 +557,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
+-  'number', 'neighborhood', 'complement', 'city', 'state',
++  'number', 'neighborhood', 'complement', 'city', 'state', 'scheduling',
+ ])
+ 
+ const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
+@@ -566,6 +571,15 @@ const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
+   'createdAt', 'createdBy', 'deletedAt', 'isDeleted',
+ ])
+ 
++const STORE_ACTIVE_ORDER_STATUSES = [
++  'pendente', 'pending', 'novo', 'new', 'received', 'recebido', 'aguardando',
++  'aguardando_confirmacao', 'awaiting_confirmation',
++  'confirmado', 'confirmed', 'aceito', 'accepted',
++  'preparando', 'preparing', 'em_preparo', 'preparo', 'in_preparation', 'in_progress',
++  'pronto', 'pronta', 'ready', 'ready_for_pickup', 'aguardando_retirada',
++  'em_rota', 'out_for_delivery', 'entregando', 'saiu_para_entrega', 'saiu_entrega', 'em_entrega',
++]
++
+ function uniqueTruthy(values) {
+   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+ }
+@@ -795,6 +809,7 @@ function sanitizePublicStore(data) {
+   profile.pix = {
+     enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
+   }
++  profile.publicScheduling = sanitizePublicStoreScheduling(data)
+ 
+   return profile
+ }
+@@ -804,7 +819,13 @@ function publicProductIsVisible(data) {
+ }
+ 
+ function sanitizePublicProduct(data) {
+-  return pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
++  const product = pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
++  const scheduling = sanitizePublicProductScheduling(data?.scheduling)
++
++  if (scheduling) product.scheduling = scheduling
++  else delete product.scheduling
++
++  return product
+ }
+ 
+ function publicCategoryIsVisible(data) {
+@@ -919,7 +940,7 @@ function isPublicItemVisible(item) {
+     item?.showInStorefront !== false
+ }
+ 
+-async function loadPublicSubcollection(storeRecord, subcollection, publicFields) {
++async function loadPublicSubcollection(storeRecord, subcollection, sanitizePublic) {
+   const results = new Map()
+   const lookupKeys = getStoreLookupKeys(storeRecord)
+ 
+@@ -928,7 +949,7 @@ async function loadPublicSubcollection(storeRecord, subcollection, publicFields)
+     publicSnapshot.docs.forEach((docSnapshot) => {
+       const data = docSnapshot.data() || {}
+       results.set(docSnapshot.id, {
+-        ...pickPublicFields(data, publicFields),
++        ...sanitizePublic(data),
+         id: docSnapshot.id,
+       })
+     })
+@@ -943,7 +964,7 @@ async function loadPublicSubcollection(storeRecord, subcollection, publicFields)
+       snapshot.docs.forEach((docSnapshot) => {
+         const data = docSnapshot.data() || {}
+         results.set(docSnapshot.id, {
+-          ...pickPublicFields(data, publicFields),
++          ...sanitizePublic(data),
+           id: docSnapshot.id,
+           storeId: data.storeId || key,
+         })
+@@ -1046,6 +1067,14 @@ function sanitizeStoreSettingsPayload(payload) {
+       throw new HttpsError('permission-denied', `Campo "${key}" contém dados restritos.`)
+     }
+ 
++    if (key === 'scheduling') {
++      if (!value || typeof value !== 'object' || Array.isArray(value)) {
++        throw new HttpsError('invalid-argument', 'Configuracao de agendamento invalida.')
++      }
++      acc.scheduling = sanitizeStoreScheduling(value)
++      return acc
++    }
++
+     const cleanValue = cleanCallableFirestoreValue(value)
+     if (cleanValue !== undefined) acc[key] = cleanValue
+     return acc
+@@ -1076,6 +1105,31 @@ function assertPixPaymentSettingsPatch(patch) {
+   }
+ }
+ 
++async function assertStoreHasNoActiveOrders(storeId, storeData) {
++  const storeKeys = buildPublicStoreKeys(storeId, storeData).slice(0, 10)
++
++  for (const key of storeKeys) {
++    const activeOrderSnapshot = await db.collection('orders')
++      .where('storeId', '==', key)
++      .where('status', 'in', STORE_ACTIVE_ORDER_STATUSES)
++      .limit(1)
++      .get()
++
++    if (!activeOrderSnapshot.empty) {
++      const activeOrder = activeOrderSnapshot.docs[0]
++      throw new HttpsError(
++        'failed-precondition',
++        'Finalize ou cancele os pedidos ativos antes de fechar a loja.',
++        {
++          reason: 'active-orders',
++          orderId: activeOrder.id,
++          status: activeOrder.data()?.status || 'pendente',
++        }
++      )
++    }
++  }
++}
++
+ async function findPublicCoupon(storeRecord, couponCode) {
+   const code = String(couponCode || '').trim().toUpperCase().slice(0, 80)
+   if (!code) return null
+@@ -1211,8 +1265,8 @@ exports.getPublicCatalog = onCall(
+     }
+ 
+     const [categories, products] = await Promise.all([
+-      loadPublicSubcollection(storeRecord, 'categories', PUBLIC_CATEGORY_FIELDS),
+-      loadPublicSubcollection(storeRecord, 'products', PUBLIC_PRODUCT_FIELDS),
++      loadPublicSubcollection(storeRecord, 'categories', sanitizePublicCategory),
++      loadPublicSubcollection(storeRecord, 'products', sanitizePublicProduct),
+     ])
+ 
+     return {
+@@ -1368,6 +1422,10 @@ exports.updateStoreSettings = onCall(
+       return { ok: true, updatedFields: [] }
+     }
+ 
++    if (patch.isOpen === false && storeData.isOpen !== false) {
++      await assertStoreHasNoActiveOrders(storeId, storeData)
++    }
++
+     patch.updatedAt = admin.firestore.FieldValue.serverTimestamp()
+     patch.updatedBy = uid
+     patch.lastUpdatedBy = uid
+diff --git a/functions/publicOrder.js b/functions/publicOrder.js
+index e3fe8113..6fa4bc04 100644
+--- a/functions/publicOrder.js
++++ b/functions/publicOrder.js
+@@ -1,5 +1,6 @@
+ const crypto = require('crypto')
+ const { normalizeBrazilianPhone } = require('./shared/phone')
++const { buildOrderSchedulingDecision } = require('./shared/orderScheduling')
+ 
+ class PublicOrderError extends Error {
+   constructor(code, message) {
+@@ -741,6 +742,7 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
+ 
+   let subtotalCents = 0
+   const items = []
++  const schedulingProducts = []
+ 
+   for (const item of inputItems) {
+     const product = await getProduct(db, item.productId, storeKeys)
+@@ -770,6 +772,12 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
+     const oldPriceCents = getProductOldPriceCents(product)
+     const acceptsCoupons = productAcceptsCoupons(product)
+ 
++    schedulingProducts.push({
++      productId: product.id,
++      name: sanitizeText(product.name || 'Produto', 160),
++      scheduling: product.scheduling,
++    })
++
+     items.push({
+       id: product.id,
+       productId: product.id,
+@@ -803,7 +811,24 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
+     })
+   }
+ 
+-  return { items, subtotalCents }
++  return { items, subtotalCents, schedulingProducts }
++}
++
++function buildFirestoreSchedulingFields(admin, decision) {
++  const toTimestamp = (value) => value ? admin.firestore.Timestamp.fromDate(value) : null
++
++  return {
++    orderTiming: decision.orderTiming,
++    scheduledFor: toTimestamp(decision.scheduledFor),
++    scheduledWindowStart: toTimestamp(decision.scheduledWindowStart),
++    scheduledWindowEnd: toTimestamp(decision.scheduledWindowEnd),
++    scheduledDateKey: decision.scheduledDateKey,
++    scheduledTimeLabel: decision.scheduledTimeLabel,
++    scheduledSlotKey: decision.scheduledSlotKey,
++    schedulingSnapshot: decision.schedulingSnapshot,
++    paymentPolicy: decision.paymentPolicy,
++    paymentPolicyReason: decision.paymentPolicyReason,
++  }
+ }
+ 
+ function couponDateToMillis(value) {
+@@ -901,12 +926,22 @@ function calculateCouponDiscount({ coupon, items, subtotalCents }) {
+ }
+ 
+ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
+-  const normalizedType = String(deliveryType || '').trim().toLowerCase()
+-  const isDelivery = ['delivery', 'entrega'].includes(normalizedType)
++  const normalizedType = normalizePublicOrderDeliveryType(deliveryType)
++  const isDelivery = normalizedType === 'delivery'
++  const isPickup = normalizedType === 'pickup'
+ 
+-  if (!isDelivery) return { deliveryType: 'pickup', neighborhood: '', deliveryFeeCents: 0 }
++  if (!isDelivery && !isPickup) {
++    fail('invalid-argument', 'Tipo de pedido invalido. Escolha entrega ou retirada.')
++  }
+ 
+   const settings = store?.settings || {}
++  if (isPickup) {
++    if (store?.acceptPickup === false || settings.acceptPickup === false) {
++      fail('failed-precondition', 'Retirada indisponivel para esta loja.')
++    }
++    return { deliveryType: 'pickup', neighborhood: '', deliveryFeeCents: 0 }
++  }
++
+   if (store?.acceptDelivery === false || settings.acceptDelivery === false) {
+     fail('failed-precondition', 'Entrega indisponivel para esta loja.')
+   }
+@@ -949,6 +984,23 @@ function getDeliveryFeeCents({ store, deliveryType, neighborhood }) {
+   }
+ }
+ 
++function normalizePublicOrderDeliveryType(value) {
++  const normalized = normalizeText(value).replace(/[\s-]+/g, '_')
++  if (!normalized) return 'pickup'
++  if (['delivery', 'entrega'].includes(normalized)) return 'delivery'
++  if ([
++    'pickup',
++    'retirada',
++    'retirar',
++    'takeaway',
++    'takeout',
++    'balcao',
++    'retirada_loja',
++    'retirada_na_loja',
++  ].includes(normalized)) return 'pickup'
++  return null
++}
++
+ function normalizePixKey(key, keyType) {
+   const cleanKey = String(key || '').trim()
+   if (!cleanKey) return ''
+@@ -1261,7 +1313,7 @@ function createPublicOrderHandler({
+         }
+       }
+ 
+-      const { items, subtotalCents } = await buildServerOrderItems(db, input.items, storeKeys)
++      const { items, subtotalCents, schedulingProducts } = await buildServerOrderItems(db, input.items, storeKeys)
+ 
+       if (subtotalCents <= 0 || subtotalCents > maxOrderCents) {
+         fail('failed-precondition', 'Subtotal do pedido invalido.')
+@@ -1279,6 +1331,31 @@ function createPublicOrderHandler({
+       const couponCode = sanitizeText(input.couponCode || input.coupon?.code, 80).toUpperCase()
+ 
+       const result = await db.runTransaction(async (transaction) => {
++        const liveStoreSnapshot = await transaction.get(db.collection('stores').doc(storeDocId))
++        if (!liveStoreSnapshot.exists) fail('failed-precondition', 'Loja indisponivel para pedidos.')
++
++        const liveStore = {
++          ...store,
++          ...(liveStoreSnapshot.data() || {}),
++          id: liveStoreSnapshot.id,
++          docId: liveStoreSnapshot.id,
++        }
++
++        if (!isPublicStoreActive(liveStore)) fail('failed-precondition', 'Loja indisponivel para pedidos.')
++        assertStoreBillingAllowsPublicOrder(liveStore, logger)
++
++        const schedulingDecision = buildOrderSchedulingDecision({
++          store: liveStore,
++          storeId: storeDocId,
++          products: schedulingProducts,
++          input,
++          deliveryType: delivery.deliveryType,
++          paymentMethod: input.paymentMethod,
++          now: new Date(),
++          fail,
++        })
++        const schedulingFields = buildFirestoreSchedulingFields(admin, schedulingDecision)
++
+         // 1. Check phone rate limit
+         const rateLimitRef = db.collection('rateLimits').doc(`createPublicOrder_${storeDocId}_${phoneHash}`)
+         const rateLimitSnap = await transaction.get(rateLimitRef)
+@@ -1360,7 +1437,7 @@ function createPublicOrderHandler({
+         }
+ 
+         const paymentSnapshot = getPaymentMethodSnapshot({
+-          store,
++          store: liveStore,
+           paymentMethod: input.paymentMethod,
+           totalCents,
+           changeFor: input.changeFor,
+@@ -1428,6 +1505,7 @@ function createPublicOrderHandler({
+           total: centsToMoney(totalCents),
+           totalCents,
+           ...paymentSnapshot,
++          ...schedulingFields,
+           couponId: couponResult?.id || null,
+           couponCode: couponResult?.code || null,
+           coupon: couponResult
+@@ -1490,6 +1568,7 @@ function createPublicOrderHandler({
+           }, { merge: true })
+         }
+ 
++        // TODO(v2): reserve scheduledSlotKey in a capacity document inside this transaction.
+         transaction.set(orderRef, orderPayload)
+ 
+         if (couponResult?.ref) {
+@@ -1549,4 +1628,5 @@ function createPublicOrderHandler({
+ 
+ module.exports = {
+   createPublicOrderHandler,
++  normalizePublicOrderDeliveryType,
+ }
+diff --git a/functions/scripts/backfillPublicCatalog.js b/functions/scripts/backfillPublicCatalog.js
+index 85b2f33c..1bfe62b9 100644
+--- a/functions/scripts/backfillPublicCatalog.js
++++ b/functions/scripts/backfillPublicCatalog.js
+@@ -1,6 +1,10 @@
+ #!/usr/bin/env node
+ 
+ const admin = require('firebase-admin')
++const {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++} = require('../shared/publicScheduling')
+ 
+ admin.initializeApp({
+   projectId:
+@@ -208,6 +212,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
+     isDeleted: data.isDeleted === true,
+     address: sanitizePublicAddress(data),
+     settings: sanitizePublicStoreSettings(data.settings),
++    publicScheduling: sanitizePublicStoreScheduling(data),
+   }
+ 
+   if (data.pix && typeof data.pix === 'object') {
+@@ -311,6 +316,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
+       'updatedAt',
+       'createdAt',
+     ]),
++    scheduling: sanitizePublicProductScheduling(data.scheduling),
+     id: productId,
+     productId,
+     storeId,
+diff --git a/src/components/layouts/DashboardLayout.jsx b/src/components/layouts/DashboardLayout.jsx
+index 52488d26..b7bd9bc9 100644
+--- a/src/components/layouts/DashboardLayout.jsx
++++ b/src/components/layouts/DashboardLayout.jsx
+@@ -16,6 +16,7 @@ import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
+ import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
+ import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
+ import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
++import { getCallableErrorMessage } from '../../utils/callableError'
+ 
+ import {
+   FiBarChart2,
+@@ -1344,7 +1345,7 @@ export default function DashboardLayout() {
+       },
+       (err) => {
+         console.error('Erro ao escutar dados da loja no Topbar:', err)
+-        setStoreError(err)
++        setStoreError('Não foi possível carregar o status atual da loja.')
+         setStoreLoading(false)
+       }
+     )
+@@ -1371,7 +1372,7 @@ export default function DashboardLayout() {
+       setConfirmStatusModalOpen(false)
+     } catch (err) {
+       console.error('Erro ao alternar status da loja:', err)
+-      setStoreError(err)
++      setStoreError(getCallableErrorMessage(err, 'Ocorreu um erro ao atualizar o status. Tente novamente.'))
+     } finally {
+       setStoreToggleLoading(false)
+     }
+@@ -1850,13 +1851,13 @@ export default function DashboardLayout() {
+ 
+                   <p className="mt-2 text-xs font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
+                     {storeData.isOpen
+-                      ? 'Ao fechar a loja, clientes no site não conseguirão enviar novos pedidos no cardápio.'
++                      ? 'Finalize ou cancele os pedidos ativos antes de fechar. Depois disso, novos pedidos ficarão pausados.'
+                       : 'Ao abrir a loja, novos pedidos começarão a chegar no painel.'}
+                   </p>
+ 
+                   {storeError && (
+                     <p className="mt-2 text-xs font-semibold text-red-500">
+-                      Ocorreu um erro ao atualizar o status. Tente novamente.
++                      {storeError}
+                     </p>
+                   )}
+ 
+diff --git a/src/pages/admin/AdminDashboard.jsx b/src/pages/admin/AdminDashboard.jsx
+index 090274ae..dbaeb22d 100644
+--- a/src/pages/admin/AdminDashboard.jsx
++++ b/src/pages/admin/AdminDashboard.jsx
+@@ -9,8 +9,10 @@ import {
+   serverTimestamp,
+   updateDoc,
+ } from 'firebase/firestore'
++import { httpsCallable } from 'firebase/functions'
+ 
+-import { db } from '../../services/firebase'
++import { db, functions } from '../../services/firebase'
++import { getCallableErrorMessage } from '../../utils/callableError'
+ 
+ import {
+   FiActivity,
+@@ -965,15 +967,25 @@ export default function AdminDashboard() {
+         : store[field] ?? true
+ 
+     try {
+-      await updateDoc(doc(db, 'stores', storeDocId), {
+-        [field]: !currentValue,
+-        updatedAt: serverTimestamp(),
+-      })
++      if (field === 'isOpen') {
++        const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
++        await updateStoreSettings({
++          storeId: storeDocId,
++          payload: {
++            isOpen: !currentValue,
++          },
++        })
++      } else {
++        await updateDoc(doc(db, 'stores', storeDocId), {
++          [field]: !currentValue,
++          updatedAt: serverTimestamp(),
++        })
++      }
+ 
+       showToast('success', 'Status da loja atualizado.')
+     } catch (error) {
+       console.error(error)
+-      showToast('error', 'Erro ao atualizar loja.')
++      showToast('error', getCallableErrorMessage(error, 'Erro ao atualizar loja.'))
+     }
+   },
+   [showToast]
+@@ -1071,6 +1083,17 @@ export default function AdminDashboard() {
+       const deliveryFee = parseCurrency(editForm.deliveryFee)
+       const whatsapp = normalizePhoneBR(editForm.whatsapp)
+       const instagram = sanitizeSocial(editForm.instagram)
++      const currentIsOpen = editingStore.isOpen ?? true
++
++      if (editForm.isOpen !== currentIsOpen) {
++        const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
++        await updateStoreSettings({
++          storeId: storeDocId,
++          payload: {
++            isOpen: editForm.isOpen,
++          },
++        })
++      }
+ 
+       await updateDoc(doc(db, 'stores', storeDocId), {
+         name: editForm.name.trim(),
+@@ -1091,7 +1114,6 @@ export default function AdminDashboard() {
+         minOrderCents: Math.round(minOrder * 100),
+         deliveryFee,
+         deliveryFeeCents: Math.round(deliveryFee * 100),
+-        isOpen: editForm.isOpen,
+         isActive: editForm.isActive,
+         isBlocked: editForm.isBlocked,
+         updatedAt: serverTimestamp(),
+@@ -1101,7 +1123,7 @@ export default function AdminDashboard() {
+       closeEditModal()
+     } catch (error) {
+       console.error(error)
+-      showToast('error', 'Erro ao salvar loja.')
++      showToast('error', getCallableErrorMessage(error, 'Erro ao salvar loja.'))
+     } finally {
+       setSaving(false)
+     }
+diff --git a/src/pages/merchant/KitchenDisplayPage.jsx b/src/pages/merchant/KitchenDisplayPage.jsx
+index 08502a83..ce26e083 100644
+--- a/src/pages/merchant/KitchenDisplayPage.jsx
++++ b/src/pages/merchant/KitchenDisplayPage.jsx
+@@ -53,6 +53,7 @@ import {
+   getDisplayStoreName,
+   getMerchantDisplayLogoUrl,
+ } from '../../utils/merchantDisplayBranding'
++import { getOrderSlaState, getOrderStatusStartedAtMillis } from '../../utils/orderSla'
+ 
+ // ─── Constants ────────────────────────────────────────────────────────────────
+ 
+@@ -138,16 +139,7 @@ function useElapsed(ts) {
+ function cn(...classes) { return classes.filter(Boolean).join(' ') }
+ 
+ function getSortTimestamp(order) {
+-  const val = order.confirmedAt || order.acceptedAt || order.updatedAt || order.createdAt
+-  if (!val) return 0
+-  if (val.toDate) return val.toDate().getTime()
+-  if (val instanceof Date) return val.getTime()
+-  if (typeof val === 'number') return val
+-  try {
+-    return new Date(val).getTime()
+-  } catch {
+-    return 0
+-  }
++  return getOrderStatusStartedAtMillis(order) || 0
+ }
+ 
+ function compareOrdersOldestFirst(a, b) {
+@@ -265,20 +257,18 @@ function useKdsTheme() {
+ 
+ // ─── Elapsed badge ────────────────────────────────────────────────────────────
+ 
+-function ElapsedBadge({ createdAt, status, t }) {
+-  const { elapsed, diffMin } = useElapsed(createdAt)
+-  const showDelay = status === 'confirmado' || status === 'preparando'
+-  const urgent = showDelay && diffMin >= 20
+-  const warning = showDelay && diffMin >= 10
++function ElapsedBadge({ sla, t }) {
++  const warning = sla.active && !sla.overdue && sla.remainingMinutes <= 5
++
+   return (
+     <span className={cn(
+       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums',
+-      urgent ? 'animate-pulse bg-red-500/20 text-red-400 ring-1 ring-red-500/40'
++      sla.overdue ? 'animate-pulse bg-red-500/20 text-red-400 ring-1 ring-red-500/40'
+         : warning ? t('bg-amber-500/15 text-amber-400', 'bg-amber-100 text-amber-700')
+         : t('bg-zinc-800 text-zinc-400', 'bg-gray-100 text-gray-600')
+     )}>
+       <FiClock size={12} />
+-      {elapsed}
++      {sla.elapsed} / {sla.thresholdMinutes}min
+     </span>
+   )
+ }
+@@ -320,6 +310,17 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
+   const normalizedStatus = normalizeKdsStatus(order.status)
+   const cfg = STATUS_CFG[normalizedStatus] || STATUS_CFG.pendente
+   const nextAction = getKdsNextAction(order, normalizedStatus, cfg)
++  const baseSla = getOrderSlaState(order)
++  const elapsed = useElapsed(baseSla.startedAtMillis)
++  const sla = {
++    ...baseSla,
++    ...elapsed,
++    overdue: baseSla.active && elapsed.diffMin >= baseSla.thresholdMinutes,
++    remainingMinutes: Math.max(0, (baseSla.thresholdMinutes || 0) - elapsed.diffMin),
++    overdueMinutes: baseSla.active && elapsed.diffMin >= baseSla.thresholdMinutes
++      ? Math.max(1, elapsed.diffMin - baseSla.thresholdMinutes)
++      : 0,
++  }
+   const [loading, setLoading] = useState(false)
+   const [actionError, setActionError] = useState('')
+ 
+@@ -367,7 +368,9 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
+     <article className={cn(
+       'relative flex flex-col rounded-2xl border transition-all duration-300',
+       t('bg-zinc-900', 'bg-white shadow-md'),
+-      cfg.border[isDark ? 'dark' : 'light'],
++      sla.overdue
++        ? t('border-red-500 ring-2 ring-red-500/50', 'border-red-500 ring-2 ring-red-300 shadow-red-100')
++        : cfg.border[isDark ? 'dark' : 'light'],
+       isNew && 'ring-2 ring-orange-500 ring-offset-2 scale-[1.01] shadow-2xl',
+       isNew && t('ring-offset-zinc-950', 'ring-offset-gray-100'),
+     )}>
+@@ -400,7 +403,7 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
+         </div>
+         <div className="flex items-center gap-2 shrink-0">
+           <OrderTypeBadge order={order} t={t} />
+-          <ElapsedBadge createdAt={order.createdAt} status={normalizedStatus} t={t} />
++          <ElapsedBadge sla={sla} t={t} />
+         </div>
+       </div>
+ 
+@@ -438,6 +441,16 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
+         </span>
+       </div>
+ 
++      {sla.overdue && (
++        <div className={cn(
++          'mx-4 mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black',
++          t('border-red-500/30 bg-red-500/10 text-red-300', 'border-red-200 bg-red-50 text-red-700')
++        )}>
++          <FiAlertCircle size={14} className="animate-pulse" />
++          Etapa atrasada há {sla.overdueMinutes}min. Priorize este pedido.
++        </div>
++      )}
++
+       {actionError && (
+         <div className={cn(
+           'mx-4 mt-3 rounded-xl border px-3 py-2 text-xs font-bold',
+diff --git a/src/pages/merchant/MerchantDashboard.jsx b/src/pages/merchant/MerchantDashboard.jsx
+index 341877e5..8b8e72be 100644
+--- a/src/pages/merchant/MerchantDashboard.jsx
++++ b/src/pages/merchant/MerchantDashboard.jsx
+@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
+ import { createPortal } from 'react-dom'
+ import { captureAppError } from '../../services/sentry'
+ import { getPricingValidation } from '../../utils/orderValidation'
++import { getCallableErrorMessage } from '../../utils/callableError'
++import { getOrderSlaState, isOrderActiveStatus } from '../../utils/orderSla'
+ import { Link } from 'react-router-dom'
+ import {
+   collection,
+@@ -165,7 +167,6 @@ const PERIOD_OPTIONS = [
+   { label: '30 dias', days: 30 },
+ ]
+ 
+-const ACTIVE_STATUSES = ['pendente', 'preparando', 'em_rota']
+ const FINISHED_STATUSES = ['entregue']
+ const CANCELED_STATUSES = ['cancelado']
+ 
+@@ -520,24 +521,6 @@ function timeAgo(order) {
+   return `${Math.floor(diff / 86400)}d atrás`
+ }
+ 
+-function getPendingMinutes(order) {
+-  const date = getOrderDate(order)
+-
+-  if (!date) return 0
+-
+-  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
+-}
+-
+-function isUrgentPending(order, minutes = 3) {
+-  if (normalizeStatus(order?.status) !== 'pendente') return false
+-
+-  const date = getOrderDate(order)
+-
+-  if (!date) return false
+-
+-  return Date.now() - date.getTime() > minutes * 60 * 1000
+-}
+-
+ function getOrderHour(order) {
+   const date = getOrderDate(order)
+ 
+@@ -766,8 +749,9 @@ function StatusPill({ status }) {
+   )
+ }
+ 
+-function OrderRow({ order }) {
+-  const urgent = isUrgentPending(order, 3)
++function OrderRow({ order, now }) {
++  const sla = getOrderSlaState(order, now)
++  const urgent = sla.overdue
+   const customerName = getCustomerName(order)
+   const initials = customerName.substring(0, 2).toUpperCase()
+   const promoSavings = getOrderPromotionSavings(order)
+@@ -796,7 +780,7 @@ function OrderRow({ order }) {
+           {urgent && (
+   <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+     <FiAlertTriangle size={11} />
+-    {getPendingMinutes(order)}min parado
++    {sla.elapsedMinutes}min nesta etapa
+   </span>
+ )}
+         </div>
+@@ -951,6 +935,7 @@ export default function MerchantDashboard() {
+   const [hasCatalog, setHasCatalog] = useState(true)
+   const [loadingCatalog, setLoadingCatalog] = useState(true)
+   const [storeActionLoading, setStoreActionLoading] = useState(false)
++  const [slaNow, setSlaNow] = useState(() => Date.now())
+ 
+   const period = PERIOD_OPTIONS[periodIdx]
+ 
+@@ -1006,6 +991,12 @@ const showToast = useCallback(
+   (type, message) => setToast({ type, message }),
+   []
+ )
++
++useEffect(() => {
++  const interval = window.setInterval(() => setSlaNow(Date.now()), 30000)
++  return () => window.clearInterval(interval)
++}, [])
++
+   const handleSelectStore = useCallback((storeId) => {
+     setSelectedStoreId(storeId)
+     safeSetLocalStorage(SELECTED_STORE_KEY, storeId)
+@@ -1045,7 +1036,7 @@ const showToast = useCallback(
+       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
+     } catch (error) {
+       console.error('Erro ao atualizar status da loja:', error)
+-      showToast('error', 'Erro ao atualizar o status da loja.')
++      showToast('error', getCallableErrorMessage(error, 'Erro ao atualizar o status da loja.'))
+     } finally {
+       setStoreActionLoading(false)
+     }
+@@ -1298,17 +1289,17 @@ subscribeOrders(query(
+ 
+     const validOrders = periodOrders.filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
+     const deliveredOrders = validOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
+-    const activeOrders = orders.filter((order) => ACTIVE_STATUSES.includes(normalizeStatus(order.status)))
++    const activeOrders = orders.filter((order) => isOrderActiveStatus(order.status))
+ 
+-  const urgentOrders = activeOrders.filter((order) => isUrgentPending(order, 3))
++  const urgentOrders = activeOrders.filter((order) => getOrderSlaState(order, slaNow).overdue)
+ const priceReviewOrders = activeOrders.filter((order) => {
+   const status = order?.pricingValidation?.status
+ 
+   return status === 'review' || status === 'invalid' || order?.requiresManualPriceReview === true
+ })
+ 
+-const oldestPendingMinutes = urgentOrders.reduce((max, order) => {
+-  return Math.max(max, getPendingMinutes(order))
++const oldestOverdueMinutes = urgentOrders.reduce((max, order) => {
++  return Math.max(max, getOrderSlaState(order, slaNow).overdueMinutes)
+ }, 0)
+ 
+     const revenue = validOrders.reduce((acc, order) => acc + getOrderTotal(order), 0)
+@@ -1405,7 +1396,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+       averageTicket,
+       uniqueCustomers,
+       completionRate,
+-      oldestPendingMinutes,
++      oldestOverdueMinutes,
+       previousRevenue,
+       revenueDelta,
+       ordersDelta,
+@@ -1421,7 +1412,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+       routeCount: orders.filter((o) => normalizeStatus(o.status) === 'entregando').length,
+       canceledCount: periodOrders.filter((o) => normalizeStatus(o.status) === 'cancelado').length,
+     }
+-  }, [orders, period.days])
++  }, [orders, period.days, slaNow])
+ 
+   const recentOrders = useMemo(() => orders.slice(0, 8), [orders])
+ 
+@@ -1695,8 +1686,8 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+                   <p className="text-xs font-black uppercase tracking-widest text-[#9ca3af] dark:text-zinc-500">Atenção</p>
+                   <p className="mt-1 text-xl font-black text-[#111827] dark:text-zinc-100">{dashboardData.urgentOrders.length}</p>
+                   <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
+-                    {dashboardData.oldestPendingMinutes > 0
+-                      ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
++                    {dashboardData.oldestOverdueMinutes > 0
++                      ? `Maior atraso de etapa: ${dashboardData.oldestOverdueMinutes} min`
+                       : 'Nenhum pedido atrasado'}
+                   </p>
+                 </div>
+@@ -1857,8 +1848,8 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+                   {dashboardData?.urgentOrders?.length || 0}
+                 </p>
+                 <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
+-                  {dashboardData?.oldestPendingMinutes > 0
+-                    ? `Pedido aguardando há ${dashboardData.oldestPendingMinutes} min`
++                  {dashboardData?.oldestOverdueMinutes > 0
++                    ? `Maior atraso de etapa: ${dashboardData.oldestOverdueMinutes} min`
+                     : 'Nenhum pedido crítico no momento'}
+                 </p>
+               </div>
+@@ -2012,7 +2003,7 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+                   </div>
+                 ) : recentOrders.length > 0 ? (
+                   <div>
+-                    {recentOrders.map((order) => <OrderRow key={order.id} order={order} />)}
++                    {recentOrders.map((order) => <OrderRow key={order.id} order={order} now={slaNow} />)}
+                   </div>
+                 ) : (
+                   <div className="p-6">
+diff --git a/src/pages/merchant/OrdersPage.jsx b/src/pages/merchant/OrdersPage.jsx
+index 16ee7809..f885680f 100644
+--- a/src/pages/merchant/OrdersPage.jsx
++++ b/src/pages/merchant/OrdersPage.jsx
+@@ -13,6 +13,8 @@ import {
+   shouldBlockOrderAcceptance,
+   shouldWarnOrderAcceptance,
+ } from '../../utils/orderValidation'
++import { getCallableErrorMessage } from '../../utils/callableError'
++import { getOrderSlaState } from '../../utils/orderSla'
+ import {
+   collection,
+   doc,
+@@ -165,6 +167,7 @@ const STATUS_META = {
+ const MAIN_STATUS_TABS = [
+   { key: 'todos', label: 'Todos' },
+   { key: 'ativos', label: 'Ativos' },
++  { key: 'atrasados', label: 'Atrasados' },
+   { key: 'pendente', label: 'Pendentes' },
+   { key: 'preparando', label: 'Em preparo' },
+   { key: 'pronto', label: 'Prontos' },
+@@ -481,24 +484,6 @@ function timeAgo(order) {
+   return `${Math.floor(diff / 86400)}d atrás`
+ }
+ 
+-function getPendingMinutes(order) {
+-  const date = getOrderDate(order)
+-
+-  if (!date) return 0
+-
+-  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
+-}
+-
+-function isLatePending(order) {
+-  if (normalizeStatus(order?.status) !== 'pendente') return false
+-
+-  const date = getOrderDate(order)
+-
+-  if (!date) return false
+-
+-  return Date.now() - date.getTime() > 3 * 60 * 1000
+-}
+-
+ function shouldShowCustomerThanksAction(order) {
+   return (
+     normalizeStatus(order?.status) === 'entregue' &&
+@@ -1960,12 +1945,13 @@ function OrderContactTimeline({ order }) {
+ }
+ 
+ 
+-function OrderCard({ order, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
++function OrderCard({ order, now, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
+   const status = normalizeStatus(order.status)
+   const meta = STATUS_META[status] || STATUS_META.pendente
+   const nextStatus = getNextStatus(status, order)
+   const address = getAddress(order)
+-  const late = isLatePending(order)
++  const sla = getOrderSlaState(order, now)
++  const isOverdue = sla.overdue
+   const promotionSavings = getOrderPromotionSavings(order)
+   const discount = getOrderDiscount(order)
+   const cancellationReason = getCancellationReason(order)
+@@ -2197,18 +2183,22 @@ const statusMeta = statusMetaMap[status] || {
+     whileHover={{ y: -2 }}
+     transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+     className={`group relative overflow-hidden rounded-[1.6rem] border transition-all duration-200 ${
+-      isFinished
++      isOverdue
++        ? 'border-red-400 bg-red-50/40 ring-2 ring-red-500/40 shadow-lg shadow-red-200/50 dark:border-red-500/60 dark:bg-red-500/[0.08] dark:ring-red-500/30 dark:shadow-red-950/30'
++        : isFinished
+         ? 'border-gray-100 bg-white/75 opacity-80 hover:opacity-95 dark:border-white/6 dark:bg-[#0d0d11]/85'
+         : 'border-gray-100 bg-white dark:border-white/10 dark:bg-[#101015]'
+     } ${
+-      isLatest
++      isLatest && !isOverdue
+         ? 'ring-1 ring-orange-400/60 shadow-[0_0_0_1px_rgba(249,115,22,0.12),0_18px_40px_-24px_rgba(249,115,22,0.5)] dark:ring-orange-500/50'
+         : 'shadow-sm shadow-gray-200/50 dark:shadow-black/20'
+     }`}
+   >
+     <div
+       className={`absolute inset-y-0 left-0 w-1 ${
+-        isCancelled
++        isOverdue
++          ? 'bg-gradient-to-b from-red-500 to-red-700'
++          : isCancelled
+           ? 'bg-gradient-to-b from-red-500 to-red-600'
+           : isFinished
+             ? 'bg-gradient-to-b from-orange-400 to-orange-500'
+@@ -2243,6 +2233,13 @@ const statusMeta = statusMetaMap[status] || {
+             {statusMeta.label}
+           </span>
+ 
++          {isOverdue && (
++            <span className="inline-flex items-center gap-1 rounded-full border border-red-600 bg-red-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm shadow-red-500/20">
++              <FiAlertTriangle size={11} className="animate-pulse" />
++              Atrasado {sla.overdueMinutes}min
++            </span>
++          )}
++
+           {isLatest && (
+             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
+               <FiZap size={11} />
+@@ -2293,17 +2290,27 @@ const statusMeta = statusMetaMap[status] || {
+ 
+       {/* Coluna 3: status/resumo */}
+       <div className="min-w-0">
+-        <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 dark:border-white/6 dark:bg-white/[0.03]">
++        <div className={`rounded-2xl border px-4 py-3 ${
++          isOverdue
++            ? 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10'
++            : 'border-gray-100 bg-white dark:border-white/6 dark:bg-white/[0.03]'
++        }`}>
+           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
+             Situação
+           </p>
+           <p className="mt-1 text-[14px] font-extrabold text-[#111827] dark:text-zinc-100">
+             {statusMeta.summary}
+           </p>
+-          <p className="mt-1 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
+-            {isFinished
+-              ? 'Concluido no historico'
+-              : 'Acompanhe a proxima etapa'}
++          <p className={`mt-1 text-[12px] font-bold ${
++            isOverdue ? 'text-red-700 dark:text-red-300' : 'text-gray-500 dark:text-zinc-500'
++          }`}>
++            {sla.active
++              ? isOverdue
++                ? `${sla.elapsedMinutes}min nesta etapa · limite ${sla.thresholdMinutes}min`
++                : `${sla.elapsedMinutes}min nesta etapa · alerta em ${sla.remainingMinutes}min`
++              : isFinished
++                ? 'Concluido no historico'
++                : 'Acompanhe a proxima etapa'}
+           </p>
+         </div>
+       </div>
+@@ -2589,6 +2596,7 @@ function FinancialSummary({ order }) {
+ 
+ function OrderModal({
+   order,
++  now,
+   store,
+   onClose,
+   onUpdateStatus,
+@@ -2600,6 +2608,7 @@ function OrderModal({
+   updatingStatus,
+ }) {
+   const status = normalizeStatus(order.status)
++  const sla = getOrderSlaState(order, now)
+   const meta = STATUS_META[status] || STATUS_META.pendente
+   const address = getAddress(order)
+   const items = getOrderItems(order)
+@@ -2680,6 +2689,12 @@ function OrderModal({
+                   Pedido {getOrderDisplayNumber(order)}
+                 </h2>
+                 <StatusBadge status={order.status} />
++                {sla.overdue && (
++                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white ring-1 ring-red-700">
++                    <FiAlertTriangle size={12} className="animate-pulse" />
++                    Etapa atrasada
++                  </span>
++                )}
+                 <PricingValidationBadge order={order} />
+                 {status === 'cancelado' && cancellationReason && (
+                   <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200 dark:bg-red-950/50 dark:text-red-400 dark:ring-red-900">
+@@ -2752,6 +2767,17 @@ function OrderModal({
+             </div>
+           </div>
+           <PricingValidationAlert order={order} />
++          {sla.overdue && (
++            <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
++              <FiAlertTriangle size={17} className="mt-0.5 shrink-0 animate-pulse" />
++              <div>
++                <p className="text-sm font-black">Este pedido ultrapassou o tempo esperado da etapa.</p>
++                <p className="mt-0.5 text-xs font-bold">
++                  {sla.elapsedMinutes}min nesta etapa · limite {sla.thresholdMinutes}min
++                </p>
++              </div>
++            </div>
++          )}
+           <OrderContactTimeline order={order} />
+           {showCustomerThanksAction && (
+             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
+@@ -3062,6 +3088,7 @@ export default function OrdersPage() {
+   const [loadingOrders, setLoadingOrders] = useState(true)
+   const [updatingStatus, setUpdatingStatus] = useState('')
+   const [storeActionLoading, setStoreActionLoading] = useState(false)
++  const [slaNow, setSlaNow] = useState(() => Date.now())
+   const [toast, setToast] = useState(null)
+   const [newOrderIds, setNewOrderIds] = useState(() => new Set())
+   const [latestNewOrderId, setLatestNewOrderId] = useState('')
+@@ -3092,6 +3119,11 @@ export default function OrdersPage() {
+     setToast({ type, message })
+   }, [])
+ 
++  useEffect(() => {
++    const interval = window.setInterval(() => setSlaNow(Date.now()), 30000)
++    return () => window.clearInterval(interval)
++  }, [])
++
+   useEffect(() => {
+     if (!moreFiltersOpen) return undefined
+ 
+@@ -3134,7 +3166,11 @@ export default function OrdersPage() {
+       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
+     } catch (error) {
+       console.error('Erro ao atualizar status da loja:', error)
+-      showToast('error', 'Erro ao atualizar o status da loja.')
++      if (error?.details?.reason === 'active-orders') {
++        setDateFilter('all')
++        setStatusFilter('ativos')
++      }
++      showToast('error', getCallableErrorMessage(error, 'Erro ao atualizar o status da loja.'))
+     } finally {
+       setStoreActionLoading(false)
+     }
+@@ -3780,6 +3816,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+     const counts = {
+       todos: orders.length,
+       ativos: 0,
++      atrasados: 0,
+       pendente: 0,
+       confirmado: 0,
+       preparando: 0,
+@@ -3796,13 +3833,17 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+         counts.ativos += 1
+       }
+ 
++      if (getOrderSlaState(order, slaNow).overdue) {
++        counts.atrasados += 1
++      }
++
+       if (counts[status] !== undefined) {
+         counts[status] += 1
+       }
+     })
+ 
+     return counts
+-  }, [orders])
++  }, [orders, slaNow])
+ 
+   const moreFiltersActive = MORE_STATUS_FILTER_KEYS.has(statusFilter)
+   const moreFiltersCount = MORE_STATUS_TABS.reduce(
+@@ -3827,7 +3868,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+       ACTIVE_STATUSES.includes(normalizeStatus(order.status))
+     )
+ 
+-    const latePendingOrders = orders.filter(isLatePending)
++    const overdueOrders = orders.filter((order) => getOrderSlaState(order, slaNow).overdue)
+ 
+     const revenueToday = validTodayOrders.reduce(
+       (acc, order) => acc + getOrderTotal(order),
+@@ -3844,9 +3885,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+       revenueToday,
+       economyToday,
+       activeCount: activeOrders.length,
+-      latePendingCount: latePendingOrders.length,
++      overdueCount: overdueOrders.length,
+     }
+-  }, [orders])
++  }, [orders, slaNow])
+ 
+   const filteredOrders = useMemo(() => {
+     const term = search.trim().toLowerCase()
+@@ -3856,6 +3897,8 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+ 
+       if (statusFilter === 'ativos') {
+         if (!ACTIVE_STATUSES.includes(status)) return false
++      } else if (statusFilter === 'atrasados') {
++        if (!getOrderSlaState(order, slaNow).overdue) return false
+       } else if (statusFilter !== 'todos' && status !== statusFilter) {
+         return false
+       }
+@@ -3886,7 +3929,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+ 
+       return searchableText.includes(term)
+     })
+-  }, [dateFilter, orders, search, statusFilter])
++  }, [dateFilter, orders, search, slaNow, statusFilter])
+ 
+   return (
+     <main className="min-h-full">
+@@ -3985,7 +4028,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+           <>
+ 
+ 
+-            {summary.latePendingCount > 0 && (
++            {summary.overdueCount > 0 && (
+   <div className="mb-6 rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-red-700 shadow-lg shadow-red-100/70 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200 dark:shadow-red-950/20">
+     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+       <div className="flex items-start gap-3">
+@@ -3995,23 +4038,22 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+ 
+         <div>
+           <p className="text-sm font-black">
+-            {summary.latePendingCount} pedido
+-            {summary.latePendingCount > 1 ? 's' : ''} pendente
+-            {summary.latePendingCount > 1 ? 's' : ''} há mais de 3 minutos
++            {summary.overdueCount} pedido
++            {summary.overdueCount > 1 ? 's' : ''} acima do tempo esperado
+           </p>
+ 
+           <p className="mt-1 text-xs font-bold leading-5 text-red-600 dark:text-red-300">
+-            Priorize esses pedidos para não deixar o cliente esperando sem confirmação.
++            Priorize as etapas atrasadas para manter a operação e o cliente atualizados.
+           </p>
+         </div>
+       </div>
+ 
+       <button
+         type="button"
+-        onClick={() => setStatusFilter('pendente')}
++        onClick={() => setStatusFilter('atrasados')}
+         className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-red-700"
+       >
+-        Ver pendentes
++        Ver atrasados
+       </button>
+     </div>
+   </div>
+@@ -4053,9 +4095,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+               <StatCard
+                 icon={FiAlertTriangle}
+                 label="Precisam atenção"
+-                value={loading ? '...' : summary.latePendingCount}
+-                description="Pendentes acima de 3min"
+-                tone={summary.latePendingCount > 0 ? 'red' : 'green'}
++                value={loading ? '...' : summary.overdueCount}
++                description="Acima do limite por etapa"
++                tone={summary.overdueCount > 0 ? 'red' : 'green'}
+               />
+             </div>
+ 
+@@ -4067,7 +4109,9 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+                     {MAIN_STATUS_TABS.map((tab) => {
+                     const meta = tab.key === 'ativos'
+                       ? { icon: FiZap, dotClass: 'bg-orange-500' }
+-                      : STATUS_META[tab.key]
++                      : tab.key === 'atrasados'
++                        ? { icon: FiAlertTriangle, dotClass: 'bg-red-500' }
++                        : STATUS_META[tab.key]
+                     const Icon = meta?.icon
+                     const isSelected = statusFilter === tab.key
+                     const hasItems = (statusCounts[tab.key] || 0) > 0
+@@ -4275,6 +4319,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+                     >
+                       <OrderCard
+                         order={order}
++                        now={slaNow}
+                         onOpen={(nextOrder) => setSelectedOrderId(nextOrder.id)}
+                         onQuickStatus={handleUpdateStatus}
+                         onOpenWhatsApp={handleOpenWhatsApp}
+@@ -4297,6 +4342,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+         {selectedOrder && (
+           <OrderModal
+             order={selectedOrder}
++            now={slaNow}
+             store={selectedStore}
+             onClose={() => setSelectedOrderId('')}
+             onUpdateStatus={handleUpdateStatus}
+diff --git a/src/pages/store/MerchantDrawer.jsx b/src/pages/store/MerchantDrawer.jsx
+index 849057ef..dd9cdcb1 100644
+--- a/src/pages/store/MerchantDrawer.jsx
++++ b/src/pages/store/MerchantDrawer.jsx
+@@ -30,6 +30,7 @@ import {
+   getStoreKeys,
+   buildStoreScopedPayload,
+ } from '../../utils/storeIdentity'
++import { getCallableErrorMessage } from '../../utils/callableError'
+ 
+ import {
+   isProductDeleted,
+@@ -256,7 +257,7 @@ export default function MerchantDrawer({
+       showToast(newStatus ? 'Boas vendas! A loja foi aberta.' : 'Loja fechada com sucesso.')
+     } catch (error) {
+       console.error(error)
+-      showToast('Falha ao alterar status da loja.')
++      showToast(getCallableErrorMessage(error, 'Falha ao alterar status da loja.'))
+     } finally {
+       setLoading(false)
+     }
+diff --git a/functions/shared/orderScheduling.js b/functions/shared/orderScheduling.js
+new file mode 100644
+index 00000000..51005425
+--- /dev/null
++++ b/functions/shared/orderScheduling.js
+@@ -0,0 +1,626 @@
++const BRAZIL_TIME_ZONE = 'America/Sao_Paulo'
++const DAY_KEYS = [
++  'sunday',
++  'monday',
++  'tuesday',
++  'wednesday',
++  'thursday',
++  'friday',
++  'saturday',
++]
++const PRODUCT_MODES = new Set([
++  'store_default',
++  'asap_only',
++  'scheduled_only',
++  'asap_and_scheduled',
++])
++const STORE_PREPAYMENT_POLICIES = new Set([
++  'none',
++  'pix_required_for_scheduled',
++  'pix_required_for_custom_products',
++])
++const PRODUCT_PREPAYMENT_POLICIES = new Set([
++  'store_default',
++  'none',
++  'pix_required',
++])
++const PIX_MANUAL_METHODS = new Set([
++  'pix',
++  'pix_manual',
++  'manual_pix',
++  'pix_manual_store',
++])
++const MINUTE_MS = 60 * 1000
++const DAY_MS = 24 * 60 * MINUTE_MS
++
++const brazilDateTimeFormatter = new Intl.DateTimeFormat('en-CA', {
++  timeZone: BRAZIL_TIME_ZONE,
++  year: 'numeric',
++  month: '2-digit',
++  day: '2-digit',
++  hour: '2-digit',
++  minute: '2-digit',
++  second: '2-digit',
++  hourCycle: 'h23',
++})
++
++function failWith(fail, code, message) {
++  if (typeof fail === 'function') fail(code, message)
++  const error = new Error(message)
++  error.code = code
++  throw error
++}
++
++function isObject(value) {
++  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
++}
++
++function toBoundedInteger(value, fallback, min, max) {
++  if (value === undefined || value === null || value === '') return fallback
++  const parsed = Number(value)
++  if (!Number.isFinite(parsed)) return fallback
++  return Math.max(min, Math.min(max, Math.floor(parsed)))
++}
++
++function toNullableBoundedInteger(value, min, max) {
++  if (value === undefined || value === null || value === '') return null
++  const parsed = Number(value)
++  if (!Number.isFinite(parsed)) return null
++  return Math.max(min, Math.min(max, Math.floor(parsed)))
++}
++
++function parseTimeToMinutes(value, allowEndOfDay = false) {
++  const text = String(value || '').trim()
++  const match = /^(\d{2}):(\d{2})$/.exec(text)
++  if (!match) return null
++
++  const hour = Number(match[1])
++  const minute = Number(match[2])
++  if (allowEndOfDay && hour === 24 && minute === 0) return 24 * 60
++  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
++  return (hour * 60) + minute
++}
++
++function normalizeWindow(window) {
++  if (!isObject(window)) return null
++  const start = String(window.start || window.from || '').trim()
++  const end = String(window.end || window.to || '').trim()
++  const startMinute = parseTimeToMinutes(start)
++  const endMinute = parseTimeToMinutes(end, true)
++
++  if (startMinute === null || endMinute === null || endMinute <= startMinute) return null
++  return { start, end, startMinute, endMinute }
++}
++
++function emptyWeeklyWindows() {
++  return DAY_KEYS.reduce((acc, day) => {
++    acc[day] = []
++    return acc
++  }, {})
++}
++
++function normalizeWeeklyWindows(value, allowNull = false) {
++  if (!isObject(value)) return allowNull ? null : emptyWeeklyWindows()
++
++  return DAY_KEYS.reduce((acc, day) => {
++    const windows = Array.isArray(value[day]) ? value[day].slice(0, 24) : []
++    acc[day] = windows.map(normalizeWindow).filter(Boolean)
++    return acc
++  }, {})
++}
++
++function normalizeBlockedDates(value) {
++  if (!Array.isArray(value)) return []
++  return [...new Set(value
++    .map((date) => String(date || '').trim())
++    .filter(isValidDateKey)
++    .slice(0, 400))]
++}
++
++function normalizeStoreScheduling(store) {
++  const raw = isObject(store?.scheduling) ? store.scheduling : {}
++  const storeAcceptsDelivery = store?.acceptDelivery !== false && store?.settings?.acceptDelivery !== false
++  const storeAcceptsPickup = store?.acceptPickup !== false && store?.settings?.acceptPickup !== false
++  const rawFulfillment = isObject(raw.fulfillmentTypes) ? raw.fulfillmentTypes : {}
++
++  return {
++    enabled: raw.enabled === true,
++    minLeadMinutes: toBoundedInteger(raw.minLeadMinutes, 0, 0, 525600),
++    maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, 30, 0, 365),
++    slotIntervalMinutes: toBoundedInteger(raw.slotIntervalMinutes, 30, 5, 1440),
++    fulfillmentTypes: {
++      delivery: storeAcceptsDelivery && rawFulfillment.delivery !== false,
++      pickup: storeAcceptsPickup && rawFulfillment.pickup !== false,
++    },
++    weeklyWindows: normalizeWeeklyWindows(raw.weeklyWindows),
++    blockedDates: normalizeBlockedDates(raw.blockedDates),
++    prepaymentPolicy: STORE_PREPAYMENT_POLICIES.has(raw.prepaymentPolicy)
++      ? raw.prepaymentPolicy
++      : 'none',
++  }
++}
++
++function normalizeProductScheduling(product) {
++  const raw = isObject(product?.scheduling) ? product.scheduling : {}
++  const rawFulfillment = isObject(raw.fulfillmentTypes) ? raw.fulfillmentTypes : null
++
++  return {
++    productId: String(product?.productId || product?.id || '').trim(),
++    name: String(product?.name || 'Produto').trim().slice(0, 160),
++    mode: PRODUCT_MODES.has(raw.mode) ? raw.mode : 'store_default',
++    minLeadMinutes: toNullableBoundedInteger(raw.minLeadMinutes, 0, 525600),
++    maxDaysAhead: toNullableBoundedInteger(raw.maxDaysAhead, 0, 365),
++    slotIntervalMinutes: toNullableBoundedInteger(raw.slotIntervalMinutes, 5, 1440),
++    fulfillmentTypes: rawFulfillment
++      ? {
++          delivery: rawFulfillment.delivery !== false,
++          pickup: rawFulfillment.pickup !== false,
++        }
++      : null,
++    weeklyWindows: normalizeWeeklyWindows(raw.weeklyWindows, true),
++    blockedDates: normalizeBlockedDates(raw.blockedDates),
++    prepaymentPolicy: PRODUCT_PREPAYMENT_POLICIES.has(raw.prepaymentPolicy)
++      ? raw.prepaymentPolicy
++      : 'store_default',
++  }
++}
++
++function uniqueProducts(products) {
++  const byId = new Map()
++  for (const product of Array.isArray(products) ? products : []) {
++    const normalized = normalizeProductScheduling(product)
++    const key = normalized.productId || `product-${byId.size}`
++    if (!byId.has(key)) byId.set(key, normalized)
++  }
++  return [...byId.values()]
++}
++
++function getBrazilParts(date) {
++  const parts = brazilDateTimeFormatter.formatToParts(date)
++    .reduce((acc, part) => {
++      if (part.type !== 'literal') acc[part.type] = part.value
++      return acc
++    }, {})
++
++  return {
++    year: Number(parts.year),
++    month: Number(parts.month),
++    day: Number(parts.day),
++    hour: Number(parts.hour),
++    minute: Number(parts.minute),
++    second: Number(parts.second),
++  }
++}
++
++function formatDateKey(parts) {
++  return [
++    String(parts.year).padStart(4, '0'),
++    String(parts.month).padStart(2, '0'),
++    String(parts.day).padStart(2, '0'),
++  ].join('-')
++}
++
++function formatTimeLabel(parts) {
++  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
++}
++
++function isValidDateKey(value) {
++  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim())
++  if (!match) return false
++  const year = Number(match[1])
++  const month = Number(match[2])
++  const day = Number(match[3])
++  const date = new Date(Date.UTC(year, month - 1, day))
++  return date.getUTCFullYear() === year
++    && date.getUTCMonth() === month - 1
++    && date.getUTCDate() === day
++}
++
++function localDateTimeToDate(dateKey, timeLabel) {
++  if (!isValidDateKey(dateKey) || parseTimeToMinutes(timeLabel) === null) return null
++
++  const [year, month, day] = dateKey.split('-').map(Number)
++  const [hour, minute] = timeLabel.split(':').map(Number)
++  const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0, 0)
++  let candidate = desiredAsUtc
++
++  for (let attempt = 0; attempt < 4; attempt += 1) {
++    const parts = getBrazilParts(new Date(candidate))
++    const representedAsUtc = Date.UTC(
++      parts.year,
++      parts.month - 1,
++      parts.day,
++      parts.hour,
++      parts.minute,
++      parts.second,
++      0
++    )
++    const adjustment = desiredAsUtc - representedAsUtc
++    candidate += adjustment
++    if (adjustment === 0) break
++  }
++
++  const result = new Date(candidate)
++  const resultParts = getBrazilParts(result)
++  if (formatDateKey(resultParts) !== dateKey || formatTimeLabel(resultParts) !== timeLabel) return null
++  return result
++}
++
++function timestampLikeToDate(value) {
++  if (!value) return null
++  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
++  if (typeof value.toDate === 'function') {
++    const date = value.toDate()
++    return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null
++  }
++  if (isObject(value) && Number.isFinite(Number(value.seconds))) {
++    const millis = (Number(value.seconds) * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1000000)
++    const date = new Date(millis)
++    return Number.isNaN(date.getTime()) ? null : date
++  }
++  if (typeof value === 'number' && Number.isFinite(value)) {
++    const date = new Date(value)
++    return Number.isNaN(date.getTime()) ? null : date
++  }
++  if (typeof value === 'string' && value.trim()) {
++    const localMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?$/.exec(value.trim())
++    if (localMatch) return localDateTimeToDate(localMatch[1], localMatch[2])
++    const date = new Date(value)
++    return Number.isNaN(date.getTime()) ? null : date
++  }
++  return null
++}
++
++function getScheduledInput(input, fail) {
++  let dateKey = String(input?.scheduledDate || '').trim()
++  let timeLabel = String(input?.scheduledTime || '').trim()
++
++  if (!dateKey || !timeLabel) {
++    const scheduledFor = timestampLikeToDate(input?.scheduledFor)
++    if (scheduledFor) {
++      const parts = getBrazilParts(scheduledFor)
++      dateKey = formatDateKey(parts)
++      timeLabel = formatTimeLabel(parts)
++    }
++  }
++
++  if (!dateKey || !timeLabel) {
++    failWith(fail, 'invalid-argument', 'Escolha uma data e horário para sua encomenda.')
++  }
++
++  const scheduledFor = localDateTimeToDate(dateKey, timeLabel)
++  if (!scheduledFor) {
++    failWith(fail, 'invalid-argument', 'Horário indisponível. Escolha outro horário.')
++  }
++
++  return {
++    dateKey,
++    timeLabel,
++    scheduledFor,
++    minuteOfDay: parseTimeToMinutes(timeLabel),
++  }
++}
++
++function normalizeOrderTiming(value, fail) {
++  const timing = String(value || '').trim().toLowerCase()
++  if (!timing) return 'asap'
++  if (timing === 'asap' || timing === 'scheduled') return timing
++  failWith(fail, 'invalid-argument', 'Tipo de agendamento inválido.')
++}
++
++function isPixManualPaymentMethod(value) {
++  return PIX_MANUAL_METHODS.has(String(value || '').trim().toLowerCase())
++}
++
++function hasProductSchedulingContribution(product) {
++  return product.mode !== 'store_default'
++    || product.minLeadMinutes !== null
++    || product.maxDaysAhead !== null
++    || product.slotIntervalMinutes !== null
++    || product.fulfillmentTypes !== null
++    || product.weeklyWindows !== null
++    || product.blockedDates.length > 0
++    || product.prepaymentPolicy !== 'store_default'
++}
++
++function resolvePaymentPolicy({ storeScheduling, products, orderTiming, paymentMethod, fail }) {
++  const explicitProductPix = products.some((product) => product.prepaymentPolicy === 'pix_required')
++  const customProductPix = storeScheduling.prepaymentPolicy === 'pix_required_for_custom_products'
++    && products.some((product) => product.mode === 'scheduled_only')
++  const storeScheduledPix = orderTiming === 'scheduled'
++    && storeScheduling.prepaymentPolicy === 'pix_required_for_scheduled'
++  const paymentPolicy = explicitProductPix || customProductPix || storeScheduledPix
++    ? 'pix_required'
++    : 'none'
++  const paymentPolicyReason = explicitProductPix || customProductPix
++    ? 'product_required'
++    : storeScheduledPix
++      ? 'store_scheduled'
++      : null
++
++  if (paymentPolicy === 'pix_required' && !isPixManualPaymentMethod(paymentMethod)) {
++    failWith(fail, 'failed-precondition', 'Este pedido exige pagamento antecipado via Pix.')
++  }
++
++  return { paymentPolicy, paymentPolicyReason }
++}
++
++function getDateOrdinal(dateKey) {
++  const [year, month, day] = dateKey.split('-').map(Number)
++  return Date.UTC(year, month - 1, day)
++}
++
++function getDayKey(dateKey) {
++  const [year, month, day] = dateKey.split('-').map(Number)
++  return DAY_KEYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]
++}
++
++function windowAcceptsSlot(window, minuteOfDay, durationMinutes, intervalMinutes) {
++  if (minuteOfDay < window.startMinute) return false
++  if ((minuteOfDay + durationMinutes) > window.endMinute) return false
++  return ((minuteOfDay - window.startMinute) % intervalMinutes) === 0
++}
++
++function acceptsWindowAndInterval(weeklyWindows, dateKey, minuteOfDay, durationMinutes, intervalMinutes) {
++  const dayKey = getDayKey(dateKey)
++  return (weeklyWindows?.[dayKey] || []).some((window) => (
++    windowAcceptsSlot(window, minuteOfDay, durationMinutes, intervalMinutes)
++  ))
++}
++
++function greatestCommonDivisor(left, right) {
++  let a = Math.abs(left)
++  let b = Math.abs(right)
++
++  while (b > 0) {
++    const remainder = a % b
++    a = b
++    b = remainder
++  }
++
++  return a || 1
++}
++
++function getEffectiveSlotInterval(storeScheduling, products, fail) {
++  const productIntervals = [...new Set(products
++    .map((product) => product.slotIntervalMinutes)
++    .filter((value) => value !== null))]
++
++  if (productIntervals.length === 0) return storeScheduling.slotIntervalMinutes
++
++  return productIntervals.reduce((commonInterval, productInterval) => {
++    const nextInterval = (commonInterval / greatestCommonDivisor(commonInterval, productInterval)) * productInterval
++    if (nextInterval > 1440) {
++      failWith(
++        fail,
++        'failed-precondition',
++        'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.'
++      )
++    }
++    return nextInterval
++  })
++}
++
++function assertScheduledRules({
++  storeScheduling,
++  products,
++  deliveryType,
++  scheduledInput,
++  now,
++  fail,
++}) {
++  if (!storeScheduling.enabled) {
++    failWith(fail, 'failed-precondition', 'A loja não aceita pedidos agendados no momento.')
++  }
++
++  if (storeScheduling.fulfillmentTypes[deliveryType] !== true) {
++    failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++  }
++
++  const productRejectsFulfillment = products.some((product) => (
++    product.fulfillmentTypes && product.fulfillmentTypes[deliveryType] !== true
++  ))
++  if (productRejectsFulfillment) {
++    failWith(fail, 'failed-precondition', 'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.')
++  }
++
++  const productLeadMinutes = products
++    .map((product) => product.minLeadMinutes)
++    .filter((value) => value !== null)
++  const minLeadMinutes = Math.max(storeScheduling.minLeadMinutes, ...productLeadMinutes, 0)
++  const productMaxDays = products
++    .map((product) => product.maxDaysAhead)
++    .filter((value) => value !== null)
++  const maxDaysAhead = Math.min(storeScheduling.maxDaysAhead, ...productMaxDays)
++  const slotIntervalMinutes = getEffectiveSlotInterval(storeScheduling, products, fail)
++  const nowDate = now instanceof Date ? now : new Date(now || Date.now())
++  const nowParts = getBrazilParts(nowDate)
++  const nowDateKey = formatDateKey(nowParts)
++  const leadMillis = scheduledInput.scheduledFor.getTime() - nowDate.getTime()
++
++  if (leadMillis <= 0) {
++    failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++  }
++
++  if (leadMillis < minLeadMinutes * MINUTE_MS) {
++    const productDriver = products.find((product) => (
++      product.minLeadMinutes !== null
++      && product.minLeadMinutes === minLeadMinutes
++      && product.minLeadMinutes > storeScheduling.minLeadMinutes
++    ))
++
++    if (productDriver) {
++      if (minLeadMinutes >= 1440) {
++        failWith(
++          fail,
++          'failed-precondition',
++          `Este produto precisa de pelo menos ${Math.ceil(minLeadMinutes / 1440)} dias de antecedência.`
++        )
++      }
++      failWith(
++        fail,
++        'failed-precondition',
++        `Este produto precisa de pelo menos ${minLeadMinutes} minutos de antecedência.`
++      )
++    }
++
++    failWith(
++      fail,
++      'failed-precondition',
++      `A loja aceita agendamentos com pelo menos ${minLeadMinutes} minutos de antecedência.`
++    )
++  }
++
++  const daysAhead = Math.round((getDateOrdinal(scheduledInput.dateKey) - getDateOrdinal(nowDateKey)) / DAY_MS)
++  if (daysAhead < 0 || daysAhead > maxDaysAhead) {
++    failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++  }
++
++  if (storeScheduling.blockedDates.includes(scheduledInput.dateKey)) {
++    failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++  }
++  if (products.some((product) => product.blockedDates.includes(scheduledInput.dateKey))) {
++    failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++  }
++
++  if (!acceptsWindowAndInterval(
++    storeScheduling.weeklyWindows,
++    scheduledInput.dateKey,
++    scheduledInput.minuteOfDay,
++    slotIntervalMinutes,
++    slotIntervalMinutes
++  )) {
++    failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++  }
++
++  for (const product of products) {
++    if (!product.weeklyWindows && product.slotIntervalMinutes === null) continue
++    const productWindows = product.weeklyWindows || storeScheduling.weeklyWindows
++    const productInterval = product.slotIntervalMinutes || slotIntervalMinutes
++    if (!acceptsWindowAndInterval(
++      productWindows,
++      scheduledInput.dateKey,
++      scheduledInput.minuteOfDay,
++      slotIntervalMinutes,
++      productInterval
++    )) {
++      failWith(fail, 'failed-precondition', 'Horário indisponível. Escolha outro horário.')
++    }
++  }
++
++  return { minLeadMinutes, maxDaysAhead, slotIntervalMinutes }
++}
++
++function buildOrderSchedulingDecision({
++  store,
++  storeId,
++  products,
++  input,
++  deliveryType,
++  paymentMethod,
++  now = new Date(),
++  fail,
++}) {
++  const normalizedProducts = uniqueProducts(products)
++  const storeScheduling = normalizeStoreScheduling(store)
++  const hasAsapOnly = normalizedProducts.some((product) => product.mode === 'asap_only')
++  const hasScheduledOnly = normalizedProducts.some((product) => product.mode === 'scheduled_only')
++
++  if (hasAsapOnly && hasScheduledOnly) {
++    failWith(
++      fail,
++      'failed-precondition',
++      'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.'
++    )
++  }
++
++  const requestedTiming = normalizeOrderTiming(input?.orderTiming, fail)
++  const orderTiming = hasScheduledOnly ? 'scheduled' : requestedTiming
++
++  if (orderTiming === 'scheduled' && hasAsapOnly) {
++    failWith(
++      fail,
++      'failed-precondition',
++      'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.'
++    )
++  }
++
++  if (orderTiming === 'asap') {
++    const paymentPolicy = resolvePaymentPolicy({
++      storeScheduling,
++      products: normalizedProducts,
++      orderTiming,
++      paymentMethod,
++      fail,
++    })
++
++    return {
++      orderTiming: 'asap',
++      scheduledFor: null,
++      scheduledWindowStart: null,
++      scheduledWindowEnd: null,
++      scheduledDateKey: null,
++      scheduledTimeLabel: null,
++      scheduledSlotKey: null,
++      schedulingSnapshot: null,
++      ...paymentPolicy,
++    }
++  }
++
++  const scheduledInput = getScheduledInput(input, fail)
++  const effectiveRules = assertScheduledRules({
++    storeScheduling,
++    products: normalizedProducts,
++    deliveryType,
++    scheduledInput,
++    now,
++    fail,
++  })
++  const paymentPolicy = resolvePaymentPolicy({
++    storeScheduling,
++    products: normalizedProducts,
++    orderTiming,
++    paymentMethod,
++    fail,
++  })
++  const contributingProducts = normalizedProducts.filter(hasProductSchedulingContribution)
++  const requiredProducts = normalizedProducts.filter((product) => product.mode === 'scheduled_only')
++  const source = requiredProducts.length > 0
++    ? (contributingProducts.length === requiredProducts.length ? 'product_required' : 'mixed')
++    : contributingProducts.length > 0
++      ? 'mixed'
++      : 'store'
++  const scheduledWindowEnd = new Date(
++    scheduledInput.scheduledFor.getTime() + (effectiveRules.slotIntervalMinutes * MINUTE_MS)
++  )
++  const safeStoreId = String(storeId || '').trim().replace(/[^A-Za-z0-9_-]/g, '-')
++
++  return {
++    orderTiming: 'scheduled',
++    scheduledFor: scheduledInput.scheduledFor,
++    scheduledWindowStart: scheduledInput.scheduledFor,
++    scheduledWindowEnd,
++    scheduledDateKey: scheduledInput.dateKey,
++    scheduledTimeLabel: scheduledInput.timeLabel,
++    scheduledSlotKey: `${safeStoreId}_${scheduledInput.dateKey}_${scheduledInput.timeLabel.replace(':', '-')}_${deliveryType}`,
++    schedulingSnapshot: {
++      source,
++      minLeadMinutes: effectiveRules.minLeadMinutes,
++      maxDaysAhead: effectiveRules.maxDaysAhead,
++      slotIntervalMinutes: effectiveRules.slotIntervalMinutes,
++      requiredByProducts: contributingProducts.map((product) => ({
++        productId: product.productId,
++        name: product.name,
++        minLeadMinutes: product.minLeadMinutes,
++        prepaymentPolicy: product.prepaymentPolicy,
++      })),
++    },
++    ...paymentPolicy,
++  }
++}
++
++module.exports = {
++  BRAZIL_TIME_ZONE,
++  buildOrderSchedulingDecision,
++  isPixManualPaymentMethod,
++}
+diff --git a/functions/shared/orderScheduling.test.js b/functions/shared/orderScheduling.test.js
+new file mode 100644
+index 00000000..928e8e2c
+--- /dev/null
++++ b/functions/shared/orderScheduling.test.js
+@@ -0,0 +1,334 @@
++const test = require('node:test')
++const assert = require('node:assert/strict')
++const { buildOrderSchedulingDecision } = require('./orderScheduling')
++const { normalizePublicOrderDeliveryType } = require('../publicOrder')
++
++const NOW = new Date('2026-06-04T12:00:00.000Z')
++
++function fail(code, message) {
++  const error = new Error(message)
++  error.code = code
++  throw error
++}
++
++function store(overrides = {}) {
++  const { scheduling: schedulingOverrides = {}, ...storeOverrides } = overrides
++
++  return {
++    acceptDelivery: true,
++    acceptPickup: true,
++    paymentMethods: { pix: true, card: true, cash: true },
++    scheduling: {
++      enabled: true,
++      minLeadMinutes: 60,
++      maxDaysAhead: 14,
++      slotIntervalMinutes: 30,
++      fulfillmentTypes: { delivery: true, pickup: true },
++      weeklyWindows: {
++        monday: [{ start: '08:00', end: '18:00' }],
++        tuesday: [{ start: '08:00', end: '18:00' }],
++        wednesday: [{ start: '08:00', end: '18:00' }],
++        thursday: [{ start: '08:00', end: '18:00' }],
++        friday: [{ start: '08:00', end: '18:00' }],
++        saturday: [],
++        sunday: [],
++      },
++      blockedDates: [],
++      prepaymentPolicy: 'none',
++      ...schedulingOverrides,
++    },
++    ...storeOverrides,
++  }
++}
++
++function product(id, scheduling = undefined) {
++  return { productId: id, name: `Produto ${id}`, scheduling }
++}
++
++function decide({
++  storeData = store(),
++  products = [product('regular')],
++  input = {},
++  deliveryType = 'pickup',
++  paymentMethod = 'cash',
++} = {}) {
++  return buildOrderSchedulingDecision({
++    store: storeData,
++    storeId: 'store-1',
++    products,
++    input,
++    deliveryType,
++    paymentMethod,
++    now: NOW,
++    fail,
++  })
++}
++
++test('keeps legacy orders immediate when orderTiming is missing', () => {
++  const result = decide({
++    storeData: {
++      acceptDelivery: true,
++      acceptPickup: true,
++      paymentMethods: { pix: true, card: true, cash: true },
++    },
++  })
++
++  assert.equal(result.orderTiming, 'asap')
++  assert.equal(result.scheduledFor, null)
++  assert.equal(result.scheduledSlotKey, null)
++  assert.equal(result.paymentPolicy, 'none')
++})
++
++test('rejects scheduled orders when legacy store scheduling is disabled', () => {
++  assert.throws(
++    () => decide({
++      storeData: {
++        acceptDelivery: true,
++        acceptPickup: true,
++        paymentMethods: { pix: true, card: true, cash: true },
++      },
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-05',
++        scheduledTime: '14:00',
++      },
++    }),
++    /não aceita pedidos agendados/
++  )
++})
++
++test('creates a valid Brazil-time scheduled decision', () => {
++  const result = decide({
++    input: {
++      orderTiming: 'scheduled',
++      scheduledDate: '2026-06-05',
++      scheduledTime: '14:00',
++    },
++  })
++
++  assert.equal(result.orderTiming, 'scheduled')
++  assert.equal(result.scheduledFor.toISOString(), '2026-06-05T17:00:00.000Z')
++  assert.equal(result.scheduledWindowEnd.toISOString(), '2026-06-05T17:30:00.000Z')
++  assert.equal(result.scheduledSlotKey, 'store-1_2026-06-05_14-00_pickup')
++  assert.equal(result.schedulingSnapshot.source, 'store')
++})
++
++test('accepts scheduledFor and normalizes it to Brazil time', () => {
++  const result = decide({
++    input: {
++      orderTiming: 'scheduled',
++      scheduledFor: '2026-06-05T17:00:00.000Z',
++    },
++  })
++
++  assert.equal(result.scheduledDateKey, '2026-06-05')
++  assert.equal(result.scheduledTimeLabel, '14:00')
++})
++
++test('scheduled_only forces scheduling and requires date and time', () => {
++  assert.throws(
++    () => decide({
++      products: [product('custom', { mode: 'scheduled_only' })],
++    }),
++    /Escolha uma data e horário para sua encomenda/
++  )
++})
++
++test('rejects asap_only mixed with scheduled_only', () => {
++  assert.throws(
++    () => decide({
++      products: [
++        product('asap', { mode: 'asap_only' }),
++        product('custom', { mode: 'scheduled_only' }),
++      ],
++    }),
++    /Finalize em pedidos separados/
++  )
++})
++
++test('uses the highest product lead time', () => {
++  assert.throws(
++    () => decide({
++      products: [product('custom', { mode: 'scheduled_only', minLeadMinutes: 2880 })],
++      input: {
++        scheduledDate: '2026-06-05',
++        scheduledTime: '14:00',
++      },
++    }),
++    /pelo menos 2 dias de antecedência/
++  )
++})
++
++test('rejects dates outside weekly windows or on blocked dates', () => {
++  assert.throws(
++    () => decide({
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-06',
++        scheduledTime: '14:00',
++      },
++    }),
++    /Horário indisponível/
++  )
++
++  assert.throws(
++    () => decide({
++      storeData: store({ scheduling: { blockedDates: ['2026-06-05'] } }),
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-05',
++        scheduledTime: '14:00',
++      },
++    }),
++    /Horário indisponível/
++  )
++})
++
++test('rejects past times and applies product slot intervals over store windows', () => {
++  assert.throws(
++    () => decide({
++      storeData: store({ scheduling: { minLeadMinutes: 0 } }),
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-04',
++        scheduledTime: '08:00',
++      },
++    }),
++    /Horário indisponível/
++  )
++
++  const cakeOrder = decide({
++    products: [product('cake', { slotIntervalMinutes: 10 })],
++    input: {
++      orderTiming: 'scheduled',
++      scheduledDate: '2026-06-05',
++      scheduledTime: '14:50',
++    },
++  })
++
++  assert.equal(cakeOrder.scheduledTimeLabel, '14:50')
++  assert.equal(cakeOrder.schedulingSnapshot.slotIntervalMinutes, 10)
++  assert.equal(cakeOrder.scheduledWindowEnd.toISOString(), '2026-06-05T18:00:00.000Z')
++})
++
++test('uses a safe common interval for products with different explicit intervals', () => {
++  const result = decide({
++    products: [
++      product('ten-minutes', { slotIntervalMinutes: 10 }),
++      product('fifteen-minutes', { slotIntervalMinutes: 15 }),
++    ],
++    input: {
++      orderTiming: 'scheduled',
++      scheduledDate: '2026-06-05',
++      scheduledTime: '14:30',
++    },
++  })
++
++  assert.equal(result.schedulingSnapshot.slotIntervalMinutes, 30)
++  assert.equal(result.scheduledWindowEnd.toISOString(), '2026-06-05T18:00:00.000Z')
++})
++
++test('rejects product interval combinations without a safe daily grid', () => {
++  assert.throws(
++    () => decide({
++      products: [
++        product('fifty-three-minutes', { slotIntervalMinutes: 53 }),
++        product('fifty-nine-minutes', { slotIntervalMinutes: 59 }),
++      ],
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-05',
++        scheduledTime: '14:00',
++      },
++    }),
++    /Finalize em pedidos separados/
++  )
++})
++
++test('applies the smallest max day limit and product fulfillment restrictions', () => {
++  assert.throws(
++    () => decide({
++      products: [product('custom', { maxDaysAhead: 1 })],
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-08',
++        scheduledTime: '14:00',
++      },
++    }),
++    /Horário indisponível/
++  )
++
++  assert.throws(
++    () => decide({
++      products: [product('custom', {
++        fulfillmentTypes: { delivery: false, pickup: true },
++      })],
++      deliveryType: 'delivery',
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-05',
++        scheduledTime: '14:00',
++      },
++    }),
++    /Finalize em pedidos separados/
++  )
++})
++
++test('allows missing product fulfillment fields and blocks only explicit false', () => {
++  const partialFulfillment = decide({
++    products: [product('delivery-blocked', {
++      fulfillmentTypes: { delivery: false },
++    })],
++    deliveryType: 'pickup',
++    input: {
++      orderTiming: 'scheduled',
++      scheduledDate: '2026-06-05',
++      scheduledTime: '14:00',
++    },
++  })
++
++  assert.equal(partialFulfillment.orderTiming, 'scheduled')
++})
++
++test('normalizes compatible pickup aliases', () => {
++  for (const alias of [
++    'pickup',
++    'retirada',
++    'retirar',
++    'takeaway',
++    'takeout',
++    'balcao',
++    'balcão',
++    'retirada na loja',
++    'retirada-loja',
++    'retirada_na_loja',
++  ]) {
++    assert.equal(normalizePublicOrderDeliveryType(alias), 'pickup')
++  }
++
++  assert.equal(normalizePublicOrderDeliveryType('delivery'), 'delivery')
++  assert.equal(normalizePublicOrderDeliveryType('desconhecido'), null)
++})
++
++test('requires Pix when store or product policy requires it', () => {
++  assert.throws(
++    () => decide({
++      storeData: store({ scheduling: { prepaymentPolicy: 'pix_required_for_scheduled' } }),
++      input: {
++        orderTiming: 'scheduled',
++        scheduledDate: '2026-06-05',
++        scheduledTime: '14:00',
++      },
++      paymentMethod: 'card',
++    }),
++    /exige pagamento antecipado via Pix/
++  )
++
++  const productPix = decide({
++    products: [product('custom', { prepaymentPolicy: 'pix_required' })],
++    paymentMethod: 'pix_manual',
++  })
++  assert.equal(productPix.orderTiming, 'asap')
++  assert.equal(productPix.paymentPolicy, 'pix_required')
++  assert.equal(productPix.paymentPolicyReason, 'product_required')
++})
+diff --git a/functions/shared/publicScheduling.js b/functions/shared/publicScheduling.js
+new file mode 100644
+index 00000000..4dad3744
+--- /dev/null
++++ b/functions/shared/publicScheduling.js
+@@ -0,0 +1,171 @@
++const DAY_KEYS = [
++  'sunday',
++  'monday',
++  'tuesday',
++  'wednesday',
++  'thursday',
++  'friday',
++  'saturday',
++]
++const PRODUCT_MODES = new Set([
++  'store_default',
++  'asap_only',
++  'scheduled_only',
++  'asap_and_scheduled',
++])
++const STORE_PREPAYMENT_POLICIES = new Set([
++  'none',
++  'pix_required_for_scheduled',
++  'pix_required_for_custom_products',
++])
++const PRODUCT_PREPAYMENT_POLICIES = new Set([
++  'store_default',
++  'none',
++  'pix_required',
++])
++
++function isObject(value) {
++  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
++}
++
++function toBoundedInteger(value, fallback, min, max) {
++  if (value === undefined || value === null || value === '') return fallback
++  const parsed = Number(value)
++  if (!Number.isFinite(parsed)) return fallback
++  return Math.max(min, Math.min(max, Math.floor(parsed)))
++}
++
++function toNullableBoundedInteger(value, min, max) {
++  if (value === undefined || value === null || value === '') return null
++  const parsed = Number(value)
++  if (!Number.isFinite(parsed)) return null
++  return Math.max(min, Math.min(max, Math.floor(parsed)))
++}
++
++function parseTimeToMinutes(value, allowEndOfDay = false) {
++  const text = String(value || '').trim()
++  const match = /^(\d{2}):(\d{2})$/.exec(text)
++  if (!match) return null
++
++  const hour = Number(match[1])
++  const minute = Number(match[2])
++  if (allowEndOfDay && hour === 24 && minute === 0) return 24 * 60
++  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
++  return (hour * 60) + minute
++}
++
++function normalizeWindow(value) {
++  if (!isObject(value)) return null
++  const start = String(value.start || value.from || '').trim()
++  const end = String(value.end || value.to || '').trim()
++  const startMinute = parseTimeToMinutes(start)
++  const endMinute = parseTimeToMinutes(end, true)
++
++  if (startMinute === null || endMinute === null || endMinute <= startMinute) return null
++  return { start, end }
++}
++
++function emptyWeeklyWindows() {
++  return DAY_KEYS.reduce((acc, day) => {
++    acc[day] = []
++    return acc
++  }, {})
++}
++
++function normalizeWeeklyWindows(value, allowNull = false) {
++  if (!isObject(value)) return allowNull ? null : emptyWeeklyWindows()
++
++  return DAY_KEYS.reduce((acc, day) => {
++    const windows = Array.isArray(value[day]) ? value[day].slice(0, 24) : []
++    acc[day] = windows.map(normalizeWindow).filter(Boolean)
++    return acc
++  }, {})
++}
++
++function isValidDateKey(value) {
++  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim())
++  if (!match) return false
++
++  const year = Number(match[1])
++  const month = Number(match[2])
++  const day = Number(match[3])
++  const date = new Date(Date.UTC(year, month - 1, day))
++
++  return date.getUTCFullYear() === year
++    && date.getUTCMonth() === month - 1
++    && date.getUTCDate() === day
++}
++
++function normalizeBlockedDates(value) {
++  if (!Array.isArray(value)) return []
++  return [...new Set(value
++    .map((date) => String(date || '').trim())
++    .filter(isValidDateKey)
++    .slice(0, 400))]
++}
++
++function sanitizeStoreScheduling(value, {
++  acceptDelivery = true,
++  acceptPickup = true,
++} = {}) {
++  const raw = isObject(value) ? value : {}
++  const rawFulfillment = isObject(raw.fulfillmentTypes) ? raw.fulfillmentTypes : {}
++
++  return {
++    enabled: raw.enabled === true,
++    minLeadMinutes: toBoundedInteger(raw.minLeadMinutes, 0, 0, 525600),
++    maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, 30, 0, 365),
++    slotIntervalMinutes: toBoundedInteger(raw.slotIntervalMinutes, 30, 5, 1440),
++    fulfillmentTypes: {
++      delivery: acceptDelivery !== false && rawFulfillment.delivery !== false,
++      pickup: acceptPickup !== false && rawFulfillment.pickup !== false,
++    },
++    weeklyWindows: normalizeWeeklyWindows(raw.weeklyWindows),
++    blockedDates: normalizeBlockedDates(raw.blockedDates),
++    prepaymentPolicy: STORE_PREPAYMENT_POLICIES.has(raw.prepaymentPolicy)
++      ? raw.prepaymentPolicy
++      : 'none',
++  }
++}
++
++function sanitizePublicStoreScheduling(store = {}) {
++  const raw = isObject(store?.scheduling)
++    ? store.scheduling
++    : isObject(store?.publicScheduling)
++      ? store.publicScheduling
++      : {}
++
++  return sanitizeStoreScheduling(raw, {
++    acceptDelivery: store?.acceptDelivery !== false && store?.settings?.acceptDelivery !== false,
++    acceptPickup: store?.acceptPickup !== false && store?.settings?.acceptPickup !== false,
++  })
++}
++
++function sanitizePublicProductScheduling(value) {
++  if (!isObject(value)) return undefined
++  const rawFulfillment = isObject(value.fulfillmentTypes) ? value.fulfillmentTypes : null
++
++  return {
++    mode: PRODUCT_MODES.has(value.mode) ? value.mode : 'store_default',
++    minLeadMinutes: toNullableBoundedInteger(value.minLeadMinutes, 0, 525600),
++    maxDaysAhead: toNullableBoundedInteger(value.maxDaysAhead, 0, 365),
++    slotIntervalMinutes: toNullableBoundedInteger(value.slotIntervalMinutes, 5, 1440),
++    fulfillmentTypes: rawFulfillment
++      ? {
++          delivery: rawFulfillment.delivery !== false,
++          pickup: rawFulfillment.pickup !== false,
++        }
++      : null,
++    weeklyWindows: normalizeWeeklyWindows(value.weeklyWindows, true),
++    blockedDates: normalizeBlockedDates(value.blockedDates),
++    prepaymentPolicy: PRODUCT_PREPAYMENT_POLICIES.has(value.prepaymentPolicy)
++      ? value.prepaymentPolicy
++      : 'store_default',
++  }
++}
++
++module.exports = {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++  sanitizeStoreScheduling,
++}
+diff --git a/functions/shared/publicScheduling.test.js b/functions/shared/publicScheduling.test.js
+new file mode 100644
+index 00000000..2a5ecdf7
+--- /dev/null
++++ b/functions/shared/publicScheduling.test.js
+@@ -0,0 +1,165 @@
++const test = require('node:test')
++const assert = require('node:assert/strict')
++const {
++  sanitizePublicProductScheduling,
++  sanitizePublicStoreScheduling,
++  sanitizeStoreScheduling,
++} = require('./publicScheduling')
++
++test('keeps stores without scheduling compatible with safe disabled defaults', () => {
++  assert.deepEqual(sanitizePublicStoreScheduling({
++    acceptDelivery: true,
++    acceptPickup: false,
++  }), {
++    enabled: false,
++    minLeadMinutes: 0,
++    maxDaysAhead: 30,
++    slotIntervalMinutes: 30,
++    fulfillmentTypes: {
++      delivery: true,
++      pickup: false,
++    },
++    weeklyWindows: {
++      sunday: [],
++      monday: [],
++      tuesday: [],
++      wednesday: [],
++      thursday: [],
++      friday: [],
++      saturday: [],
++    },
++    blockedDates: [],
++    prepaymentPolicy: 'none',
++  })
++})
++
++test('publishes only safe normalized store scheduling fields', () => {
++  const result = sanitizePublicStoreScheduling({
++    acceptDelivery: true,
++    acceptPickup: true,
++    scheduling: {
++      enabled: true,
++      minLeadMinutes: -20,
++      maxDaysAhead: 900,
++      slotIntervalMinutes: 2,
++      maxOrdersPerSlot: 12,
++      internalNote: 'secret',
++      fulfillmentTypes: { delivery: false },
++      weeklyWindows: {
++        monday: [
++          { start: '08:00', end: '18:00', capacity: 10 },
++          { start: '19:00', end: '18:00' },
++          { start: 'invalid', end: '20:00' },
++        ],
++        internalDay: [{ start: '00:00', end: '24:00' }],
++      },
++      blockedDates: ['2026-12-25', '2026-02-30', 'secret'],
++      prepaymentPolicy: 'pix_required_for_scheduled',
++      pixKey: 'sensitive',
++    },
++  })
++
++  assert.equal(result.enabled, true)
++  assert.equal(result.minLeadMinutes, 0)
++  assert.equal(result.maxDaysAhead, 365)
++  assert.equal(result.slotIntervalMinutes, 5)
++  assert.deepEqual(result.fulfillmentTypes, { delivery: false, pickup: true })
++  assert.deepEqual(result.weeklyWindows.monday, [{ start: '08:00', end: '18:00' }])
++  assert.deepEqual(result.blockedDates, ['2026-12-25'])
++  assert.equal(result.prepaymentPolicy, 'pix_required_for_scheduled')
++  assert.equal(Object.hasOwn(result, 'maxOrdersPerSlot'), false)
++  assert.equal(Object.hasOwn(result, 'internalNote'), false)
++  assert.equal(Object.hasOwn(result, 'pixKey'), false)
++})
++
++test('normalizes store settings writes without retaining unknown fields', () => {
++  const result = sanitizeStoreScheduling({
++    enabled: true,
++    minLeadMinutes: '120',
++    weeklyWindows: {
++      friday: [{ from: '09:00', to: '17:00', private: true }],
++    },
++    maxOrdersPerSlot: 4,
++  })
++
++  assert.equal(result.minLeadMinutes, 120)
++  assert.deepEqual(result.weeklyWindows.friday, [{ start: '09:00', end: '17:00' }])
++  assert.equal(Object.hasOwn(result, 'maxOrdersPerSlot'), false)
++})
++
++test('omits product scheduling when the product has no scheduling object', () => {
++  assert.equal(sanitizePublicProductScheduling(undefined), undefined)
++  assert.equal(sanitizePublicProductScheduling(null), undefined)
++})
++
++test('publishes only safe normalized product scheduling fields', () => {
++  const result = sanitizePublicProductScheduling({
++    mode: 'scheduled_only',
++    minLeadMinutes: 2880,
++    maxDaysAhead: 'invalid',
++    slotIntervalMinutes: 10,
++    fulfillmentTypes: { delivery: false },
++    weeklyWindows: {
++      friday: [{ start: '08:00', end: '20:00', capacity: 20 }],
++    },
++    blockedDates: ['2026-12-25', 'invalid'],
++    prepaymentPolicy: 'pix_required',
++    costPrice: 99,
++    supplier: 'internal',
++  })
++
++  assert.deepEqual(result, {
++    mode: 'scheduled_only',
++    minLeadMinutes: 2880,
++    maxDaysAhead: null,
++    slotIntervalMinutes: 10,
++    fulfillmentTypes: {
++      delivery: false,
++      pickup: true,
++    },
++    weeklyWindows: {
++      sunday: [],
++      monday: [],
++      tuesday: [],
++      wednesday: [],
++      thursday: [],
++      friday: [{ start: '08:00', end: '20:00' }],
++      saturday: [],
++    },
++    blockedDates: ['2026-12-25'],
++    prepaymentPolicy: 'pix_required',
++  })
++})
++
++test('normalizes invalid product scheduling values without throwing', () => {
++  assert.deepEqual(sanitizePublicProductScheduling({
++    mode: 'internal_mode',
++    minLeadMinutes: 'invalid',
++    maxDaysAhead: -5,
++    slotIntervalMinutes: 9999,
++    fulfillmentTypes: 'invalid',
++    weeklyWindows: {
++      monday: [{ start: '25:00', end: '26:00' }],
++    },
++    blockedDates: ['2026-13-01'],
++    prepaymentPolicy: 'internal_policy',
++    maxOrdersPerSlot: 10,
++  }), {
++    mode: 'store_default',
++    minLeadMinutes: null,
++    maxDaysAhead: 0,
++    slotIntervalMinutes: 1440,
++    fulfillmentTypes: null,
++    weeklyWindows: {
++      sunday: [],
++      monday: [],
++      tuesday: [],
++      wednesday: [],
++      thursday: [],
++      friday: [],
++      saturday: [],
++    },
++    blockedDates: [],
++    prepaymentPolicy: 'store_default',
++  })
++})
+diff --git a/src/utils/callableError.js b/src/utils/callableError.js
+new file mode 100644
+index 00000000..4570793d
+--- /dev/null
++++ b/src/utils/callableError.js
+@@ -0,0 +1,13 @@
++export function getCallableErrorMessage(error, fallbackMessage) {
++  const message = String(error?.message || '').trim()
++
++  if (!message || /functions\/(internal|unknown)/i.test(message)) {
++    return fallbackMessage
++  }
++
++  return message
++    .replace(/^FirebaseError:\s*/i, '')
++    .replace(/^Firebase:\s*/i, '')
++    .trim() || fallbackMessage
++}
++
+diff --git a/src/utils/orderSla.js b/src/utils/orderSla.js
+new file mode 100644
+index 00000000..69cfad81
+--- /dev/null
++++ b/src/utils/orderSla.js
+@@ -0,0 +1,132 @@
++export const ORDER_STATUS_SLA_MINUTES = Object.freeze({
++  pendente: 3,
++  confirmado: 10,
++  preparando: 40,
++  pronto: 20,
++  em_rota: 60,
++})
++
++export const ACTIVE_ORDER_STATUSES = Object.freeze(Object.keys(ORDER_STATUS_SLA_MINUTES))
++
++const STATUS_TIMESTAMP_FIELDS = Object.freeze({
++  pendente: ['pendingAt'],
++  confirmado: ['confirmedAt', 'acceptedAt'],
++  preparando: ['preparingAt', 'preparationStartedAt'],
++  pronto: ['readyAt'],
++  em_rota: ['outForDeliveryAt', 'deliveryStartedAt'],
++})
++
++export function normalizeOrderStatus(status) {
++  const value = String(status || 'pendente').toLowerCase().trim()
++
++  return {
++    novo: 'pendente',
++    new: 'pendente',
++    received: 'pendente',
++    recebido: 'pendente',
++    aguardando: 'pendente',
++    aguardando_confirmacao: 'pendente',
++    awaiting_confirmation: 'pendente',
++    pending: 'pendente',
++    pendente: 'pendente',
++
++    aceito: 'confirmado',
++    accepted: 'confirmado',
++    confirmed: 'confirmado',
++    confirmado: 'confirmado',
++
++    em_preparo: 'preparando',
++    in_preparation: 'preparando',
++    in_progress: 'preparando',
++    preparing: 'preparando',
++    preparo: 'preparando',
++    preparando: 'preparando',
++
++    pronto: 'pronto',
++    pronta: 'pronto',
++    ready: 'pronto',
++    ready_for_pickup: 'pronto',
++    aguardando_retirada: 'pronto',
++
++    entregando: 'em_rota',
++    saiu_para_entrega: 'em_rota',
++    saiu_entrega: 'em_rota',
++    em_entrega: 'em_rota',
++    out_for_delivery: 'em_rota',
++    em_rota: 'em_rota',
++
++    finalizado: 'entregue',
++    delivered: 'entregue',
++    entregue: 'entregue',
++
++    canceled: 'cancelado',
++    cancelled: 'cancelado',
++    cancelado: 'cancelado',
++  }[value] || value || 'pendente'
++}
++
++export function timestampToMillis(value) {
++  if (!value) return null
++  if (typeof value.toMillis === 'function') return value.toMillis()
++  if (typeof value.toDate === 'function') return value.toDate().getTime()
++  if (value instanceof Date) return value.getTime()
++  if (typeof value === 'number') return Number.isFinite(value) ? value : null
++  if (value.seconds !== undefined) return Number(value.seconds) * 1000
++
++  const parsed = new Date(value).getTime()
++  return Number.isNaN(parsed) ? null : parsed
++}
++
++export function isOrderActiveStatus(status) {
++  return ACTIVE_ORDER_STATUSES.includes(normalizeOrderStatus(status))
++}
++
++export function getOrderStatusStartedAtMillis(order, normalizedStatus = normalizeOrderStatus(order?.status)) {
++  const statusFields = STATUS_TIMESTAMP_FIELDS[normalizedStatus] || []
++  const candidates = [
++    ...statusFields.map((field) => order?.[field]),
++    order?.statusUpdatedAt,
++    order?.createdAt,
++  ]
++
++  for (const candidate of candidates) {
++    const value = timestampToMillis(candidate)
++    if (value !== null) return value
++  }
++
++  return null
++}
++
++export function getOrderSlaState(order, now = Date.now()) {
++  const status = normalizeOrderStatus(order?.status)
++  const thresholdMinutes = ORDER_STATUS_SLA_MINUTES[status] || null
++  const startedAtMillis = getOrderStatusStartedAtMillis(order, status)
++  const nowMillis = timestampToMillis(now) ?? Date.now()
++
++  if (!thresholdMinutes || startedAtMillis === null) {
++    return {
++      status,
++      active: Boolean(thresholdMinutes),
++      overdue: false,
++      thresholdMinutes,
++      elapsedMinutes: 0,
++      remainingMinutes: thresholdMinutes,
++      overdueMinutes: 0,
++      startedAtMillis,
++    }
++  }
++
++  const elapsedMinutes = Math.max(0, Math.floor((nowMillis - startedAtMillis) / 60000))
++  const overdue = elapsedMinutes >= thresholdMinutes
++
++  return {
++    status,
++    active: true,
++    overdue,
++    thresholdMinutes,
++    elapsedMinutes,
++    remainingMinutes: Math.max(0, thresholdMinutes - elapsedMinutes),
++    overdueMinutes: overdue ? Math.max(1, elapsedMinutes - thresholdMinutes) : 0,
++    startedAtMillis,
++  }
++}
