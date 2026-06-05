@@ -118,7 +118,7 @@ index 41c840fd..81737b20 100644
  
      return {
 diff --git a/functions/scripts/backfillPublicCatalog.js b/functions/scripts/backfillPublicCatalog.js
-index 85b2f33c..1bfe62b9 100644
+index 85b2f33c..bca1550d 100644
 --- a/functions/scripts/backfillPublicCatalog.js
 +++ b/functions/scripts/backfillPublicCatalog.js
 @@ -1,6 +1,10 @@
@@ -140,14 +140,27 @@ index 85b2f33c..1bfe62b9 100644
    }
  
    if (data.pix && typeof data.pix === 'object') {
-@@ -311,6 +316,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
-       'updatedAt',
-       'createdAt',
-     ]),
-+    scheduling: sanitizePublicProductScheduling(data.scheduling),
-     id: productId,
-     productId,
-     storeId,
+@@ -265,7 +270,7 @@ function buildPublicCategory(data = {}, categoryId, storeId) {
+ }
+ 
+ function buildPublicProduct(data = {}, productId, storeId) {
+-  return stripUndefinedDeep({
++  const product = stripUndefinedDeep({
+     ...pickFields(data, [
+       'name',
+       'description',
+@@ -319,6 +324,11 @@ function buildPublicProduct(data = {}, productId, storeId) {
+     isDeleted: false,
+     publicUpdatedAt: FieldValue.serverTimestamp(),
+   })
++
++  const scheduling = sanitizePublicProductScheduling(data.scheduling)
++  if (scheduling) product.scheduling = scheduling
++
++  return product
+ }
+ 
+ function storeKeysFromSnapshot(storeId, data = {}) {
 diff --git a/functions/shared/publicScheduling.js b/functions/shared/publicScheduling.js
 new file mode 100644
 index 00000000..4dad3744

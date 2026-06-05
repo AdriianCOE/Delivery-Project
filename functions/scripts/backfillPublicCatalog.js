@@ -270,7 +270,7 @@ function buildPublicCategory(data = {}, categoryId, storeId) {
 }
 
 function buildPublicProduct(data = {}, productId, storeId) {
-  return stripUndefinedDeep({
+  const product = stripUndefinedDeep({
     ...pickFields(data, [
       'name',
       'description',
@@ -316,7 +316,6 @@ function buildPublicProduct(data = {}, productId, storeId) {
       'updatedAt',
       'createdAt',
     ]),
-    scheduling: sanitizePublicProductScheduling(data.scheduling),
     id: productId,
     productId,
     storeId,
@@ -325,6 +324,11 @@ function buildPublicProduct(data = {}, productId, storeId) {
     isDeleted: false,
     publicUpdatedAt: FieldValue.serverTimestamp(),
   })
+
+  const scheduling = sanitizePublicProductScheduling(data.scheduling)
+  if (scheduling) product.scheduling = scheduling
+
+  return product
 }
 
 function storeKeysFromSnapshot(storeId, data = {}) {
