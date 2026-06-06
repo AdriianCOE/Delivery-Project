@@ -14,6 +14,7 @@ import { httpsCallable } from 'firebase/functions'
 import {
   FiAlertCircle,
   FiArrowLeft,
+  FiCalendar,
   FiCheckCircle,
   FiClock,
   FiCopy,
@@ -55,6 +56,62 @@ const DAYS_OF_WEEK = [
   { id: 'thu', short: 'Qui', label: 'Quinta' },
   { id: 'fri', short: 'Sex', label: 'Sexta' },
   { id: 'sat', short: 'Sáb', label: 'Sábado' },
+]
+
+const SCHEDULING_DAYS = [
+  { key: 'monday', label: 'Segunda' },
+  { key: 'tuesday', label: 'Terça' },
+  { key: 'wednesday', label: 'Quarta' },
+  { key: 'thursday', label: 'Quinta' },
+  { key: 'friday', label: 'Sexta' },
+  { key: 'saturday', label: 'Sábado' },
+  { key: 'sunday', label: 'Domingo' },
+]
+
+const DEFAULT_SCHEDULING_WEEKLY_WINDOWS = {
+  monday: [{ start: '08:00', end: '18:00' }],
+  tuesday: [{ start: '08:00', end: '18:00' }],
+  wednesday: [{ start: '08:00', end: '18:00' }],
+  thursday: [{ start: '08:00', end: '18:00' }],
+  friday: [{ start: '08:00', end: '18:00' }],
+  saturday: [],
+  sunday: [],
+}
+
+const DEFAULT_STORE_SCHEDULING = {
+  enabled: false,
+  minLeadMinutes: 60,
+  maxDaysAhead: 14,
+  slotIntervalMinutes: 30,
+  fulfillmentTypes: {
+    delivery: true,
+    pickup: true,
+  },
+  weeklyWindows: DEFAULT_SCHEDULING_WEEKLY_WINDOWS,
+  blockedDates: [],
+  prepaymentPolicy: 'none',
+}
+
+const OPENING_TO_SCHEDULING_DAY = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
+}
+
+const SETTINGS_NAV_ITEMS = [
+  { id: 'settings-identity', label: 'Identidade', icon: FiGlobe },
+  { id: 'settings-images', label: 'Logo e banner', icon: FiImage },
+  { id: 'settings-contact', label: 'Contato', icon: FiPhone },
+  { id: 'settings-hours', label: 'Horários', icon: FiClock },
+  { id: 'settings-scheduling', label: 'Agendamento', icon: FiCalendar },
+  { id: 'settings-address', label: 'Endereço', icon: FiMapPin },
+  { id: 'settings-operation', label: 'Operação', icon: FiMonitor },
+  { id: 'settings-notifications', label: 'Alertas', icon: FiZap },
+  { id: 'settings-payments', label: 'Pagamentos', icon: FiShield },
 ]
 
 const SEGMENTS = [
@@ -126,6 +183,7 @@ const DEFAULT_FORM = {
   complement: '',
   city: '',
   state: 'SE',
+  scheduling: DEFAULT_STORE_SCHEDULING,
 }
 
 function uniqueArray(values) {
@@ -337,6 +395,163 @@ function normalizeThemeColor(value) {
 
 function isValidTime(value) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || '').trim())
+}
+
+function cloneDefaultScheduling() {
+  return {
+    ...DEFAULT_STORE_SCHEDULING,
+    fulfillmentTypes: { ...DEFAULT_STORE_SCHEDULING.fulfillmentTypes },
+    weeklyWindows: Object.fromEntries(
+      Object.entries(DEFAULT_STORE_SCHEDULING.weeklyWindows).map(([day, windows]) => [
+        day,
+        windows.map((window) => ({ ...window })),
+      ])
+    ),
+    blockedDates: [],
+  }
+}
+
+function toBoundedInteger(value, fallback, min, max) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(max, Math.floor(parsed)))
+}
+
+function normalizeSchedulingWindow(window, fallback = { start: '08:00', end: '18:00' }) {
+  const start = isValidTime(window?.start) ? window.start : fallback.start
+  const end = isValidTime(window?.end) ? window.end : fallback.end
+  return start < end ? { start, end } : fallback
+}
+
+function normalizeStoreScheduling(value) {
+  const defaults = cloneDefaultScheduling()
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {}
+  const fulfillment = raw.fulfillmentTypes && typeof raw.fulfillmentTypes === 'object'
+    ? raw.fulfillmentTypes
+    : {}
+  const windows = raw.weeklyWindows && typeof raw.weeklyWindows === 'object'
+    ? raw.weeklyWindows
+    : defaults.weeklyWindows
+
+  return {
+    enabled: raw.enabled === true,
+    minLeadMinutes: toBoundedInteger(raw.minLeadMinutes, defaults.minLeadMinutes, 0, 525600),
+    maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, defaults.maxDaysAhead, 0, 365),
+    slotIntervalMinutes: [10, 15, 30, 60].includes(Number(raw.slotIntervalMinutes))
+      ? Number(raw.slotIntervalMinutes)
+      : defaults.slotIntervalMinutes,
+    fulfillmentTypes: {
+      delivery: fulfillment.delivery !== false,
+      pickup: fulfillment.pickup !== false,
+    },
+    weeklyWindows: SCHEDULING_DAYS.reduce((acc, day) => {
+      const dayWindows = Array.isArray(windows?.[day.key]) ? windows[day.key] : []
+      acc[day.key] = dayWindows.length
+        ? [normalizeSchedulingWindow(dayWindows[0])]
+        : []
+      return acc
+    }, {}),
+    blockedDates: Array.isArray(raw.blockedDates)
+      ? [...new Set(raw.blockedDates.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))))]
+      : [],
+    prepaymentPolicy: [
+      'none',
+      'pix_required_for_scheduled',
+      'pix_required_for_custom_products',
+    ].includes(raw.prepaymentPolicy)
+      ? raw.prepaymentPolicy
+      : 'none',
+  }
+}
+
+function schedulingRequiresPix(scheduling) {
+  return scheduling?.prepaymentPolicy === 'pix_required_for_scheduled'
+    || scheduling?.prepaymentPolicy === 'pix_required_for_custom_products'
+}
+
+function hasAnySchedulingWindow(scheduling) {
+  return SCHEDULING_DAYS.some((day) => {
+    return Array.isArray(scheduling?.weeklyWindows?.[day.key])
+      && scheduling.weeklyWindows[day.key].length > 0
+  })
+}
+
+function getSchedulingValidationError(scheduling, form, pixCompleteness) {
+  if (!scheduling?.enabled) return null
+
+  if (
+    scheduling.fulfillmentTypes?.delivery !== true
+    && scheduling.fulfillmentTypes?.pickup !== true
+  ) {
+    return 'Selecione pelo menos entrega ou retirada para pedidos agendados.'
+  }
+
+  if (Number(scheduling.maxDaysAhead) < 1) {
+    return 'O limite de dias no futuro precisa ser maior que zero.'
+  }
+
+  if (Number(scheduling.minLeadMinutes) > Number(scheduling.maxDaysAhead) * 1440) {
+    return 'A antecedência mínima não pode ser maior que o limite de dias no futuro.'
+  }
+
+  if (!hasAnySchedulingWindow(scheduling)) {
+    return 'Configure pelo menos um dia disponível para agendamento.'
+  }
+
+  for (const day of SCHEDULING_DAYS) {
+    const windows = scheduling.weeklyWindows?.[day.key] || []
+
+    for (const window of windows) {
+      if (!isValidTime(window?.start) || !isValidTime(window?.end) || window.start >= window.end) {
+        return `Revise os horários de ${day.label}: o início precisa ser antes do fim.`
+      }
+    }
+  }
+
+  if (schedulingRequiresPix(scheduling) && (!form.paymentPix || !pixCompleteness.complete)) {
+    return 'Para exigir Pix em pedidos agendados, ative e configure o Pix manual da loja.'
+  }
+
+  return null
+}
+
+function formatBlockedDate(dateKey) {
+  const [year, month, day] = String(dateKey || '').split('-')
+  if (!year || !month || !day) return dateKey
+  return `${day}/${month}/${year}`
+}
+
+function openingHoursToSchedulingWindows(openingHours) {
+  const defaults = getDefaultOpeningHours()
+  const source = openingHours || defaults
+
+  return Object.entries(OPENING_TO_SCHEDULING_DAY).reduce((acc, [openingDay, schedulingDay]) => {
+    const dayHours = source?.[openingDay] || defaults[openingDay]
+    acc[schedulingDay] = dayHours?.enabled
+      ? [{ start: dayHours.open || '08:00', end: dayHours.close || '18:00' }]
+      : []
+    return acc
+  }, {})
+}
+
+function splitMinutesForInput(minutes) {
+  const value = Number(minutes)
+  if (Number.isFinite(value) && value > 0 && value % 1440 === 0) {
+    return { value: String(value / 1440), unit: 'days' }
+  }
+  if (Number.isFinite(value) && value > 0 && value % 60 === 0) {
+    return { value: String(value / 60), unit: 'hours' }
+  }
+  return { value: String(Number.isFinite(value) ? value : 60), unit: 'minutes' }
+}
+
+function leadTimeToMinutes(value, unit) {
+  const amount = Math.max(0, Number.parseInt(value, 10) || 0)
+  if (unit === 'days') return amount * 1440
+  if (unit === 'hours') return amount * 60
+  return amount
 }
 
 function normalizeOpeningHoursForSave(openingHours) {
@@ -571,27 +786,31 @@ function mapStoreToForm(store) {
     pixKeyType: PIX_KEY_TYPES.includes(pixKeyType) ? pixKeyType : 'phone',
     pixMerchantName: pix?.merchantName || settingsPix?.merchantName || store?.name || '',
     pixMerchantCity: pix?.merchantCity || settingsPix?.merchantCity || address.city || '',
+    scheduling: normalizeStoreScheduling(store?.scheduling),
     ...address,
   }
 }
 
 
 
-function Section({ icon: Icon, title, description, children }) {
+function Section({ id, icon: Icon, title, description, children }) {
   return (
-    <section className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm">
+    <section
+      id={id}
+      className="scroll-mt-28 rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-[#151922]"
+    >
       <div className="mb-5 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
           <Icon size={20} />
         </div>
 
         <div>
-          <h2 className="text-base font-black text-[#111827]">
+          <h2 className="text-base font-black text-[#111827] dark:text-zinc-50">
             {title}
           </h2>
 
           {description && (
-            <p className="mt-1 text-sm leading-6 text-[#6b7280]">
+            <p className="mt-1 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
               {description}
             </p>
           )}
@@ -851,6 +1070,7 @@ export default function Settings() {
   const [uploadingImage, setUploadingImage] = useState('')
   const [toast, setToast] = useState(null)
   const [form, setForm] = useState(DEFAULT_FORM)
+  const [blockedDateInput, setBlockedDateInput] = useState('')
 
   const selectedStore = useMemo(() => {
     return stores.find((store) => store.id === selectedStoreId) || stores[0] || null
@@ -868,6 +1088,10 @@ export default function Settings() {
   }, [form, selectedStore])
 
   const pixRequiredAndIncomplete = form.paymentPix && !pixCompleteness.complete
+  const schedulingLeadInput = useMemo(
+    () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
+    [form.scheduling?.minLeadMinutes]
+  )
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -878,6 +1102,109 @@ export default function Settings() {
       ...prev,
       [field]: value,
     }))
+  }, [])
+
+  const updateScheduling = useCallback((field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      scheduling: {
+        ...normalizeStoreScheduling(prev.scheduling),
+        [field]: value,
+      },
+    }))
+  }, [])
+
+  const updateSchedulingFulfillment = useCallback((field, value) => {
+    setForm((prev) => {
+      const scheduling = normalizeStoreScheduling(prev.scheduling)
+      return {
+        ...prev,
+        scheduling: {
+          ...scheduling,
+          fulfillmentTypes: {
+            ...scheduling.fulfillmentTypes,
+            [field]: value,
+          },
+        },
+      }
+    })
+  }, [])
+
+  const updateSchedulingWindow = useCallback((dayKey, field, value) => {
+    setForm((prev) => {
+      const scheduling = normalizeStoreScheduling(prev.scheduling)
+      const current = scheduling.weeklyWindows?.[dayKey]?.[0] || { start: '08:00', end: '18:00' }
+      return {
+        ...prev,
+        scheduling: {
+          ...scheduling,
+          weeklyWindows: {
+            ...scheduling.weeklyWindows,
+            [dayKey]: [{ ...current, [field]: value }],
+          },
+        },
+      }
+    })
+  }, [])
+
+  const toggleSchedulingDay = useCallback((dayKey, enabled) => {
+    setForm((prev) => {
+      const scheduling = normalizeStoreScheduling(prev.scheduling)
+      return {
+        ...prev,
+        scheduling: {
+          ...scheduling,
+          weeklyWindows: {
+            ...scheduling.weeklyWindows,
+            [dayKey]: enabled ? [{ start: '08:00', end: '18:00' }] : [],
+          },
+        },
+      }
+    })
+  }, [])
+
+  const copyOpeningHoursToScheduling = useCallback(() => {
+    setForm((prev) => {
+      const scheduling = normalizeStoreScheduling(prev.scheduling)
+
+      return {
+        ...prev,
+        scheduling: {
+          ...scheduling,
+          weeklyWindows: openingHoursToSchedulingWindows(prev.openingHours),
+        },
+      }
+    })
+
+    showToast('success', 'Horários de funcionamento copiados para o agendamento.')
+  }, [showToast])
+
+  const addBlockedDate = useCallback(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(blockedDateInput)) return
+    setForm((prev) => {
+      const scheduling = normalizeStoreScheduling(prev.scheduling)
+      return {
+        ...prev,
+        scheduling: {
+          ...scheduling,
+          blockedDates: [...new Set([...(scheduling.blockedDates || []), blockedDateInput])].sort(),
+        },
+      }
+    })
+    setBlockedDateInput('')
+  }, [blockedDateInput])
+
+  const removeBlockedDate = useCallback((date) => {
+    setForm((prev) => {
+      const scheduling = normalizeStoreScheduling(prev.scheduling)
+      return {
+        ...prev,
+        scheduling: {
+          ...scheduling,
+          blockedDates: scheduling.blockedDates.filter((blockedDate) => blockedDate !== date),
+        },
+      }
+    })
   }, [])
 
   const updatePaymentPix = useCallback((value) => {
@@ -1135,6 +1462,15 @@ export default function Settings() {
       const minOrderCents = currencyToCents(form.minOrder)
       const minOrder = minOrderCents / 100
       const openingHours = normalizeOpeningHoursForSave(form.openingHours)
+      const scheduling = normalizeStoreScheduling(form.scheduling)
+      const schedulingValidationError = getSchedulingValidationError(scheduling, form, pixCompleteness)
+
+      if (schedulingValidationError) {
+        showToast('error', schedulingValidationError)
+        scrollToFirstError()
+        return
+      }
+
       const autoCloseGraceMinutes = Math.min(
         240,
         Math.max(0, Number.parseInt(form.autoCloseGraceMinutes, 10) || 30)
@@ -1198,6 +1534,7 @@ export default function Settings() {
         hoursOpen,
         hoursClose,
         openingHours,
+        scheduling,
         settings,
 
         deliveryTime,
@@ -1244,7 +1581,7 @@ export default function Settings() {
         'name', 'storeName', 'description', 'segment', 'category',
         'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
         'phone', 'instagram', 'social', 'isActive', 'activeDays',
-        'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+        'hoursOpen', 'hoursClose', 'openingHours', 'scheduling', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
         'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
         'number', 'neighborhood', 'complement', 'city', 'state'
@@ -1283,7 +1620,7 @@ export default function Settings() {
             <div className="h-6 w-48 animate-pulse rounded-lg bg-gray-200" />
           </div>
         </header>
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[74px_minmax(0,1fr)_360px] lg:px-8">
           <div className="h-[300px] animate-pulse rounded-[1.8rem] border border-gray-100 bg-white shadow-sm lg:order-2" />
           <div className="space-y-6 lg:order-1">
             <div className="h-64 animate-pulse rounded-[1.8rem] border border-gray-100 bg-white shadow-sm" />
@@ -1333,8 +1670,28 @@ export default function Settings() {
         }
       />
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
-        <aside className="space-y-5 lg:order-2">
+      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[64px_minmax(0,1fr)_360px] xl:grid-cols-[64px_minmax(0,1fr)_380px] lg:px-8">
+        <aside className="lg:sticky lg:top-24 lg:order-1 lg:h-fit">
+          <nav className="flex gap-2 overflow-x-auto rounded-[1.4rem] border border-gray-100 bg-white/90 p-2 shadow-sm backdrop-blur-xl dark:border-zinc-800 dark:bg-[#151922]/90 lg:w-14 lg:flex-col lg:overflow-visible">
+            {SETTINGS_NAV_ITEMS.map((item) => {
+              const Icon = item.icon
+
+              return (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  title={item.label}
+                  aria-label={item.label}
+                  className="group flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-gray-400 transition hover:bg-orange-50 hover:text-[#f97316] dark:text-zinc-500 dark:hover:bg-orange-500/10 dark:hover:text-orange-300"
+                >
+                  <Icon size={17} />
+                  <span className="sr-only">{item.label}</span>
+                </a>
+              )
+            })}
+          </nav>
+        </aside>
+        <aside className="space-y-5 lg:order-3">
           <StoreSelector
             stores={stores}
             selectedStoreId={selectedStoreId}
@@ -1412,7 +1769,7 @@ export default function Settings() {
           </section>
         </aside>
 
-        <div className="space-y-6 lg:order-1">
+        <div className="min-w-0 space-y-6 lg:order-2">
 
           <div className="flex flex-col gap-4 rounded-[1.8rem] border border-orange-100 bg-orange-50 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1429,6 +1786,7 @@ export default function Settings() {
             </Link>
           </div>
           <Section
+            id="settings-identity"
             icon={FiGlobe}
             title="Identidade da loja"
             description="Essas informações aparecem no cardápio público e no compartilhamento da loja."
@@ -1511,6 +1869,7 @@ export default function Settings() {
           </Section>
 
           <Section
+            id="settings-images"
             icon={FiImage}
             title="Logo e banner"
             description="Imagens usadas no cabeçalho do cardápio público."
@@ -1540,6 +1899,7 @@ export default function Settings() {
           </Section>
 
           <Section
+            id="settings-contact"
             icon={FiPhone}
             title="Contato e redes sociais"
             description="Número principal da loja e perfil social exibido para o cliente."
@@ -1564,6 +1924,7 @@ export default function Settings() {
           </Section>
 
           <Section
+  id="settings-hours"
   icon={FiClock}
   title="Horário de funcionamento"
   description="Defina dias e horários diferentes para cada dia da semana."
@@ -1645,6 +2006,261 @@ export default function Settings() {
 </Section>
 
           <Section
+            id="settings-scheduling"
+            icon={FiCalendar}
+            title="Agendamento de pedidos"
+            description="Permita que seus clientes escolham uma data e horário para pedidos, encomendas, retiradas programadas e produtos sob encomenda."
+          >
+            <div className="space-y-5">
+              <Toggle
+                checked={Boolean(form.scheduling?.enabled)}
+                onChange={(value) => updateScheduling('enabled', value)}
+                label="Aceitar pedidos agendados"
+                description="Quando ativo, o checkout público poderá oferecer datas e horários conforme estas regras."
+              />
+
+              {!form.scheduling?.enabled ? (
+                <div className="rounded-[1.5rem] border border-dashed border-orange-200 bg-orange-50/70 p-5 dark:border-orange-500/25 dark:bg-orange-500/10">
+                  <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
+                    Agendamento desativado
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
+                    Ative para permitir encomendas, retiradas programadas e pedidos com data marcada. As regras abaixo ficam guardadas e só passam a valer quando o agendamento estiver ligado.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {schedulingRequiresPix(form.scheduling) && (!form.paymentPix || !pixCompleteness.complete) && (
+                    <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                      <FiAlertCircle className="mt-0.5 shrink-0" size={18} />
+                      <div>
+                        <p className="font-black">Pix manual precisa estar ativo</p>
+                        <p className="mt-1 leading-5">
+                          Você escolheu exigir Pix para agendamentos. Ative Pix em “Pagamentos” e configure chave, nome e cidade antes de salvar.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid items-end gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_220px]">
+                    <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                      <Input
+                        label="Antecedência mínima"
+                        type="number"
+                        min="0"
+                        value={schedulingLeadInput.value}
+                        onChange={(event) => updateScheduling(
+                          'minLeadMinutes',
+                          leadTimeToMinutes(event.target.value, schedulingLeadInput.unit)
+                        )}
+                      />
+                      <Select
+                        label="Unidade"
+                        value={schedulingLeadInput.unit}
+                        onChange={(event) => updateScheduling(
+                          'minLeadMinutes',
+                          leadTimeToMinutes(schedulingLeadInput.value, event.target.value)
+                        )}
+                      >
+                        <option value="minutes">Minutos</option>
+                        <option value="hours">Horas</option>
+                        <option value="days">Dias</option>
+                      </Select>
+                    </div>
+
+                    <Input
+                      label="Aceitar até quantos dias no futuro?"
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={form.scheduling?.maxDaysAhead ?? 14}
+                      onChange={(event) => updateScheduling('maxDaysAhead', Number(event.target.value))}
+                    />
+
+                    <Select
+                      label="Intervalo dos horários"
+                      value={form.scheduling?.slotIntervalMinutes ?? 30}
+                      onChange={(event) => updateScheduling('slotIntervalMinutes', Number(event.target.value))}
+                    >
+                      <option value={10}>10 minutos</option>
+                      <option value={15}>15 minutos</option>
+                      <option value={30}>30 minutos</option>
+                      <option value={60}>60 minutos</option>
+                    </Select>
+                  </div>
+
+                  <div className="grid items-stretch gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+                      <Label>Tipos aceitos</Label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {[
+                          ['delivery', 'Entrega'],
+                          ['pickup', 'Retirada'],
+                        ].map(([key, label]) => (
+                          <label
+                            key={key}
+                            className="flex h-12 cursor-pointer items-center gap-3 rounded-2xl bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition hover:bg-orange-50 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:bg-orange-500/10"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.scheduling?.fulfillmentTypes?.[key] !== false}
+                              onChange={(event) => updateSchedulingFulfillment(key, event.target.checked)}
+                              className="h-4 w-4 shrink-0 accent-[#f97316]"
+                            />
+                            <span className="leading-none">{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+                      <Select
+                        label="Pré-pagamento"
+                        value={form.scheduling?.prepaymentPolicy || 'none'}
+                        onChange={(event) => updateScheduling('prepaymentPolicy', event.target.value)}
+                      >
+                        <option value="none">Não exigir</option>
+                        <option value="pix_required_for_scheduled">Exigir Pix para todo pedido agendado</option>
+                        <option value="pix_required_for_custom_products">Exigir Pix apenas para produtos sob encomenda</option>
+                      </Select>
+                      <p className="mt-3 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                        Quando o Pix for obrigatório, o cliente deverá escolher Pix manual no checkout.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <Label>Horários disponíveis por dia da semana</Label>
+                        <p className="text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                          Um dia sem janela fica indisponível para agendamento.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={copyOpeningHoursToScheduling}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border border-orange-100 bg-white px-4 text-xs font-black text-[#f97316] shadow-sm transition hover:border-orange-200 hover:bg-orange-50 dark:border-orange-500/20 dark:bg-zinc-950/50 dark:hover:bg-orange-500/10"
+                      >
+                        <FiCopy size={14} />
+                        Copiar funcionamento
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {SCHEDULING_DAYS.map((day) => {
+                        const dayWindows = form.scheduling?.weeklyWindows?.[day.key] || []
+                        const enabled = dayWindows.length > 0
+                        const window = dayWindows[0] || { start: '08:00', end: '18:00' }
+                        const invalidWindow = enabled && (!isValidTime(window.start) || !isValidTime(window.end) || window.start >= window.end)
+
+                        return (
+                          <div
+                            key={day.key}
+                            className={`grid items-center gap-3 rounded-2xl border bg-white p-4 dark:bg-zinc-950/40 sm:grid-cols-[minmax(0,1fr)_118px_118px] ${
+                              invalidWindow
+                                ? 'border-red-200 dark:border-red-500/30'
+                                : 'border-gray-100 dark:border-zinc-800'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleSchedulingDay(day.key, !enabled)}
+                              className="flex items-center justify-between gap-3 text-left"
+                            >
+                              <div>
+                                <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
+                                  {day.label}
+                                </p>
+                                <p className={`mt-1 text-xs ${invalidWindow ? 'font-bold text-red-500' : 'text-[#6b7280] dark:text-zinc-400'}`}>
+                                  {invalidWindow
+                                    ? 'Revise este horário'
+                                    : enabled
+                                      ? `${window.start} às ${window.end}`
+                                      : 'Indisponível'}
+                                </p>
+                              </div>
+
+                              <span className={`rounded-full px-3 py-1 text-xs font-black ${
+                                enabled
+                                  ? 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300'
+                                  : 'bg-gray-200 text-gray-500 dark:bg-zinc-800 dark:text-zinc-400'
+                              }`}>
+                                {enabled ? 'Disponível' : 'Indisponível'}
+                              </span>
+                            </button>
+
+                            <input
+                              type="time"
+                              disabled={!enabled}
+                              value={window.start}
+                              onChange={(event) => updateSchedulingWindow(day.key, 'start', event.target.value)}
+                              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 text-xs font-black text-[#f97316] transition hover:border-orange-500/35 hover:bg-orange-500/15 dark:text-orange-300"
+                            />
+
+                            <input
+                              type="time"
+                              disabled={!enabled}
+                              value={window.end}
+                              onChange={(event) => updateSchedulingWindow(day.key, 'end', event.target.value)}
+                              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 text-xs font-black text-[#f97316] transition hover:border-orange-500/35 hover:bg-orange-500/15 dark:text-orange-300"
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+                    <Label>Datas bloqueadas</Label>
+                    <p className="mb-3 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                      Use para feriados, folgas ou dias em que não aceitará encomendas.
+                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <input
+                        type="date"
+                        value={blockedDateInput}
+                        onChange={(event) => setBlockedDateInput(event.target.value)}
+                        className="h-12 flex-1 rounded-2xl border border-gray-100 bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-100 dark:focus:ring-orange-500/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={addBlockedDate}
+                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white transition hover:bg-[#ea580c]"
+                      >
+                        Adicionar data
+                      </button>
+                    </div>
+
+                    {form.scheduling?.blockedDates?.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {form.scheduling.blockedDates.map((date) => (
+                          <span
+                            key={date}
+                            className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white px-3 py-1.5 text-xs font-black text-[#111827] dark:border-orange-500/20 dark:bg-zinc-950/50 dark:text-zinc-100"
+                          >
+                            {formatBlockedDate(date)}
+                            <button
+                              type="button"
+                              onClick={() => removeBlockedDate(date)}
+                              className="text-gray-400 transition hover:text-red-500"
+                              aria-label={`Remover ${formatBlockedDate(date)}`}
+                            >
+                              <FiX size={13} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </Section>
+
+          <Section
+            id="settings-address"
             icon={FiMapPin}
             title="Endereço"
             description="Endereço textual da loja. Entrega por bairro continua sendo configurada no editor do cardápio."
@@ -1702,6 +2318,7 @@ export default function Settings() {
           </Section>
 
           <Section
+            id="settings-operation"
             icon={FiMonitor}
             title="Operação"
             description="Configurações gerais de atendimento. Itens, cupons e taxas por bairro ficam no editor do cardápio."
@@ -1764,6 +2381,7 @@ export default function Settings() {
           </Section>
 
           <Section
+            id="settings-notifications"
             icon={FiZap}
             title="Notificações e comanda"
             description="Configurações usadas no painel de pedidos."
@@ -1786,6 +2404,7 @@ export default function Settings() {
           </Section>
 
           <Section
+            id="settings-payments"
             icon={FiShield}
             title="Pagamentos"
             description="Formas de pagamento aceitas e dados para Pix manual."

@@ -12,8 +12,11 @@ import {
 } from 'firebase/firestore'
 import { AnimatePresence, motion } from 'motion/react'
 import {
+  FiAlertTriangle,
+  FiCalendar,
   FiCheck,
   FiClock,
+  FiCreditCard,
   FiDollarSign,
   FiEye,
   FiImage,
@@ -26,6 +29,7 @@ import {
   FiStar,
   FiTag,
   FiTrash2,
+  FiTruck,
   FiX,
 } from 'react-icons/fi'
 
@@ -37,7 +41,9 @@ import {
   createEmptyOption,
   createEmptyOptionGroup,
   normalizeProductOptionGroupsForForm,
+  normalizeProductSchedulingForForm,
   sanitizeOptionGroupsForSave,
+  sanitizeProductSchedulingForSave,
   cleanObject,
 } from '../utils/menuPayloads'
 import { parseCurrency, formatMoney, moneyToInput } from '../utils/menuFormatters'
@@ -109,6 +115,29 @@ const statusItems = [
 ]
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
+
+function splitSchedulingMinutes(minutes) {
+  if (minutes === null || minutes === undefined || minutes === '') {
+    return { value: '', unit: 'hours' }
+  }
+
+  const value = Number(minutes)
+  if (Number.isFinite(value) && value > 0 && value % 1440 === 0) {
+    return { value: String(value / 1440), unit: 'days' }
+  }
+  if (Number.isFinite(value) && value > 0 && value % 60 === 0) {
+    return { value: String(value / 60), unit: 'hours' }
+  }
+  return { value: String(Number.isFinite(value) ? value : ''), unit: 'minutes' }
+}
+
+function schedulingInputToMinutes(value, unit) {
+  if (value === '') return null
+  const amount = Math.max(0, Number.parseInt(value, 10) || 0)
+  if (unit === 'days') return amount * 1440
+  if (unit === 'hours') return amount * 60
+  return amount
+}
 
 function FieldLabel({ children, required }) {
   return (
@@ -407,6 +436,7 @@ const DRAWER_SECTIONS = [
   { id: 'image', label: 'Imagem', icon: FiImage },
   { id: 'status', label: 'Status', icon: FiPackage },
   { id: 'options', label: 'Opções', icon: FiLayers },
+  { id: 'scheduling', label: 'Encomenda', icon: FiCalendar },
 ]
 
 // ── ProductEditorDrawer ──────────────────────────────────────────────────────
@@ -462,9 +492,15 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         order: editingProduct.order || 0,
         optionGroups: normalizeProductOptionGroupsForForm(editingProduct),
         extras: editingProduct.extras || [],
+        scheduling: normalizeProductSchedulingForForm(editingProduct.scheduling),
       })
     } else {
-      setForm({ ...EMPTY_PRODUCT_FORM, optionGroups: [], extras: [] })
+      setForm({
+        ...EMPTY_PRODUCT_FORM,
+        optionGroups: [],
+        extras: [],
+        scheduling: normalizeProductSchedulingForForm(),
+      })
     }
   }, [open, editingProduct])
 
@@ -482,6 +518,15 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
   }, [open])
 
   const setField = useCallback((field, value) => setForm((p) => ({ ...p, [field]: value })), [])
+  const setSchedulingField = useCallback((field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      scheduling: {
+        ...normalizeProductSchedulingForForm(prev.scheduling),
+        [field]: value,
+      },
+    }))
+  }, [])
 
   const handleImageSelect = useCallback((e) => {
     const file = e.target.files?.[0]
@@ -563,6 +608,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         preparationTime: form.preparationTime?.trim() || '',
         optionGroups: sanitizeOptionGroupsForSave(form.optionGroups),
         extras: Array.isArray(form.extras) ? form.extras : [],
+        scheduling: sanitizeProductSchedulingForSave(form.scheduling),
         isDeleted: false,
         updatedAt: serverTimestamp(),
       })
@@ -587,6 +633,14 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
 
   const visibleImage = imagePreview || form.imageUrl
   const activeCategory = useMemo(() => categories.find((c) => c.id === form.categoryId), [categories, form.categoryId])
+  const productScheduling = useMemo(
+    () => normalizeProductSchedulingForForm(form.scheduling),
+    [form.scheduling]
+  )
+  const productLeadInput = useMemo(
+    () => splitSchedulingMinutes(productScheduling.minLeadMinutes),
+    [productScheduling.minLeadMinutes]
+  )
 
   const handleSetSection = useCallback((id) => {
     setSection(id)
@@ -599,7 +653,10 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
     image: form.imageUrl || imagePreview ? 'has' : null,
     status: null,
     options: form.optionGroups?.length > 0 ? form.optionGroups.length : null,
-  }), [form.name, form.price, form.imageUrl, imagePreview, form.optionGroups])
+    scheduling: form.scheduling?.mode === 'scheduled_only' || form.scheduling?.prepaymentPolicy === 'pix_required'
+      ? 'has'
+      : null,
+  }), [form.name, form.price, form.imageUrl, imagePreview, form.optionGroups, form.scheduling])
 
   const discountPct = useMemo(() => {
     if (!form.oldPrice || !form.price) return null
@@ -918,6 +975,191 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                     groups={form.optionGroups}
                     onChange={(groups) => setField('optionGroups', groups)}
                   />
+                </div>
+              )}
+              {section === 'scheduling' && (
+                <div className="space-y-5">
+                  <InfoCallout>
+                    Use esta seção para vender bolos, kits festa, marmitas programadas e outros produtos que precisam de data marcada.
+                  </InfoCallout>
+
+                  <SectionCard title="Como este produto pode ser vendido?" description="Defina se o produto segue a loja, aceita pedido imediato ou exige data marcada." icon={FiCalendar}>
+                    <div className="grid gap-3">
+                      {[
+                        ['store_default', 'Seguir regra da loja', 'Usa a configuração geral de agendamento.'],
+                        ['asap_only', 'Só pedido imediato', 'Não permite escolher data futura.'],
+                        ['asap_and_scheduled', 'Imediato e agendado', 'Cliente pode pedir agora ou escolher horário.'],
+                        ['scheduled_only', 'Somente sob encomenda/agendado', 'Cliente será obrigado a escolher data e horário.'],
+                      ].map(([mode, title, description]) => {
+                        const active = productScheduling.mode === mode
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setSchedulingField('mode', mode)}
+                            className={`rounded-2xl border p-4 text-left transition-all ${
+                              active
+                                ? 'border-orange-300 bg-orange-50 text-[#f97316] ring-4 ring-orange-100 dark:border-orange-500/50 dark:bg-orange-500/10 dark:ring-orange-500/15'
+                                : 'border-orange-100 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/60 dark:border-white/10 dark:bg-[#1A1F2B] dark:text-slate-200 dark:hover:border-orange-500/30'
+                            }`}
+                          >
+                            <p className="text-sm font-black">{title}</p>
+                            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">{description}</p>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </SectionCard>
+
+                  {productScheduling.mode === 'scheduled_only' && (
+                    <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                      <FiCheck size={18} className="mt-0.5 shrink-0" />
+                      <p className="text-sm font-black">Este produto só poderá ser comprado com data e horário escolhidos.</p>
+                    </div>
+                  )}
+
+                  <SectionCard title="Regras especificas" description="Deixe em branco para seguir a regra geral da loja." icon={FiClock}>
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                        <div>
+                          <FieldLabel>Antecedência mínima</FieldLabel>
+                          <input
+                            type="number"
+                            min="0"
+                            value={productLeadInput.value}
+                            onChange={(event) => setSchedulingField(
+                              'minLeadMinutes',
+                              schedulingInputToMinutes(event.target.value, productLeadInput.unit)
+                            )}
+                            placeholder="Seguir loja"
+                            className={ui.input}
+                          />
+                          <p className={ui.hint}>Ex: bolo com 2 dias = 2880 minutos.</p>
+                        </div>
+
+                        <div>
+                          <FieldLabel>Unidade</FieldLabel>
+                          <select
+                            value={productLeadInput.unit}
+                            onChange={(event) => setSchedulingField(
+                              'minLeadMinutes',
+                              schedulingInputToMinutes(productLeadInput.value, event.target.value)
+                            )}
+                            className={ui.input}
+                          >
+                            <option value="minutes">Minutos</option>
+                            <option value="hours">Horas</option>
+                            <option value="days">Dias</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <FieldLabel>Limite de dias à frente</FieldLabel>
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          value={productScheduling.maxDaysAhead ?? ''}
+                          onChange={(event) => setSchedulingField('maxDaysAhead', event.target.value === '' ? null : Number(event.target.value))}
+                          placeholder="Seguir loja"
+                          className={ui.input}
+                        />
+                      </div>
+
+                      <div>
+                        <FieldLabel>Intervalo dos horários</FieldLabel>
+                        <select
+                          value={productScheduling.slotIntervalMinutes ?? ''}
+                          onChange={(event) => setSchedulingField('slotIntervalMinutes', event.target.value === '' ? null : Number(event.target.value))}
+                          className={ui.input}
+                        >
+                          <option value="">Seguir loja</option>
+                          <option value={10}>10 minutos</option>
+                          <option value={15}>15 minutos</option>
+                          <option value={30}>30 minutos</option>
+                          <option value={60}>60 minutos</option>
+                        </select>
+                        <p className={ui.hint}>Permite casos como bolo em intervalos de 10 minutos mesmo se a loja usa 30.</p>
+                      </div>
+
+                      <div>
+                        <FieldLabel>Pagamento</FieldLabel>
+                        <select
+                          value={productScheduling.prepaymentPolicy}
+                          onChange={(event) => setSchedulingField('prepaymentPolicy', event.target.value)}
+                          className={ui.input}
+                        >
+                          <option value="store_default">Seguir regra da loja</option>
+                          <option value="none">Não exigir Pix</option>
+                          <option value="pix_required">Exigir Pix antecipado</option>
+                        </select>
+                      </div>
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard title="Tipos aceitos" description="Use seguir loja para herdar entrega e retirada da configuração geral." icon={FiTruck}>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={() => setSchedulingField('fulfillmentTypes', null)}
+                        className={`rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                          productScheduling.fulfillmentTypes === null
+                            ? 'border-orange-300 bg-orange-50 text-[#f97316] dark:border-orange-500/40 dark:bg-orange-500/10'
+                            : 'border-orange-100 bg-white text-slate-600 dark:border-white/10 dark:bg-[#1A1F2B] dark:text-slate-300'
+                        }`}
+                      >
+                        Seguir loja
+                      </button>
+
+                      {[
+                        ['delivery', 'Entrega'],
+                        ['pickup', 'Retirada'],
+                      ].map(([key, label]) => (
+                        <label
+                          key={key}
+                          className="flex cursor-pointer items-center gap-3 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-black text-slate-700 dark:border-white/10 dark:bg-[#1A1F2B] dark:text-slate-200"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={(productScheduling.fulfillmentTypes || { delivery: true, pickup: true })[key] !== false}
+                            onChange={(event) => setSchedulingField('fulfillmentTypes', {
+                              ...(productScheduling.fulfillmentTypes || { delivery: true, pickup: true }),
+                              [key]: event.target.checked,
+                            })}
+                            className="h-4 w-4 accent-[#f97316]"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </SectionCard>
+
+                  {productScheduling.prepaymentPolicy === 'pix_required' && (
+                    <div className="flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-orange-800 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200">
+                      <FiCreditCard size={18} className="mt-0.5 shrink-0" />
+                      <p className="text-sm font-black">O checkout exigirá Pix para confirmar esta encomenda.</p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {[
+                      'Bolo personalizado: 2 dias de antecedência + Pix antecipado',
+                      'Pizza: imediato e agendado',
+                      'Marmita: agendamento com retirada programada',
+                    ].map((example) => (
+                      <div key={example} className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 text-xs font-black leading-5 text-[#9a3412] dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-200">
+                        {example}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                    <FiAlertTriangle size={18} className="mt-0.5 shrink-0" />
+                    <p className="text-sm font-bold leading-6">
+                      Horarios personalizados por produto e capacidade por slot ficam fora desta fase.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

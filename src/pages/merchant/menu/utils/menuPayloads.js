@@ -21,6 +21,16 @@ export const EMPTY_PRODUCT_FORM = {
   order: 0,
   optionGroups: [],
   extras: [],
+  scheduling: {
+    mode: 'store_default',
+    minLeadMinutes: null,
+    maxDaysAhead: null,
+    slotIntervalMinutes: null,
+    fulfillmentTypes: null,
+    weeklyWindows: null,
+    blockedDates: [],
+    prepaymentPolicy: 'store_default',
+  },
 }
 
 export const STATUS_FILTERS = [
@@ -114,6 +124,81 @@ export function sanitizeOptionGroupsForSave(optionGroups = []) {
       }
     })
     .filter((g) => g.title && g.options.length > 0)
+}
+
+function toNullableInteger(value, min, max) {
+  if (value === '' || value === null || value === undefined) return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  return Math.max(min, Math.min(max, Math.floor(parsed)))
+}
+
+function normalizeSlotInterval(value) {
+  const parsed = Number(value)
+  return [10, 15, 30, 60].includes(parsed) ? parsed : null
+}
+
+export function getDefaultProductScheduling() {
+  return {
+    mode: 'store_default',
+    minLeadMinutes: null,
+    maxDaysAhead: null,
+    slotIntervalMinutes: null,
+    fulfillmentTypes: null,
+    weeklyWindows: null,
+    blockedDates: [],
+    prepaymentPolicy: 'store_default',
+  }
+}
+
+export function normalizeProductSchedulingForForm(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {}
+  const fulfillment = raw.fulfillmentTypes && typeof raw.fulfillmentTypes === 'object'
+    ? raw.fulfillmentTypes
+    : null
+
+  return {
+    ...getDefaultProductScheduling(),
+    mode: ['store_default', 'asap_only', 'scheduled_only', 'asap_and_scheduled'].includes(raw.mode)
+      ? raw.mode
+      : 'store_default',
+    minLeadMinutes: toNullableInteger(raw.minLeadMinutes, 0, 525600),
+    maxDaysAhead: toNullableInteger(raw.maxDaysAhead, 0, 365),
+    slotIntervalMinutes: normalizeSlotInterval(raw.slotIntervalMinutes),
+    fulfillmentTypes: fulfillment
+      ? {
+          delivery: fulfillment.delivery !== false,
+          pickup: fulfillment.pickup !== false,
+        }
+      : null,
+    weeklyWindows: null,
+    blockedDates: [],
+    prepaymentPolicy: ['store_default', 'none', 'pix_required'].includes(raw.prepaymentPolicy)
+      ? raw.prepaymentPolicy
+      : 'store_default',
+  }
+}
+
+export function sanitizeProductSchedulingForSave(value) {
+  const normalized = normalizeProductSchedulingForForm(value)
+
+  return {
+    mode: normalized.mode,
+    minLeadMinutes: normalized.minLeadMinutes,
+    maxDaysAhead: normalized.maxDaysAhead,
+    slotIntervalMinutes: normalized.slotIntervalMinutes,
+    fulfillmentTypes: normalized.fulfillmentTypes
+      ? {
+          delivery: normalized.fulfillmentTypes.delivery !== false,
+          pickup: normalized.fulfillmentTypes.pickup !== false,
+        }
+      : null,
+    weeklyWindows: null,
+    blockedDates: [],
+    prepaymentPolicy: normalized.prepaymentPolicy,
+  }
 }
 
 export function cleanObject(obj) {

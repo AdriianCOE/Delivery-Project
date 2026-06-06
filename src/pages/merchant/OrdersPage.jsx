@@ -16,6 +16,13 @@ import {
 import { getCallableErrorMessage } from '../../utils/callableError'
 import { getOrderSlaState } from '../../utils/orderSla'
 import {
+  formatScheduledBadge,
+  formatScheduledDate,
+  getScheduledDate,
+  getScheduledTimeDistance,
+  isScheduledOrder,
+} from '../../utils/orderScheduling'
+import {
   collection,
   doc,
   limit,
@@ -29,6 +36,7 @@ import { httpsCallable } from 'firebase/functions'
 
 import {
   FiAlertTriangle,
+  FiCalendar,
   FiCheckCircle,
   FiChevronRight,
   FiClock,
@@ -178,6 +186,12 @@ const MORE_STATUS_TABS = [
   { key: 'em_rota', label: 'Em rota' },
   { key: 'entregue', label: 'Entregues' },
   { key: 'cancelado', label: 'Cancelados' },
+]
+
+const TIMING_FILTERS = [
+  { key: 'now', label: 'Agora' },
+  { key: 'scheduled', label: 'Agendados' },
+  { key: 'all', label: 'Todos' },
 ]
 
 const STATUS_TABS = [...MAIN_STATUS_TABS, ...MORE_STATUS_TABS]
@@ -405,6 +419,17 @@ function isOrderInDateFilter(order, filter) {
   if (end && date >= end) return false
 
   return true
+}
+
+function isOrderInTimingFilter(order, filter, now) {
+  if (filter === 'all') return true
+
+  const scheduled = isScheduledOrder(order)
+  if (filter === 'scheduled') return scheduled
+  if (!scheduled) return true
+
+  const distance = getScheduledTimeDistance(order, now)
+  return Boolean(distance && distance.minutes <= 60)
 }
 
 function formatDate(order) {
@@ -2085,6 +2110,14 @@ const PaymentMethodIcon =
   const savingsValue = Number(order.savingsAmount || order.savings || savings || 0)
 
   const savingsLabel = savingsValue > 0 ? formatMoney(savingsValue) : null
+  const scheduled = isScheduledOrder(order)
+  const scheduledDateLabel = scheduled ? formatScheduledDate(order) : ''
+  const scheduledDistance = scheduled ? getScheduledTimeDistance(order, now) : null
+  const scheduledBadge = scheduled ? formatScheduledBadge(order, now) : null
+  const hasCustomScheduledProducts = Array.isArray(order.schedulingSnapshot?.requiredByProducts) &&
+    order.schedulingSnapshot.requiredByProducts.length > 0
+  const requiresScheduledPix = order.paymentPolicy === 'pix_required' ||
+    order.schedulingSnapshot?.prepaymentPolicy === 'pix_required'
 
   const createdDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt || Date.now())
   const dateLabel = createdDate.toLocaleDateString('pt-BR')
@@ -2233,6 +2266,13 @@ const statusMeta = statusMetaMap[status] || {
             {statusMeta.label}
           </span>
 
+          {scheduled && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
+              <FiCalendar size={11} />
+              {scheduledBadge || 'Agendado'}
+            </span>
+          )}
+
           {isOverdue && (
             <span className="inline-flex items-center gap-1 rounded-full border border-red-600 bg-red-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm shadow-red-500/20">
               <FiAlertTriangle size={11} className="animate-pulse" />
@@ -2258,6 +2298,37 @@ const statusMeta = statusMetaMap[status] || {
             <FiAlertTriangle size={11} />
             {paymentStatusLabel || 'Pagamento pendente'}
           </span>
+        )}
+
+        {scheduled && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-[12px] font-black text-[#9a3412] dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+              <FiCalendar size={12} />
+              {scheduledDateLabel}
+            </span>
+            {scheduledDistance && scheduledDistance.minutes <= 60 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-black text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                <FiClock size={12} />
+                {scheduledDistance.label}
+              </span>
+            )}
+            {requiresScheduledPix && (
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-black ${
+                isPaymentValidated
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200'
+                  : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
+              }`}>
+                <FiCreditCard size={12} />
+                {isPaymentValidated ? 'Pix confirmado' : 'Aguardando confirmação do Pix'}
+              </span>
+            )}
+            {hasCustomScheduledProducts && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white px-3 py-1.5 text-[12px] font-black text-[#f97316] dark:border-orange-500/20 dark:bg-white/[0.04] dark:text-orange-300">
+                <FiPackage size={12} />
+                Contém produto sob encomenda
+              </span>
+            )}
+          </div>
         )}
 
         <p className="mt-2 truncate text-[14px] font-semibold text-gray-700 dark:text-zinc-300">
@@ -2339,14 +2410,14 @@ const statusMeta = statusMetaMap[status] || {
       {/* Coluna 5: data/hora */}
       <div>
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
-          Horário
+          {scheduled ? 'Agendado' : 'Horário'}
         </p>
         <p className="mt-1 text-[14px] font-extrabold text-[#111827] dark:text-zinc-100">
-          {dateLabel}, {timeLabel}
+          {scheduled && scheduledDateLabel ? scheduledDateLabel.replace('Agendado para ', '') : `${dateLabel}, ${timeLabel}`}
         </p>
         <p className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
           <FiClock size={12} />
-          {relativeTimeLabel || 'Agora há pouco'}
+          {scheduledDistance?.label || relativeTimeLabel || 'Agora há pouco'}
         </p>
       </div>
 
@@ -3080,6 +3151,7 @@ export default function OrdersPage() {
   const [selectedStoreId, setSelectedStoreId] = useState('')
   const [selectedOrderId, setSelectedOrderId] = useState('')
   const [statusFilter, setStatusFilter] = useState('todos')
+  const [timingFilter, setTimingFilter] = useState('now')
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [dateFilter, setDateFilter] = useState('hoje')
   const [search, setSearch] = useState('')
@@ -3851,6 +3923,19 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     0
   )
 
+  const timingCounts = useMemo(() => {
+    return orders.reduce((counts, order) => {
+      counts.all += 1
+      if (isScheduledOrder(order)) {
+        counts.scheduled += 1
+        if (isOrderInTimingFilter(order, 'now', slaNow)) counts.now += 1
+      } else {
+        counts.now += 1
+      }
+      return counts
+    }, { now: 0, scheduled: 0, all: 0 })
+  }, [orders, slaNow])
+
   const summary = useMemo(() => {
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
@@ -3892,7 +3977,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   const filteredOrders = useMemo(() => {
     const term = search.trim().toLowerCase()
 
-    return orders.filter((order) => {
+    const result = orders.filter((order) => {
       const status = normalizeStatus(order.status)
 
       if (statusFilter === 'ativos') {
@@ -3900,6 +3985,10 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       } else if (statusFilter === 'atrasados') {
         if (!getOrderSlaState(order, slaNow).overdue) return false
       } else if (statusFilter !== 'todos' && status !== statusFilter) {
+        return false
+      }
+
+      if (!isOrderInTimingFilter(order, timingFilter, slaNow)) {
         return false
       }
 
@@ -3929,7 +4018,17 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
       return searchableText.includes(term)
     })
-  }, [dateFilter, orders, search, slaNow, statusFilter])
+
+    if (timingFilter === 'scheduled') {
+      return result.sort((a, b) => {
+        const dateA = getScheduledDate(a)?.getTime() || Number.MAX_SAFE_INTEGER
+        const dateB = getScheduledDate(b)?.getTime() || Number.MAX_SAFE_INTEGER
+        return dateA - dateB
+      })
+    }
+
+    return result
+  }, [dateFilter, orders, search, slaNow, statusFilter, timingFilter])
 
   return (
     <main className="min-h-full">
@@ -4102,6 +4201,37 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             </div>
 
             <div className="mb-5 flex flex-col gap-4">
+              <div className="rounded-[1.5rem] border border-orange-100 bg-white p-2 shadow-sm dark:border-orange-500/20 dark:bg-zinc-900">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {TIMING_FILTERS.map((filter) => {
+                    const selected = timingFilter === filter.key
+                    const count = timingCounts[filter.key] || 0
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        onClick={() => setTimingFilter(filter.key)}
+                        className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-black transition ${
+                          selected
+                            ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/20'
+                            : 'bg-orange-50/70 text-[#9a3412] hover:bg-orange-100 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          {filter.key === 'scheduled' ? <FiCalendar size={15} /> : <FiClock size={15} />}
+                          {filter.label}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-black ${
+                          selected ? 'bg-white/25 text-white' : 'bg-white text-[#f97316] dark:bg-white/[0.08]'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* Row 1: Status Filters */}
               <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2">
@@ -4283,7 +4413,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={`${statusFilter}-${dateFilter}-${loading ? 'loading' : 'ready'}`}
+                key={`${timingFilter}-${statusFilter}-${dateFilter}-${loading ? 'loading' : 'ready'}`}
                 variants={ORDERS_LIST_VARIANTS}
                 initial="hidden"
                 animate="visible"
@@ -4304,7 +4434,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                       icon={FiShoppingBag}
                       title="Nenhum pedido encontrado"
                       description={
-                        search || statusFilter !== 'todos'
+                        search || statusFilter !== 'todos' || timingFilter !== 'all'
                           ? 'Tente limpar a busca ou alterar o filtro de status.'
                           : 'Quando novos pedidos entrarem, eles aparecerão aqui em tempo real.'
                       }
