@@ -20,6 +20,7 @@ import {
   isProductUnavailable,
   hasOutOfStock,
 } from '../../utils/productStatus'
+import { getProductSchedulingBadges } from '../../utils/publicScheduling'
 
 const FAVORITES_KEY = '@PratoBy:favorites'
 
@@ -309,6 +310,7 @@ function ProductCard({
   const discountPercent = getDiscountPercent(price, oldPrice)
   const hasDiscount = discountPercent > 0
   const hasPromotionBadge = Boolean(product?.isPromotion || product?.isPromotional || product?.promotion)
+  const schedulingBadges = useMemo(() => getProductSchedulingBadges(product, store), [product, store])
   const hasExplicitCouponEligibility =
     product?.acceptsCoupons === true ||
     product?.acceptsCoupon === true ||
@@ -466,6 +468,24 @@ function ProductCard({
                   Últimas unidades
                 </span>
               )}
+
+              {schedulingBadges.map((badge) => (
+                <span
+                  key={badge.id}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${
+                    badge.tone === 'amber'
+                      ? 'bg-amber-50 text-amber-700 ring-amber-100'
+                      : badge.tone === 'green'
+                        ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                        : badge.tone === 'orange'
+                          ? 'bg-orange-50 text-orange-700 ring-orange-100'
+                          : 'bg-gray-50 text-gray-600 ring-gray-100'
+                  }`}
+                >
+                  {badge.tone === 'orange' ? <FiTag size={12} /> : <FiClock size={12} />}
+                  {badge.label}
+                </span>
+              ))}
 
               {outOfStock && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-black text-gray-600 ring-1 ring-gray-200">

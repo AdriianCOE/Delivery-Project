@@ -11,6 +11,7 @@ import {
 import { useCart } from '../../contexts/CartContext'
 import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
 import { canAddProductToCart, isProductUnavailable, hasOutOfStock } from '../../utils/productStatus'
+import { getProductSchedulingBadges } from '../../utils/publicScheduling'
 
 const DEFAULT_THEME_COLOR = '#f97316'
 const INCLUDED_PRICING_MODES = new Set([
@@ -275,6 +276,10 @@ export default function ProductOptionsModal({
   const imageUrl = useMemo(() => getProductImage(product), [product])
   const extras = useMemo(() => getProductExtras(product), [product])
   const optionGroups = useMemo(() => getOptionGroups(product), [product])
+  const schedulingBadges = useMemo(
+  () => product ? getProductSchedulingBadges(product, store) : [],
+  [product, store]
+  )
 
   useEffect(() => {
     if (!isOpen) return
@@ -542,6 +547,27 @@ export default function ProductOptionsModal({
             <h2 className="text-2xl font-black tracking-tight text-[#111827]">
               {product.name}
             </h2>
+
+            {schedulingBadges.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {schedulingBadges.map((badge) => (
+                  <span
+                    key={badge.id}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${
+                      badge.tone === 'amber'
+                        ? 'bg-amber-50 text-amber-700 ring-amber-100'
+                        : badge.tone === 'green'
+                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                          : badge.tone === 'orange'
+                            ? 'bg-orange-50 text-orange-700 ring-orange-100'
+                            : 'bg-gray-50 text-gray-600 ring-gray-100'
+                    }`}
+                  >
+                    {badge.label}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {product.description && (
               <p className="mt-2 text-sm leading-6 text-[#6b7280]">

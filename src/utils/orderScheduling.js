@@ -27,6 +27,13 @@ export function getScheduledDate(order) {
   )
 }
 
+const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
+
+function normalizeSlotInterval(value, fallback = null) {
+  const parsed = Number(value)
+  return ALLOWED_SLOT_INTERVALS.has(parsed) ? parsed : fallback
+}
+
 export function formatScheduledDate(order) {
   const date = getScheduledDate(order)
   if (!date) return 'Horário agendado não informado'

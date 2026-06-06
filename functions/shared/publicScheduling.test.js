@@ -148,7 +148,7 @@ test('normalizes invalid product scheduling values without throwing', () => {
     mode: 'store_default',
     minLeadMinutes: null,
     maxDaysAhead: 0,
-    slotIntervalMinutes: 1440,
+    slotIntervalMinutes: null,
     fulfillmentTypes: null,
     weeklyWindows: {
       sunday: [],

@@ -33,6 +33,7 @@ import {
 
 import { db, functions } from '../../services/firebase'
 import StoreFooter from '../../components/layouts/StoreFooter'
+import { formatScheduledOrderDate, isScheduledOrder } from '../../utils/publicScheduling'
 import {
   disableCustomerOrderFcmToken,
   ensureCustomerOrderForegroundFcmListener,
@@ -1818,6 +1819,9 @@ const isDelivered = status === 'entregue'
   const pixPaid = isPixManual && isPaymentPaid(order)
   const pixCopyPaste = getPixCopyPaste(order)
   const shouldShowPixCard = isPixManual && !isCanceled && !isDelivered && (pixPaymentPending || pixPaid)
+  const scheduledOrder = isScheduledOrder(order)
+  const scheduledOrderLabel = formatScheduledOrderDate(order)
+  const showScheduledPixNotice = order?.paymentPolicy === 'pix_required' || pixPaymentPending
   const statusContent = getStatusContent(order)
   const StatusIcon = statusContent.icon
 
@@ -2218,6 +2222,36 @@ const isDelivered = status === 'entregue'
             </div>
           )}
         </section>
+
+        {scheduledOrder && (
+          <section className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+                <FiClock size={22} />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-wide text-[#f97316]">
+                  Pedido agendado
+                </p>
+
+                <h2 className="mt-1 text-lg font-black text-[#111827]">
+                  {scheduledOrderLabel || 'Data e horário escolhidos'}
+                </h2>
+
+                <p className="mt-1 text-sm leading-6 text-[#6b7280]">
+                  Acompanhe esta tela para ver a confirmação e o preparo no horário combinado.
+                </p>
+
+                {showScheduledPixNotice && !isPaymentPaid(order) && (
+                  <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-700">
+                    Este pedido exige Pix antecipado. A loja inicia o preparo após confirmar o pagamento.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         {((!isCanceled && !isDelivered) || customerPushStatus === 'enabled') && (
           <section className="rounded-[2rem] border border-orange-100 bg-white p-4 shadow-sm print:hidden">

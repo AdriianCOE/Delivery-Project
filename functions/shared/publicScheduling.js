@@ -42,6 +42,19 @@ function toNullableBoundedInteger(value, min, max) {
   return Math.max(min, Math.min(max, Math.floor(parsed)))
 }
 
+function normalizeSlotInterval(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(5, Math.min(1440, Math.floor(parsed)))
+}
+
+function normalizeProductSlotInterval(value) {
+  if (value === undefined || value === null || value === '') return null
+  const parsed = Number(value)
+  return [10, 15, 30, 60].includes(parsed) ? parsed : null
+}
+
 function parseTimeToMinutes(value, allowEndOfDay = false) {
   const text = String(value || '').trim()
   const match = /^(\d{2}):(\d{2})$/.exec(text)
@@ -115,7 +128,7 @@ function sanitizeStoreScheduling(value, {
     enabled: raw.enabled === true,
     minLeadMinutes: toBoundedInteger(raw.minLeadMinutes, 0, 0, 525600),
     maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, 30, 0, 365),
-    slotIntervalMinutes: toBoundedInteger(raw.slotIntervalMinutes, 30, 5, 1440),
+    slotIntervalMinutes: normalizeSlotInterval(raw.slotIntervalMinutes, 30),
     fulfillmentTypes: {
       delivery: acceptDelivery !== false && rawFulfillment.delivery !== false,
       pickup: acceptPickup !== false && rawFulfillment.pickup !== false,
@@ -149,7 +162,7 @@ function sanitizePublicProductScheduling(value) {
     mode: PRODUCT_MODES.has(value.mode) ? value.mode : 'store_default',
     minLeadMinutes: toNullableBoundedInteger(value.minLeadMinutes, 0, 525600),
     maxDaysAhead: toNullableBoundedInteger(value.maxDaysAhead, 0, 365),
-    slotIntervalMinutes: toNullableBoundedInteger(value.slotIntervalMinutes, 5, 1440),
+    slotIntervalMinutes: normalizeProductSlotInterval(value.slotIntervalMinutes),
     fulfillmentTypes: rawFulfillment
       ? {
           delivery: rawFulfillment.delivery !== false,

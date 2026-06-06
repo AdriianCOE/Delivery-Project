@@ -1920,8 +1920,10 @@ const handleToggleFavorite = useCallback(() => {
 
   useEffect(() => {
     if (!slug) {
-      setStore(null)
-      setLoadingStore(false)
+      queueMicrotask(() => {
+        setStore(null)
+        setLoadingStore(false)
+      })
       return undefined
     }
 
@@ -1975,10 +1977,12 @@ const handleToggleFavorite = useCallback(() => {
 
   useEffect(() => {
   if (!store || (isStoreUnavailable(store) && !canPreviewUnavailableStore)) {
+  queueMicrotask(() => {
     setCategories([])
     setProducts([])
     setLoadingMenu(false)
-    return undefined
+  })
+  return undefined
   }
 
     const targetStoreId = getStoreDocId(store)
@@ -2132,8 +2136,10 @@ const handleToggleFavorite = useCallback(() => {
     const categoryExists = categories.some((category) => category.id === activeCategory)
 
     if (!categoryExists) {
-      setActiveCategory('all')
-    }
+      queueMicrotask(() => {
+    setActiveCategory('all')
+    })
+  }
   }, [activeCategory, categories])
 
   useEffect(() => {

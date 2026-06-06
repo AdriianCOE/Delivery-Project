@@ -20,6 +20,8 @@ import {
   FiTwitter,
   FiUser,
   FiX,
+  FiCalendar,
+  FiShoppingBag,
 } from 'react-icons/fi'
 
 const FAVORITES_KEY = '@PratoBy:favorites'
@@ -833,6 +835,65 @@ function InfoRow({ icon: Icon, label, value, action, themeColor }) {
   )
 }
 
+function getAcceptedServiceTypes(store) {
+  const settings = store?.settings || {}
+  const publicScheduling = store?.publicScheduling || store?.scheduling || {}
+
+  const acceptsDelivery =
+    store?.acceptDelivery ??
+    settings?.acceptDelivery ??
+    store?.deliveryEnabled ??
+    true
+
+  const acceptsPickup =
+    store?.acceptPickup ??
+    settings?.acceptPickup ??
+    store?.pickupEnabled ??
+    false
+
+  const schedulingEnabled = publicScheduling?.enabled === true
+
+  const schedulingFulfillment = publicScheduling?.fulfillmentTypes || {}
+
+  const scheduledDelivery =
+    schedulingEnabled &&
+    acceptsDelivery !== false &&
+    schedulingFulfillment.delivery !== false
+
+  const scheduledPickup =
+    schedulingEnabled &&
+    acceptsPickup !== false &&
+    schedulingFulfillment.pickup !== false
+
+  return [
+    acceptsDelivery !== false && {
+      id: 'delivery',
+      label: 'Entrega',
+      icon: FiMapPin,
+      description: 'Receba no endereço informado',
+    },
+    acceptsPickup !== false && {
+      id: 'pickup',
+      label: 'Retirada',
+      icon: FiShoppingBag,
+      description: 'Retire seu pedido no balcão',
+    },
+    schedulingEnabled && {
+      id: 'scheduled',
+      label: 'Agendamento',
+      icon: FiCalendar,
+      description:
+        scheduledDelivery && scheduledPickup
+          ? 'Escolha data e horário para entrega ou retirada'
+          : scheduledDelivery
+            ? 'Escolha data e horário para entrega'
+            : scheduledPickup
+              ? 'Escolha data e horário para retirada'
+              : 'Escolha data e horário para encomendas',
+    },
+  ].filter(Boolean)
+}
+
 function getAcceptedPaymentMethods(store) {
   const paymentMethods = store?.paymentMethods || {}
   const pixConfig =
@@ -903,6 +964,10 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     () => getAcceptedPaymentMethods(store),
     [store]
   )
+  const acceptedServiceTypes = useMemo(
+  () => getAcceptedServiceTypes(store),
+  [store]
+  )
   const businessHours = useMemo(() => getBusinessHours(store), [store])
   const scheduleStatus = useMemo(() => getScheduleStatus(businessHours), [businessHours])
   const todayHoursLabel = scheduleStatus.todayLabel
@@ -942,9 +1007,10 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     const mergedFavorites = uniqueArray([...currentFavorites, ...legacyFavorites])
 
     setToLocalStorage(FAVORITES_KEY, mergedFavorites)
+    queueMicrotask(() => {
     setFavorited(storeKeys.some((key) => mergedFavorites.includes(key)))
-  }, [primaryFavoriteKey, storeKeys])
-
+  })
+}, [primaryFavoriteKey, storeKeys])
   useEffect(() => {
     if (!showModal || typeof document === 'undefined') return undefined
 
@@ -1392,7 +1458,57 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
                 value={deliveryTime}
                 themeColor={themeColor}
               />
+{acceptedServiceTypes.length > 0 && (
+  <section className="rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-sm">
+    <div className="mb-3 flex items-center gap-3">
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm"
+        style={{ color: themeColor }}
+      >
+        <FiShoppingBag size={19} />
+      </div>
 
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+          Atendimento
+        </p>
+
+        <p className="text-sm font-black text-[#111827]">
+          Como você pode receber o pedido
+        </p>
+      </div>
+    </div>
+
+    <div className="grid gap-2 sm:grid-cols-3">
+      {acceptedServiceTypes.map((service) => (
+        <div
+          key={service.id}
+          className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]"
+              style={{
+                backgroundColor: themeSofter,
+                color: themeColor,
+              }}
+            >
+              <service.icon size={16} />
+            </span>
+
+            <p className="text-sm font-black text-[#111827]">
+              {service.label}
+            </p>
+          </div>
+
+          <p className="mt-1 text-xs font-bold leading-5 text-[#6b7280]">
+            {service.description}
+          </p>
+        </div>
+      ))}
+    </div>
+  </section>
+)}
 {acceptedPaymentMethods.length > 0 && (
   <section className="rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-sm">
     <div className="mb-3 flex items-center gap-3">

@@ -26,6 +26,7 @@ import {
 
 import { useCart } from '../../contexts/CartContext'
 import { scrollToFirstError } from '../../utils/scroll'
+import { getCartSchedulingState } from '../../utils/publicScheduling'
 import { functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
@@ -1405,7 +1406,7 @@ function CartItemDetailsModal({
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white transition hover:bg-[#ea580c] active:scale-[0.98]"
           >
             <FiCheck />
-            Conferido · {formatMoney(getItemTotal(item))}
+            Salvar · {formatMoney(getItemTotal(item))}
           </button>
         </footer>
       </div>
@@ -1558,6 +1559,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
   const [step, setStep] = useState('cart')
   const [orderType, setOrderType] = useState('delivery')
+  const [orderTiming, setOrderTiming] = useState('asap')
+  const [scheduledDate, setScheduledDate] = useState('')
+  const [scheduledTime, setScheduledTime] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [changeFor, setChangeFor] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -1734,6 +1738,90 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     orderType !== 'delivery' ||
     deliveryNeighborhoods.length === 0 ||
     selectedNeighborhoodFee !== null
+
+  const schedulingState = useMemo(() => getCartSchedulingState({
+    store,
+    items: cartItems,
+    fulfillmentType: orderType,
+    orderTiming,
+  }), [cartItems, orderTiming, orderType, store])
+  const schedulingDates = schedulingState.availableDates
+  const selectedSchedulingDate = schedulingDates.find((date) => date.dateKey === scheduledDate)
+  const selectedSchedulingTimes = selectedSchedulingDate?.slots || []
+  const pixRequiredForSchedule = schedulingState.pixRequired
+  const pixOptionAvailable = paymentOptions.some((option) => option.value === 'pix_manual')
+
+  useEffect(() => {
+    if (schedulingState.requiresScheduling && orderTiming !== 'scheduled') {
+      setOrderTiming('scheduled')
+    }
+  }, [orderTiming, schedulingState.requiresScheduling])
+
+  useEffect(() => {
+    if (orderTiming !== 'scheduled') {
+      setScheduledDate('')
+      setScheduledTime('')
+      return
+    }
+
+    if (schedulingState.deliveryAllowed === false && orderType === 'delivery' && schedulingState.pickupAllowed) {
+      setOrderType('pickup')
+      return
+    }
+
+    if (schedulingState.pickupAllowed === false && orderType === 'pickup' && schedulingState.deliveryAllowed) {
+      setOrderType('delivery')
+    }
+  }, [
+    orderTiming,
+    orderType,
+    schedulingState.deliveryAllowed,
+    schedulingState.pickupAllowed,
+  ])
+
+  useEffect(() => {
+    if (orderTiming === 'scheduled' && !schedulingState.requiresScheduling && !schedulingState.canSchedule) {
+      setOrderTiming('asap')
+      return
+    }
+
+    if (orderTiming !== 'scheduled') return
+
+    const firstDate = schedulingDates[0]
+    if (!firstDate) {
+      if (scheduledDate) setScheduledDate('')
+      if (scheduledTime) setScheduledTime('')
+      return
+    }
+
+    const currentDate = schedulingDates.find((date) => date.dateKey === scheduledDate)
+    if (!currentDate) {
+      setScheduledDate(firstDate.dateKey)
+      setScheduledTime(firstDate.slots[0]?.time || '')
+      return
+    }
+
+    const currentTimeIsAvailable = currentDate.slots.some((slot) => slot.time === scheduledTime)
+    if (!currentTimeIsAvailable) {
+      setScheduledTime(currentDate.slots[0]?.time || '')
+    }
+  }, [
+    orderTiming,
+    scheduledDate,
+    scheduledTime,
+    schedulingDates,
+    schedulingState.canSchedule,
+    schedulingState.requiresScheduling,
+  ])
+
+  useEffect(() => {
+    if (!pixRequiredForSchedule) return
+
+    if (pixOptionAvailable && paymentMethod !== 'pix_manual') {
+      setPaymentMethod('pix_manual')
+      setChangeFor('')
+    }
+  }, [paymentMethod, pixOptionAvailable, pixRequiredForSchedule])
 
   const handleQuantity = useCallback(
     (item, nextQuantity) => {
@@ -1984,7 +2072,21 @@ if (orderType === 'delivery') {
   if (!canUseDelivery) return 'Este bairro não está disponível para entrega.'
 }
 
+    if (schedulingState.blockingMessage) return schedulingState.blockingMessage
+
+    if (orderTiming === 'scheduled') {
+      if (!scheduledDate || !scheduledTime) return 'Escolha uma data e horário para o pedido agendado.'
+    }
+
     if (!paymentMethod) return 'Escolha a forma de pagamento.'
+
+    if (pixRequiredForSchedule && !pixOptionAvailable) {
+      return 'Este pedido exige Pix antecipado, mas a loja não configurou Pix.'
+    }
+
+    if (pixRequiredForSchedule && paymentMethod !== 'pix_manual') {
+      return 'Este pedido exige pagamento antecipado via Pix.'
+    }
 
     if (paymentMethod === 'pix_manual') {
       // O frontend confia nas flags públicas para exibir a opção Pix.
@@ -2022,7 +2124,13 @@ if (orderType === 'delivery') {
   loadingCep,
   missingForMin,
   orderType,
+  orderTiming,
   paymentMethod,
+  pixOptionAvailable,
+  pixRequiredForSchedule,
+  scheduledDate,
+  scheduledTime,
+  schedulingState.blockingMessage,
   store,
   storeIsOpen,
   total,
@@ -2087,6 +2195,13 @@ if (orderType === 'delivery') {
         paymentMethod,
         changeFor,
         couponCode: appliedCoupon?.code || null,
+        orderTiming,
+        ...(orderTiming === 'scheduled'
+          ? {
+              scheduledDate,
+              scheduledTime,
+            }
+          : {}),
         items,
       })
 
@@ -2133,7 +2248,10 @@ if (orderType === 'delivery') {
     navigate,
     onClose,
     orderType,
+    orderTiming,
     paymentMethod,
+    scheduledDate,
+    scheduledTime,
     storeDocId,
     storeSlug,
     validateCheckout,
@@ -2448,11 +2566,12 @@ if (orderType === 'delivery') {
                       <button
                         type="button"
                         onClick={() => setOrderType('delivery')}
+                        disabled={orderTiming === 'scheduled' && !schedulingState.deliveryAllowed}
                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderType === 'delivery'
                             ? 'bg-white text-[#f97316] shadow-sm'
                             : 'text-[#6b7280]'
-                        }`}
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         <FiTruck />
                         Entrega
@@ -2461,17 +2580,123 @@ if (orderType === 'delivery') {
                       <button
                         type="button"
                         onClick={() => setOrderType('pickup')}
+                        disabled={orderTiming === 'scheduled' && !schedulingState.pickupAllowed}
                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderType === 'pickup'
                             ? 'bg-white text-[#f97316] shadow-sm'
                             : 'text-[#6b7280]'
-                        }`}
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         <FiHome />
                         Retirada
                       </button>
                     </div>
                   </section>
+
+                  <SectionCard title="Quando você quer receber?" icon={FiClock}>
+                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#F9FAFB] p-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (schedulingState.canOrderNow) setOrderTiming('asap')
+                        }}
+                        disabled={!schedulingState.canOrderNow}
+                        className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                          orderTiming === 'asap'
+                            ? 'bg-white text-[#f97316] shadow-sm'
+                            : 'text-[#6b7280]'
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        Pedir agora
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (schedulingState.canSchedule || schedulingState.requiresScheduling) {
+                            setOrderTiming('scheduled')
+                          }
+                        }}
+                        disabled={!schedulingState.canSchedule && !schedulingState.requiresScheduling}
+                        className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                          orderTiming === 'scheduled'
+                            ? 'bg-white text-[#f97316] shadow-sm'
+                            : 'text-[#6b7280]'
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        Agendar
+                      </button>
+                    </div>
+
+                    {schedulingState.requiresScheduling && (
+                      <div className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-700">
+                        <FiAlertCircle className="mt-0.5 shrink-0" />
+                        <span>Seu carrinho contém produto sob encomenda. Escolha uma data e horário.</span>
+                      </div>
+                    )}
+
+                    {schedulingState.blockingMessage && (
+                      <div className="flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold leading-5 text-red-600">
+                        <FiAlertCircle className="mt-0.5 shrink-0" />
+                        <span>{schedulingState.blockingMessage}</span>
+                      </div>
+                    )}
+
+                    {orderTiming === 'scheduled' && schedulingDates.length > 0 && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                            Data
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {schedulingDates.slice(0, 12).map((date) => (
+                              <button
+                                key={date.dateKey}
+                                type="button"
+                                onClick={() => {
+                                  setScheduledDate(date.dateKey)
+                                  setScheduledTime(date.slots[0]?.time || '')
+                                }}
+                                className={`rounded-2xl border px-3 py-3 text-left text-xs font-black transition ${
+                                  scheduledDate === date.dateKey
+                                    ? 'border-orange-200 bg-orange-50 text-[#f97316]'
+                                    : 'border-gray-100 bg-[#F9FAFB] text-[#6b7280] hover:bg-white'
+                                }`}
+                              >
+                                {date.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {selectedSchedulingTimes.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                              Horário
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {selectedSchedulingTimes.map((slot) => (
+                                <button
+                                  key={slot.time}
+                                  type="button"
+                                  onClick={() => setScheduledTime(slot.time)}
+                                  className={`rounded-2xl border px-3 py-3 text-center text-xs font-black transition ${
+                                    scheduledTime === slot.time
+                                      ? 'border-orange-200 bg-orange-50 text-[#f97316]'
+                                      : 'border-gray-100 bg-[#F9FAFB] text-[#6b7280] hover:bg-white'
+                                  }`}
+                                >
+                                  {slot.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </SectionCard>
 
                   {orderType === 'delivery' && (
                     <SectionCard title="Endereço de entrega" icon={FiMapPin}>
@@ -2682,44 +2907,57 @@ if (orderType === 'delivery') {
                   )}
 
                   <SectionCard title="Pagamento" icon={FiCreditCard}>
+                    {pixRequiredForSchedule && (
+                      <div className="flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
+                        <FiShield className="mt-0.5 shrink-0" />
+                        <span>Este pedido exige Pix antecipado. A loja confirma o preparo após o pagamento.</span>
+                      </div>
+                    )}
+
                     {paymentOptions.length === 0 ? (
                       <div className="rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700">
                         Nenhuma forma de pagamento foi configurada pela loja.
                       </div>
                     ) : (
-                      paymentOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => {
-                            setPaymentMethod(option.value)
-                            setChangeFor('')
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${
-                            paymentMethod === option.value
-                              ? 'border-green-200 bg-orange-50'
-                              : 'border-gray-100 bg-[#F9FAFB] hover:bg-white'
-                          }`}
-                        >
-                          <span className="text-2xl">{option.icon}</span>
+                      paymentOptions.map((option) => {
+                        const paymentDisabled = pixRequiredForSchedule && option.value !== 'pix_manual'
 
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-black text-[#111827]">
-                              {option.label}
-                            </p>
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              if (paymentDisabled) return
+                              setPaymentMethod(option.value)
+                              setChangeFor('')
+                            }}
+                            disabled={paymentDisabled}
+                            className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                              paymentMethod === option.value
+                                ? 'border-green-200 bg-orange-50'
+                                : 'border-gray-100 bg-[#F9FAFB] hover:bg-white'
+                            } disabled:cursor-not-allowed disabled:opacity-45`}
+                          >
+                            <span className="text-2xl">{option.icon}</span>
 
-                            <p className="mt-0.5 text-xs text-[#6b7280]">
-                              {option.description}
-                            </p>
-                          </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-black text-[#111827]">
+                                {option.label}
+                              </p>
 
-                          {paymentMethod === option.value && (
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316] text-white">
-                              <FiCheck size={14} />
+                              <p className="mt-0.5 text-xs text-[#6b7280]">
+                                {paymentDisabled ? 'Indisponível para pedido com Pix antecipado' : option.description}
+                              </p>
                             </div>
-                          )}
-                        </button>
-                      ))
+
+                            {paymentMethod === option.value && (
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316] text-white">
+                                <FiCheck size={14} />
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })
                     )}
 
                     {paymentMethod === 'cash' && (

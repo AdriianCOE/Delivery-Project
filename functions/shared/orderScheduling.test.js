@@ -228,21 +228,20 @@ test('uses a safe common interval for products with different explicit intervals
   assert.equal(result.scheduledWindowEnd.toISOString(), '2026-06-05T18:00:00.000Z')
 })
 
-test('rejects product interval combinations without a safe daily grid', () => {
-  assert.throws(
-    () => decide({
-      products: [
-        product('fifty-three-minutes', { slotIntervalMinutes: 53 }),
-        product('fifty-nine-minutes', { slotIntervalMinutes: 59 }),
-      ],
-      input: {
-        orderTiming: 'scheduled',
-        scheduledDate: '2026-06-05',
-        scheduledTime: '14:00',
-      },
-    }),
-    /Finalize em pedidos separados/
-  )
+test('ignores product intervals outside the supported UI options', () => {
+  const result = decide({
+    products: [
+      product('fifty-three-minutes', { slotIntervalMinutes: 53 }),
+      product('fifty-nine-minutes', { slotIntervalMinutes: 59 }),
+    ],
+    input: {
+      orderTiming: 'scheduled',
+      scheduledDate: '2026-06-05',
+      scheduledTime: '14:00',
+    },
+  })
+
+  assert.equal(result.schedulingSnapshot.slotIntervalMinutes, 30)
 })
 
 test('applies the smallest max day limit and product fulfillment restrictions', () => {
