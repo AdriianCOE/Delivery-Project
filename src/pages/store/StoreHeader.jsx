@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
+import { getPublicPixConfig, isPublicPaymentMethodAllowed } from '../../utils/publicPaymentMethods'
 import {
   FiCheck,
   FiClock,
@@ -895,26 +896,14 @@ function getAcceptedServiceTypes(store) {
 }
 
 function getAcceptedPaymentMethods(store) {
-  const paymentMethods = store?.paymentMethods || {}
-  const pixConfig =
-    store?.pix ||
-    store?.paymentSettings?.pix ||
-    store?.settings?.pix ||
-    {}
-
-  const pixKey =
-    pixConfig.key ||
-    store?.pixKey ||
-    store?.settings?.pixKey ||
-    store?.paymentSettings?.pix?.key ||
-    ''
-
+  const pixConfig = getPublicPixConfig(store)
   const pixEnabled =
-    paymentMethods.pix !== false &&
-    (pixConfig.enabled === true || Boolean(pixKey))
+    isPublicPaymentMethodAllowed(store, 'pix') &&
+    pixConfig.enabled === true &&
+    Boolean(pixConfig.key)
 
-  const cardEnabled = paymentMethods.card !== false
-  const cashEnabled = paymentMethods.cash !== false
+  const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
+  const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
 
   return [
     pixEnabled && {

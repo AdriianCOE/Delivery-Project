@@ -5,6 +5,9 @@ Base atual do MVP para notificacoes do lojista.
 | Evento | internal/sino | badge | toast | sound | browser | fcm | title | email |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Novo pedido | Sim | Pedidos | Sim | Sim | Configuravel | Sim, data-only | Sim | Nao |
+| Pedido agendado novo | Sim | Pedidos | Leve | Opcional/baixo | Configuravel | Futuro | Sim | Nao |
+| Pedido agendado em preparo breve | Sim | Pedidos/KDS | Sim | Sim uma vez | Configuravel | Futuro | Sim | Nao |
+| Pedido agendado atrasado | Sim | Pedidos/KDS | Sim | Sim | Configuravel | Futuro | Sim | Nao |
 | Avaliacao nova | Sim | Avaliacoes | Nao por padrao | Nao | Configuravel | Futuro | Nao | Nao |
 | Billing/assinatura | Sim | Assinatura | Apenas urgente | Nao | Configuravel | Futuro | Nao | Transacional existente |
 | Loja fechada/configuracao | Opcional | Configuracoes | Apenas acao do usuario | Nao | Nao | Nao | Nao | Nao |

@@ -525,6 +525,28 @@ Regras:
 
 ---
 
+## Pedidos Agendados e Sob Encomenda
+
+Estado atual:
+
+- Backend valida agendamento em `createPublicOrder`.
+- `publicStores` materializa `publicScheduling` e `product.scheduling`.
+- `Settings` configura agendamento da loja.
+- `ProductEditorDrawer` configura encomenda por produto.
+- Checkout público permite Pedir agora / Agendar.
+- Tracking mostra pedido agendado.
+
+Pendências:
+
+- Corrigir `normalizeSlotInterval` em `functions/shared`.
+- Corrigir `normalizeProductScheduling(null)` na loja pública.
+- Adaptar `OrdersPage`/SLA/card expandido.
+- Adaptar KDS para mostrar agendado só na hora de preparo.
+- Ajustar notificações/alertas/impressão de comanda.
+- Criar dashboard de agenda do dia em patch separado.
+
+---
+
 ## 9. KDS e Painel de Retirada
 
 ### KitchenDisplayPage

@@ -6,6 +6,15 @@ Este arquivo contém regras obrigatórias para qualquer IA/agente que analise ou
 
 Leia antes de modificar qualquer arquivo.
 
+Antes de implementar, leia:
+
+- `docs/AGENTS.md`
+- `docs/PROJECT_CONTEXT.md`
+- `docs/deploy-runbook.md`
+- `docs/notification-matrix.md`
+
+Não recrie helpers, não altere fora do escopo e respeite as decisões documentadas.
+
 ---
 
 ## 1. Papel esperado do agente
@@ -124,6 +133,18 @@ Regras:
 - Backend recalcula tudo.
 - Frontend só faz preview/UX.
 - Cliente não cria pedido direto em `orders`.
+
+### Agendamento
+
+Regras:
+
+- Não criar status principal `agendado`.
+- Usar `orderTiming: "asap" | "scheduled"`.
+- Pedido agendado futuro não é atrasado.
+- Pedido agendado futuro não deve aparecer no KDS principal.
+- KDS só mostra agendado quando estiver dentro da janela de preparo, atrasado, preparando ou pronto.
+- Não imprimir comanda ao apenas confirmar agendamento.
+- Imprimir ao mudar para preparando, se a configuração da loja já faz isso.
 
 ### Cupom
 

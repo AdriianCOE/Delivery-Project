@@ -46,6 +46,17 @@ Fluxo minimo para validar FCM merchant:
 5. Confirmar notificacao recebida no navegador do lojista.
 6. Se houver falha, registrar navegador, service worker ativo, token hash, `storeId` e erro de push.
 
+Fluxo minimo para validar agendamento:
+
+1. Produto comum com pedido imediato.
+2. Produto `scheduled_only` com 2 dias de antecedência.
+3. Produto com intervalo de 10 min escolhendo 14:50.
+4. Pix obrigatório para encomenda.
+5. Conflito `asap_only` + `scheduled_only`.
+6. Tracking de pedido agendado.
+7. `OrdersPage` sem marcar agendado futuro como atrasado.
+8. KDS mostrando agendado só quando entrar na janela de preparo.
+
 Comando para configurar o secret Cloudinary antes do deploy da assinatura:
 
 ```bash

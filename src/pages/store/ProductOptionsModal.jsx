@@ -833,7 +833,7 @@ export default function ProductOptionsModal({
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-gray-100 bg-white p-4">
+        <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-2xl border border-gray-100 bg-[#f9fafb] p-1">
               <button

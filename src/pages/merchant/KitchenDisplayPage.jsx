@@ -40,6 +40,7 @@ import {
   FiSun,
   FiMoon,
   FiArrowLeft,
+  FiCalendar,
   FiGrid,
   FiList,
   FiTag,
@@ -54,6 +55,13 @@ import {
   getMerchantDisplayLogoUrl,
 } from '../../utils/merchantDisplayBranding'
 import { getOrderSlaState, getOrderStatusStartedAtMillis } from '../../utils/orderSla'
+import {
+  formatScheduledBadge,
+  formatScheduledDate,
+  getScheduledOperationalState,
+  isOrderOperationalNow,
+  isScheduledOrder,
+} from '../../utils/orderScheduling'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -170,6 +178,14 @@ function getOrderFulfillmentType(order) {
 
 function getKdsNextAction(_order, _status, cfg) {
   return cfg.nextAction
+}
+
+function shouldShowInMainKds(order, now) {
+  const status = normalizeKdsStatus(order?.status)
+  if (!KDS_COLUMNS.includes(status)) return false
+  if (!isScheduledOrder(order)) return true
+  if (status === 'preparando' || status === 'pronto') return true
+  return isOrderOperationalNow(order, { now })
 }
 
 function getCustomerName(order) {
@@ -306,7 +322,7 @@ function OrderTypeBadge({ order, t }) {
 
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
-function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
+function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark, now }) {
   const normalizedStatus = normalizeKdsStatus(order.status)
   const cfg = STATUS_CFG[normalizedStatus] || STATUS_CFG.pendente
   const nextAction = getKdsNextAction(order, normalizedStatus, cfg)
@@ -363,6 +379,10 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
   const customerNote = order.customerNote || order.note || order.observations || ''
   const internalNote = order.internalNote || order.kitchenNote || ''
   const customerName = getCustomerName(order)
+  const scheduled = isScheduledOrder(order)
+  const scheduledState = scheduled ? getScheduledOperationalState(order, { now }) : 'asap'
+  const scheduledBadge = scheduled ? formatScheduledBadge(order, now) : null
+  const scheduledDateLabel = scheduled ? formatScheduledDate(order) : ''
 
   return (
     <article className={cn(
@@ -440,6 +460,19 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
           {cfg.label}
         </span>
       </div>
+
+      {scheduled && (
+        <div className={cn(
+          'mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black',
+          scheduledState === 'scheduled_late'
+            ? t('border-red-500/30 bg-red-500/10 text-red-300', 'border-red-200 bg-red-50 text-red-700')
+            : t('border-amber-500/30 bg-amber-500/10 text-amber-200', 'border-amber-200 bg-amber-50 text-amber-800')
+        )}>
+          <FiCalendar size={14} />
+          <span>{scheduledState === 'scheduled_late' ? 'Agendado atrasado' : `Agendado · ${scheduledBadge || 'preparar em breve'}`}</span>
+          {scheduledDateLabel && <span className="font-semibold opacity-85">{scheduledDateLabel}</span>}
+        </div>
+      )}
 
       {sla.overdue && (
         <div className={cn(
@@ -601,7 +634,7 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark }) {
 
 // ─── Column ───────────────────────────────────────────────────────────────────
 
-function KDSColumn({ status, orders, onUpdateStatus, compact, newIds, t, isDark }) {
+function KDSColumn({ status, orders, onUpdateStatus, compact, newIds, t, isDark, now }) {
   const cfg = STATUS_CFG[status]
   if (!cfg) return null
   const colColor = cfg.color[isDark ? 'dark' : 'light']
@@ -647,6 +680,7 @@ function KDSColumn({ status, orders, onUpdateStatus, compact, newIds, t, isDark 
               isNew={newIds.has(order.id)}
               t={t}
               isDark={isDark}
+              now={now}
             />
           </div>
         ))}
@@ -694,11 +728,13 @@ export default function KitchenDisplayPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [newIds, setNewIds] = useState(new Set())
   const [storeData, setStoreData] = useState(null)
+  const [operationalNow, setOperationalNow] = useState(() => new Date())
 
   const containerRef = useRef(null)
   const isFirstLoadRef = useRef(true)
   const prevIdsRef = useRef(new Set())
   const newIdTimers = useRef({})
+  const scheduledReadyAlertedRef = useRef(new Set())
 
   // ── Fullscreen ─────────────────────────────────────────────────────────────
   const enterFullscreen = useCallback(async () => {
@@ -733,6 +769,11 @@ export default function KitchenDisplayPage() {
     }
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  useEffect(() => {
+    const id = setInterval(() => setOperationalNow(new Date()), 30000)
+    return () => clearInterval(id)
   }, [])
 
   useEffect(() => {
@@ -776,12 +817,13 @@ export default function KitchenDisplayPage() {
       // Detect truly new orders (not first load)
       if (!isFirstLoadRef.current) {
         const incoming = docs.filter(o => !prevIdsRef.current.has(o.id))
-        if (incoming.length > 0) {
+        const urgentIncoming = incoming.filter((order) => shouldShowInMainKds(order, new Date()))
+        if (urgentIncoming.length > 0) {
           sound.play('new')
-          const newSet = new Set(incoming.map(o => o.id))
+          const newSet = new Set(urgentIncoming.map(o => o.id))
           setNewIds(prev => new Set([...prev, ...newSet]))
           // Clear "new" flag after 8s
-          incoming.forEach(o => {
+          urgentIncoming.forEach(o => {
             clearTimeout(newIdTimers.current[o.id])
             newIdTimers.current[o.id] = setTimeout(() => {
               setNewIds(prev => {
@@ -820,9 +862,38 @@ export default function KitchenDisplayPage() {
   }, [storeId])
 
   // ── Group by status ────────────────────────────────────────────────────────
+  const visibleOrders = useMemo(
+    () => orders.filter((order) => shouldShowInMainKds(order, operationalNow)),
+    [orders, operationalNow]
+  )
+
+  useEffect(() => {
+    const readyScheduled = visibleOrders.filter((order) => {
+      if (!isScheduledOrder(order)) return false
+      const status = normalizeKdsStatus(order.status)
+      if (status !== 'confirmado') return false
+      const state = getScheduledOperationalState(order, { now: operationalNow })
+      return state === 'scheduled_due_soon' || state === 'scheduled_late'
+    })
+
+    const notYetVisibleIds = new Set(
+      orders
+        .filter((order) => isScheduledOrder(order) && !shouldShowInMainKds(order, operationalNow))
+        .map((order) => order.id)
+    )
+
+    notYetVisibleIds.forEach((id) => scheduledReadyAlertedRef.current.delete(id))
+
+    const firstUnalerted = readyScheduled.find((order) => !scheduledReadyAlertedRef.current.has(order.id))
+    if (!firstUnalerted) return
+
+    readyScheduled.forEach((order) => scheduledReadyAlertedRef.current.add(order.id))
+    sound.play('ready')
+  }, [orders, operationalNow, sound, visibleOrders])
+
   const grouped = useMemo(() => {
     const map = { confirmado: [], preparando: [], pronto: [] }
-    orders.forEach(o => {
+    visibleOrders.forEach(o => {
       const status = normalizeKdsStatus(o.status)
       if (map[status]) map[status].push(o)
     })
@@ -833,9 +904,9 @@ export default function KitchenDisplayPage() {
     map.pronto.sort(compareOrdersOldestFirst)
 
     return map
-  }, [orders])
+  }, [visibleOrders])
 
-  const totalActive = orders.length
+  const totalActive = visibleOrders.length
   const storeName = getDisplayStoreName(storeData, userData)
   const logoUrl = getMerchantDisplayLogoUrl(storeData, userData)
 
@@ -1033,6 +1104,7 @@ export default function KitchenDisplayPage() {
                   newIds={newIds}
                   t={t}
                   isDark={isDark}
+                  now={operationalNow}
                 />
               ))}
             </div>

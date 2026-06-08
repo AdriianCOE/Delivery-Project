@@ -152,6 +152,16 @@ function getCanonicalPublicStoreId(docId, data = {}, fallback = '') {
   return String(data.storeDocId || data.docId || data.storeId || docId || fallback || '').trim()
 }
 
+function isPublicStoreProjectionActive(data = {}) {
+  return (
+    data.isActive === true &&
+    data.isBlocked === false &&
+    data.isBillingBlocked === false &&
+    data.isDeleted === false &&
+    !data.deletedAt
+  )
+}
+
 async function findStoreBySlug(db, functionsInstance, slugParam) {
   const cleanSlug = String(slugParam || '').trim().replace(/^\/+|\/+$/g, '')
 
@@ -179,17 +189,20 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
 
     if (directSnap.exists()) {
       const data = directSnap.data() || {}
-      const canonicalStoreId = getCanonicalPublicStoreId(directSnap.id, data, cleanSlug)
-      return {
-        ...data,
-        ref: directRef,
-        id: canonicalStoreId,
-        docId: canonicalStoreId,
-        storeId: canonicalStoreId,
-        storeDocId: canonicalStoreId,
-        storeSlug: data.storeSlug || data.slug || cleanSlug,
-        slug: data.slug || data.storeSlug || cleanSlug,
-        publicDataSource: 'publicStores',
+
+      if (isPublicStoreProjectionActive(data)) {
+        const canonicalStoreId = getCanonicalPublicStoreId(directSnap.id, data, cleanSlug)
+        return {
+          ...data,
+          ref: directRef,
+          id: canonicalStoreId,
+          docId: canonicalStoreId,
+          storeId: canonicalStoreId,
+          storeDocId: canonicalStoreId,
+          storeSlug: data.storeSlug || data.slug || cleanSlug,
+          slug: data.slug || data.storeSlug || cleanSlug,
+          publicDataSource: 'publicStores',
+        }
       }
     }
   } catch (error) {
@@ -1634,19 +1647,38 @@ export default function StoreFrontPage() {
     }
   }, [configuredPromoBanner, featuredProducts, searchTerm])
 
+  const productsByCategory = useMemo(() => {
+    const grouped = new Map()
+    const uncategorized = []
+
+    searchedProducts.forEach((product) => {
+      if (!product.categoryId || !categoryById.has(product.categoryId)) {
+        uncategorized.push(product)
+        return
+      }
+
+      const current = grouped.get(product.categoryId) || []
+      current.push(product)
+      grouped.set(product.categoryId, current)
+    })
+
+    return {
+      grouped,
+      uncategorized,
+    }
+  }, [categoryById, searchedProducts])
+
   const categoryCounts = useMemo(() => {
     const counts = {
       all: searchedProducts.length,
     }
 
     categories.forEach((category) => {
-      counts[category.id] = searchedProducts.filter(
-        (product) => product.categoryId === category.id,
-      ).length
+      counts[category.id] = productsByCategory.grouped.get(category.id)?.length || 0
     })
 
     return counts
-  }, [categories, searchedProducts])
+  }, [categories, productsByCategory, searchedProducts.length])
 
   const productSections = useMemo(() => {
     const sections = categories
@@ -1654,13 +1686,11 @@ export default function StoreFrontPage() {
         id: category.id,
         name: category.name,
         description: category.description,
-        products: searchedProducts.filter((product) => product.categoryId === category.id),
+        products: productsByCategory.grouped.get(category.id) || [],
       }))
       .filter((section) => section.products.length > 0)
 
-    const uncategorizedProducts = searchedProducts.filter(
-      (product) => !product.categoryId || !categoryById.has(product.categoryId),
-    )
+    const uncategorizedProducts = productsByCategory.uncategorized
 
     if (uncategorizedProducts.length > 0) {
       sections.push({
@@ -1672,7 +1702,7 @@ export default function StoreFrontPage() {
     }
 
     return sections
-  }, [categories, categoryById, searchedProducts])
+  }, [categories, productsByCategory])
 
   const storeInfoItems = useMemo(() => {
     return [
@@ -2162,7 +2192,17 @@ if (!store) {
 }
 
 if (shouldBlockStorefront) {
-  return <StoreUnavailable />
+  return (
+    <>
+      <SEO
+        title={`${storeName} | Loja indisponivel`}
+        description="Este cardapio esta temporariamente indisponivel para pedidos."
+        path={`/${storeSlug}`}
+        noIndex
+      />
+      <StoreUnavailable />
+    </>
+  )
 }
 
 return (

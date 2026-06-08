@@ -105,20 +105,49 @@ function safeJsonParse(value, fallback = null) {
   }
 }
 
-function loadTrackingTokens() {
+function normalizeTrackingRecord(value) {
+  if (typeof value === 'string') {
+    const token = value.trim()
+    return token ? { orderId: token, trackingToken: token } : null
+  }
+
+  if (!value || typeof value !== 'object') return null
+
+  const trackingToken = String(value.trackingToken || value.token || value.orderId || '').trim()
+  const orderId = String(value.orderId || value.id || trackingToken || '').trim()
+
+  if (!orderId && !trackingToken) return null
+
+  return {
+    orderId: orderId || trackingToken,
+    trackingToken: trackingToken || orderId,
+    storeId: String(value.storeId || '').trim(),
+    storeSlug: String(value.storeSlug || '').trim(),
+    trackingUrl: String(value.trackingUrl || '').trim(),
+  }
+}
+
+function loadTrackingRecords() {
   try {
-    const tokens = safeJsonParse(
+    const records = safeJsonParse(
       localStorage.getItem(TRACKING_TOKENS_KEY),
       []
     )
 
-    if (!Array.isArray(tokens)) return []
+    if (!Array.isArray(records)) return []
 
-    return uniqueArray(
-      tokens
-        .map((token) => String(token || '').trim())
-        .filter(Boolean)
-    ).slice(0, 30)
+    const seen = new Set()
+
+    return records
+      .map(normalizeTrackingRecord)
+      .filter(Boolean)
+      .filter((record) => {
+        const key = `${record.orderId}:${record.trackingToken}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 30)
   } catch {
     return []
   }
@@ -278,6 +307,34 @@ function isProductAvailable(product) {
   return true
 }
 
+function hasList(value) {
+  return Array.isArray(value) && value.length > 0
+}
+
+function hasConfigurableOptions(product) {
+  return (
+    hasList(product?.optionGroups) ||
+    hasList(product?.optionsGroups) ||
+    hasList(product?.options) ||
+    hasList(product?.extras) ||
+    hasList(product?.addons) ||
+    hasList(product?.additionalItems) ||
+    hasList(product?.complements) ||
+    hasList(product?.complementGroups)
+  )
+}
+
+function hasOrderCustomizations(item) {
+  return (
+    hasList(item?.extras) ||
+    hasList(item?.addons) ||
+    hasList(item?.selectedOptions) ||
+    hasList(item?.optionGroupsSnapshot) ||
+    hasList(item?.selectedOptionGroups) ||
+    Boolean(String(item?.optionsSummary || '').trim())
+  )
+}
+
 function StatusBadge({ status }) {
   const currentStatus = normalizeStatus(status)
   const meta = STATUS_META[currentStatus] || STATUS_META.pendente
@@ -421,9 +478,9 @@ const greeting = useMemo(() => {
     return undefined
   }
 
-  const trackingTokens = loadTrackingTokens()
+  const trackingRecords = loadTrackingRecords()
 
-  if (!trackingTokens.length) {
+  if (!trackingRecords.length) {
     setOrders([])
     setLoadingOrders(false)
     return undefined
@@ -444,32 +501,33 @@ const greeting = useMemo(() => {
 
     setOrders(data)
 
-    if (loadedTokens.size >= trackingTokens.length) {
+    if (loadedTokens.size >= trackingRecords.length) {
       setLoadingOrders(false)
     }
   }
 
-  const unsubscribes = trackingTokens.map((token) => {
-    const orderRef = doc(db, 'orders', token)
+  const unsubscribes = trackingRecords.map((record) => {
+    const orderRef = doc(db, 'orders', record.orderId)
 
     return onSnapshot(
       orderRef,
       (snapshot) => {
-        loadedTokens.add(token)
+        loadedTokens.add(record.orderId)
 
         if (snapshot.exists()) {
           ordersById.set(snapshot.id, {
             id: snapshot.id,
+            trackingToken: record.trackingToken,
             ...snapshot.data(),
           })
         } else {
-          ordersById.delete(token)
+          ordersById.delete(record.orderId)
         }
 
         updateOrders()
       },
       () => {
-        loadedTokens.add(token)
+        loadedTokens.add(record.orderId)
         updateOrders()
       }
     )
@@ -542,6 +600,7 @@ const greeting = useMemo(() => {
         }
 
         const unavailable = []
+        const needsConfiguration = []
         const itemsToAdd = []
 
         getOrderItems(order).forEach((orderItem) => {
@@ -549,26 +608,31 @@ const greeting = useMemo(() => {
             (product) => product.id === orderItem.id
           )
 
-          if (isProductAvailable(currentProduct)) {
-            itemsToAdd.push({
-              product: {
-                ...currentProduct,
-                extras: orderItem.extras || orderItem.addons || [],
-                observation: orderItem.observation || '',
-              },
-              quantity: getItemQuantity(orderItem),
-            })
-          } else {
+          if (!isProductAvailable(currentProduct)) {
             unavailable.push(getItemName(orderItem))
+            return
           }
+
+          if (hasConfigurableOptions(currentProduct) || hasOrderCustomizations(orderItem)) {
+            needsConfiguration.push(getItemName(orderItem))
+            return
+          }
+
+          itemsToAdd.push({
+            product: {
+              ...currentProduct,
+              observation: orderItem.observation || '',
+            },
+            quantity: getItemQuantity(orderItem),
+          })
         })
 
         if (unavailable.length > 0) {
-          alert(
-            `Alguns itens não estão mais disponíveis e foram removidos:\n\n- ${unavailable.join(
-              '\n- '
-            )}`
-          )
+          showToast(`${unavailable.length} item(ns) indisponivel(is) foram removidos.`)
+        }
+
+        if (needsConfiguration.length > 0) {
+          showToast(`${needsConfiguration.length} item(ns) com opcionais precisam ser configurados novamente.`)
         }
 
         if (!itemsToAdd.length) {

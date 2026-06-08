@@ -27,10 +27,12 @@ import {
 import { useCart } from '../../contexts/CartContext'
 import { scrollToFirstError } from '../../utils/scroll'
 import { getCartSchedulingState } from '../../utils/publicScheduling'
+import { getPublicPixConfig, isPublicPaymentMethodAllowed } from '../../utils/publicPaymentMethods'
 import { functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
+const TRACKING_TOKENS_KEY = '@PratoBy:trackingTokens'
 
 const EMPTY_CUSTOMER = {
   name: '',
@@ -149,10 +151,8 @@ function sanitizeAddressNumber(value) {
 }
 
 function normalizeForMatch(value) {
-  return String(value || '')
+  return removeAccents(value)
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -235,191 +235,56 @@ function removeAccents(value) {
     .replace(/[̀-ͯ]/g, '')
 }
 
-function sanitizePixText(value, maxLength = 25) {
-  return removeAccents(value)
-    .toUpperCase()
-    .replace(/[^A-Z0-9 $%*+\-./:]/g, '')
-    .trim()
-    .slice(0, maxLength)
-}
-
-function emv(id, value) {
-  const stringValue = String(value ?? '')
-  const length = String(stringValue.length).padStart(2, '0')
-
-  return `${id}${length}${stringValue}`
-}
-
-function crc16(payload) {
-  let crc = 0xffff
-
-  for (let index = 0; index < payload.length; index += 1) {
-    crc ^= payload.charCodeAt(index) << 8
-
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1
-      crc &= 0xffff
-    }
-  }
-
-  return crc.toString(16).toUpperCase().padStart(4, '0')
-}
-
-function normalizePixKey(key, keyType) {
-  const cleanKey = String(key || '').trim()
-
-  if (!cleanKey) return ''
-
-  if (keyType === 'phone') {
-    const digits = onlyDigits(cleanKey)
-
-    if (!digits) return ''
-    if (digits.startsWith('55')) return `+${digits}`
-
-    return `+55${digits}`
-  }
-
-  if (keyType === 'cpf' || keyType === 'cnpj') {
-    return onlyDigits(cleanKey)
-  }
-
-  if (keyType === 'email') {
-    return cleanKey.toLowerCase()
-  }
-
-  return cleanKey
-}
-
-function getPixConfig(store) {
-  const pix = store?.pix || {}
-  const settingsPix = store?.paymentSettings?.pix || {}
-
-  const key = firstValue(
-    pix.key,
-    settingsPix.key,
-    store?.pixKey
-  )
-
-  const keyType = firstValue(
-    pix.keyType,
-    settingsPix.keyType,
-    store?.pixKeyType,
-    'random'
-  )
-
-  const merchantName = firstValue(
-    pix.merchantName,
-    pix.receiverName,
-    settingsPix.merchantName,
-    settingsPix.receiverName,
-    store?.name,
-    'PratoBy'
-  )
-
-  const merchantCity = firstValue(
-    pix.merchantCity,
-    pix.receiverCity,
-    settingsPix.merchantCity,
-    settingsPix.receiverCity,
-    store?.city,
-    store?.address?.city,
-    'ARACAJU'
-  )
-
-  const hasPixObject = Boolean(store?.pix && Object.keys(store.pix).length > 0)
-  const hasSettingsPixObject = Boolean(
-    store?.paymentSettings?.pix && Object.keys(store.paymentSettings.pix).length > 0
-  )
-  const legacyEnabled = !hasPixObject && !hasSettingsPixObject && Boolean(store?.pixKey)
-
-  return {
-    enabled: pix.enabled === true || settingsPix.enabled === true || legacyEnabled,
-    key: normalizePixKey(key, keyType),
-    rawKey: String(key || '').trim(),
-    keyType,
-    merchantName: sanitizePixText(merchantName, 25),
-    merchantCity: sanitizePixText(merchantCity, 15),
-  }
-}
-
-function generatePixCopyPaste({
-  pixConfig,
-  amount,
-  txid = 'PratoBy',
-  description = 'PEDIDO PratoBy',
-}) {
-  if (!pixConfig?.key) return ''
-
-  const merchantAccountInfo = [
-    emv('00', 'BR.GOV.BCB.PIX'),
-    emv('01', pixConfig.key),
-    description ? emv('02', sanitizePixText(description, 30)) : '',
-  ].join('')
-
-  const additionalData = emv('05', sanitizePixText(txid, 25) || 'PratoBy')
-
-  const amountValue = Number(amount || 0).toFixed(2)
-
-  const payloadWithoutCrc = [
-    emv('00', '01'),
-    emv('26', merchantAccountInfo),
-    emv('52', '0000'),
-    emv('53', '986'),
-    emv('54', amountValue),
-    emv('58', 'BR'),
-    emv('59', pixConfig.merchantName || 'PratoBy'),
-    emv('60', pixConfig.merchantCity || 'ARACAJU'),
-    emv('62', additionalData),
-    '6304',
-  ].join('')
-
-  return `${payloadWithoutCrc}${crc16(payloadWithoutCrc)}`
-}
-
-function buildPixPaymentSnapshot({ store, total, totalCents, storeSlug }) {
-  const pixConfig = getPixConfig(store)
-
-  if (!pixConfig.enabled || !pixConfig.key) return null
-
-  const txid = `P${Date.now().toString(36).toUpperCase()}`.slice(0, 25)
-
-  const pixCopyPaste = generatePixCopyPaste({
-    pixConfig,
-    amount: total,
-    txid,
-    description: `PEDIDO ${storeSlug || 'PratoBy'}`,
-  })
-
-  if (!pixCopyPaste) return null
-
-  return {
-    method: 'pix_manual',
-    label: 'Pix',
-    status: 'pending',
-    amount: total,
-    amountCents: totalCents,
-
-    pixKey: pixConfig.rawKey || pixConfig.key,
-    pixKeyNormalized: pixConfig.key,
-    pixKeyType: pixConfig.keyType,
-    pixMerchantName: pixConfig.merchantName,
-    pixMerchantCity: pixConfig.merchantCity,
-    pixTxid: txid,
-    pixCopyPaste,
-
-    proofUrl: null,
-    proofSentAt: null,
-    confirmedAt: null,
-    confirmedBy: null,
-  }
-}
-
 function safeJsonParse(value, fallback) {
   try {
     return value ? JSON.parse(value) : fallback
   } catch {
     return fallback
   }
+}
+
+function normalizeTrackingRecord(value) {
+  if (typeof value === 'string') {
+    const token = value.trim()
+    return token ? { orderId: token, trackingToken: token } : null
+  }
+
+  if (!value || typeof value !== 'object') return null
+
+  const trackingToken = String(value.trackingToken || value.token || value.orderId || '').trim()
+  const orderId = String(value.orderId || value.id || trackingToken || '').trim()
+
+  if (!orderId && !trackingToken) return null
+
+  return {
+    ...value,
+    orderId: orderId || trackingToken,
+    trackingToken: trackingToken || orderId,
+  }
+}
+
+function loadTrackingRecords() {
+  let records = []
+
+  try {
+    records = safeJsonParse(localStorage.getItem(TRACKING_TOKENS_KEY), [])
+  } catch {
+    return []
+  }
+
+  if (!Array.isArray(records)) return []
+
+  const seen = new Set()
+
+  return records
+    .map(normalizeTrackingRecord)
+    .filter(Boolean)
+    .filter((record) => {
+      const key = `${record.orderId}:${record.trackingToken}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 }
 
 function loadCustomer() {
@@ -1367,7 +1232,7 @@ function CartItemDetailsModal({
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-gray-100 bg-white p-4">
+        <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-2xl border border-gray-100 bg-[#F9FAFB] p-1">
               <button
@@ -1608,27 +1473,15 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const blockingCepError = isBlockingCepError(cepError)
 
   const paymentOptions = useMemo(() => {
-    const paymentMethods = store?.paymentMethods || {}
-    const publicPaymentMethods = store?.publicPaymentMethods || {}
-    const acceptedPaymentMethods = Array.isArray(store?.acceptedPaymentMethods) ? store.acceptedPaymentMethods : []
-    const acceptedPaymentMethodKeys = acceptedPaymentMethods.map((m) => String(m).toLowerCase())
-    const pixConfig = getPixConfig(store)
+    const pixConfig = getPublicPixConfig(store)
 
     const pixEnabled =
-      paymentMethods.pix !== false &&
-      publicPaymentMethods.pix !== false &&
+      isPublicPaymentMethodAllowed(store, 'pix') &&
       pixConfig.enabled === true &&
-      (
-        paymentMethods?.pix === true ||
-        paymentMethods?.pix?.enabled === true ||
-        publicPaymentMethods?.pix === true ||
-        publicPaymentMethods?.pix?.enabled === true ||
-        acceptedPaymentMethodKeys.includes('pix') ||
-        paymentMethods?.pix === undefined
-      )
+      Boolean(pixConfig.key)
 
-    const cardEnabled = paymentMethods.card !== false
-    const cashEnabled = paymentMethods.cash !== false
+    const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
+    const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
 
     return [
       pixEnabled && {
@@ -2076,6 +1929,13 @@ if (orderType === 'delivery') {
 
     if (orderTiming === 'scheduled') {
       if (!scheduledDate || !scheduledTime) return 'Escolha uma data e horário para o pedido agendado.'
+
+      const validScheduledDate = schedulingDates.find((date) => date.dateKey === scheduledDate)
+      const validScheduledTime = validScheduledDate?.slots?.some((slot) => slot.time === scheduledTime)
+
+      if (!validScheduledDate || !validScheduledTime) {
+        return 'O horário selecionado não está mais disponível. Escolha outro horário.'
+      }
     }
 
     if (!paymentMethod) return 'Escolha a forma de pagamento.'
@@ -2130,6 +1990,7 @@ if (orderType === 'delivery') {
   pixRequiredForSchedule,
   scheduledDate,
   scheduledTime,
+  schedulingDates,
   schedulingState.blockingMessage,
   store,
   storeIsOpen,
@@ -2207,23 +2068,34 @@ if (orderType === 'delivery') {
 
       const createdOrder = result?.data || {}
       const trackingToken = createdOrder.trackingToken
+      const orderId = String(createdOrder.orderId || createdOrder.id || trackingToken || '').trim()
 
       if (!trackingToken) {
         throw new Error('Pedido criado sem token de acompanhamento.')
       }
 
-      const savedTokens = JSON.parse(
-        localStorage.getItem('@PratoBy:trackingTokens') || '[]'
-      )
+      const nextTrackingRecord = {
+        orderId,
+        trackingToken,
+        storeId: finalStoreId,
+        storeSlug,
+        trackingUrl: createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`,
+        createdAt: new Date().toISOString(),
+      }
+      const savedTrackingRecords = loadTrackingRecords()
+      const nextTrackingRecords = [
+        nextTrackingRecord,
+        ...savedTrackingRecords.filter((record) => (
+          record.orderId !== orderId &&
+          record.trackingToken !== trackingToken
+        )),
+      ].slice(0, 30)
 
-      const nextTokens = Array.from(
-        new Set([
-          trackingToken,
-          ...savedTokens,
-        ])
-      ).slice(0, 30)
-
-      localStorage.setItem('@PratoBy:trackingTokens', JSON.stringify(nextTokens))
+      try {
+        localStorage.setItem(TRACKING_TOKENS_KEY, JSON.stringify(nextTrackingRecords))
+      } catch {
+        // O pedido ja foi criado; falha de storage local nao deve bloquear o tracking.
+      }
 
       clearCart()
       onClose?.()
@@ -2233,7 +2105,6 @@ if (orderType === 'delivery') {
       const message = error?.message || 'Erro ao enviar pedido. Tente novamente.'
       setCheckoutError(message)
       scrollToFirstError()
-      alert(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -3277,7 +3148,7 @@ if (orderType === 'delivery') {
             </div>
 
             {step === 'cart' && (
-              <footer className="shrink-0 border-t border-gray-100 bg-white p-4 shadow-2xl">
+              <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
                 {belowMinimum && (
                   <div className="mb-3 flex gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3">
                     <FiAlertCircle className="mt-0.5 shrink-0 text-amber-600" />

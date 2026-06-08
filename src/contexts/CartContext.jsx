@@ -13,9 +13,34 @@ function safeJsonParse(value, fallback = []) {
   }
 }
 
+function safeGetItem(key) {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function safeRemoveItem(key) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // Ignora ambientes sem localStorage.
+  }
+}
+
 function loadCart() {
-  const currentCart = safeJsonParse(localStorage.getItem(CART_KEY), null)
-  const legacyCart = safeJsonParse(localStorage.getItem(LEGACY_CART_KEY), null)
+  const currentCart = safeJsonParse(safeGetItem(CART_KEY), null)
+  const legacyCart = safeJsonParse(safeGetItem(LEGACY_CART_KEY), null)
 
   if (Array.isArray(currentCart)) return currentCart
   if (Array.isArray(legacyCart)) return legacyCart
@@ -24,8 +49,9 @@ function loadCart() {
 }
 
 function saveCart(cartItems) {
-  localStorage.setItem(CART_KEY, JSON.stringify(cartItems))
-  localStorage.setItem(LEGACY_CART_KEY, JSON.stringify(cartItems))
+  const payload = JSON.stringify(cartItems)
+  safeSetItem(CART_KEY, payload)
+  safeSetItem(LEGACY_CART_KEY, payload)
 }
 
 function getCartItemKey(item) {
@@ -118,7 +144,7 @@ export function CartProvider({ children }) {
 
     // 1. Try loading from preferred ID key
     if (idKey) {
-      const stored = localStorage.getItem(idKey)
+      const stored = safeGetItem(idKey)
       if (stored !== null) {
         loadedItems = safeJsonParse(stored, [])
       }
@@ -126,20 +152,20 @@ export function CartProvider({ children }) {
 
     // 2. Try loading from fallback slug key
     if (loadedItems === null && slugKey) {
-      const stored = localStorage.getItem(slugKey)
+      const stored = safeGetItem(slugKey)
       if (stored !== null) {
         loadedItems = safeJsonParse(stored, [])
         // If we have an ID now, migrate slug cart to ID cart
         if (idKey) {
-          localStorage.setItem(idKey, JSON.stringify(loadedItems))
-          localStorage.removeItem(slugKey)
+          safeSetItem(idKey, JSON.stringify(loadedItems))
+          safeRemoveItem(slugKey)
         }
       }
     }
 
     // 3. Try loading from legacy key
     if (loadedItems === null) {
-      const stored = localStorage.getItem(legacyKey) || localStorage.getItem('@DeliveryApp:cart')
+      const stored = safeGetItem(legacyKey) || safeGetItem('@DeliveryApp:cart')
       if (stored !== null) {
         const legacyItems = safeJsonParse(stored, [])
         let isCompatible = true
@@ -164,12 +190,12 @@ export function CartProvider({ children }) {
           loadedItems = legacyItems
           const targetKey = idKey || slugKey
           if (targetKey) {
-            localStorage.setItem(targetKey, JSON.stringify(loadedItems))
+            safeSetItem(targetKey, JSON.stringify(loadedItems))
           }
         }
 
-        localStorage.removeItem(legacyKey)
-        localStorage.removeItem('@DeliveryApp:cart')
+        safeRemoveItem(legacyKey)
+        safeRemoveItem('@DeliveryApp:cart')
       }
     }
 
@@ -182,7 +208,7 @@ export function CartProvider({ children }) {
     if (!active) return
 
     const targetKey = id ? `@PratoBy:cart:${id}` : `@PratoBy:cart:${slug}`
-    localStorage.setItem(targetKey, JSON.stringify(newItems))
+    safeSetItem(targetKey, JSON.stringify(newItems))
   }
 
   const addToCart = (product) => {
@@ -270,10 +296,10 @@ export function CartProvider({ children }) {
   const clearCart = () => {
     setCartItems([])
     const { id, slug } = storeKeyInfo
-    if (id) localStorage.removeItem(`@PratoBy:cart:${id}`)
-    if (slug) localStorage.removeItem(`@PratoBy:cart:${slug}`)
-    localStorage.removeItem(CART_KEY)
-    localStorage.removeItem(LEGACY_CART_KEY)
+    if (id) safeRemoveItem(`@PratoBy:cart:${id}`)
+    if (slug) safeRemoveItem(`@PratoBy:cart:${slug}`)
+    safeRemoveItem(CART_KEY)
+    safeRemoveItem(LEGACY_CART_KEY)
   }
 
   const cartTotal = useMemo(() => {

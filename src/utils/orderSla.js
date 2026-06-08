@@ -1,3 +1,9 @@
+import {
+  getScheduledDate,
+  getScheduledOperationalState,
+  isScheduledOrder,
+} from './orderScheduling'
+
 export const ORDER_STATUS_SLA_MINUTES = Object.freeze({
   pendente: 3,
   confirmado: 10,
@@ -100,8 +106,64 @@ export function getOrderStatusStartedAtMillis(order, normalizedStatus = normaliz
 export function getOrderSlaState(order, now = Date.now()) {
   const status = normalizeOrderStatus(order?.status)
   const thresholdMinutes = ORDER_STATUS_SLA_MINUTES[status] || null
-  const startedAtMillis = getOrderStatusStartedAtMillis(order, status)
   const nowMillis = timestampToMillis(now) ?? Date.now()
+  const scheduledState = isScheduledOrder(order)
+    ? getScheduledOperationalState(order, { now: nowMillis })
+    : 'asap'
+
+  if (scheduledState === 'scheduled_future') {
+    return {
+      status,
+      active: false,
+      overdue: false,
+      thresholdMinutes,
+      elapsedMinutes: 0,
+      remainingMinutes: thresholdMinutes,
+      overdueMinutes: 0,
+      startedAtMillis: null,
+      scheduledState,
+    }
+  }
+
+  if (scheduledState === 'scheduled_due_soon' && status === 'confirmado') {
+    const startedAtMillis = getScheduledDate(order)?.getTime() ?? getOrderStatusStartedAtMillis(order, status)
+    const remainingMinutes = startedAtMillis === null
+      ? thresholdMinutes
+      : Math.max(0, Math.ceil((startedAtMillis - nowMillis) / 60000))
+
+    return {
+      status,
+      active: true,
+      overdue: false,
+      thresholdMinutes,
+      elapsedMinutes: 0,
+      remainingMinutes,
+      overdueMinutes: 0,
+      startedAtMillis,
+      scheduledState,
+    }
+  }
+
+  if (scheduledState === 'scheduled_late' && status === 'confirmado') {
+    const startedAtMillis = getScheduledDate(order)?.getTime() ?? getOrderStatusStartedAtMillis(order, status)
+    const overdueMinutes = startedAtMillis === null
+      ? 0
+      : Math.max(1, Math.floor((nowMillis - startedAtMillis) / 60000))
+
+    return {
+      status,
+      active: true,
+      overdue: true,
+      thresholdMinutes,
+      elapsedMinutes: overdueMinutes,
+      remainingMinutes: 0,
+      overdueMinutes,
+      startedAtMillis,
+      scheduledState,
+    }
+  }
+
+  const startedAtMillis = getOrderStatusStartedAtMillis(order, status)
 
   if (!thresholdMinutes || startedAtMillis === null) {
     return {
@@ -113,6 +175,7 @@ export function getOrderSlaState(order, now = Date.now()) {
       remainingMinutes: thresholdMinutes,
       overdueMinutes: 0,
       startedAtMillis,
+      scheduledState,
     }
   }
 
@@ -128,5 +191,6 @@ export function getOrderSlaState(order, now = Date.now()) {
     remainingMinutes: Math.max(0, thresholdMinutes - elapsedMinutes),
     overdueMinutes: overdue ? Math.max(1, elapsedMinutes - thresholdMinutes) : 0,
     startedAtMillis,
+    scheduledState,
   }
 }
