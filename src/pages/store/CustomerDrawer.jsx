@@ -669,7 +669,7 @@ const greeting = useMemo(() => {
 
   return (
     <div 
-      className={`fixed inset-0 z-[90] flex justify-end transition-all duration-300 ${
+      className={`fixed inset-0 z-[90] flex justify-end transition-all duration-300 ease-out ${
         isOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
       }`}
     >
@@ -677,7 +677,7 @@ const greeting = useMemo(() => {
       <button
         type="button"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-black/45 backdrop-blur-sm transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'opacity-0'
         }`}
         aria-label="Fechar perfil"
@@ -685,11 +685,11 @@ const greeting = useMemo(() => {
 
       {/* Painel lateral com animação de deslizar (slide) */}
       <aside 
-        className={`relative flex h-full w-full max-w-md flex-col bg-[#f9fafb] shadow-2xl transition-transform duration-300 ease-in-out ${
+        className={`relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#f9fafb] shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] sm:rounded-l-[2rem] ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <header className="sticky top-0 z-20 border-b border-gray-100 bg-white px-4 py-4">
+        <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
@@ -743,7 +743,7 @@ const greeting = useMemo(() => {
           )}
         </header>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-scroll p-4 pratoby-scrollbar [scrollbar-gutter:stable]">
           {toast && (
             <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-sm font-black text-[#f97316]">
               {toast}
@@ -786,7 +786,7 @@ const greeting = useMemo(() => {
                 </div>
 
                 <div className="mt-5 grid grid-cols-3 gap-2">
-                  <div className="rounded-2xl bg-[#f9fafb] p-3 text-center">
+                  <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-3 text-center shadow-sm">
                     <p className="text-lg font-black text-[#111827]">
                       {visibleOrders.length}
                     </p>
@@ -795,7 +795,7 @@ const greeting = useMemo(() => {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-orange-50 p-3 text-center">
+                  <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-center shadow-sm">
                     <p className="text-lg font-black text-[#f97316]">
                       {deliveredOrders.length}
                     </p>
@@ -804,7 +804,7 @@ const greeting = useMemo(() => {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-amber-50 p-3 text-center">
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-center shadow-sm">
                     <p className="text-lg font-black text-amber-700">
                       {activeOrders.length}
                     </p>
@@ -923,8 +923,12 @@ const greeting = useMemo(() => {
                   return (
                     <article
                       key={order.id}
-                      className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-xl hover:shadow-gray-200/60"
+                      className="group relative overflow-hidden rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-orange-100 hover:shadow-xl hover:shadow-orange-100/30"
                     >
+                      {isActive && (
+                        <span className="absolute inset-x-5 top-0 h-1 rounded-b-full bg-orange-400" />
+                      )}
+
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="text-xs font-bold text-[#6b7280]">

@@ -17,6 +17,7 @@ export const EMPTY_PRODUCT_FORM = {
   isVisible: true,
   isFeatured: false,
   isPromotion: false,
+  isPopular: false,
   acceptsCoupons: true,
   order: 0,
   optionGroups: [],

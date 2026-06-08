@@ -149,6 +149,20 @@ function stripAccents(value) {
     .trim()
 }
 
+function getStoreDescription(store) {
+  return String(
+    store?.description ||
+    store?.shortDescription ||
+    store?.about ||
+    store?.bio ||
+    store?.settings?.description ||
+    store?.settings?.shortDescription ||
+    ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function getStoreSlug(store) {
   return store?.storeSlug || store?.slug || store?.storeId || store?.id || ''
 }
@@ -700,7 +714,7 @@ function getOperationalStatus(store, scheduleStatus = {}) {
   if (scheduleStatus.hasSchedule && !scheduleStatus.isWithinSchedule) {
     return {
       label: 'Fora do horário',
-      description: 'A loja está aberta, mas fora do horário de funcionamento.',
+      description: 'Você pode navegar pelo cardápio. Os pedidos voltam no próximo horário de atendimento.',
       isOpen: false,
       tone: 'warning',
     }
@@ -899,8 +913,7 @@ function getAcceptedPaymentMethods(store) {
   const pixConfig = getPublicPixConfig(store)
   const pixEnabled =
     isPublicPaymentMethodAllowed(store, 'pix') &&
-    pixConfig.enabled === true &&
-    Boolean(pixConfig.key)
+    pixConfig.enabled === true
 
   const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
   const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
@@ -928,6 +941,7 @@ function getAcceptedPaymentMethods(store) {
 }
 
 export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+  const storeDescription = useMemo(() => getStoreDescription(store), [store])
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(false)
   const [favorited, setFavorited] = useState(false)
@@ -1093,7 +1107,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
   return (
     <header className="relative w-full overflow-visible bg-[#f6f7f9]">
-      <div className="store-banner-shell relative h-[150px] w-full overflow-hidden border-b border-white/70 sm:h-[240px] lg:h-[280px]">
+      <div className="store-banner-shell relative h-[168px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
   <div
     className="store-banner-bg absolute inset-0"
     style={{
@@ -1103,7 +1117,13 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     }}
   />
 
-  <div className="absolute inset-0 bg-black/[0.03]" />
+  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/[0.03] to-[#f6f7f9]" />
+  <div
+    className="pointer-events-none absolute inset-0 opacity-40"
+    style={{
+      background: `radial-gradient(circle at 18% 12%, ${getRgba(themeColor, 0.35)}, transparent 34%)`,
+    }}
+  />
 </div>
 
       <section className="relative z-10 mx-auto -mt-7 max-w-[1120px] px-3 pb-4 sm:-mt-12 sm:px-4 lg:-mt-16">
@@ -1157,7 +1177,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
                     <div className="mb-1.5 flex flex-wrap items-center gap-1.5 sm:mb-2">
   <StatusBadge status={operationalStatus} themeColor={themeColor} />
 
-  <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-600 ring-1 ring-orange-100/80 sm:px-3 sm:py-1.5">
+  <span className="hidden items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-600 ring-1 ring-orange-100/80 sm:inline-flex sm:px-3 sm:py-1.5">
     <FiStar size={13} strokeWidth={2.4} />
     {ratingLabel}
   </span>
@@ -1180,9 +1200,11 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   className="group block max-w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-200"
   aria-label="Abrir informações da loja"
 >
-  <h1 className="whitespace-normal break-words text-[1.12rem] font-black leading-tight tracking-tight text-[#111827] transition group-hover:text-orange-600 sm:text-4xl lg:text-[2.45rem]">
-    {store?.name || 'Loja'}
-  </h1>
+  <span className="block min-w-0">
+    <h1 className="min-w-0 whitespace-normal break-words text-[1.12rem] font-black leading-tight tracking-tight text-[#111827] transition group-hover:text-orange-600 sm:text-4xl lg:text-[2.45rem]">
+      {store?.name || 'Loja'}
+    </h1>
+  </span>
 </button>
                   </div>
 
@@ -1234,10 +1256,11 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 </div>
                 </div>
 
-                <p className="mt-2 max-h-10 overflow-hidden text-[13px] font-medium leading-5 text-[#6b7280] sm:mt-3 sm:max-h-none sm:text-[15px] sm:leading-6 lg:max-w-2xl">
-                  {store?.description ||
-                    'Peça online de forma rápida, acompanhe seu pedido e receba no conforto da sua casa.'}
-                </p>
+                {storeDescription && (
+  <p className="mt-2 max-h-10 overflow-hidden text-[13px] font-medium leading-5 text-[#6b7280] sm:mt-3 sm:max-h-none sm:text-[15px] sm:leading-6 lg:max-w-2xl">
+    {storeDescription}
+  </p>
+)}
 
                 <div className="mt-3 -ml-20 flex w-[calc(100%+5rem)] gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:ml-0 sm:mt-4 sm:w-auto sm:flex-wrap [&::-webkit-scrollbar]:hidden">
                   <InfoPill icon={FiClock} themeColor={themeColor}>
@@ -1305,7 +1328,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         />
 
         <div
-          className={`relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl transition-all duration-300 ease-out md:max-h-[90vh] md:rounded-[2rem] ${
+          className={`relative flex max-h-[88vh] min-h-0 w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl transition-all duration-300 ease-out md:max-h-[90vh] md:rounded-[2rem] ${
             showModal
               ? 'translate-y-0 scale-100 opacity-100'
               : 'translate-y-full opacity-0 md:translate-y-10 md:scale-95'
@@ -1322,7 +1345,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
           />
 
 <div
-  className="relative overflow-hidden border-b border-gray-100 p-5"
+  className="relative shrink-0 overflow-hidden border-b border-gray-100 px-5 pb-6 pt-5"
   style={{
     background: `linear-gradient(135deg, ${themeSofter}, #ffffff 62%, ${getRgba(
       themeColor,
@@ -1383,33 +1406,25 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       </div>
     </div>
 
-    <div className="mt-5 grid grid-cols-2 gap-2">
-      <div className="rounded-2xl bg-white/90 p-3 shadow-sm ring-1 ring-gray-100 backdrop-blur-xl">
-        <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#9ca3af]">
-          <FiClock size={13} />
-          Hoje
-        </p>
-
-        <p className="mt-1 truncate text-sm font-black text-[#111827]">
-          {todayHoursLabel}
-        </p>
-      </div>
-
-      <div className="rounded-2xl bg-white/90 p-3 shadow-sm ring-1 ring-gray-100 backdrop-blur-xl">
-        <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#9ca3af]">
-          <FiDollarSign size={13} />
-          Pedido mínimo
-        </p>
-
-        <p className="mt-1 truncate text-sm font-black text-[#111827]">
-          {minOrder > 0 ? formatMoney(minOrder) : 'Sem mínimo'}
-        </p>
-      </div>
-    </div>
+    {storeDescription && (
+  <div className="mt-4 max-w-[38rem] rounded-2xl bg-white/90 px-4 py-3 shadow-sm ring-1 ring-gray-100 backdrop-blur-xl">
+    <p
+      className="text-sm font-semibold leading-6 text-[#4b5563] sm:text-[15px]"
+      style={{
+        display: '-webkit-box',
+        WebkitLineClamp: 3,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+      }}
+    >
+      {storeDescription}
+    </p>
+  </div>
+)}
   </div>
 </div>
 
-          <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 pratoby-scrollbar">
           <div
   className="rounded-[1.5rem] border p-4"
   style={{
@@ -1423,7 +1438,9 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
   <div className="mt-4 grid gap-3 sm:grid-cols-2">
     <div className="rounded-2xl bg-white p-3 shadow-sm">
-      <p className="text-xs font-bold text-[#6b7280]">Horário de hoje</p>
+      <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#9ca3af]"><FiClock size={13} />
+          Horário de hoje
+        </p>
 
       <p className="mt-1 text-sm font-black text-[#111827]">
         {todayHoursLabel}
@@ -1431,7 +1448,10 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     </div>
 
     <div className="rounded-2xl bg-white p-3 shadow-sm">
-      <p className="text-xs font-bold text-[#6b7280]">Pedido mínimo</p>
+      <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#9ca3af]">
+          <FiDollarSign size={13} />
+          Pedido mínimo
+        </p>
 
       <p className="mt-1 text-sm font-black text-[#111827]">
         {minOrder > 0 ? formatMoney(minOrder) : 'Sem valor mínimo'}

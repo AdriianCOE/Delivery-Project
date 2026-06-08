@@ -518,8 +518,8 @@ export default function ProductOptionsModal({
         aria-label="Fechar detalhes do produto"
       />
 
-      <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl md:rounded-[2rem]">
-        <div className="relative h-56 shrink-0 bg-gray-100">
+      <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 md:rounded-[2rem]">
+        <div className="relative h-60 shrink-0 bg-gray-100 sm:h-64">
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -532,6 +532,15 @@ export default function ProductOptionsModal({
             </div>
           )}
 
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-black/10" />
+
+          <div className="absolute bottom-4 left-4 right-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#111827] shadow-lg backdrop-blur">
+              <FiShoppingBag size={13} />
+              Monte seu pedido
+            </span>
+          </div>
+
           <button
             type="button"
             onClick={onClose}
@@ -542,8 +551,8 @@ export default function ProductOptionsModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <div>
+        <div className="flex-1 overflow-y-auto bg-[#f9fafb] p-5">
+          <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
             <h2 className="text-2xl font-black tracking-tight text-[#111827]">
               {product.name}
             </h2>
@@ -589,7 +598,7 @@ export default function ProductOptionsModal({
                 return (
                   <section
                     key={group.id}
-                    className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4"
+                    className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm"
                   >
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div>
@@ -745,7 +754,7 @@ export default function ProductOptionsModal({
           )}
 
           {extras.length > 0 && (
-            <section className="mt-6 rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4">
+            <section className="mt-6 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
               <h3 className="text-sm font-black text-[#111827]">
                 Adicionais
               </h3>
@@ -804,7 +813,7 @@ export default function ProductOptionsModal({
             </section>
           )}
 
-          <section className="mt-6">
+          <section className="mt-6 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
             <label className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
               Alguma observação?
             </label>
@@ -833,7 +842,7 @@ export default function ProductOptionsModal({
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-18px_40px_rgba(15,23,42,0.08)]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-2xl border border-gray-100 bg-[#f9fafb] p-1">
               <button
@@ -859,7 +868,7 @@ export default function ProductOptionsModal({
 
             <div className="text-right">
               <p className="text-xs font-bold text-[#6b7280]">
-                Total
+                Subtotal
               </p>
 
               <p className="text-xl font-black text-[#111827]">

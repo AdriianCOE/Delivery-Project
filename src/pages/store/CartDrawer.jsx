@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { httpsCallable } from 'firebase/functions'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 
 import {
   FiAlertCircle,
@@ -852,9 +852,9 @@ function isBlockingCepError(message) {
 
 function SectionCard({ title, icon: Icon, children, description }) {
   return (
-    <section className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+    <section className="rounded-[1.65rem] border border-gray-100 bg-white p-4 shadow-sm shadow-gray-100/80 ring-1 ring-white">
       <div className="mb-4 flex gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] shadow-sm ring-1 ring-orange-100/70">
           <Icon size={18} />
         </div>
 
@@ -960,7 +960,7 @@ function CartItemDetailsModal({
   const promo = getPromotionInfo(item)
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-end justify-center md:items-center">
+    <div className="fixed inset-0 z-[95] flex items-end justify-center px-0 md:items-center md:px-6">
       <button
         type="button"
         onClick={onClose}
@@ -968,7 +968,7 @@ function CartItemDetailsModal({
         aria-label="Fechar detalhes do item"
       />
 
-      <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl md:rounded-[2rem]">
+      <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl md:max-h-[86vh] md:rounded-[2rem]">
         <div className="relative h-52 shrink-0 bg-gray-100">
           {imageUrl ? (
             <img
@@ -1464,11 +1464,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       }))
       .sort((a, b) => a.neighborhood.localeCompare(b.neighborhood))
   }, [deliveryFees])
-  const deliveryNeighborhoodList = useMemo(() => {
-    return deliveryNeighborhoods.map((item) => item.neighborhood).join(', ')
-  }, [deliveryNeighborhoods])
-  const deliveryAreaMessage = deliveryNeighborhoodList
-    ? `A loja entrega apenas em: ${deliveryNeighborhoodList}.`
+  const deliveryNeighborhoodCount = deliveryNeighborhoods.length
+  const deliveryAreaMessage = deliveryNeighborhoodCount > 0
+    ? 'A loja entrega apenas nos bairros selecionaveis abaixo.'
     : ''
   const blockingCepError = isBlockingCepError(cepError)
 
@@ -1477,8 +1475,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
     const pixEnabled =
       isPublicPaymentMethodAllowed(store, 'pix') &&
-      pixConfig.enabled === true &&
-      Boolean(pixConfig.key)
+      pixConfig.enabled === true
 
     const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
     const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
@@ -2128,10 +2125,16 @@ if (orderType === 'delivery') {
     validateCheckout,
   ])
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end">
+    <AnimatePresence>
+      {isOpen && (
+    <motion.div
+      className="fixed inset-0 z-[70] flex justify-end"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+    >
       <motion.button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2143,13 +2146,13 @@ if (orderType === 'delivery') {
       />
 
       <motion.aside
-        initial={{ x: '100%', opacity: 0.92 }}
+        initial={{ x: '104%', opacity: 0.94, scale: 0.985 }}
         animate={{ x: 0, opacity: 1 }}
-        exit={{ x: '100%', opacity: 0.92 }}
-        transition={{ type: 'spring', stiffness: 420, damping: 38, mass: 0.9 }}
-        className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl"
+        exit={{ x: '104%', opacity: 0.94, scale: 0.985 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 32, mass: 0.9 }}
+        className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl will-change-transform"
       >
-        <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white px-4 py-4">
+        <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {step === 'checkout' && (
@@ -2187,6 +2190,35 @@ if (orderType === 'delivery') {
               <FiX size={20} />
             </button>
           </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-[#F9FAFB] p-1">
+            {[
+              { id: 'cart', label: 'Carrinho' },
+              { id: 'checkout', label: 'Dados' },
+              { id: 'send', label: 'Enviar' },
+            ].map((item, index) => {
+              const active =
+                item.id === step ||
+                (item.id === 'send' && step === 'checkout' && isSubmitting)
+              const completed = step === 'checkout' && index === 0
+
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-xl px-2 py-2 text-center text-[11px] font-black transition ${
+                    active
+                      ? 'text-white shadow-sm'
+                      : completed
+                        ? 'bg-white text-[#111827]'
+                        : 'text-[#9ca3af]'
+                  }`}
+                  style={{ backgroundColor: active ? themeColor : undefined }}
+                >
+                  {item.label}
+                </div>
+              )
+            })}
+          </div>
         </header>
 
         {!storeIsOpen && (
@@ -2202,8 +2234,8 @@ if (orderType === 'delivery') {
         )}
 
         {cartItems.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-[1.7rem] bg-white text-gray-300 shadow-sm">
+          <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-white to-[#F9FAFB] p-8 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-[1.7rem] bg-white text-gray-300 shadow-xl shadow-gray-200/70 ring-1 ring-gray-100">
               <FiShoppingBag size={34} />
             </div>
 
@@ -2218,7 +2250,8 @@ if (orderType === 'delivery') {
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 rounded-2xl bg-[#f97316] px-6 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]"
+              className="mt-6 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 active:scale-95"
+              style={{ backgroundColor: themeColor }}
             >
               Explorar cardápio
             </button>
@@ -2262,9 +2295,17 @@ if (orderType === 'delivery') {
               </div>
             )}
 
-            <div className="flex-1 space-y-4 overflow-y-auto bg-[#F9FAFB] p-4 pratoby-scrollbar">
+            <div className="flex-1 overflow-y-auto bg-[#F9FAFB] p-4 pratoby-scrollbar">
+              <AnimatePresence mode="wait" initial={false}>
               {step === 'cart' && (
-                <>
+                <motion.div
+                  key="cart-step"
+                  className="space-y-4"
+                  initial={{ opacity: 0, x: -14, filter: 'blur(2px)' }}
+                  animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, x: 14, filter: 'blur(2px)' }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                >
                   <SectionCard
                     title="Itens do pedido"
                     icon={FiShoppingBag}
@@ -2289,7 +2330,7 @@ if (orderType === 'delivery') {
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') setSelectedCartItem(item)
                           }}
-                          className="cursor-pointer rounded-2xl border border-gray-100 bg-white p-3 transition hover:border-orange-100 hover:bg-[#F9FAFB]"
+                          className="cursor-pointer rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:bg-white hover:shadow-lg hover:shadow-orange-100/40"
                         >
                           <div className="flex gap-3">
                             <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-100 text-gray-300">
@@ -2396,11 +2437,18 @@ if (orderType === 'delivery') {
                       Esvaziar carrinho
                     </button>
                   </SectionCard>
-            </>
+            </motion.div>
               )}
 
               {step === 'checkout' && (
-                <>
+                <motion.div
+                  key="checkout-step"
+                  className="space-y-4"
+                  initial={{ opacity: 0, x: 14, filter: 'blur(2px)' }}
+                  animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, x: -14, filter: 'blur(2px)' }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                >
                   <SectionCard title="Seus dados" icon={FiUser}>
                     <InputField
                       label="Nome"
@@ -2622,9 +2670,9 @@ if (orderType === 'delivery') {
     </p>
   )}
 
-  {deliveryNeighborhoodList && (
+  {deliveryNeighborhoodCount > 0 && (
     <p className="mt-2 text-xs font-bold leading-5 text-[#6b7280]">
-      Entregamos apenas em: {deliveryNeighborhoodList}.
+      Entregamos apenas nos bairros selecionaveis abaixo.
     </p>
   )}
 </div>
@@ -3098,7 +3146,8 @@ if (orderType === 'delivery') {
       loadingCep ||
       (orderType === 'delivery' && blockingCepError)
     }
-    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-base font-black text-white transition hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+    className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+    style={{ backgroundColor: themeColor }}
   >
     {isSubmitting ? (
       <>
@@ -3132,19 +3181,13 @@ if (orderType === 'delivery') {
     !customer.neighborhood && (
       <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs font-bold text-[#6b7280]">
         <FiMapPin size={14} />
-        Informe e busque o CEP para confirmar a entrega.
+        O pedido será enviado para a loja em tempo real.
       </p>
     )}
-
-  {!cepError && (
-    <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-[#6b7280]">
-      <FiClock />
-      O pedido será enviado para a loja em tempo real.
-    </div>
-  )}
 </div>
-                </>
+                </motion.div>
               )}
+              </AnimatePresence>
             </div>
 
             {step === 'cart' && (
@@ -3163,7 +3206,7 @@ if (orderType === 'delivery') {
                   type="button"
                   onClick={() => setStep('checkout')}
                   disabled={belowMinimum || !storeIsOpen}
-                  className="flex w-full items-center justify-between rounded-2xl px-5 py-4 text-base font-black text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-between rounded-2xl px-5 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   style={{
                     background: belowMinimum || !storeIsOpen ? '#9ca3af' : themeColor,
                   }}
@@ -3181,15 +3224,17 @@ if (orderType === 'delivery') {
           </>
         )}
 
-        <CartItemDetailsModal
-          item={selectedCartItem}
-          onClose={() => setSelectedCartItem(null)}
-          onQuantityChange={handleQuantity}
-          onRemove={handleRemoveCartItem}
-          onUpdateObservation={handleUpdateItemObservation}
-        />
       </motion.aside>
-    </div>
+      <CartItemDetailsModal
+        item={selectedCartItem}
+        onClose={() => setSelectedCartItem(null)}
+        onQuantityChange={handleQuantity}
+        onRemove={handleRemoveCartItem}
+        onUpdateObservation={handleUpdateItemObservation}
+      />
+    </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

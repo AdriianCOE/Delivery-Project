@@ -12,10 +12,12 @@ import {
   limit,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
+import { AnimatePresence, motion } from 'motion/react'
 
 import {
   FiAlertCircle,
   FiArrowUp,
+  FiCheck,
   FiChevronRight,
   FiClock,
   FiCopy,
@@ -1050,18 +1052,24 @@ function StoreQuickActions({
   onToggleSearch,
   onOpenProfile,
   onCopyLink,
+  copied,
+  themeColor,
 }) {
   return (
     <section className="mx-auto mt-3 max-w-[1120px] px-3 sm:mt-4 sm:px-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:gap-3">
+      <div className="rounded-[1.35rem] border border-white/80 bg-white/90 p-1.5 shadow-lg shadow-gray-200/60 ring-1 ring-gray-100/80 backdrop-blur-xl sm:rounded-[1.7rem]">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:gap-2">
         <button
           type="button"
           onClick={onToggleSearch}
-          className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[1.15rem] border px-3 text-sm font-black transition sm:min-h-[54px] sm:rounded-2xl ${
+          className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] px-3 text-sm font-black transition duration-200 active:scale-[0.98] sm:min-h-[54px] sm:rounded-[1.25rem] ${
             searchExpanded || searchTerm
-              ? 'border-orange-100 bg-orange-50 text-[#f97316]'
-              : 'border-gray-100 bg-white text-[#111827] shadow-sm hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]'
+              ? 'text-white shadow-lg shadow-orange-200/50'
+              : 'bg-[#f9fafb] text-[#111827] hover:bg-orange-50 hover:text-[#f97316]'
           }`}
+          style={{
+            backgroundColor: searchExpanded || searchTerm ? themeColor : undefined,
+          }}
         >
           <FiSearch />
           Buscar
@@ -1070,7 +1078,7 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onOpenProfile}
-          className="flex min-h-[46px] items-center justify-center gap-2 rounded-[1.15rem] border border-gray-100 bg-white px-3 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] sm:min-h-[54px] sm:rounded-2xl"
+          className="flex min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[54px] sm:rounded-[1.25rem]"
         >
           <FiUser />
           Meus Pedidos
@@ -1079,11 +1087,12 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onCopyLink}
-          className="hidden min-h-[54px] items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 text-sm font-black text-[#6b7280] shadow-sm transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] sm:flex"
+          className="hidden min-h-[54px] items-center justify-center gap-2 rounded-[1.25rem] bg-[#f9fafb] px-3 text-sm font-black text-[#6b7280] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:flex"
         >
-          <FiCopy />
-          Copiar link
+          {copied ? <FiCheck /> : <FiCopy />}
+          {copied ? 'Copiado!' : 'Copiar link'}
         </button>
+      </div>
       </div>
 
       <div
@@ -1094,7 +1103,7 @@ function StoreQuickActions({
         }`}
       >
         <div className="overflow-hidden">
-          <div className="relative rounded-[1.25rem] border border-orange-100 bg-white shadow-lg shadow-orange-100/40 sm:rounded-[1.45rem]">
+          <div className="relative rounded-[1.25rem] border border-orange-100 bg-white shadow-xl shadow-orange-100/50 ring-1 ring-white sm:rounded-[1.45rem]">
             <FiSearch
               className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280]"
               size={19}
@@ -1106,7 +1115,7 @@ function StoreQuickActions({
               placeholder="Buscar pizza, burger, coca..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="h-12 w-full bg-white py-3 pl-11 pr-12 text-sm font-semibold text-[#111827] outline-none placeholder:text-gray-400 sm:h-14 sm:pl-12"
+              className="h-12 w-full rounded-[1.25rem] bg-white py-3 pl-11 pr-12 text-sm font-semibold text-[#111827] outline-none placeholder:text-gray-400 focus:ring-4 focus:ring-orange-100 sm:h-14 sm:rounded-[1.45rem] sm:pl-12"
             />
 
             {searchTerm && (
@@ -1149,6 +1158,7 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
               <img
                 src={banner.imageUrl}
                 alt={banner.title}
+                loading="lazy"
                 className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
               />
             </div>
@@ -1579,6 +1589,21 @@ export default function StoreFrontPage() {
       ? `${window.location.origin}/${storeSlug}`
       : `/${storeSlug}`
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined
+
+    const targets = [document.documentElement, document.body]
+    targets.forEach((target) => {
+      target.classList.add('pratoby-scrollbar', 'pratoby-page-scrollbar')
+    })
+
+    return () => {
+      targets.forEach((target) => {
+        target.classList.remove('pratoby-scrollbar', 'pratoby-page-scrollbar')
+      })
+    }
+  }, [])
+
   const combinedUser = useMemo(() => {
     if (!user && !userData) return null
     return { ...user, ...userData }
@@ -1724,7 +1749,10 @@ export default function StoreFrontPage() {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
 
     event.preventDefault()
-    element.scrollLeft += event.deltaY
+    element.scrollBy({
+      left: event.deltaY * 1.1,
+      behavior: 'smooth',
+    })
   }, [])
 
   useEffect(() => {
@@ -2278,6 +2306,8 @@ return (
         onToggleSearch={() => setSearchExpanded((current) => !current)}
         onOpenProfile={() => setIsProfileOpen(true)}
         onCopyLink={handleCopyLink}
+        copied={copyMessage.toLowerCase().includes('copiado')}
+        themeColor={themeColor}
       />
 
       <StorePromoBanner
@@ -2295,28 +2325,28 @@ return (
       )}
 
       <section
-        className={`sticky z-30 mt-4 overflow-hidden border-y border-gray-100 bg-[#f9fafb]/95 px-0 py-2.5 backdrop-blur-xl ${
+        className={`sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
           isOwner ? 'top-[44px]' : 'top-0'
         }`}
       >
-        <div className="relative mx-auto max-w-[1120px] px-4">
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-7 bg-gradient-to-r from-[#f9fafb] to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-7 bg-gradient-to-l from-[#f9fafb] to-transparent" />
+        <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100/80 backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-white via-white/90 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-9 bg-gradient-to-l from-white via-white/90 to-transparent" />
 
           <div
             ref={categoryScrollRef}
             onWheel={handleCategoryWheel}
-            className="flex w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain scroll-smooth pb-1 pr-7 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             <button
               type="button"
               data-active-category={activeCategory === 'all' ? 'true' : undefined}
               onClick={() => handleScrollToCategory('all')}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition active:scale-[0.98] sm:px-5 ${
+              className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
                 activeCategory === 'all'
                   ? 'text-white shadow-lg shadow-orange-600/20'
-                  : 'bg-white text-[#6b7280] shadow-sm hover:text-[#111827]'
+                  : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
               }`}
               style={{
                 background: activeCategory === 'all' ? themeColor : undefined,
@@ -2342,10 +2372,10 @@ return (
                   type="button"
                   data-active-category={active ? 'true' : undefined}
                   onClick={() => handleScrollToCategory(category.id)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition active:scale-[0.98] sm:px-5 ${
+                  className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
                     active
                       ? 'text-white shadow-lg shadow-orange-600/20'
-                      : 'bg-white text-[#6b7280] shadow-sm hover:text-[#111827]'
+                      : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
                   }`}
                   style={{
                     background: active ? themeColor : undefined,
@@ -2370,14 +2400,14 @@ return (
         {loadingMenu ? (
           <div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((item) => (
-              <div key={item} className="h-48 animate-pulse rounded-[2rem] bg-white shadow-sm" />
+              <div key={item} className="h-52 animate-pulse rounded-[2rem] bg-white shadow-sm ring-1 ring-gray-100" />
             ))}
           </div>
         ) : (
           <>
             {featuredProducts.length > 0 && activeCategory === 'all' && !searchTerm && (
               <section id="category-destaques" className="mb-8 lg:mb-10">
-                <div className="mb-5 flex items-end justify-between gap-4">
+                <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                   <div>
                     <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#f97316]">
                       <FiStar />
@@ -2394,7 +2424,7 @@ return (
                   </div>
                 </div>
 
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid auto-rows-fr gap-4 md:grid-cols-2 lg:gap-5 xl:grid-cols-3">
                   {featuredProducts.map((product) => (
                     <div key={`featured-${product.id}`} className="relative">
                       <div
@@ -2432,10 +2462,10 @@ return (
 
             {productSections.length > 0 ? (
               productSections.map((section) => (
-                <section key={section.id} id={`category-${section.id}`} className="mb-8 lg:mb-10">
-                  <div className="mb-5 flex items-end justify-between gap-4">
+                <section key={section.id} id={`category-${section.id}`} className="scroll-mt-28 mb-8 lg:mb-10">
+                  <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                     <div>
-                      <h2 className="text-2xl font-black tracking-tight text-[#111827] sm:text-3xl">
+                      <h2 className="text-[1.35rem] font-black tracking-tight text-[#111827] sm:text-3xl">
                         {section.name}
                       </h2>
 
@@ -2453,7 +2483,7 @@ return (
                     </div>
                   </div>
 
-                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid auto-rows-fr gap-4 md:grid-cols-2 lg:gap-5 xl:grid-cols-3">
                     {section.products.map((product) => (
                       <div key={product.id} className="relative h-full">
                         <div
@@ -2509,12 +2539,19 @@ return (
 
 <StoreFooter store={store} todayHoursLabel={todayHoursLabel} />
 
-      {totalItemsCount > 0 && store?.isOpen && (
-        <button
+      <AnimatePresence>
+        {totalItemsCount > 0 && store?.isOpen && (
+        <motion.button
           type="button"
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-5 left-4 right-4 z-40 rounded-[1.7rem] p-4 text-white shadow-2xl transition hover:scale-[1.01] md:left-1/2 md:max-w-xl md:-translate-x-1/2"
+          className="fixed bottom-5 left-4 right-4 z-40 rounded-[1.7rem] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white shadow-2xl md:left-[calc(50%-18rem)] md:right-auto md:w-full md:max-w-xl"
           style={{ background: themeColor }}
+          initial={{ y: 28, opacity: 0, scale: 0.96 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 28, opacity: 0, scale: 0.96 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 28, mass: 0.8 }}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.985 }}
         >
           <div className="flex items-center justify-between gap-5">
             <div className="flex items-center gap-4">
@@ -2523,24 +2560,53 @@ return (
                   <FiShoppingCart size={25} />
                 </div>
 
-                <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#111827] shadow-lg">
+                <motion.span
+                  key={`cart-count-${totalItemsCount}`}
+                  className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#111827] shadow-lg"
+                  initial={{ scale: 0.75, y: 4 }}
+                  animate={{ scale: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+                >
                   {totalItemsCount}
-                </span>
+                </motion.span>
               </div>
 
               <div className="text-left">
-                <p className="text-lg font-black leading-none">Ver carrinho</p>
-                <p className="mt-1 text-sm font-bold text-white/80">Finalizar pedido</p>
+                <motion.p
+                  className="text-lg font-black leading-none"
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.04, duration: 0.18 }}
+                >
+                  Ver carrinho
+                </motion.p>
+                <motion.p
+                  className="mt-1 text-sm font-bold text-white/80"
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.08, duration: 0.18 }}
+                >
+                  Finalizar pedido
+                </motion.p>
               </div>
             </div>
 
             <div className="text-right">
               <p className="text-xs font-bold text-white/75">Total</p>
-              <p className="text-xl font-black tracking-tight">{formatMoney(cartTotal)}</p>
+              <motion.p
+                key={`cart-total-${cartTotal}`}
+                className="text-xl font-black tracking-tight"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16 }}
+              >
+                {formatMoney(cartTotal)}
+              </motion.p>
             </div>
           </div>
-        </button>
-      )}
+        </motion.button>
+        )}
+      </AnimatePresence>
 
       {store?.whatsapp && (
         <a

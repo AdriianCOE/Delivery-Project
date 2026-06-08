@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import {
+  FiAward,
   FiCheckCircle,
   FiClock,
   FiEdit2,
@@ -8,8 +9,8 @@ import {
   FiInfo,
   FiPlus,
   FiShoppingCart,
-  FiStar,
   FiTag,
+  FiTrendingUp,
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
@@ -342,14 +343,16 @@ function ProductCard({
     if (hasOptions) return 'Personalizar'
     return 'Adicionar'
   }, [unavailable, outOfStock, disabled, hasOptions, justAdded])
+  const compactBlockedCta = !canAdd && !isOwner
 
   const handleOpen = useCallback(() => {
     // Produto indisponível: não abre modal de compra, apenas informa.
     // Produto oculto/inativo/deletado: não deve estar aqui (filtrado antes).
+    if (disabled && !isOwner) return
     if (!shouldShow && !isOwner) return
     if ((unavailable || outOfStock) && !isOwner) return  // sem modal de compra se bloqueado
     onClick?.(product)
-  }, [shouldShow, unavailable, outOfStock, isOwner, onClick, product])
+  }, [disabled, shouldShow, unavailable, outOfStock, isOwner, onClick, product])
 
   const handleQuickEdit = useCallback(
     (event) => {
@@ -401,20 +404,21 @@ function ProductCard({
     <article
       onClick={handleOpen}
       className={`
-        group relative overflow-hidden rounded-[1.65rem] border bg-white/95 p-3 shadow-sm ring-1 ring-black/[0.02] sm:p-4
+        group relative overflow-hidden rounded-[1.8rem] border bg-white p-3.5 shadow-sm ring-1 ring-black/[0.02] sm:p-4
         transition-all duration-300 flex flex-col
-        h-full min-h-[176px] sm:min-h-[192px]
+        h-full min-h-[224px] sm:min-h-[244px] lg:h-[264px]
         ${
           canAdd
-            ? 'cursor-pointer border-gray-100 hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-xl hover:shadow-gray-200/70'
+            ? 'cursor-pointer border-gray-100 hover:-translate-y-1 hover:border-orange-100 hover:shadow-2xl hover:shadow-orange-100/40 active:scale-[0.995]'
             : (unavailable || outOfStock)
               ? 'cursor-default border-gray-100 opacity-75'
               : 'cursor-not-allowed border-gray-100 opacity-60 grayscale'
         }
+        ${justAdded ? 'border-emerald-200 shadow-emerald-100 ring-2 ring-emerald-100' : ''}
       `}
       style={{ '--theme-color': themeColor }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-gray-50/90 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-orange-50/60 via-white/50 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
 
       {/* 👈 2. h-full no wrapper interno para preencher o espaço do article */}
       <div className="relative flex h-full gap-3 sm:gap-4">
@@ -422,23 +426,24 @@ function ProductCard({
           
           {/* BLOCO DO TOPO (Tags, Título e Descrição) */}
           <div>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex min-h-[2rem] max-h-[4.75rem] flex-wrap items-center gap-1.5 overflow-hidden">
               {product?.isPopular && canAdd && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 ring-1 ring-amber-100">
-                  <FiStar size={12} className="fill-amber-500" />
-                  Popular
+                  <FiTrendingUp size={12} />
+                  Mais pedido
                 </span>
               )}
 
               {product?.isFeatured && canAdd && (
                 <span
-                  className="rounded-full px-2.5 py-1 text-[11px] font-black ring-1"
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1"
                   style={{
                     color: themeColor,
                     backgroundColor: `${themeColor}12`,
                     borderColor: `${themeColor}20`,
                   }}
                 >
+                  <FiAward size={12} />
                   Destaque
                 </span>
               )}
@@ -502,7 +507,7 @@ function ProductCard({
               )}
             </div>
 
-            <h3 className="mt-2 line-clamp-2 text-base font-black leading-tight text-[#111827]">
+            <h3 className="mt-2 line-clamp-2 text-[1.02rem] font-black leading-tight text-[#111827] sm:text-lg">
               {productName}
             </h3>
 
@@ -536,8 +541,8 @@ function ProductCard({
           </div>
 
           {/* 👈 3. BLOCO INFERIOR (Preço e Botão). O mt-auto joga eles para o fim do card */}
-          <div className="mt-auto pt-4 flex items-end justify-between gap-4">
-            <div className="min-w-0 pr-2">
+          <div className="mt-auto flex items-end justify-between gap-3 pt-4 sm:gap-4">
+            <div className="min-w-[88px] pr-1 sm:min-w-[102px]">
               {hasDiscount && (
                 <p className="text-xs font-bold text-gray-400 line-through">
                   {formatMoney(oldPrice)}
@@ -545,12 +550,12 @@ function ProductCard({
               )}
 
               {displayPrice.from && (
-                <p className="text-[11px] font-black uppercase tracking-wide text-[#f97316]">
+                <p className="whitespace-nowrap text-[10px] font-black uppercase leading-none tracking-normal text-[#f97316] sm:text-[11px]">
                   A partir de
                 </p>
               )}
 
-              <p className="whitespace-nowrap text-xl font-black tracking-tight text-[#111827] sm:text-2xl">
+              <p className="mt-1 whitespace-nowrap text-[1.35rem] font-black leading-none tracking-tight text-[#111827] sm:text-2xl">
                 {formatMoney(displayPrice.value)}
               </p>
             </div>
@@ -572,12 +577,21 @@ function ProductCard({
                   type="button"
                   onClick={handleAdd}
                   disabled={!canAdd}
-                  className="flex h-11 min-w-[116px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black text-white shadow-lg shadow-gray-200 transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none sm:h-12 sm:min-w-[132px] sm:px-5"
-                  style={{ backgroundColor: canAdd ? themeColor : undefined }}
+                  className={`flex items-center justify-center gap-2 font-black transition active:scale-95 disabled:cursor-not-allowed ${
+                    canAdd
+                      ? 'h-11 min-w-[112px] rounded-[1rem] px-4 text-sm text-white shadow-lg hover:-translate-y-0.5 sm:h-12 sm:min-w-[132px] sm:rounded-[1.15rem] sm:px-5'
+                      : 'h-9 min-w-0 rounded-xl bg-gray-100 px-3 text-[11px] text-gray-600 shadow-none sm:h-10 sm:px-3'
+                  }`}
+                  style={{
+                    backgroundColor: canAdd ? (justAdded ? '#059669' : themeColor) : undefined,
+                    boxShadow: canAdd ? `0 16px 32px ${themeColor}2b` : undefined,
+                  }}
                   aria-label={`${cardStatusLabel} ${productName}`}
                 >
-                  {justAdded ? <FiCheckCircle size={15} /> : hasOptions ? <FiShoppingCart size={15} /> : <FiPlus size={15} />}
-                  <span>{cardStatusLabel}</span>
+                  {!compactBlockedCta && (
+                    justAdded ? <FiCheckCircle size={15} /> : hasOptions ? <FiShoppingCart size={15} /> : <FiPlus size={15} />
+                  )}
+                  <span className="whitespace-nowrap">{cardStatusLabel}</span>
                 </button>
               )}
             </div>
@@ -587,8 +601,8 @@ function ProductCard({
         {/* CONTAINER DA IMAGEM */}
         <div
           className={`
-            relative shrink-0 overflow-hidden rounded-[1.35rem] bg-gray-100 ring-1 ring-black/[0.03]
-            ${compact ? 'h-28 w-28' : 'h-32 w-32 sm:h-36 sm:w-36'}
+            relative shrink-0 overflow-hidden rounded-[1.45rem] bg-gray-100 shadow-inner ring-1 ring-black/[0.03]
+            ${compact ? 'h-28 w-28' : 'h-32 w-32 sm:h-40 sm:w-40'}
           `}
         >
           {imageUrl && !imgLoaded && !imgError && (
@@ -604,7 +618,7 @@ function ProductCard({
               onError={() => setImgError(true)}
               className={`
                 h-full w-full object-cover transition duration-500
-                ${imgLoaded ? 'scale-100 opacity-100 group-hover:scale-105' : 'scale-95 opacity-0'}
+                ${imgLoaded ? 'scale-100 opacity-100 group-hover:scale-110' : 'scale-95 opacity-0'}
               `}
             />
           ) : (
@@ -631,6 +645,13 @@ function ProductCard({
           {hasDiscount && canAdd && (
             <div className="absolute bottom-2 left-2 rounded-xl bg-red-500 px-2 py-1 text-[11px] font-black text-white shadow-lg">
               -{discountPercent}%
+            </div>
+          )}
+
+          {justAdded && (
+            <div className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1 rounded-xl bg-emerald-500 px-2 py-1.5 text-[11px] font-black text-white shadow-lg">
+              <FiCheckCircle size={12} />
+              No carrinho
             </div>
           )}
         </div>

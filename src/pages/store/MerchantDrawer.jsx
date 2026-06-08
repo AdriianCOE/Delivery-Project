@@ -3,24 +3,25 @@ import { Link } from 'react-router-dom'
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import {
+  FiActivity,
+  FiAlertTriangle,
   FiBox,
+  FiCalendar,
+  FiCheck,
   FiCopy,
   FiEdit2,
-  FiEye,
   FiEyeOff,
+  FiExternalLink,
   FiLayout,
+  FiPercent,
+  FiSearch,
   FiSettings,
+  FiShoppingBag,
   FiStar,
   FiTag,
-  FiTruck,
+  FiTrendingUp,
   FiX,
-  FiSearch,
-  FiCheck,
-  FiShoppingBag,
-  FiActivity,
-  FiExternalLink,
-  FiTrash2,
-  FiAlertTriangle
+  FiTrash2
 } from 'react-icons/fi'
 
 import { db, functions } from '../../services/firebase'
@@ -35,7 +36,6 @@ import { getCallableErrorMessage } from '../../utils/callableError'
 import {
   isProductDeleted,
   isProductHidden,
-  isProductInactive,
   isProductUnavailable,
   hasOutOfStock,
 } from '../../utils/productStatus'
@@ -79,14 +79,92 @@ function normalizeString(str) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+function formatLeadTime(minutes) {
+  const value = Number(minutes || 0)
+  if (!Number.isFinite(value) || value <= 0) return ''
+  if (value >= 1440) {
+    const days = Math.round(value / 1440)
+    return `${days} dia${days > 1 ? 's' : ''}`
+  }
+  if (value >= 60) {
+    const hours = Math.round(value / 60)
+    return `${hours} hora${hours > 1 ? 's' : ''}`
+  }
+  return `${value} min`
+}
+
+function getProductSchedulingBadges(product) {
+  const scheduling = product?.scheduling || {}
+  const badges = []
+
+  if (scheduling.mode === 'scheduled_only') {
+    badges.push({ id: 'scheduled-only', label: 'Sob encomenda', tone: 'amber' })
+  } else if (scheduling.mode === 'asap_and_scheduled') {
+    badges.push({ id: 'scheduled-enabled', label: 'Agenda', tone: 'green' })
+  } else if (scheduling.mode === 'asap_only') {
+    badges.push({ id: 'asap-only', label: 'Só imediato', tone: 'gray' })
+  }
+
+  if (scheduling.minLeadMinutes) {
+    const lead = formatLeadTime(scheduling.minLeadMinutes)
+    if (lead) badges.push({ id: 'lead-time', label: lead, tone: 'gray' })
+  }
+
+  if (scheduling.prepaymentPolicy === 'pix_required') {
+    badges.push({ id: 'pix-required', label: 'Pix antecipado', tone: 'orange' })
+  }
+
+  return badges
+}
+
+function getProductFlags(product) {
+  return [
+    product?.isFeatured && { id: 'featured', label: 'Destaque', tone: 'orange' },
+    product?.isPopular && { id: 'popular', label: 'Mais pedido', tone: 'green' },
+    product?.isPromotion && { id: 'promotion', label: 'Promoção', tone: 'red' },
+    product?.acceptsCoupons === false && { id: 'no-coupons', label: 'Sem cupom', tone: 'gray' },
+  ].filter(Boolean)
+}
+
+function getBadgeClass(tone) {
+  const classes = {
+    amber: 'bg-amber-50 text-amber-700 ring-amber-100',
+    gray: 'bg-gray-100 text-gray-600 ring-gray-200',
+    green: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    orange: 'bg-orange-50 text-[#f97316] ring-orange-100',
+    red: 'bg-red-50 text-red-600 ring-red-100',
+  }
+  return classes[tone] || classes.gray
+}
+
+const EMPTY_PRODUCT_QUICK_FORM = {
+  name: '',
+  price: '0,00',
+  categoryId: '',
+  isAvailable: true,
+  isVisible: true,
+  isFeatured: false,
+  isPopular: false,
+  isPromotion: false,
+  acceptsCoupons: true,
+}
+
+const EMPTY_CATEGORY_QUICK_FORM = {
+  name: '',
+  description: '',
+  isVisible: true,
+  isActive: true,
+}
+
 // --- Premium Custom Toggle Switch component ---
 function PremiumToggle({ checked, onChange, disabled }) {
   return (
     <button
       type="button"
       disabled={disabled}
+      aria-pressed={checked}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-50 ${
         checked ? 'bg-[#f97316]' : 'bg-gray-200'
       }`}
     >
@@ -96,6 +174,72 @@ function PremiumToggle({ checked, onChange, disabled }) {
         }`}
       />
     </button>
+  )
+}
+
+function ProductFlagToggles({ value, onChange, disabled = false }) {
+  const items = [
+    {
+      key: 'isFeatured',
+      icon: FiStar,
+      label: 'Destaque',
+      description: 'Aparece com mais força nas áreas de destaque.',
+    },
+    {
+      key: 'isPopular',
+      icon: FiTrendingUp,
+      label: 'Mais pedido',
+      description: 'Mostra o selo de popularidade na vitrine pública.',
+    },
+    {
+      key: 'isPromotion',
+      icon: FiTag,
+      label: 'Promoção',
+      description: 'Reforça ofertas e campanhas no cardápio.',
+    },
+    {
+      key: 'acceptsCoupons',
+      icon: FiPercent,
+      label: 'Aceita cupons',
+      description: 'Permite aplicar cupons de desconto neste item.',
+    },
+  ]
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {items.map((item) => {
+        const Icon = item.icon
+        const checked = item.key === 'acceptsCoupons'
+          ? value?.acceptsCoupons !== false
+          : Boolean(value?.[item.key])
+
+        return (
+          <label
+            key={item.key}
+            className={`flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition ${
+              checked
+                ? 'border-orange-100 bg-orange-50/60'
+                : 'border-gray-100 bg-[#f9fafb] hover:bg-white'
+            }`}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${checked ? 'bg-white text-[#f97316]' : 'bg-white text-gray-400'}`}>
+                <Icon size={15} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-[#111827]">{item.label}</p>
+                <p className="mt-0.5 text-[10px] leading-normal text-[#6b7280]">{item.description}</p>
+              </div>
+            </div>
+            <PremiumToggle
+              checked={checked}
+              disabled={disabled}
+              onChange={(val) => onChange(item.key, val)}
+            />
+          </label>
+        )
+      })}
+    </div>
   )
 }
 
@@ -115,39 +259,17 @@ export default function MerchantDrawer({
   // Quick Search & Edit states
   const [productSearch, setProductSearch] = useState('')
   const [quickEditProductState, setQuickEditProductState] = useState(null)
-  const [productForm, setProductForm] = useState({
-    name: '',
-    price: '0,00',
-    categoryId: '',
-    isAvailable: true,
-    isVisible: true,
-  })
+  const [productForm, setProductForm] = useState(EMPTY_PRODUCT_QUICK_FORM)
 
   const [editingCategoryId, setEditingCategoryId] = useState(null)
-  const [categoryForm, setCategoryForm] = useState({
-    name: '',
-    description: '',
-    isVisible: true,
-    isActive: true,
-  })
+  const [categoryForm, setCategoryForm] = useState(EMPTY_CATEGORY_QUICK_FORM)
 
   // Quick Creation states
   const [showCreateProductForm, setShowCreateProductForm] = useState(false)
-  const [newProductForm, setNewProductForm] = useState({
-    name: '',
-    price: '0,00',
-    categoryId: '',
-    isAvailable: true,
-    isVisible: true,
-  })
+  const [newProductForm, setNewProductForm] = useState(EMPTY_PRODUCT_QUICK_FORM)
 
   const [showCreateCategoryForm, setShowCreateCategoryForm] = useState(false)
-  const [newCategoryForm, setNewCategoryForm] = useState({
-    name: '',
-    description: '',
-    isVisible: true,
-    isActive: true,
-  })
+  const [newCategoryForm, setNewCategoryForm] = useState(EMPTY_CATEGORY_QUICK_FORM)
 
   const storeDocId = getStoreDocId(store)
   const storeKeys = useMemo(() => getStoreKeys(store), [store])
@@ -212,11 +334,16 @@ export default function MerchantDrawer({
     setShowCreateProductForm(false)
     setShowCreateCategoryForm(false)
     setProductForm({
+      ...EMPTY_PRODUCT_QUICK_FORM,
       name: product.name || '',
       price: moneyToInput(product.price, product.priceCents),
       categoryId: product.categoryId || '',
       isAvailable: product.isAvailable !== false,
       isVisible: product.isVisible !== false,
+      isFeatured: Boolean(product.isFeatured),
+      isPopular: Boolean(product.isPopular),
+      isPromotion: Boolean(product.isPromotion),
+      acceptsCoupons: product.acceptsCoupons !== false,
     })
   }, [])
 
@@ -233,12 +360,16 @@ export default function MerchantDrawer({
     const outOfStock = activeProducts.filter((p) => hasOutOfStock(p)).length
     const hidden = activeProducts.filter((p) => isProductHidden(p)).length
     const totalCategories = sortedCategories.length
+    const scheduledProducts = activeProducts.filter((p) => p?.scheduling?.mode === 'scheduled_only').length
+    const highlighted = activeProducts.filter((p) => p.isFeatured || p.isPopular || p.isPromotion).length
 
     return {
       totalProducts,
       outOfStock,
       hidden,
       totalCategories,
+      scheduledProducts,
+      highlighted,
     }
   }, [activeProducts, sortedCategories])
 
@@ -268,10 +399,19 @@ export default function MerchantDrawer({
     if (!slug) return
     const url = typeof window !== 'undefined' ? `${window.location.origin}/${slug}` : `/${slug}`
     try {
-      await navigator.clipboard.writeText(url)
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+      } else {
+        const input = document.createElement('input')
+        input.value = url
+        document.body.appendChild(input)
+        input.select()
+        document.execCommand('copy')
+        document.body.removeChild(input)
+      }
       showToast('Link da loja copiado!')
     } catch {
-      showToast('Erro ao copiar link.')
+      showToast('Não foi possível copiar o link automaticamente.')
     }
   }
 
@@ -325,6 +465,10 @@ export default function MerchantDrawer({
         categoryName: category?.name || '',
         isAvailable: productForm.isAvailable,
         isVisible: productForm.isVisible,
+        isFeatured: Boolean(productForm.isFeatured),
+        isPopular: Boolean(productForm.isPopular),
+        isPromotion: Boolean(productForm.isPromotion),
+        acceptsCoupons: productForm.acceptsCoupons !== false,
         updatedAt: serverTimestamp(),
       })
       showToast('Produto atualizado com sucesso!')
@@ -372,15 +516,32 @@ export default function MerchantDrawer({
         oldPriceCents: null,
         isAvailable: newProductForm.isAvailable,
         isVisible: newProductForm.isVisible,
+        isFeatured: Boolean(newProductForm.isFeatured),
+        isPopular: Boolean(newProductForm.isPopular),
+        isPromotion: Boolean(newProductForm.isPromotion),
         isActive: true,
         isDeleted: false,
-        acceptsCoupons: true,
+        acceptsCoupons: newProductForm.acceptsCoupons !== false,
+        scheduling: {
+          mode: 'store_default',
+          minLeadMinutes: null,
+          maxDaysAhead: null,
+          slotIntervalMinutes: null,
+          fulfillmentTypes: null,
+          weeklyWindows: null,
+          blockedDates: [],
+          prepaymentPolicy: 'store_default',
+        },
         stock: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
 
       showToast('Produto criado com sucesso!')
+      setNewProductForm({
+        ...EMPTY_PRODUCT_QUICK_FORM,
+        categoryId: sortedCategories[0]?.id || '',
+      })
       setShowCreateProductForm(false)
     } catch (error) {
       console.error(error)
@@ -436,6 +597,7 @@ export default function MerchantDrawer({
     setShowCreateProductForm(false)
     setShowCreateCategoryForm(false)
     setCategoryForm({
+      ...EMPTY_CATEGORY_QUICK_FORM,
       name: category.name || '',
       description: category.description || '',
       isVisible: category.isVisible !== false,
@@ -517,6 +679,7 @@ export default function MerchantDrawer({
       })
 
       showToast('Categoria criada com sucesso!')
+      setNewCategoryForm(EMPTY_CATEGORY_QUICK_FORM)
       setShowCreateCategoryForm(false)
     } catch (error) {
       console.error(error)
@@ -579,10 +742,10 @@ export default function MerchantDrawer({
               </div>
               <div>
                 <h2 className="text-lg font-black tracking-tight text-[#111827]">
-                  Painel de Controle Rápido
+                  Atalhos da loja
                 </h2>
                 <p className="text-xs text-[#6b7280]">
-                  Gerenciamento instantâneo da operação
+                  Ajustes rápidos de vitrine e operação
                 </p>
               </div>
             </div>
@@ -706,10 +869,32 @@ export default function MerchantDrawer({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <FiCalendar size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#6b7280] font-medium">Sob encomenda</p>
+                    <p className="text-lg font-black text-[#111827]">{metrics.scheduledProducts}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <FiStar size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#6b7280] font-medium">Vitrine</p>
+                    <p className="text-lg font-black text-[#111827]">{metrics.highlighted}</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Dashboard Shortcuts Panel */}
               <div className="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm space-y-4">
                 <div>
-                  <h3 className="text-sm font-black text-[#111827]">Atalhos Administrativos</h3>
+                  <h3 className="text-sm font-black text-[#111827]">Atalhos do painel</h3>
                   <p className="text-xs text-[#6b7280]">Acesse o painel completo para edições profundas.</p>
                 </div>
 
@@ -864,11 +1049,8 @@ export default function MerchantDrawer({
                     type="button"
                     onClick={() => {
                       setNewProductForm({
-                        name: '',
-                        price: '0,00',
+                        ...EMPTY_PRODUCT_QUICK_FORM,
                         categoryId: sortedCategories[0]?.id || '',
-                        isAvailable: true,
-                        isVisible: true,
                       })
                       setShowCreateProductForm(true)
                     }}
@@ -908,22 +1090,30 @@ export default function MerchantDrawer({
                           </div>
                           
                           {/* Badges */}
-                          <div className="flex flex-wrap gap-1 mt-1">
+                          <div className="mt-1 flex flex-wrap gap-1">
                             {hidden && (
-                              <span className="rounded-lg bg-gray-100 px-1.5 py-0.5 text-[9px] font-black text-gray-500 uppercase">
+                              <span className="rounded-lg bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase text-gray-500 ring-1 ring-gray-200">
                                 Oculto
                               </span>
                             )}
                             {unavailable && (
-                              <span className="rounded-lg bg-red-50 px-1.5 py-0.5 text-[9px] font-black text-red-500 uppercase">
+                              <span className="rounded-lg bg-red-50 px-1.5 py-0.5 text-[9px] font-black uppercase text-red-500 ring-1 ring-red-100">
                                 Indisponível
                               </span>
                             )}
                             {outOfStock && (
-                              <span className="rounded-lg bg-amber-50 px-1.5 py-0.5 text-[9px] font-black text-amber-500 uppercase">
+                              <span className="rounded-lg bg-amber-50 px-1.5 py-0.5 text-[9px] font-black uppercase text-amber-600 ring-1 ring-amber-100">
                                 Esgotado
                               </span>
                             )}
+                            {[...getProductFlags(p), ...getProductSchedulingBadges(p)].slice(0, 4).map((badge) => (
+                              <span
+                                key={badge.id}
+                                className={`rounded-lg px-1.5 py-0.5 text-[9px] font-black uppercase ring-1 ${getBadgeClass(badge.tone)}`}
+                              >
+                                {badge.label}
+                              </span>
+                            ))}
                           </div>
                         </div>
 
@@ -988,7 +1178,7 @@ export default function MerchantDrawer({
               <div className="flex items-center justify-between border-b border-gray-50 pb-3">
                 <div>
                   <h3 className="text-sm font-black text-[#111827]">Criar Produto (Rápido)</h3>
-                  <p className="text-xs text-[#6b7280]">Adicione um novo produto instantâneo ao cardápio.</p>
+                  <p className="text-xs text-[#6b7280]">Criação simples. Para opcionais, imagem e encomenda, use o editor completo.</p>
                 </div>
                 <button
                   type="button"
@@ -1099,6 +1289,15 @@ export default function MerchantDrawer({
                   </label>
                 </div>
 
+                <div className="space-y-2">
+                  <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">Vitrine e descontos</p>
+                  <ProductFlagToggles
+                    value={newProductForm}
+                    disabled={loading}
+                    onChange={(key, val) => setNewProductForm((p) => ({ ...p, [key]: val }))}
+                  />
+                </div>
+
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
@@ -1139,6 +1338,22 @@ export default function MerchantDrawer({
               </div>
 
               <div className="space-y-4">
+                {quickEditProductState?.scheduling?.mode && quickEditProductState.scheduling.mode !== 'store_default' && (
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-amber-600">
+                        <FiCalendar size={16} />
+                      </span>
+                      <div>
+                        <p className="text-xs font-black text-amber-900">Produto com regra de encomenda</p>
+                        <p className="mt-1 text-[11px] font-semibold leading-5 text-amber-800">
+                          Este item tem regras de agendamento/Pix. Use o editor completo para alterar antecedência, horários ou pagamento.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
                     Nome do Produto *
@@ -1207,6 +1422,15 @@ export default function MerchantDrawer({
                       onChange={(val) => setProductForm((p) => ({ ...p, isVisible: val }))}
                     />
                   </label>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">Vitrine e descontos</p>
+                  <ProductFlagToggles
+                    value={productForm}
+                    disabled={loading}
+                    onChange={(key, val) => setProductForm((p) => ({ ...p, [key]: val }))}
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-3">

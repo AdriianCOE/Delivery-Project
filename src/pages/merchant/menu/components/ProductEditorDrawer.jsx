@@ -29,6 +29,7 @@ import {
   FiStar,
   FiTag,
   FiTrash2,
+  FiTrendingUp,
   FiTruck,
   FiX,
 } from 'react-icons/fi'
@@ -95,10 +96,16 @@ const statusItems = [
     desc: 'Quando desligado, fica oculto para os clientes da loja pública.',
   },
   {
-    key: 'isFeatured',
-    icon: FiStar,
-    label: 'Destaque',
-    desc: 'Aparece com mais força nas áreas de destaque da loja.',
+  key: 'isFeatured',
+  icon: FiStar,
+  label: 'Destaque',
+  desc: 'Aparece com mais força nas áreas de destaque da loja.',
+  },
+  {
+    key: 'isPopular',
+    icon: FiTrendingUp,
+    label: 'Mais pedido',
+    desc: 'Mostra o selo de popularidade na vitrine pública do cardápio.',
   },
   {
     key: 'isPromotion',
@@ -481,6 +488,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         isAvailable: editingProduct.isAvailable !== false,
         isVisible: editingProduct.isVisible !== false,
         isFeatured: Boolean(editingProduct.isFeatured),
+        isPopular: Boolean(editingProduct.isPopular),
         isPromotion: Boolean(editingProduct.isPromotion),
         acceptsCoupons: editingProduct.acceptsCoupons !== undefined
           ? Boolean(editingProduct.acceptsCoupons)
@@ -601,6 +609,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         isAvailable: Boolean(form.isAvailable),
         isVisible: Boolean(form.isVisible),
         isFeatured: Boolean(form.isFeatured),
+        isPopular: Boolean(form.isPopular),
         isPromotion: Boolean(form.isPromotion),
         acceptsCoupons: Boolean(form.acceptsCoupons),
         order: Number(form.order) || 0,

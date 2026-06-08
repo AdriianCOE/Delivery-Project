@@ -483,7 +483,10 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                   className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-zinc-800"
                 >
               <div className="min-w-0">
-                <h3 className="text-sm font-black text-gray-900 dark:text-zinc-100">
+                <h3 className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-zinc-100">
+                  <span className="grid h-7 w-7 place-items-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300">
+                    <FiBell size={15} />
+                  </span>
                   Notificações
                 </h3>
                 <p className="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
