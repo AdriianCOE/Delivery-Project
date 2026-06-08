@@ -19,24 +19,43 @@ function timestampToDate(value) {
 }
 
 export function isScheduledOrder(order) {
-  return String(order?.orderTiming || '').toLowerCase() === 'scheduled'
+  return String(order?.orderTiming || '').toLowerCase() === 'scheduled' ||
+    Boolean(
+      order?.scheduledFor ||
+      order?.scheduledAt ||
+      order?.scheduledWindowStart ||
+      order?.scheduledDateKey ||
+      order?.scheduledDate ||
+      order?.scheduledTime ||
+      order?.schedule?.scheduledFor ||
+      order?.schedulingSnapshot?.scheduledFor
+    )
+}
+
+function dateKeyAndTimeToDate(dateKey, timeLabel) {
+  const dateText = String(dateKey || '').trim()
+  const timeText = String(timeLabel || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText) || !/^\d{2}:\d{2}$/.test(timeText)) return null
+
+  const date = new Date(`${dateText}T${timeText}:00-03:00`)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 export function getScheduledDate(order) {
-  return timestampToDate(
+  const directDate = timestampToDate(
     order?.scheduledFor ||
     order?.scheduledAt ||
     order?.scheduledWindowStart ||
     order?.schedule?.scheduledFor ||
     order?.schedulingSnapshot?.scheduledFor
   )
-}
 
-const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
+  if (directDate) return directDate
 
-function normalizeSlotInterval(value, fallback = null) {
-  const parsed = Number(value)
-  return ALLOWED_SLOT_INTERVALS.has(parsed) ? parsed : fallback
+  return dateKeyAndTimeToDate(
+    order?.scheduledDateKey || order?.scheduledDate,
+    order?.scheduledTimeLabel || order?.scheduledTime
+  )
 }
 
 export function formatScheduledDate(order) {
@@ -179,7 +198,7 @@ export function formatScheduledOperationalLabel(order, options = {}) {
   }
   if (state === 'scheduled_due_soon') return 'Preparar em breve'
   if (state === 'scheduled_late') return 'Horário passou'
-  if (state === 'completed') return 'Concluído'
+  if (state === 'completed') return ''
   if (state === 'canceled') return 'Cancelado'
   return 'Agora'
 }
@@ -189,7 +208,7 @@ export function formatScheduledBadge(order, now = new Date()) {
   const state = getScheduledOperationalState(order, { now })
   if (state === 'scheduled_due_soon') return 'Preparar em breve'
   if (state === 'scheduled_late') return 'Horário passou'
-  if (state === 'completed') return 'Concluído'
+  if (state === 'completed') return ''
   if (state === 'canceled') return 'Cancelado'
   return 'Agendado'
 }

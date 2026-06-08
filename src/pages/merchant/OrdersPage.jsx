@@ -207,6 +207,8 @@ const FILTER_BUTTON_MOTION = {
   transition: { type: 'spring', stiffness: 420, damping: 28 },
 }
 
+const FINAL_STATUSES = ['entregue', 'cancelado', 'concluido', 'finalizado']
+
 const FILTER_DROPDOWN_VARIANTS = {
   hidden: {
     opacity: 0,
@@ -430,7 +432,7 @@ function isOrderInTimingFilter(order, filter, now) {
 
   const scheduled = isScheduledOrder(order)
   if (filter === 'scheduled') {
-    return scheduled && !['entregue', 'cancelado'].includes(normalizeStatus(order.status))
+    return scheduled
   }
   if (!scheduled) return true
 
@@ -1252,6 +1254,9 @@ function buildWhatsAppMessage(order, store) {
   const total = formatMoney(getOrderTotal(order))
   const scheduled = isScheduledOrder(order)
   const scheduledLabel = scheduled ? formatScheduledDate(order) : ''
+  const scheduledWhen = scheduledLabel
+    ? scheduledLabel.replace(/^Agendado para\s*/i, '')
+    : 'o horário combinado'
 
   const contextLine = [
     `Pedido: *${orderCode}*`,
@@ -1261,6 +1266,51 @@ function buildWhatsAppMessage(order, store) {
   ]
     .filter(Boolean)
     .join('\n')
+
+  if (scheduled && status === 'confirmado') {
+    return [
+      `Olá, ${customerName}. Seu pedido ${orderCode} está agendado para ${scheduledWhen}.`,
+      'Qualquer mudança, avisaremos por aqui.',
+      trackingLink ? `\nAcompanhe por aqui:\n${trackingLink}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
+  if (scheduled && status === 'preparando') {
+    return [
+      `Olá, ${customerName}. Estamos preparando seu pedido agendado ${orderCode}.`,
+      trackingLink ? `\nAcompanhe por aqui:\n${trackingLink}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
+  if (scheduled && status === 'pronto' && isPickup) {
+    return [
+      `Olá, ${customerName}. Seu pedido agendado ${orderCode} está pronto para retirada.`,
+      trackingLink ? `\nAcompanhe por aqui:\n${trackingLink}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
+  if (scheduled && status === 'em_rota') {
+    return [
+      `Olá, ${customerName}. Seu pedido agendado ${orderCode} saiu para entrega.`,
+      trackingLink ? `\nAcompanhe por aqui:\n${trackingLink}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
 
   if (scheduled && status === 'confirmado') {
     return [
@@ -1358,16 +1408,17 @@ function buildCustomerThanksMessage(order, store) {
   const storeName = store?.name || order?.storeName || 'nossa loja'
   const orderCode = getOrderDisplayNumber(order)
 
-  return [
-    `Olá, *${customerName}*!`,
-    '',
-    `Passando só para agradecer pelo pedido *${orderCode}*.`,
-    '',
-    'Ficamos felizes em te atender e esperamos que tenha chegado tudo certinho. ðŸ˜Š',
-    '',
-    `- ${storeName}`,
-  ].join('\n')
-}
+    return [
+      `Olá, *${customerName}*! 😊`,
+      '',
+      `Passando para agradecer pela confiança e pelo pedido *${orderCode}*.`,
+      '',
+      'Ficamos muito felizes em atender você! Esperamos que tenha gostado e que tudo tenha chegado certinho.',
+      '',
+      'Com carinho,',
+      `*${storeName}*`,
+    ].join('\n')
+  }
 
 function printComanda(order, store) {
   if (!order) return
@@ -1391,6 +1442,27 @@ function printComanda(order, store) {
   const date = formatDate(order)
   const storeName = store?.name || 'PratoBy'
   const typeLabel = getOrderTypeLabel(order)
+  const scheduled = isScheduledOrder(order)
+  const scheduledLabel = scheduled ? formatScheduledDate(order).replace(/^Agendado para\s*/i, '') : ''
+  const scheduledOperationalState = scheduled ? getScheduledOperationalState(order, { now: Date.now() }) : 'asap'
+  const normalizedStatus = normalizeStatus(order.status)
+  const scheduledState = scheduled
+    ? normalizedStatus === 'cancelado' || scheduledOperationalState === 'canceled'
+      ? 'Pedido cancelado no historico'
+      : normalizedStatus === 'entregue' || scheduledOperationalState === 'completed'
+        ? 'Pedido finalizado no historico'
+        : normalizedStatus === 'preparando' || scheduledOperationalState === 'scheduled_due_soon'
+          ? 'Preparar agora'
+          : normalizedStatus === 'pronto'
+            ? 'Pedido pronto'
+            : scheduledOperationalState === 'scheduled_late'
+              ? ''
+              : scheduledOperationalState === 'scheduled_future'
+                ? ''
+                : ''
+    : ''
+  const requiresScheduledPix = order.paymentPolicy === 'pix_required' ||
+    order.schedulingSnapshot?.prepaymentPolicy === 'pix_required'
 
   const itemRows = items
     .map((item, index) => {
@@ -1466,6 +1538,17 @@ function printComanda(order, store) {
       </div>
     `
 
+  const scheduledHtml = scheduled
+    ? `
+      <section class="schedule-box">
+        <div class="schedule-title">PEDIDO AGENDADO</div>
+        <div class="schedule-time">${escapeHtml(scheduledLabel || order.scheduledTimeLabel || 'Horario nao informado')}</div>
+        ${scheduledState ? `<div class="schedule-state">${escapeHtml(scheduledState)}</div>` : ''}
+        ${requiresScheduledPix ? '<div class="schedule-pix">PIX ANTECIPADO</div>' : ''}
+      </section>
+    `
+    : ''
+
   const html = `
     <!doctype html>
     <html lang="pt-BR">
@@ -1503,7 +1586,7 @@ function printComanda(order, store) {
           .receipt {
             width: 72mm;
             margin: 0 auto;
-            padding: 5mm 2mm 4mm;
+            padding: 4mm 2mm 4mm;
           }
 
           .center {
@@ -1534,11 +1617,11 @@ function printComanda(order, store) {
 
           .order-number {
             border: 2px solid #000;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 900;
             line-height: 1;
             margin: 8px 0;
-            padding: 6px 4px 5px;
+            padding: 7px 4px 6px;
             text-align: center;
           }
 
@@ -1575,6 +1658,34 @@ function printComanda(order, store) {
             border: 1px solid #000;
             margin-top: 6px;
             padding: 5px;
+          }
+
+          .schedule-box {
+            border: 2px solid #000;
+            margin: 7px 0;
+            padding: 6px;
+            text-align: center;
+          }
+
+          .schedule-title {
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: .04em;
+          }
+
+          .schedule-time {
+            font-size: 15px;
+            font-weight: 900;
+            margin-top: 3px;
+            text-transform: uppercase;
+          }
+
+          .schedule-state,
+          .schedule-pix {
+            font-size: 10px;
+            font-weight: 900;
+            margin-top: 3px;
+            text-transform: uppercase;
           }
 
           .item {
@@ -1677,6 +1788,7 @@ function printComanda(order, store) {
             <div class="separator"></div>
             <div class="pill">${escapeHtml(typeLabel)}</div>
             <div class="order-number">PEDIDO ${escapeHtml(orderNumber)}</div>
+            ${scheduledHtml}
           </header>
 
           <section>
@@ -1925,18 +2037,31 @@ function PricingValidationAlert({ order }) {
   )
 }
 
-function OrderContactTimeline({ order }) {
+function OrderContactTimeline({ order, now = new Date() }) {
   const status = normalizeStatus(order.status)
   const statusIndex = STATUS_FLOW.indexOf(status)
+  const nextStatus = getNextStatus(status, order)
+  const currentMeta = STATUS_META[status] || STATUS_META.pendente
   const whatsappSent = Boolean(
     order?.customerLastNotifiedAt ||
       order?.customerConfirmationMessageSentAt ||
       order?.storeThankedCustomerAt ||
       order?.customerLastNotifiedStatus
   )
+  const scheduled = isScheduledOrder(order)
+  const scheduledState = scheduled ? getScheduledOperationalState(order, { now }) : 'asap'
+  const scheduledLabel = scheduled ? formatScheduledOperationalLabel(order, { now }) : ''
+  const scheduledDistance = scheduled ? getScheduledTimeDistance(order, now) : null
+  const operationText =
+    scheduledState === 'scheduled_future'
+      ? `Agendamento confirmado${scheduledDistance?.label ? ` · ${scheduledDistance.label}` : ''}`
+      : scheduledState === 'scheduled_due_soon'
+        ? 'Preparar em breve'
+        : scheduledState === 'scheduled_late'
+          ? 'Horário passou'
+          : scheduledLabel || currentMeta.label
   const steps = [
     { key: 'pendente', label: 'Pendente', done: statusIndex >= STATUS_FLOW.indexOf('pendente'), current: status === 'pendente' },
-    { key: 'whatsapp', label: 'WhatsApp', done: whatsappSent, current: !whatsappSent && statusIndex >= STATUS_FLOW.indexOf('confirmado') },
     { key: 'confirmado', label: 'Confirmado', done: statusIndex >= STATUS_FLOW.indexOf('confirmado'), current: status === 'confirmado' },
     { key: 'preparando', label: 'Preparo', done: statusIndex >= STATUS_FLOW.indexOf('preparando'), current: status === 'preparando' },
     { key: 'pronto', label: 'Pronto', done: statusIndex >= STATUS_FLOW.indexOf('pronto'), current: status === 'pronto' },
@@ -1950,25 +2075,47 @@ function OrderContactTimeline({ order }) {
   ]
 
   return (
-    <div className="mt-3 rounded-2xl border border-gray-100 bg-white px-3 py-3 dark:border-white/10 dark:bg-white/[0.03]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">
-          Contato e status
-        </p>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
-          whatsappSent
-            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
-            : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
-        }`}>
-          {whatsappSent ? 'Cliente avisado' : 'WhatsApp pendente'}
-        </span>
+    <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="grid gap-2 sm:grid-cols-4">
+        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
+          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Status</p>
+          <p className="mt-0.5 truncate text-xs font-black text-gray-900 dark:text-zinc-100">{currentMeta.label}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
+          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Cliente</p>
+          <p className={`mt-0.5 truncate text-xs font-black ${
+            whatsappSent
+              ? 'text-emerald-700 dark:text-emerald-300'
+              : 'text-amber-700 dark:text-amber-300'
+          }`}>
+            {whatsappSent ? 'Avisado' : 'WhatsApp pendente'}
+          </p>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
+          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Etapa</p>
+          <p className="mt-0.5 truncate text-xs font-black text-gray-900 dark:text-zinc-100">{operationText}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
+          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Próximo passo</p>
+          <p className="mt-0.5 truncate text-xs font-black text-gray-900 dark:text-zinc-100">
+            {nextStatus ? getNextStatusLabel(status, order) : 'Sem ação'}
+          </p>
+        </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-7 gap-1.5">
+      <div className="pratoby-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
         {steps.map((step, index) => (
-          <div key={step.key} className="min-w-0">
-            <div className="flex items-center">
-              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ring-1 ${
+          <div
+            key={step.key}
+            className={`flex min-w-[92px] items-center gap-2 rounded-xl border px-2.5 py-2 ${
+              step.current
+                ? 'border-orange-200 bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10'
+                : step.done
+                  ? 'border-emerald-100 bg-emerald-50 dark:border-emerald-500/25 dark:bg-emerald-500/10'
+                  : 'border-gray-100 bg-gray-50 dark:border-zinc-800 dark:bg-white/[0.04]'
+            }`}
+          >
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black ring-1 ${
                 step.done
                   ? status === 'cancelado' && step.key === 'cancelado'
                     ? 'bg-red-500 text-white ring-red-500'
@@ -1977,15 +2124,9 @@ function OrderContactTimeline({ order }) {
                     ? 'bg-orange-500 text-white ring-orange-500'
                     : 'bg-gray-100 text-gray-400 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-500 dark:ring-zinc-700'
               }`}>
-                {step.done ? <FiCheckCircle size={12} /> : index + 1}
-              </span>
-              {index < steps.length - 1 && (
-                <span className={`h-0.5 min-w-0 flex-1 ${
-                  step.done ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-zinc-800'
-                }`} />
-              )}
-            </div>
-            <p className={`mt-1 truncate text-[9px] font-black ${
+              {step.done ? <FiCheckCircle size={11} /> : index + 1}
+            </span>
+            <p className={`truncate text-[10px] font-black ${
               step.current
                 ? 'text-orange-600 dark:text-orange-300'
                 : step.done
@@ -2152,6 +2293,12 @@ const PaymentMethodIcon =
     order.schedulingSnapshot.requiredByProducts.length > 0
   const requiresScheduledPix = order.paymentPolicy === 'pix_required' ||
     order.schedulingSnapshot?.prepaymentPolicy === 'pix_required'
+  const scheduledHistoricalLabel = scheduled && isFinalStatus
+    ? isCancelled
+      ? 'Cancelado no histórico'
+      : 'Finalizado no histórico'
+    : ''
+  const scheduledDistanceLabel = scheduled && !isFinalStatus ? scheduledDistance?.label : ''
 
   const createdDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt || Date.now())
   const dateLabel = createdDate.toLocaleDateString('pt-BR')
@@ -2246,7 +2393,7 @@ const statusMeta = statusMetaMap[status] || {
 
 const scheduledNotice =
   scheduledState === 'scheduled_future'
-    ? 'Este pedido ainda está reservado para uma data futura.'
+    ? ''
     : scheduledState === 'scheduled_due_soon'
       ? 'Está na hora de se preparar para este pedido.'
       : scheduledState === 'scheduled_late'
@@ -2356,11 +2503,7 @@ const scheduledNoticeTone =
               <FiCalendar size={12} />
               {scheduledDateLabel}
             </span>
-            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-black ${scheduledNoticeTone}`}>
-              <FiClock size={12} />
-              {scheduledOperationalLabel || scheduledBadge || 'Agendado'}
-            </span>
-            {scheduledDistance && scheduledDistance.minutes <= 60 && (
+            {!isFinalStatus && scheduledDistance && scheduledDistance.minutes <= 60 && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-black text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
                 <FiClock size={12} />
                 {scheduledDistance.label}
@@ -2374,12 +2517,6 @@ const scheduledNoticeTone =
               }`}>
                 <FiCreditCard size={12} />
                 {isPaymentValidated ? 'Pix confirmado' : 'Aguardando confirmação do Pix'}
-              </span>
-            )}
-            {hasCustomScheduledProducts && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white px-3 py-1.5 text-[12px] font-black text-[#f97316] dark:border-orange-500/20 dark:bg-white/[0.04] dark:text-orange-300">
-                <FiPackage size={12} />
-                Contém produto sob encomenda
               </span>
             )}
           </div>
@@ -2477,7 +2614,7 @@ const scheduledNoticeTone =
         </p>
         <p className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
           <FiClock size={12} />
-          {scheduledDistance?.label || relativeTimeLabel || 'Agora há pouco'}
+          {scheduled ? (scheduledHistoricalLabel || scheduledDistanceLabel || scheduledOperationalLabel || 'Agendado') : (relativeTimeLabel || 'Agora há pouco')}
         </p>
       </div>
 
@@ -2766,6 +2903,12 @@ function OrderModal({
   const hasCustomScheduledProducts = scheduledProducts.length > 0
   const requiresScheduledPix = order.paymentPolicy === 'pix_required' ||
     order.schedulingSnapshot?.prepaymentPolicy === 'pix_required'
+  const scheduledHistoricalLabel = scheduled && isFinalStatus
+    ? status === 'cancelado'
+      ? 'Cancelado no histórico'
+      : 'Finalizado no histórico'
+    : ''
+  const scheduledDistanceLabel = scheduled && !isFinalStatus ? scheduledDistance?.label : ''
   const canRunPrimaryStatusAction = Boolean(nextStatus) &&
     !(scheduledState === 'scheduled_future' && nextStatus === 'preparando')
   const isWaitingScheduledFuture = scheduledState === 'scheduled_future' && nextStatus === 'preparando'
@@ -2773,13 +2916,15 @@ function OrderModal({
   const scheduledTypeLabel = address.isPickup ? 'Retirada agendada' : 'Entrega agendada'
   const scheduledTitle = hasCustomScheduledProducts ? 'Encomenda agendada' : 'Pedido agendado'
   const scheduledMessage =
-    scheduledState === 'scheduled_future'
-      ? 'Este pedido ainda está reservado para uma data futura.'
-      : scheduledState === 'scheduled_due_soon'
-        ? 'Está na hora de se preparar para este pedido.'
-        : scheduledState === 'scheduled_late'
-          ? 'O horário agendado já passou.'
-          : 'Acompanhe o agendamento deste pedido.'
+    scheduledHistoricalLabel
+      ? 'Este pedido já saiu da operação ativa. Mantemos o horário agendado apenas para histórico.'
+      : scheduledState === 'scheduled_future'
+        ? 'Este pedido está reservado para uma data futura.'
+        : scheduledState === 'scheduled_due_soon'
+          ? 'Está na hora de se preparar para este pedido.'
+          : scheduledState === 'scheduled_late'
+            ? 'O horário agendado já passou.'
+            : 'Acompanhe o agendamento deste pedido.'
   const scheduledPanelClass =
     scheduledState === 'scheduled_late'
       ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
@@ -2787,7 +2932,10 @@ function OrderModal({
         ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
         : 'border-orange-100 bg-orange-50 text-orange-900 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-100'
 
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth < 640
+  })
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 640)
     checkMobile()
@@ -2814,14 +2962,14 @@ function OrderModal({
   }, [onClose])
 
     const variants = isMobile ? {
-    initial: { y: '100%', opacity: 0.96 },
+    initial: { y: '100%', opacity: 1 },
     animate: { y: 0, opacity: 1 },
-    exit: { y: '100%', opacity: 0.96 },
-    transition: { type: 'spring', damping: 28, stiffness: 300 }
+    exit: { y: '100%', opacity: 1 },
+    transition: { type: 'spring', damping: 30, stiffness: 320 }
   } : {
-    initial: { opacity: 0, scale: 0.94, y: 24, filter: 'blur(8px)' },
-    animate: { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' },
-    exit: { opacity: 0, scale: 0.96, y: 18, filter: 'blur(8px)' },
+    initial: { opacity: 0, scale: 0.96, y: 18 },
+    animate: { opacity: 1, scale: 1, y: 0 },
+    exit: { opacity: 0, scale: 0.98, y: 14 },
     transition: { type: 'spring', stiffness: 360, damping: 34, mass: 0.85 }
   }
 
@@ -2834,7 +2982,7 @@ function OrderModal({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4 sm:backdrop-blur-md"
     >
       <motion.div
         initial={variants.initial}
@@ -2908,94 +3056,50 @@ function OrderModal({
               </span>
             </div>
             {/* Right: action buttons */}
-            <div className="flex items-center gap-2">
-              {canOpenWhatsApp && (
-                <button
-                  onClick={() => onOpenWhatsApp(order)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-green-700 disabled:opacity-60"
-                >
-                  <FiMessageCircle size={16}/> WhatsApp
-                </button>
-              )}
-              {pixPending ? (
-                <button onClick={() => onConfirmPixPayment(order)} disabled={Boolean(updatingStatus)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-green-700 disabled:opacity-60">
-                  <FiCheckCircle size={16}/> {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
-                </button>
-              ) : isWaitingScheduledFuture ? (
-                <div className="inline-flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-black text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
-                  <FiClock size={16} />
-                  <span>Agendamento confirmado</span>
-                </div>
-              ) : nextStatus ? (
-                <button onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null} disabled={Boolean(updatingStatus) || !canRunPrimaryStatusAction}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:opacity-60 animate-pulse-slow">
-                  <FiZap size={16}/> {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
-                </button>
-              ) : null}
-              <button onClick={() => printComanda(order, store)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-black text-white transition hover:bg-black dark:bg-white/12 dark:text-zinc-50 dark:ring-1 dark:ring-white/10 dark:hover:bg-white/16">
-                <FiPrinter size={16}/> Comanda
-              </button>
-            </div>
-          </div>
-          <PricingValidationAlert order={order} />
-          {scheduled && (
-            <section className={`mt-3 rounded-2xl border p-4 ${scheduledPanelClass}`}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
-                    <FiCalendar size={14} />
-                    {scheduledTitle}
-                  </p>
-                  <p className="mt-2 text-base font-black">
-                    {scheduledDateLabel || order.scheduledTimeLabel || 'Horário agendado não informado'}
-                  </p>
-                  <p className="mt-1 text-sm font-bold">
-                    {scheduledTypeLabel} · {scheduledOperationalLabel || 'Agendado'}
-                    {scheduledDistance?.label ? ` · ${scheduledDistance.label}` : ''}
-                  </p>
-                  <p className="mt-2 text-xs font-semibold leading-5">
-                    {scheduledMessage}
-                  </p>
-                </div>
-                {requiresScheduledPix && (
-                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black ${
-                    pixPaid
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200'
-                      : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
-                  }`}>
-                    <FiCreditCard size={13} />
-                    {pixPaid ? 'Pix confirmado' : 'Pix antecipado pendente'}
-                  </span>
+              <div className="flex items-center gap-3">
+                {canOpenWhatsApp && (
+                  <button
+                    onClick={() => onOpenWhatsApp(order)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FiMessageCircle size={18} className="text-emerald-600 dark:text-emerald-400" /> 
+                    WhatsApp
+                  </button>
                 )}
+                
+                {pixPending ? (
+                  <button 
+                    onClick={() => onConfirmPixPayment(order)} 
+                    disabled={Boolean(updatingStatus)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} /> 
+                    {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
+                  </button>
+                ) : isWaitingScheduledFuture ? (
+                  <div className="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+                    <FiClock size={18} />
+                    <span>Agendamento confirmado</span>
+                  </div>
+                ) : nextStatus ? (
+                  <button 
+                    onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null} 
+                    disabled={Boolean(updatingStatus) || !canRunPrimaryStatusAction}
+                    className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
+                  >
+                    <FiZap size={18}/> 
+                    {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
+                  </button>
+                ) : null}
+
+                <button 
+                  onClick={() => printComanda(order, store)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-900 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
+                >
+                  <FiPrinter size={18}/> Comanda
+                </button>
               </div>
-              {requiresScheduledPix && (
-                <p className="mt-3 rounded-xl bg-white/55 px-3 py-2 text-xs font-semibold leading-5 text-current ring-1 ring-black/5 dark:bg-black/10 dark:ring-white/10">
-                  Esta encomenda exige Pix antecipado para confirmação. Confira o comprovante antes de iniciar o preparo.
-                </p>
-              )}
-              {hasCustomScheduledProducts && (
-                <div className="mt-3 rounded-xl bg-white/55 p-3 ring-1 ring-black/5 dark:bg-black/10 dark:ring-white/10">
-                  <p className="text-xs font-black uppercase tracking-wider">Produtos sob encomenda</p>
-                  <ul className="mt-2 space-y-1 text-xs font-semibold">
-                    {scheduledProducts.map((product, index) => {
-                      const name = product?.name || product?.productName || `Produto ${index + 1}`
-                      const lead = product?.minLeadMinutes || product?.leadMinutes || product?.requiredLeadMinutes
-                      const pix = product?.prepaymentPolicy === 'pix_required' || product?.paymentPolicy === 'pix_required'
-                      return (
-                        <li key={`${name}-${index}`}>
-                          {name}
-                          {lead ? ` — exige ${minutesToHumanLabel(lead)} de antecedência` : ''}
-                          {pix ? ' — Pix antecipado' : ''}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              )}
-            </section>
-          )}
+          </div>
           {sla.overdue && (
             <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
               <FiAlertTriangle size={17} className="mt-0.5 shrink-0 animate-pulse" />
@@ -3007,7 +3111,7 @@ function OrderModal({
               </div>
             </div>
           )}
-          <OrderContactTimeline order={order} />
+          <OrderContactTimeline order={order} now={now} />
           {showCustomerThanksAction && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
               <div>
@@ -3095,6 +3199,100 @@ function OrderModal({
                 )}
               </section>
 
+              {/* Order timing card */}
+                <section className={`rounded-[1.35rem] border p-4 shadow-sm ring-1 ring-black/[0.02] ${
+                  scheduled
+                    ? scheduledPanelClass
+                    : 'border-gray-100 bg-white dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]'
+                }`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`flex items-center gap-2 text-xs font-black uppercase tracking-wider ${
+                        scheduled
+                          ? 'text-current opacity-80'
+                          : 'text-gray-400 dark:text-zinc-500'
+                      }`}>
+                        <FiCalendar className={scheduled ? '' : 'text-orange-500'} />
+                        Tipo do pedido
+                      </p>
+
+                      <p className={`mt-3 text-base font-black ${
+                        scheduled
+                          ? 'text-current'
+                          : 'text-gray-900 dark:text-zinc-100'
+                      }`}>
+                        {scheduled ? scheduledTitle : 'Pedido imediato'}
+                      </p>
+
+                      <p className={`mt-1 text-sm font-bold leading-5 ${
+                        scheduled
+                          ? 'text-current opacity-90'
+                          : 'text-gray-500 dark:text-zinc-400'
+                      }`}>
+                        {scheduled
+                          ? scheduledDateLabel || order.scheduledTimeLabel || 'Horário agendado não informado'
+                          : 'Entrou na operação assim que foi criado.'}
+                      </p>
+                    </div>
+
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-black ${
+                      scheduled
+                        ? 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
+                    }`}>
+                      {scheduled ? 'Depois' : 'Agora'}
+                    </span>
+                  </div>
+
+                  {scheduled ? (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/55 px-2.5 py-1 text-[11px] font-black ring-1 ring-black/5 dark:bg-black/10 dark:ring-white/10">
+                          <FiClock size={12} />
+                          {scheduledHistoricalLabel || scheduledOperationalLabel || 'Agendado'}
+                        </span>
+
+                        {scheduledDistanceLabel && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/55 px-2.5 py-1 text-[11px] font-black ring-1 ring-black/5 dark:bg-black/10 dark:ring-white/10">
+                            <FiClock size={12} />
+                            {scheduledDistanceLabel}
+                          </span>
+                        )}
+
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/55 px-2.5 py-1 text-[11px] font-black ring-1 ring-black/5 dark:bg-black/10 dark:ring-white/10">
+                          {address.isPickup ? <FiShoppingBag size={12} /> : <FiTruck size={12} />}
+                          {scheduledTypeLabel}
+                        </span>
+
+                        {requiresScheduledPix && (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${
+                            pixPaid
+                              ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-200'
+                              : 'bg-amber-500/10 text-amber-800 ring-amber-500/20 dark:text-amber-200'
+                          }`}>
+                            <FiCreditCard size={12} />
+                            {pixPaid ? 'Pix confirmado' : 'Pix antecipado'}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs font-semibold leading-5 text-current opacity-80">
+                        {scheduledMessage}
+                      </p>
+
+                      {requiresScheduledPix && !pixPaid && (
+                        <p className="rounded-xl bg-white/55 px-3 py-2 text-xs font-semibold leading-5 ring-1 ring-black/5 dark:bg-black/10 dark:ring-white/10">
+                          Confira o comprovante antes de iniciar o preparo.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold leading-5 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400">
+                      Para alterar um pedido imediato para agendado, o ideal é cancelar e refazer o pedido com data e horário escolhidos.
+                    </p>
+                  )}
+                </section>
+
               {/* Observation card */}
               {(order?.orderObservation || order?.customerObservation || order?.observation) && (
                 <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900 dark:bg-amber-950/40">
@@ -3106,6 +3304,8 @@ function OrderModal({
                   </p>
                 </section>
               )}
+
+              
 
               {/* Payment details card */}
               <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
@@ -3227,6 +3427,16 @@ function OrderModal({
                     Use somente para corrigir o fluxo do pedido.
                   </p>
                 </div>
+                {scheduled && scheduledState === 'scheduled_future' && (
+                  <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-bold leading-5 text-orange-800 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+                    Este pedido ainda está fora da janela de preparo. Iniciar preparo agora é uma ação manual.
+                  </div>
+                )}
+                {scheduled && scheduledState === 'scheduled_late' && (
+                  <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
+                    O horário agendado passou. Inicie o preparo ou ajuste o status com atenção.
+                  </div>
+                )}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {STATUS_FLOW.map((statusOption) => {
                     const optionMeta = STATUS_META[statusOption]
@@ -3234,6 +3444,9 @@ function OrderModal({
                     const active = status === statusOption
                     const optionIndex = STATUS_FLOW.indexOf(statusOption)
                     const isPreviousStatus = optionIndex < currentIndex
+                    const manualScheduledPrepare = scheduledState === 'scheduled_future' && statusOption === 'preparando'
+                    const naturalScheduledPrepare = scheduledState === 'scheduled_due_soon' && statusOption === 'preparando'
+                    const lateScheduledPrepare = scheduledState === 'scheduled_late' && statusOption === 'preparando'
 
                     return (
                       <button
@@ -3246,32 +3459,33 @@ function OrderModal({
                           isPreviousStatus ||
                           (statusOption === 'preparando' && pixPending)
                         }
+                        title={manualScheduledPrepare ? 'Adianta o preparo manualmente' : undefined}
                         className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
                           active
                             ? optionMeta.buttonClass
-                            : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-white/[0.06] dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                            : manualScheduledPrepare
+                              ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200'
+                              : lateScheduledPrepare
+                                ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
+                                : naturalScheduledPrepare
+                                  ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
+                                  : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-white/[0.06] dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
                         }`}
                       >
                         <Icon size={14} />
-                        {optionMeta.label}
+                        <span>{optionMeta.label}</span>
+                        {manualScheduledPrepare && (
+                          <span className="text-[9px] font-black uppercase tracking-wide">Manual</span>
+                        )}
+                        {naturalScheduledPrepare && (
+                          <span className="text-[9px] font-black uppercase tracking-wide">Fluxo normal</span>
+                        )}
+                        {lateScheduledPrepare && (
+                          <span className="text-[9px] font-black uppercase tracking-wide">Atrasado</span>
+                        )}
                       </button>
                     )
                   })}
-
-                  {/* TODO: futura agenda de alteração manual de status. Visual apenas; não salva nem chama updateMerchantOrder. */}
-                  <button
-                    type="button"
-                    disabled
-                    title="Agendamento de alteração em breve"
-                    aria-label="Agendado em breve"
-                    className="flex min-h-[58px] cursor-not-allowed flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-gray-100 bg-gray-50/80 p-2 text-center text-[10px] font-black text-gray-400 opacity-75 transition dark:border-zinc-800 dark:bg-white/[0.04] dark:text-zinc-500"
-                  >
-                    <FiClock size={14} />
-                    <span>Agendado</span>
-                    <span className="text-[9px] font-black uppercase tracking-wide text-gray-300 dark:text-zinc-600">
-                      Em breve
-                    </span>
-                  </button>
                 </div>
               </section>
             </aside>
@@ -4184,8 +4398,41 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
     if (timingFilter === 'scheduled') {
       return result.sort((a, b) => {
-        const dateA = getScheduledDate(a)?.getTime() || Number.MAX_SAFE_INTEGER
-        const dateB = getScheduledDate(b)?.getTime() || Number.MAX_SAFE_INTEGER
+        const statusA = normalizeStatus(a.status)
+        const statusB = normalizeStatus(b.status)
+
+        const finalA = FINAL_STATUSES.includes(statusA)
+        const finalB = FINAL_STATUSES.includes(statusB)
+
+        if (finalA !== finalB) return finalA ? 1 : -1
+
+        const stateA = getScheduledOperationalState(a, { now: slaNow })
+        const stateB = getScheduledOperationalState(b, { now: slaNow })
+
+        const priority = {
+          scheduled_late: 0,
+          scheduled_due_soon: 1,
+          scheduled_future: 2,
+          asap: 3,
+          completed: 4,
+          canceled: 5,
+        }
+
+        const priorityA = priority[stateA] ?? 9
+        const priorityB = priority[stateB] ?? 9
+
+        if (priorityA !== priorityB) return priorityA - priorityB
+
+        const dateA =
+          getScheduledDate(a)?.getTime() ??
+          getOrderDate(a)?.getTime() ??
+          Number.MAX_SAFE_INTEGER
+
+        const dateB =
+          getScheduledDate(b)?.getTime() ??
+          getOrderDate(b)?.getTime() ??
+          Number.MAX_SAFE_INTEGER
+
         return dateA - dateB
       })
     }
@@ -4619,7 +4866,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                         onCopyOrder={handleCopyOrder}
                         updatingStatus={updatingStatus}
                         isNew={newOrderIds.has(order.id)}
-                        isLatestNew={latestNewOrderId === order.id || index === 0}
+                        isLatestNew={latestNewOrderId === order.id}
                       />
                     </motion.div>
                   ))

@@ -260,12 +260,12 @@ function TTLCountdown({ order, t, compact = false }) {
   if (!remaining) return null
   return (
     <p className={cn(
-      'flex items-center gap-1 tabular-nums',
+      'inline-flex items-center justify-center gap-1 tabular-nums',
       compact ? 'text-[10px] font-bold' : 'text-sm font-semibold',
       t('text-emerald-500', 'text-emerald-600')
     )}>
-      <FiClock size={compact ? 10 : 12} />
-      {remaining}
+      <FiClock size={compact ? 10 : 12} className="shrink-0" />
+      <span>{remaining}</span>
     </p>
   )
 }
@@ -395,7 +395,7 @@ function ReadyCard({ order, isNew, t, isDark, size = 'lg' }) {
       </p>
 
       {/* Label e hora */}
-      <div className="space-y-0.5 text-center">
+      <div className="flex flex-col items-center space-y-0.5 text-center">
         <p className={cn('font-black', s.label, t('text-emerald-300', 'text-emerald-700'))}>
           Pedido pronto!
         </p>
@@ -767,15 +767,15 @@ export default function CustomerDisplayPage() {
             {/* ── Em preparo — mobile: order-2, desktop: order-1 ─────────── */}
             <section className="flex flex-col order-2 min-h-0 lg:order-1">
               <div className={cn(
-                'flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 mb-6 shrink-0',
+                'flex min-w-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 mb-6 shrink-0',
                 t('bg-zinc-900/40 border-zinc-800/80 text-zinc-400', 'bg-white border-gray-200 text-gray-500')
               )}>
-                <FiClock size={16} />
-                <h2 className="text-lg font-black uppercase tracking-[0.15em]">
+                <FiClock size={16} className="shrink-0" />
+                <h2 className="min-w-0 truncate text-base font-black uppercase tracking-[0.12em] sm:text-lg sm:tracking-[0.15em]">
                   Em preparo
                 </h2>
                 <span className={cn(
-                  'ml-2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-black border',
+                  'ml-1 flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border px-1.5 text-xs font-black',
                   t('bg-zinc-800 border-zinc-700 text-zinc-400', 'bg-gray-100 border-gray-200 text-gray-600')
                 )}>
                   {preparingOrders.length}
@@ -807,15 +807,15 @@ export default function CustomerDisplayPage() {
               t('border-zinc-800', 'border-gray-200')
             )}>
               <div className={cn(
-                'flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 mb-6 shrink-0',
+                'flex min-w-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 mb-6 shrink-0',
                 t('bg-emerald-500/10 border-emerald-500/20 text-emerald-400', 'bg-emerald-50 border-emerald-200 text-emerald-700')
               )}>
-                <FiBell size={16} />
-                <h2 className="text-lg font-black uppercase tracking-[0.15em]">
+                <FiBell size={16} className="shrink-0" />
+                <h2 className="min-w-0 truncate text-base font-black uppercase tracking-[0.12em] sm:text-lg sm:tracking-[0.15em]">
                   Prontos para retirada
                 </h2>
                 <span className={cn(
-                  'ml-2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-black border',
+                  'ml-1 flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border px-1.5 text-xs font-black',
                   t('bg-emerald-500/20 border-emerald-500/30 text-emerald-400', 'bg-emerald-100 border-emerald-200 text-emerald-700')
                 )}>
                   {readyOrders.length}
