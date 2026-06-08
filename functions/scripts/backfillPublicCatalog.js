@@ -5,6 +5,9 @@ const {
   sanitizePublicProductScheduling,
   sanitizePublicStoreScheduling,
 } = require('../shared/publicScheduling')
+const {
+  sanitizePublicStorePayments,
+} = require('../shared/asaasOrders')
 
 admin.initializeApp({
   projectId:
@@ -212,6 +215,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
     isDeleted: data.isDeleted === true,
     address: sanitizePublicAddress(data),
     settings: sanitizePublicStoreSettings(data.settings),
+    payments: sanitizePublicStorePayments(data),
     publicScheduling: sanitizePublicStoreScheduling(data),
   }
 

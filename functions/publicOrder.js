@@ -1,6 +1,14 @@
 const crypto = require('crypto')
 const { normalizeBrazilianPhone } = require('./shared/phone')
 const { buildOrderSchedulingDecision } = require('./shared/orderScheduling')
+const {
+  buildAsaasLinkCreationFailurePatch,
+  buildAsaasPendingPaymentSnapshot,
+  createOrderPaymentLink,
+  isAsaasOnlineActive,
+  isAsaasOnlinePaymentRequest,
+  orderRequiresAsaasOnline,
+} = require('./shared/asaasOrders')
 
 class PublicOrderError extends Error {
   constructor(code, message) {
@@ -1201,6 +1209,49 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
   fail('invalid-argument', 'Forma de pagamento invalida.')
 }
 
+function getPublicOrderPaymentSnapshot({
+  input,
+  store,
+  paymentMethod,
+  totalCents,
+  changeFor,
+  trackingToken,
+  storeSlug,
+  schedulingDecision,
+}) {
+  const requiresAsaasOnline = orderRequiresAsaasOnline({ store, schedulingDecision })
+  const requestedAsaasOnline = isAsaasOnlinePaymentRequest({
+    ...input,
+    paymentMethod,
+  })
+
+  if (requiresAsaasOnline || requestedAsaasOnline) {
+    if (typeof input.asaasOrdersApiKeyConfigured === 'boolean' && !input.asaasOrdersApiKeyConfigured) {
+      fail('failed-precondition', 'Pagamento online nao configurado.')
+    }
+
+    if (!isAsaasOnlineActive(store)) {
+      fail('failed-precondition', 'Pagamento online indisponivel para esta loja.')
+    }
+
+    return buildAsaasPendingPaymentSnapshot({
+      totalCents,
+      storeId: getStoreDocId(store),
+      storeSlug,
+      orderId: trackingToken,
+    })
+  }
+
+  return getPaymentMethodSnapshot({
+    store,
+    paymentMethod,
+    totalCents,
+    changeFor,
+    trackingToken,
+    storeSlug,
+  })
+}
+
 function buildDeliveryAddress(input, deliveryType, neighborhood) {
   if (deliveryType !== 'delivery') return null
 
@@ -1256,6 +1307,7 @@ function createPublicOrderHandler({
   logger,
   maxOrderCents = 100000000,
   sendNewOrderPushToStore = null,
+  createAsaasOrderPaymentLink = null,
 }) {
   return async (request) => {
     try {
@@ -1436,13 +1488,20 @@ function createPublicOrderHandler({
           fail('failed-precondition', 'Total do pedido invalido.')
         }
 
-        const paymentSnapshot = getPaymentMethodSnapshot({
+        const paymentSnapshot = getPublicOrderPaymentSnapshot({
+          input: {
+            ...input,
+            asaasOrdersApiKeyConfigured: typeof createAsaasOrderPaymentLink === 'function'
+              ? Boolean(createAsaasOrderPaymentLink())
+              : false,
+          },
           store: liveStore,
           paymentMethod: input.paymentMethod,
           totalCents,
           changeFor: input.changeFor,
           trackingToken,
           storeSlug,
+          schedulingDecision,
         })
 
         const legacyAddress = delivery.deliveryType === 'delivery'
@@ -1583,6 +1642,11 @@ function createPublicOrderHandler({
           orderId: orderRef.id,
           trackingToken,
           trackingUrl: `/${storeSlug}/pedido/${trackingToken}`,
+          payment: {
+            mode: paymentSnapshot.paymentMode || 'manual',
+            provider: paymentSnapshot.paymentProvider || null,
+            status: paymentSnapshot.paymentStatus || null,
+          },
           totals: {
             subtotalCents,
             discountCents,
@@ -1593,15 +1657,59 @@ function createPublicOrderHandler({
         }
       })
 
+      let onlinePaymentLink = null
+      let onlinePaymentLinkError = null
+
+      if (result.payment?.mode === 'online' && result.payment.provider === 'asaas') {
+        const orderRefForPayment = db.collection('orders').doc(result.orderId)
+        try {
+          const [orderSnapshot, storeSnapshot] = await Promise.all([
+            orderRefForPayment.get(),
+            db.collection('stores').doc(storeDocId).get(),
+          ])
+
+          onlinePaymentLink = await createOrderPaymentLink({
+            db,
+            admin,
+            logger,
+            apiKey: typeof createAsaasOrderPaymentLink === 'function'
+              ? createAsaasOrderPaymentLink()
+              : '',
+            orderRef: orderRefForPayment,
+            orderData: {
+              id: orderSnapshot.id,
+              ...(orderSnapshot.data() || {}),
+            },
+            storeData: storeSnapshot.data() || {},
+          })
+        } catch (paymentError) {
+          logger.error('Public order created but Asaas payment link failed.', {
+            orderId: result.orderId,
+            storeId: storeDocId,
+            error: paymentError?.message || String(paymentError),
+          })
+          onlinePaymentLinkError = paymentError
+          await orderRefForPayment.set(
+            buildAsaasLinkCreationFailurePatch({ admin, error: paymentError }),
+            { merge: true }
+          )
+        }
+      }
+
       logger.info('Public order created server-side', {
         orderId: result.orderId,
         storeId: storeDocId,
         storeSlug,
         totalCents: result.totals.totalCents,
         hasCoupon: Boolean(couponCode),
+        paymentMode: result.payment?.mode || 'manual',
       })
 
-      if (typeof sendNewOrderPushToStore === 'function') {
+      const shouldNotifyNewOrder =
+        result.payment?.mode !== 'online' ||
+        result.payment?.status === 'paid'
+
+      if (shouldNotifyNewOrder && typeof sendNewOrderPushToStore === 'function') {
         try {
           await sendNewOrderPushToStore({
             storeId: storeDocId,
@@ -1616,7 +1724,23 @@ function createPublicOrderHandler({
         }
       }
 
-      return result
+      return {
+        ...result,
+        ...(onlinePaymentLink
+          ? {
+              paymentUrl: onlinePaymentLink.paymentUrl,
+              invoiceUrl: onlinePaymentLink.invoiceUrl,
+              providerPaymentLinkId: onlinePaymentLink.providerPaymentLinkId,
+            }
+          : {}),
+        ...(onlinePaymentLinkError
+          ? {
+              paymentStatus: 'failed_link_creation',
+              paymentError: 'failed_link_creation',
+              paymentMessage: 'Pedido recebido, mas nao foi possivel gerar o link de pagamento agora. Tente pagar pela tela de acompanhamento.',
+            }
+          : {}),
+      }
     } catch (error) {
       if (error instanceof PublicOrderError) {
         throw new HttpsError(error.code, error.message)

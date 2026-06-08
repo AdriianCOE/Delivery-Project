@@ -180,9 +180,28 @@ function getKdsNextAction(_order, _status, cfg) {
   return cfg.nextAction
 }
 
+function isOnlinePaymentPending(order) {
+  const method = String(order?.payment?.method || order?.paymentMethod || order?.paymentType || '')
+    .toLowerCase()
+    .trim()
+  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(order?.payment?.mode || order?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+  const paymentStatus = String(order?.payment?.status || order?.paymentStatus || '')
+    .toLowerCase()
+    .trim()
+
+  if (method !== 'asaas_online' && !(provider === 'asaas' && mode === 'online')) return false
+  return !['paid', 'confirmed', 'pago'].includes(paymentStatus)
+}
+
 function shouldShowInMainKds(order, now) {
   const status = normalizeKdsStatus(order?.status)
   if (!KDS_COLUMNS.includes(status)) return false
+  if (order?.operationalBlockedReason === 'awaiting_online_payment' || isOnlinePaymentPending(order)) return false
   if (!isScheduledOrder(order)) return true
   if (status === 'preparando' || status === 'pronto') return true
   return isOrderOperationalNow(order, { now })

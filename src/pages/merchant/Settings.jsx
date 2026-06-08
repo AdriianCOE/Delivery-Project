@@ -1088,6 +1088,10 @@ export default function Settings() {
   }, [form, selectedStore])
 
   const pixRequiredAndIncomplete = form.paymentPix && !pixCompleteness.complete
+  const asaasOrderPayments = selectedStore?.payments?.asaas || {}
+  const asaasOrderPaymentsActive =
+    asaasOrderPayments.enabled === true &&
+    String(asaasOrderPayments.status || '').toLowerCase() === 'active'
   const schedulingLeadInput = useMemo(
     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
     [form.scheduling?.minLeadMinutes]
@@ -2430,6 +2434,33 @@ export default function Settings() {
                 label="Dinheiro"
                 description="Permitir pagamento em dinheiro."
               />
+            </div>
+
+            <div className={`mt-5 rounded-[1.5rem] border p-4 ${
+              asaasOrderPaymentsActive
+                ? 'border-green-100 bg-green-50 text-green-900'
+                : 'border-gray-100 bg-[#f9fafb] text-[#374151]'
+            }`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
+                    Pagamento online Asaas
+                  </p>
+                  <p className="mt-1 text-xs font-bold leading-5">
+                    {asaasOrderPaymentsActive
+                      ? 'Ativo para pedidos piloto. O cliente paga no ambiente seguro Asaas.'
+                      : 'Nao ativo nesta loja. A ativacao e feita pelo suporte/admin, sem pedir API key ao lojista.'}
+                  </p>
+                </div>
+
+                <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${
+                  asaasOrderPaymentsActive
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {asaasOrderPaymentsActive ? 'Ativo' : 'Inativo'}
+                </span>
+              </div>
             </div>
 
             {pixRequiredAndIncomplete && (

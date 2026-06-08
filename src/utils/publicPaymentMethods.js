@@ -181,3 +181,32 @@ export function getPublicPixConfig(store) {
     merchantCity: sanitizePixText(merchantCity, 15),
   }
 }
+
+export function getPublicAsaasConfig(store) {
+  const asaas = toObject(store?.payments?.asaas)
+  const status = normalizeMethodKey(asaas.status || (asaas.enabled === true ? 'active' : 'inactive'))
+  const maxInstallmentCount = Number(asaas.maxInstallmentCount)
+
+  return {
+    enabled: asaas.enabled === true && status === 'active',
+    status: status || 'inactive',
+    maxInstallmentCount: Number.isInteger(maxInstallmentCount) && maxInstallmentCount > 1
+      ? Math.min(maxInstallmentCount, 12)
+      : null,
+  }
+}
+
+export function getPublicPreorderPaymentPolicy(store) {
+  const policy = toObject(store?.payments?.preorderPolicy)
+  const mode = normalizeMethodKey(policy.mode || policy.requiredMethod || 'manual')
+
+  return {
+    mode: ['manual', 'pix_manual', 'asaas_online', 'manual_or_asaas'].includes(mode)
+      ? mode
+      : 'manual',
+  }
+}
+
+export function isPublicAsaasOnlineAllowed(store) {
+  return getPublicAsaasConfig(store).enabled === true
+}

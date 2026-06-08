@@ -153,6 +153,18 @@ function isManualPixOrder(orderData) {
   return ['pix', 'pix_manual', 'manual_pix', 'pix_manual_store'].includes(getOrderPaymentMethodId(orderData))
 }
 
+function isAsaasOnlineOrder(orderData) {
+  const method = getOrderPaymentMethodId(orderData)
+  const provider = String(orderData?.payment?.provider || orderData?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(orderData?.payment?.mode || orderData?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+
+  return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
+}
+
 function isOrderPaymentPaid(orderData) {
   const status = getOrderPaymentStatusId(orderData)
   return ['paid', 'confirmed', 'pago'].includes(status)
@@ -165,10 +177,14 @@ function shouldBlockMerchantOrderAction(orderData) {
 function shouldBlockMerchantPreparationUntilPayment(orderData) {
   const status = normalizeMerchantOrderStatus(orderData?.status)
   const paymentStatus = getOrderPaymentStatusId(orderData)
-  return isManualPixOrder(orderData)
+  return (isManualPixOrder(orderData) || isAsaasOnlineOrder(orderData))
     && ['pendente', 'confirmado'].includes(status)
     && !isOrderPaymentPaid(orderData)
     && ['pending', 'proof_sent', 'manual', ''].includes(paymentStatus)
+}
+
+function shouldBlockMerchantOnlinePayment(orderData) {
+  return isAsaasOnlineOrder(orderData) && !isOrderPaymentPaid(orderData)
 }
 
 function sanitizeCancellationReason(value) {
@@ -255,8 +271,12 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
     throw new HttpsError('failed-precondition', 'Pedido com valor suspeito precisa de revisao.')
   }
 
+  if (nextStatus !== 'cancelado' && nextStatus !== currentStatus && shouldBlockMerchantOnlinePayment(orderData)) {
+    throw new HttpsError('failed-precondition', 'Aguarde a confirmacao do pagamento online antes de avancar o pedido.')
+  }
+
   if (nextStatus === 'preparando' && shouldBlockMerchantPreparationUntilPayment(orderData)) {
-    throw new HttpsError('failed-precondition', 'Confirme o Pix antes de iniciar o preparo.')
+    throw new HttpsError('failed-precondition', 'Confirme o pagamento antes de iniciar o preparo.')
   }
 
   const statusField = getMerchantOrderStatusField(nextStatus)
@@ -355,6 +375,102 @@ function assertNonAnonymousCallableUser(request, HttpsError) {
   }
 
   return uid
+}
+
+const COUNTER_ORDER_PAYMENT_LABELS = {
+  dinheiro: 'Dinheiro',
+  maquininha: 'Maquininha',
+  pix_manual: 'Pix manual',
+  credito: 'Cartao de credito',
+  debito: 'Cartao de debito',
+}
+const COUNTER_ORDER_ALLOWED_METHODS = new Set(Object.keys(COUNTER_ORDER_PAYMENT_LABELS))
+const COUNTER_ORDER_MAX_ITEMS = 50
+const COUNTER_ORDER_RATE_LIMIT_WINDOW_MS = 60 * 1000
+const COUNTER_ORDER_RATE_LIMIT_MAX = 30
+
+function sanitizeCounterStoreId(value, HttpsError) {
+  const id = String(value || '').trim()
+  if (!id || id.length < 4 || id.length > 160) {
+    throw new HttpsError('invalid-argument', 'Loja invalida.')
+  }
+  return id
+}
+
+function sanitizeCounterCustomerName(value) {
+  return String(value || '').trim().slice(0, 80) || 'Balcao'
+}
+
+function sanitizeCounterNote(value) {
+  return String(value || '').trim().slice(0, 300)
+}
+
+function sanitizeCounterObservation(value) {
+  return String(value || '').trim().slice(0, 500)
+}
+
+function sanitizeCounterQuantity(value, HttpsError) {
+  const qty = Math.floor(Number(value ?? 1))
+  if (!Number.isFinite(qty) || qty < 1 || qty > 99) {
+    throw new HttpsError('invalid-argument', 'Quantidade invalida.')
+  }
+  return qty
+}
+
+function sanitizeCounterProductId(value, HttpsError) {
+  const id = String(value || '').trim()
+  if (!id || id.length > 160) {
+    throw new HttpsError('invalid-argument', 'Produto invalido.')
+  }
+  return id
+}
+
+function getCounterProductPriceCents(product) {
+  const candidates = [
+    product?.priceCents,
+    product?.priceInCents,
+  ]
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && Number.isFinite(Number(c))) {
+      return Math.max(0, Math.round(Number(c)))
+    }
+  }
+  // fallback: treat as reais
+  const price = Number(product?.price || 0)
+  if (Number.isFinite(price) && price > 0) return Math.round(price * 100)
+  return 0
+}
+
+async function assertCounterOrderRateLimit({ db, admin, HttpsError, logger, uid, storeId }) {
+  const now = admin.firestore.Timestamp.now()
+  const nowMs = now.toMillis()
+  const safeUid = sanitizeRateLimitKey(uid)
+  const safeStoreId = sanitizeRateLimitKey(storeId)
+  const rateLimitRef = db.collection('rateLimits').doc(`createMerchantCounterOrder_${safeUid}_${safeStoreId}`)
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(rateLimitRef)
+    const data = snapshot.exists ? snapshot.data() || {} : {}
+    const windowStartMs = data.windowStart?.toMillis ? data.windowStart.toMillis() : 0
+    const shouldReset = !windowStartMs || nowMs - windowStartMs >= COUNTER_ORDER_RATE_LIMIT_WINDOW_MS
+    const count = shouldReset ? 0 : Number(data.count || 0)
+
+    if (count >= COUNTER_ORDER_RATE_LIMIT_MAX) {
+      logger?.warn?.('[createMerchantCounterOrder] rate limit exceeded', { uid, storeId })
+      throw new HttpsError('resource-exhausted', 'Muitas criacoes em pouco tempo. Aguarde alguns segundos e tente novamente.')
+    }
+
+    transaction.set(rateLimitRef, {
+      type: 'merchant_counter_order_create',
+      uid,
+      storeId,
+      count: count + 1,
+      limit: COUNTER_ORDER_RATE_LIMIT_MAX,
+      windowStart: shouldReset ? now : data.windowStart || now,
+      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + COUNTER_ORDER_RATE_LIMIT_WINDOW_MS),
+      updatedAt: now,
+    }, { merge: true })
+  })
 }
 
 function createMerchantOrderFunctions({
@@ -503,7 +619,252 @@ function createMerchantOrderFunctions({
     }
   )
 
-  return { updateMerchantOrder }
+  const createMerchantCounterOrder = onCall(
+    { region, timeoutSeconds: 60, memory: '256MiB', maxInstances: 10 },
+    async (request) => {
+      const uid = assertNonAnonymousCallableUser(request, HttpsError)
+      const data = request.data || {}
+
+      // 1. Validar e sanitizar inputs
+      const storeId = sanitizeCounterStoreId(data.storeId, HttpsError)
+      const rawItems = Array.isArray(data.items) ? data.items : []
+      if (!rawItems.length) {
+        throw new HttpsError('invalid-argument', 'Pedido sem itens.')
+      }
+      if (rawItems.length > COUNTER_ORDER_MAX_ITEMS) {
+        throw new HttpsError('invalid-argument', 'Muitos itens no pedido.')
+      }
+
+      const paymentMethod = String(data.paymentMethod || '').trim().toLowerCase()
+      if (!COUNTER_ORDER_ALLOWED_METHODS.has(paymentMethod)) {
+        throw new HttpsError('invalid-argument', 'Metodo de pagamento invalido.')
+      }
+
+      const customerName = sanitizeCounterCustomerName(data.customerName)
+      const note = sanitizeCounterNote(data.note)
+
+      // 2. Validar user
+      const userSnapshot = await db.collection('users').doc(uid).get()
+      if (!userSnapshot.exists) {
+        throw new HttpsError('permission-denied', 'Usuario nao encontrado.')
+      }
+      const userData = userSnapshot.data() || {}
+      const userRole = normalizeRoleValue(userData?.role)
+      if (!['merchant', 'admin', 'developer'].includes(userRole)) {
+        throw new HttpsError('permission-denied', 'Acesso negado.')
+      }
+
+      // 3. Validar loja e permissao
+      const storeSnapshot = await db.collection('stores').doc(storeId).get()
+      if (!storeSnapshot.exists) {
+        throw new HttpsError('not-found', 'Loja nao encontrada.')
+      }
+      const storeData = storeSnapshot.data() || {}
+      assertStoreOwnerOrAdmin(storeData, uid, userData, HttpsError)
+
+      const storeSlug = String(storeData.storeSlug || storeData.slug || storeId).trim()
+
+      // 4. Rate limit
+      await assertCounterOrderRateLimit({ db, admin, HttpsError, logger, uid, storeId })
+
+      // 5. Validar e calcular itens (leitura de publicStores/{storeId}/products)
+      const sanitizedItems = rawItems.map((item, index) => ({
+        productId: sanitizeCounterProductId(item.productId, HttpsError),
+        quantity: sanitizeCounterQuantity(item.quantity, HttpsError),
+        observation: sanitizeCounterObservation(item.observation),
+        _index: index,
+      }))
+
+      let subtotalCents = 0
+      const builtItems = []
+
+      for (const item of sanitizedItems) {
+        // Tenta direto em publicStores/{storeId}/products/{productId}
+        let productSnap = await db
+          .collection('publicStores')
+          .doc(storeId)
+          .collection('products')
+          .doc(item.productId)
+          .get()
+
+        // Fallback: tenta coleção global products
+        if (!productSnap.exists) {
+          productSnap = await db.collection('products').doc(item.productId).get()
+        }
+
+        if (!productSnap.exists) {
+          throw new HttpsError('not-found', `Produto nao encontrado: ${item.productId}`)
+        }
+
+        const product = productSnap.data() || {}
+
+        // Verificar se produto pertence a loja (para produtos da coleção global)
+        const productStoreId = String(product.storeId || product.storeDocId || '').trim()
+        if (productStoreId && productStoreId !== storeId) {
+          throw new HttpsError('failed-precondition', `Produto nao pertence a loja: ${item.productId}`)
+        }
+
+        // Verificar disponibilidade
+        if (product.isDeleted === true || product.deletedAt) {
+          throw new HttpsError('failed-precondition', `Produto removido: ${product.name || item.productId}`)
+        }
+        if (product.isActive === false || product.active === false) {
+          throw new HttpsError('failed-precondition', `Produto inativo: ${product.name || item.productId}`)
+        }
+        if (product.isAvailable === false || product.available === false) {
+          throw new HttpsError('failed-precondition', `Produto indisponivel: ${product.name || item.productId}`)
+        }
+        const stock = product.stock
+        if (stock !== undefined && stock !== null && stock !== '' && Number(stock) <= 0) {
+          throw new HttpsError('failed-precondition', `Produto sem estoque: ${product.name || item.productId}`)
+        }
+
+        const basePriceCents = getCounterProductPriceCents(product)
+        const unitTotalCents = basePriceCents
+        const itemTotalCents = unitTotalCents * item.quantity
+        subtotalCents += itemTotalCents
+
+        builtItems.push({
+          id: productSnap.id,
+          productId: productSnap.id,
+          originalProductId: productSnap.id,
+          cartItemId: `${productSnap.id}-${item._index}`,
+          name: String(product.name || 'Produto').trim().slice(0, 160),
+          description: String(product.description || '').trim().slice(0, 500),
+          quantity: item.quantity,
+          price: basePriceCents / 100,
+          priceCents: basePriceCents,
+          basePrice: basePriceCents / 100,
+          basePriceCents,
+          unitPrice: unitTotalCents / 100,
+          unitPriceCents: unitTotalCents,
+          totalCents: itemTotalCents,
+          total: itemTotalCents / 100,
+          imageUrl: product.imageUrl || product.image || product.photoUrl || null,
+          observation: item.observation,
+          itemObservation: item.observation,
+          extras: [],
+          selectedOptionsFlat: [],
+          selectedOptionGroups: [],
+        })
+      }
+
+      if (subtotalCents <= 0) {
+        throw new HttpsError('failed-precondition', 'Total do pedido invalido.')
+      }
+
+      // 6. Determinar status de pagamento
+      const isPixManual = paymentMethod === 'pix_manual'
+      const paymentStatus = isPixManual ? 'pending' : 'pay_on_delivery'
+      const paymentLabel = COUNTER_ORDER_PAYMENT_LABELS[paymentMethod] || paymentMethod
+
+      // 7. Criar pedido no Firestore
+      const now = admin.firestore.FieldValue.serverTimestamp()
+      const orderRef = db.collection('orders').doc()
+      const orderId = orderRef.id
+
+      const orderPayload = {
+        // Identificação da loja
+        storeId,
+        storeDocId: storeId,
+        storeSlug,
+        storeKeys: uniqueTruthy([storeId, storeSlug]),
+
+        // Canal e tipo
+        channel: 'counter',
+        orderType: 'counter',
+        orderSubtype: 'balcao',
+        orderTiming: 'asap',
+        isCounterOrder: true,
+
+        // Status
+        status: 'confirmado',
+        confirmedAt: now,
+
+        // Cliente
+        customerName,
+        customer: { name: customerName, phone: '' },
+        customerPhone: '',
+
+        // Itens
+        items: builtItems,
+
+        // Valores
+        subtotal: subtotalCents / 100,
+        subtotalCents,
+        deliveryFee: 0,
+        deliveryCents: 0,
+        deliveryFeeCents: 0,
+        discount: 0,
+        discountCents: 0,
+        total: subtotalCents / 100,
+        totalCents: subtotalCents,
+
+        // Pagamento
+        payment: {
+          method: paymentMethod,
+          label: paymentLabel,
+          status: paymentStatus,
+          requiresConfirmation: isPixManual,
+        },
+        paymentMethod,
+        paymentStatus,
+
+        // Observações
+        note,
+        observation: note,
+
+        // Entrega (não tem)
+        deliveryType: 'pickup',
+        acceptDelivery: false,
+        isDelivery: false,
+
+        // Metadados
+        createdBy: uid,
+        createdByRole: 'merchant',
+        trackingToken: null,
+
+        // Timestamps
+        createdAt: now,
+        updatedAt: now,
+        statusUpdatedAt: now,
+        statusUpdatedBy: uid,
+        statusUpdatedFrom: null,
+        statusUpdatedTo: 'confirmado',
+      }
+
+      await orderRef.set(orderPayload)
+
+      // 8. Audit log
+      try {
+        await db.collection('auditLogs').add({
+          action: 'merchant_counter_order_create',
+          entity: 'order',
+          entityId: orderId,
+          storeId,
+          storeSlug,
+          actorUid: uid,
+          changedFields: Object.keys(orderPayload),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: 'cloud_function',
+        })
+      } catch (auditErr) {
+        logger?.warn?.('[createMerchantCounterOrder] audit log failed', { orderId, error: auditErr?.message })
+      }
+
+      logger?.info?.('[createMerchantCounterOrder] created', { orderId, storeId, uid, totalCents: subtotalCents })
+
+      return {
+        ok: true,
+        orderId,
+        total: subtotalCents / 100,
+        totalCents: subtotalCents,
+        itemCount: builtItems.length,
+      }
+    }
+  )
+
+  return { updateMerchantOrder, createMerchantCounterOrder }
 }
 
 module.exports = {

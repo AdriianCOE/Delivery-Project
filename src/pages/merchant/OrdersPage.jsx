@@ -56,6 +56,7 @@ import {
   FiNavigation,
   FiPackage,
   FiPhone,
+  FiPlusCircle,
   FiRefreshCw,
   FiSearch,
   FiShoppingBag,
@@ -76,6 +77,7 @@ import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import FloatingToast from '../../components/ui/FloatingToast'
+import CounterOrderModal from './components/CounterOrderModal'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'])
@@ -544,6 +546,7 @@ function getPaymentMethod(order) {
   const map = {
     pix: 'Pix',
     pix_manual: 'Pix manual',
+    asaas_online: 'Asaas online',
     card: 'Cartão',
     cartao: 'Cartão',
     'cartão': 'Cartão',
@@ -602,6 +605,18 @@ function isPixManualOrder(order) {
   ].includes(method)
 }
 
+function isAsaasOnlineOrder(order) {
+  const method = getPaymentMethodId(order)
+  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(order?.payment?.mode || order?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+
+  return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
+}
+
 function isPaymentPaid(order) {
   const status = getPaymentStatusId(order)
   const hasPaidStatus = ['paid', 'confirmed', 'pago'].includes(status)
@@ -629,8 +644,21 @@ function isPixPaymentPending(order) {
   return !isPaymentPaid(order) && ['pending', 'proof_sent', 'manual', ''].includes(paymentStatus)
 }
 
+function isAsaasPaymentPending(order) {
+  if (!isAsaasOnlineOrder(order)) return false
+
+  const paymentStatus = getPaymentStatusId(order)
+
+  return !isPaymentPaid(order) && ['pending', 'awaiting_payment', 'failed_link_creation', ''].includes(paymentStatus)
+}
+
+function getAsaasPaymentUrl(order) {
+  return order?.payment?.paymentUrl || order?.payment?.invoiceUrl || order?.paymentUrl || order?.invoiceUrl || ''
+}
+
 function shouldBlockPreparationUntilPayment(order) {
-  return isPixPaymentPending(order) && ['pendente', 'confirmado'].includes(normalizeStatus(order?.status))
+  return (isPixPaymentPending(order) || isAsaasPaymentPending(order)) &&
+    ['pendente', 'confirmado'].includes(normalizeStatus(order?.status))
 }
 
 function getPaymentProofUrl(order) {
@@ -1452,9 +1480,9 @@ function printComanda(order, store) {
       : normalizedStatus === 'entregue' || scheduledOperationalState === 'completed'
         ? 'Pedido finalizado no historico'
         : normalizedStatus === 'preparando' || scheduledOperationalState === 'scheduled_due_soon'
-          ? 'Preparar agora'
+          ? ''
           : normalizedStatus === 'pronto'
-            ? 'Pedido pronto'
+            ? ''
             : scheduledOperationalState === 'scheduled_late'
               ? ''
               : scheduledOperationalState === 'scheduled_future'
@@ -2211,6 +2239,7 @@ const normalizedPaymentMethod = String(paymentMethod || '')
 const paymentMethodLabelMap = {
   pix_manual: 'Pix manual',
   pix: 'Pix',
+  asaas_online: 'Asaas online',
   cash: 'Dinheiro',
   money: 'Dinheiro',
   dinheiro: 'Dinheiro',
@@ -2230,6 +2259,8 @@ const paymentMethodLabel =
   paymentMethodLabelMap[normalizedPaymentMethod] ||
   (normalizedPaymentMethod.includes('pix')
     ? 'Pix'
+    : normalizedPaymentMethod.includes('asaas')
+      ? 'Asaas online'
     : normalizedPaymentMethod.includes('cash') ||
         normalizedPaymentMethod.includes('money') ||
         normalizedPaymentMethod.includes('dinheiro')
@@ -2244,6 +2275,8 @@ const paymentMethodLabel =
 const PaymentMethodIcon =
   normalizedPaymentMethod.includes('pix')
     ? FiZap
+    : normalizedPaymentMethod.includes('asaas')
+      ? FiCreditCard
     : normalizedPaymentMethod.includes('cash') ||
         normalizedPaymentMethod.includes('money') ||
         normalizedPaymentMethod.includes('dinheiro')
@@ -2314,18 +2347,22 @@ const PaymentMethodIcon =
   ''
 ).toLowerCase()
 
+const isCounter = order.channel === 'counter' || order.orderType === 'counter' || order.isCounterOrder === true
+
 const orderTypeLabel =
-  order.fulfillmentTypeLabel ||
-  order.deliveryTypeLabel ||
-  (['delivery', 'entrega'].includes(rawOrderType)
-    ? 'Entrega'
-    : ['pickup', 'retirada', 'takeout', 'balcao', 'balcão'].includes(rawOrderType)
-      ? 'Retirada'
-      : ['local', 'dine_in', 'mesa'].includes(rawOrderType)
-        ? 'No local'
-        : isDeliveryOrder(order)
-          ? 'Entrega'
-          : 'Retirada')
+  isCounter
+    ? 'Balcão'
+    : order.fulfillmentTypeLabel ||
+      order.deliveryTypeLabel ||
+      (['delivery', 'entrega'].includes(rawOrderType)
+        ? 'Entrega'
+        : ['pickup', 'retirada', 'takeout', 'balcao', 'balcão'].includes(rawOrderType)
+          ? 'Retirada'
+          : ['local', 'dine_in', 'mesa'].includes(rawOrderType)
+            ? 'No local'
+            : isDeliveryOrder(order)
+              ? 'Entrega'
+              : 'Retirada')
 
 const OrderTypeIcon = orderTypeLabel === 'Entrega'
   ? FiTruck
@@ -2481,6 +2518,13 @@ const scheduledNoticeTone =
             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
               <FiZap size={11} />
               Último pedido
+            </span>
+          )}
+
+          {isCounter && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300">
+              <FiShoppingBag size={11} />
+              Balcão
             </span>
           )}
 
@@ -2883,8 +2927,12 @@ function OrderModal({
   const nextStatus = getNextStatus(status, order)
   const changeForLabel = getChangeForLabel(order)
 
-  const pixPending = shouldBlockPreparationUntilPayment(order)
+  const paymentBlocked = shouldBlockPreparationUntilPayment(order)
+  const pixPending = isPixPaymentPending(order)
   const pixPaid = isPixManualOrder(order) && isPaymentPaid(order)
+  const asaasOnline = isAsaasOnlineOrder(order)
+  const asaasPending = isAsaasPaymentPending(order)
+  const asaasPaymentUrl = getAsaasPaymentUrl(order)
   const paymentProofUrl = getPaymentProofUrl(order)
 
   const currentIndex = STATUS_FLOW.indexOf(status)
@@ -3024,6 +3072,12 @@ function OrderModal({
                     Pix pendente
                   </span>
                 )}
+                {asaasPending && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                    <FiCreditCard size={12} />
+                    Asaas pendente
+                  </span>
+                )}
                 {showCustomerThanksAction && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-200 dark:bg-green-950/50 dark:text-green-400 dark:ring-green-900">
                     <FiMessageCircle size={12} />
@@ -3051,7 +3105,7 @@ function OrderModal({
               <span className="rounded-2xl bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
                 {getPaymentMethod(order)}
               </span>
-              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
+              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ (pixPaid || (asaasOnline && isPaymentPaid(order))) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : (pixPending || asaasPending) ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
                 {getPaymentStatus(order)}
               </span>
             </div>
@@ -3076,6 +3130,16 @@ function OrderModal({
                     <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} /> 
                     {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
                   </button>
+                ) : asaasPending && asaasPaymentUrl ? (
+                  <a
+                    href={asaasPaymentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                  >
+                    <FiCreditCard size={18} />
+                    Abrir pagamento
+                  </a>
                 ) : isWaitingScheduledFuture ? (
                   <div className="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
                     <FiClock size={18} />
@@ -3331,8 +3395,8 @@ function OrderModal({
                       </div>
                     )}
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
-                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : getPaymentMethod(order)}
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid || (asaasOnline && isPaymentPaid(order)) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : paymentBlocked ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
+                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : asaasOnline ? (isPaymentPaid(order) ? 'Asaas pago' : 'Asaas pendente') : getPaymentMethod(order)}
                   </span>
                 </div>
                 {status === 'cancelado' && (
@@ -3405,7 +3469,7 @@ function OrderModal({
                   {meta.label}
                 </p>
                 <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
-                  {pixPending ? 'Aguardando confirmação do Pix.' : meta.description}
+                  {paymentBlocked ? 'Aguardando confirmacao do pagamento.' : meta.description}
                 </p>
               </section>
 
@@ -3457,7 +3521,7 @@ function OrderModal({
                           Boolean(updatingStatus) ||
                           (isFinalStatus && !active) ||
                           isPreviousStatus ||
-                          (statusOption === 'preparando' && pixPending)
+                          (statusOption === 'preparando' && paymentBlocked)
                         }
                         title={manualScheduledPrepare ? 'Adianta o preparo manualmente' : undefined}
                         className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -3536,6 +3600,7 @@ export default function OrdersPage() {
   const [toast, setToast] = useState(null)
   const [newOrderIds, setNewOrderIds] = useState(() => new Set())
   const [latestNewOrderId, setLatestNewOrderId] = useState('')
+  const [counterOrderOpen, setCounterOrderOpen] = useState(false)
   const seenOrderIdsRef = useRef(new Set())
   const firstOrdersSnapshotRef = useRef(true)
   const newOrderTimersRef = useRef({})
@@ -3647,7 +3712,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 }
 
     if (nextStatus === 'preparando' && shouldBlockPreparationUntilPayment(order)) {
-      showToast('error', 'Confirme o pagamento Pix antes de iniciar o preparo.')
+      showToast('error', 'Confirme o pagamento antes de iniciar o preparo.')
       return
     }
 
@@ -4507,6 +4572,17 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
               <FiRefreshCw />
               Tempo real
             </button>
+            {selectedStore && canReadOrders && (
+              <button
+                type="button"
+                id="counter-order-btn"
+                onClick={() => setCounterOrderOpen(true)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 text-sm font-black text-white shadow-sm shadow-violet-200/60 transition hover:bg-violet-700 active:scale-95 dark:bg-violet-500 dark:shadow-violet-900/30 dark:hover:bg-violet-600"
+              >
+                <FiPlusCircle size={16} />
+                Novo pedido
+              </button>
+            )}
           </>
         }
       />
@@ -4896,8 +4972,29 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         )}
       </AnimatePresence>
 
+
+      {counterOrderOpen && selectedStore && (
+        <CounterOrderModal
+          storeId={
+            selectedStore.storeDocId ||
+            selectedStore.storeId ||
+            selectedStore.id ||
+            selectedStoreId
+          }
+          onClose={() => setCounterOrderOpen(false)}
+          onSuccess={(data) => {
+            setCounterOrderOpen(false)
+            showToast(
+              'success',
+              `Pedido de balcão criado! Total: ${Number(data?.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+            )
+          }}
+        />
+      )}
+
       <Toast toast={toast} onClose={() => setToast(null)} />
         <DashboardFooter store={selectedStore} />
+
     </main>
   )
 }

@@ -27,7 +27,13 @@ import {
 import { useCart } from '../../contexts/CartContext'
 import { scrollToFirstError } from '../../utils/scroll'
 import { getCartSchedulingState } from '../../utils/publicScheduling'
-import { getPublicPixConfig, isPublicPaymentMethodAllowed } from '../../utils/publicPaymentMethods'
+import {
+  getPublicAsaasConfig,
+  getPublicPixConfig,
+  getPublicPreorderPaymentPolicy,
+  isPublicAsaasOnlineAllowed,
+  isPublicPaymentMethodAllowed,
+} from '../../utils/publicPaymentMethods'
 import { functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
@@ -1472,15 +1478,27 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
   const paymentOptions = useMemo(() => {
     const pixConfig = getPublicPixConfig(store)
+    const asaasConfig = getPublicAsaasConfig(store)
 
     const pixEnabled =
       isPublicPaymentMethodAllowed(store, 'pix') &&
       pixConfig.enabled === true
+    const asaasOnlineEnabled = isPublicAsaasOnlineAllowed(store)
 
     const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
     const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
 
     return [
+      asaasOnlineEnabled && {
+        value: 'asaas_online',
+        legacyLabel: 'Online',
+        label: 'Pagamento online',
+        icon: 'Asaas',
+        description: asaasConfig.maxInstallmentCount
+          ? `Pague no ambiente seguro Asaas em ate ${asaasConfig.maxInstallmentCount}x`
+          : 'Pague com Pix, boleto ou cartao no ambiente seguro Asaas',
+        paymentStatus: 'pending',
+      },
       pixEnabled && {
         value: 'pix_manual',
         legacyLabel: 'Pix',
@@ -1600,6 +1618,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const selectedSchedulingTimes = selectedSchedulingDate?.slots || []
   const pixRequiredForSchedule = schedulingState.pixRequired
   const pixOptionAvailable = paymentOptions.some((option) => option.value === 'pix_manual')
+  const preorderPaymentPolicy = getPublicPreorderPaymentPolicy(store)
+  const asaasRequiredForSchedule = orderTiming === 'scheduled' && preorderPaymentPolicy.mode === 'asaas_online'
+  const asaasOptionAvailable = paymentOptions.some((option) => option.value === 'asaas_online')
 
   useEffect(() => {
     if (schedulingState.requiresScheduling && orderTiming !== 'scheduled') {
@@ -1665,13 +1686,22 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   ])
 
   useEffect(() => {
-    if (!pixRequiredForSchedule) return
+    if (!pixRequiredForSchedule || asaasRequiredForSchedule) return
 
     if (pixOptionAvailable && paymentMethod !== 'pix_manual') {
       setPaymentMethod('pix_manual')
       setChangeFor('')
     }
-  }, [paymentMethod, pixOptionAvailable, pixRequiredForSchedule])
+  }, [asaasRequiredForSchedule, paymentMethod, pixOptionAvailable, pixRequiredForSchedule])
+
+  useEffect(() => {
+    if (!asaasRequiredForSchedule) return
+
+    if (asaasOptionAvailable && paymentMethod !== 'asaas_online') {
+      setPaymentMethod('asaas_online')
+      setChangeFor('')
+    }
+  }, [asaasOptionAvailable, asaasRequiredForSchedule, paymentMethod])
 
   const handleQuantity = useCallback(
     (item, nextQuantity) => {
@@ -1941,8 +1971,16 @@ if (orderType === 'delivery') {
       return 'Este pedido exige Pix antecipado, mas a loja não configurou Pix.'
     }
 
-    if (pixRequiredForSchedule && paymentMethod !== 'pix_manual') {
+    if (pixRequiredForSchedule && !asaasRequiredForSchedule && paymentMethod !== 'pix_manual') {
       return 'Este pedido exige pagamento antecipado via Pix.'
+    }
+
+    if (asaasRequiredForSchedule && !asaasOptionAvailable) {
+      return 'Este pedido exige pagamento online, mas a loja ainda nÃ£o ativou o Asaas.'
+    }
+
+    if (asaasRequiredForSchedule && paymentMethod !== 'asaas_online') {
+      return 'Este pedido exige pagamento online pelo Asaas.'
     }
 
     if (paymentMethod === 'pix_manual') {
@@ -1962,6 +2000,8 @@ if (orderType === 'delivery') {
 
     return ''
   }, [
+  asaasOptionAvailable,
+  asaasRequiredForSchedule,
   belowMinimum,
   blockingCepError,
   canUseDelivery,
@@ -2051,6 +2091,12 @@ if (orderType === 'delivery') {
         ...(address || {}),
         address,
         paymentMethod,
+        ...(paymentMethod === 'asaas_online'
+          ? {
+              paymentMode: 'online',
+              paymentProvider: 'asaas',
+            }
+          : {}),
         changeFor,
         couponCode: appliedCoupon?.code || null,
         orderTiming,
@@ -2077,6 +2123,7 @@ if (orderType === 'delivery') {
         storeId: finalStoreId,
         storeSlug,
         trackingUrl: createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`,
+        paymentUrl: createdOrder.paymentUrl || '',
         createdAt: new Date().toISOString(),
       }
       const savedTrackingRecords = loadTrackingRecords()
@@ -2826,7 +2873,14 @@ if (orderType === 'delivery') {
                   )}
 
                   <SectionCard title="Pagamento" icon={FiCreditCard}>
-                    {pixRequiredForSchedule && (
+                    {asaasRequiredForSchedule && (
+                      <div className="flex items-start gap-2 rounded-2xl border border-green-100 bg-green-50 p-3 text-xs font-bold leading-5 text-green-800">
+                        <FiShield className="mt-0.5 shrink-0" />
+                        <span>Este pedido exige pagamento online antecipado no ambiente seguro Asaas.</span>
+                      </div>
+                    )}
+
+                    {pixRequiredForSchedule && !asaasRequiredForSchedule && (
                       <div className="flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
                         <FiShield className="mt-0.5 shrink-0" />
                         <span>Este pedido exige Pix antecipado. A loja confirma o preparo após o pagamento.</span>
@@ -2839,7 +2893,9 @@ if (orderType === 'delivery') {
                       </div>
                     ) : (
                       paymentOptions.map((option) => {
-                        const paymentDisabled = pixRequiredForSchedule && option.value !== 'pix_manual'
+                        const paymentDisabled = asaasRequiredForSchedule
+                          ? option.value !== 'asaas_online'
+                          : pixRequiredForSchedule && option.value !== 'pix_manual'
 
                         return (
                           <button
@@ -2925,6 +2981,25 @@ if (orderType === 'delivery') {
                             <p className="mt-1 text-xs font-bold leading-5 text-[#9a3412]">
                               Depois de enviar o pedido, você verá o Pix copia e cola na tela de acompanhamento.
                               A loja só iniciará o preparo após confirmar o pagamento.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === 'asaas_online' && (
+                      <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+                        <div className="flex gap-3">
+                          <FiShield className="mt-0.5 shrink-0 text-green-700" />
+
+                          <div>
+                            <p className="text-sm font-black text-[#111827]">
+                              Pagamento online Asaas
+                            </p>
+
+                            <p className="mt-1 text-xs font-bold leading-5 text-green-800">
+                              Depois de enviar o pedido, voce vera o botao para pagar agora no ambiente seguro Asaas.
+                              A loja comeca o preparo apos a confirmacao automatica.
                             </p>
                           </div>
                         </div>

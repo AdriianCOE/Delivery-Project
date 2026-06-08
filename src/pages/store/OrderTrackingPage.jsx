@@ -307,6 +307,18 @@ function isPixManualOrder(order) {
   ].includes(method)
 }
 
+function isAsaasOnlineOrder(order) {
+  const method = getPaymentMethodId(order)
+  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(order?.payment?.mode || order?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+
+  return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
+}
+
 function isPaymentPaid(order) {
   const paymentStatus = getPaymentStatusId(order)
 
@@ -315,6 +327,22 @@ function isPaymentPaid(order) {
     paymentStatus === 'pago' ||
     Boolean(order?.payment?.paidAt || order?.paidAt || order?.payment?.confirmedAt)
   )
+}
+
+function getAsaasPaymentUrl(order) {
+  return (
+    order?.payment?.paymentUrl ||
+    order?.payment?.invoiceUrl ||
+    order?.paymentUrl ||
+    order?.invoiceUrl ||
+    ''
+  )
+}
+
+function isAsaasPaymentPending(order) {
+  if (!isAsaasOnlineOrder(order) || isPaymentPaid(order)) return false
+  const status = getPaymentStatusId(order)
+  return ['', 'pending', 'awaiting_payment', 'failed_link_creation'].includes(status)
 }
 
 function isPixPaymentPending(order) {
@@ -1352,6 +1380,124 @@ function PixManualPaymentCard({
   )
 }
 
+function AsaasOnlinePaymentCard({ order, trackingToken }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const paymentUrl = getAsaasPaymentUrl(order)
+  const status = getPaymentStatusId(order)
+  const paid = isPaymentPaid(order)
+  const pending = isAsaasPaymentPending(order)
+  const failed = ['failed', 'expired', 'canceled', 'refunded', 'chargeback_requested'].includes(status)
+
+  const handleOpenPayment = useCallback(async () => {
+    if (paymentUrl) {
+      window.open(paymentUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+
+    if (!order?.id || !trackingToken) {
+      setError('Link de pagamento indisponivel. Fale com a loja.')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError('')
+      const createPayment = httpsCallable(functions, 'createAsaasOrderPayment')
+      const result = await createPayment({
+        orderId: order.id,
+        trackingToken,
+      })
+      const nextUrl = result?.data?.paymentUrl || result?.data?.invoiceUrl
+      if (!nextUrl) throw new Error('Link de pagamento indisponivel.')
+      window.open(nextUrl, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      setError(err?.message || 'Nao foi possivel abrir o pagamento.')
+    } finally {
+      setLoading(false)
+    }
+  }, [order?.id, paymentUrl, trackingToken])
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-green-100 bg-white shadow-sm print:hidden">
+      <div className="bg-green-50 p-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-green-700 shadow-sm">
+            <FiCreditCard size={24} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-green-700 shadow-sm">
+              Asaas
+            </span>
+
+            <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
+              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atencao' : 'Aguardando pagamento online'}
+            </h3>
+
+            <p className="mt-2 text-sm font-semibold leading-6 text-green-800">
+              {paid
+                ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
+                : failed
+                  ? 'Nao foi possivel confirmar esse pagamento. Fale com a loja para combinar o proximo passo.'
+                  : 'Pague agora no ambiente seguro Asaas. A loja inicia o preparo apos a confirmacao automatica.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
+              Valor
+            </p>
+            <p className="mt-1 text-2xl font-black text-[#111827]">
+              {formatMoney(getOrderTotal(order))}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
+              Status
+            </p>
+            <p className={`mt-1 text-sm font-black ${paid ? 'text-green-600' : failed ? 'text-red-600' : 'text-amber-700'}`}>
+              {paid ? 'Pago' : failed ? 'Nao confirmado' : 'Aguardando pagamento'}
+            </p>
+          </div>
+        </div>
+
+        {pending && (
+          <button
+            type="button"
+            onClick={handleOpenPayment}
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {loading ? (
+              <>
+                <FiLoader className="animate-spin" />
+                Abrindo pagamento...
+              </>
+            ) : (
+              <>
+                <FiCreditCard />
+                Pagar agora no ambiente seguro Asaas
+              </>
+            )}
+          </button>
+        )}
+
+        {error && (
+          <p className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">
+            {error}
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function PixQrCodeBox({ pixCopyPaste, orderDisplayNumber }) {
   if (!pixCopyPaste) return null
 
@@ -1815,10 +1961,12 @@ const isDelivered = status === 'entregue'
   const orderDisplayNumber = getOrderDisplayNumber(order, orderId)
   const storePhone = getStorePhone(order, store)
   const isPixManual = isPixManualOrder(order)
+  const isAsaasOnline = isAsaasOnlineOrder(order)
   const pixPaymentPending = isPixPaymentPending(order)
   const pixPaid = isPixManual && isPaymentPaid(order)
   const pixCopyPaste = getPixCopyPaste(order)
   const shouldShowPixCard = isPixManual && !isCanceled && !isDelivered && (pixPaymentPending || pixPaid)
+  const shouldShowAsaasCard = isAsaasOnline && !isCanceled && !isDelivered
   const scheduledOrder = isScheduledOrder(order)
   const scheduledOrderLabel = formatScheduledOrderDate(order)
   const showScheduledPixNotice = order?.paymentPolicy === 'pix_required' || pixPaymentPending
@@ -2371,6 +2519,13 @@ const isDelivered = status === 'entregue'
             onSendProof={handleSendPixProof}
             proofLoading={proofLoading}
             orderDisplayNumber={orderDisplayNumber}
+          />
+        )}
+
+        {shouldShowAsaasCard && (
+          <AsaasOnlinePaymentCard
+            order={order}
+            trackingToken={trackingToken}
           />
         )}
 

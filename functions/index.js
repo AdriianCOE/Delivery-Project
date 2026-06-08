@@ -14,6 +14,10 @@ const { createPublicOrderHandler } = require('./publicOrder')
 const { createAsaasFunctions } = require('./asaas')
 const { createMerchantOrderFunctions } = require('./merchantOrder')
 const {
+  createAsaasOrderFunctions,
+  sanitizePublicStorePayments,
+} = require('./shared/asaasOrders')
+const {
   disableCustomerOrderPushToken,
   registerCustomerOrderPushToken,
   sendCustomerOrderStatusPushToOrder,
@@ -55,6 +59,8 @@ const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
 const REGION = 'southamerica-east1'
 const CLOUDINARY_API_SECRET = defineSecret('CLOUDINARY_API_SECRET')
+const ASAAS_ORDERS_API_KEY = defineSecret('ASAAS_ORDERS_API_KEY')
+const ASAAS_ORDERS_WEBHOOK_SECRET = defineSecret('ASAAS_ORDERS_WEBHOOK_SECRET')
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
 const LEGAL_CONFIG_COLLECTION = 'config'
 const LEGAL_CONFIG_DOC = 'legal'
@@ -71,6 +77,22 @@ const merchantOrderFunctions = createMerchantOrderFunctions({
     orderId,
     status,
     orderData,
+  }),
+})
+const asaasOrderFunctions = createAsaasOrderFunctions({
+  db,
+  admin,
+  HttpsError,
+  logger,
+  region: REGION,
+  apiKeySecret: ASAAS_ORDERS_API_KEY,
+  webhookSecret: ASAAS_ORDERS_WEBHOOK_SECRET,
+  sendNewOrderPushToStore: ({ storeId, orderId }) => sendNewOrderPushToStore({
+    db,
+    admin,
+    logger,
+    storeId,
+    orderId,
   }),
 })
 
@@ -214,6 +236,9 @@ exports.createPaymentMethodUpdateCheckout = asaasFunctions.createPaymentMethodUp
 exports.asaasWebhook = asaasFunctions.asaasWebhook
 exports.adminUpdateSubscriptionRequestStatus = asaasFunctions.adminUpdateSubscriptionRequestStatus
 exports.updateMerchantOrder = merchantOrderFunctions.updateMerchantOrder
+exports.createMerchantCounterOrder = merchantOrderFunctions.createMerchantCounterOrder
+exports.createAsaasOrderPayment = asaasOrderFunctions.createAsaasOrderPayment
+exports.asaasOrderWebhook = asaasOrderFunctions.asaasOrderWebhook
 
 exports.createPublicOrder = onCall(
   {
@@ -222,6 +247,7 @@ exports.createPublicOrder = onCall(
     memory: '256MiB',
     maxInstances: 10,
     enforceAppCheck: ENFORCE_APP_CHECK,
+    secrets: [ASAAS_ORDERS_API_KEY],
   },
   createPublicOrderHandler({
     db,
@@ -236,6 +262,13 @@ exports.createPublicOrder = onCall(
       storeId,
       orderId,
     }),
+    createAsaasOrderPaymentLink: () => {
+      try {
+        return ASAAS_ORDERS_API_KEY.value() || process.env.ASAAS_ORDERS_API_KEY || ''
+      } catch {
+        return process.env.ASAAS_ORDERS_API_KEY || ''
+      }
+    },
   })
 )
 
@@ -809,6 +842,7 @@ function sanitizePublicStore(data) {
   profile.pix = {
     enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
   }
+  profile.payments = sanitizePublicStorePayments(data)
   profile.publicScheduling = sanitizePublicStoreScheduling(data)
 
   return profile
@@ -2841,7 +2875,7 @@ exports.auditStoreChanges = onDocumentUpdated(
 // ---------------------------------------------------------------------------
 // Scheduler: limpa usuários anônimos do Firebase Auth com mais de 30 dias.
 // Evita acumulação ilimitada de contas fantasmas de visitantes da storefront.
-// Roda diariamente às 03:00 (horário de Brasília = 06:00 UTC).
+// Roda diariamente as 03:00 no horario de Brasilia (06:00 UTC).
 // ---------------------------------------------------------------------------
 exports.cleanupAnonymousUsers = onSchedule(
   {

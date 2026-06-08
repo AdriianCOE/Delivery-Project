@@ -1,0 +1,1862 @@
+diff --git a/functions/publicOrder.js b/functions/publicOrder.js
+index 6fa4bc04..0c63229c 100644
+--- a/functions/publicOrder.js
++++ b/functions/publicOrder.js
+@@ -1,6 +1,14 @@
+ const crypto = require('crypto')
+ const { normalizeBrazilianPhone } = require('./shared/phone')
+ const { buildOrderSchedulingDecision } = require('./shared/orderScheduling')
++const {
++  buildAsaasLinkCreationFailurePatch,
++  buildAsaasPendingPaymentSnapshot,
++  createOrderPaymentLink,
++  isAsaasOnlineActive,
++  isAsaasOnlinePaymentRequest,
++  orderRequiresAsaasOnline,
++} = require('./shared/asaasOrders')
+ 
+ class PublicOrderError extends Error {
+   constructor(code, message) {
+@@ -1201,6 +1209,49 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
+   fail('invalid-argument', 'Forma de pagamento invalida.')
+ }
+ 
++function getPublicOrderPaymentSnapshot({
++  input,
++  store,
++  paymentMethod,
++  totalCents,
++  changeFor,
++  trackingToken,
++  storeSlug,
++  schedulingDecision,
++}) {
++  const requiresAsaasOnline = orderRequiresAsaasOnline({ store, schedulingDecision })
++  const requestedAsaasOnline = isAsaasOnlinePaymentRequest({
++    ...input,
++    paymentMethod,
++  })
++
++  if (requiresAsaasOnline || requestedAsaasOnline) {
++    if (typeof input.asaasOrdersApiKeyConfigured === 'boolean' && !input.asaasOrdersApiKeyConfigured) {
++      fail('failed-precondition', 'Pagamento online nao configurado.')
++    }
++
++    if (!isAsaasOnlineActive(store)) {
++      fail('failed-precondition', 'Pagamento online indisponivel para esta loja.')
++    }
++
++    return buildAsaasPendingPaymentSnapshot({
++      totalCents,
++      storeId: getStoreDocId(store),
++      storeSlug,
++      orderId: trackingToken,
++    })
++  }
++
++  return getPaymentMethodSnapshot({
++    store,
++    paymentMethod,
++    totalCents,
++    changeFor,
++    trackingToken,
++    storeSlug,
++  })
++}
++
+ function buildDeliveryAddress(input, deliveryType, neighborhood) {
+   if (deliveryType !== 'delivery') return null
+ 
+@@ -1256,6 +1307,7 @@ function createPublicOrderHandler({
+   logger,
+   maxOrderCents = 100000000,
+   sendNewOrderPushToStore = null,
++  createAsaasOrderPaymentLink = null,
+ }) {
+   return async (request) => {
+     try {
+@@ -1436,13 +1488,20 @@ function createPublicOrderHandler({
+           fail('failed-precondition', 'Total do pedido invalido.')
+         }
+ 
+-        const paymentSnapshot = getPaymentMethodSnapshot({
++        const paymentSnapshot = getPublicOrderPaymentSnapshot({
++          input: {
++            ...input,
++            asaasOrdersApiKeyConfigured: typeof createAsaasOrderPaymentLink === 'function'
++              ? Boolean(createAsaasOrderPaymentLink())
++              : false,
++          },
+           store: liveStore,
+           paymentMethod: input.paymentMethod,
+           totalCents,
+           changeFor: input.changeFor,
+           trackingToken,
+           storeSlug,
++          schedulingDecision,
+         })
+ 
+         const legacyAddress = delivery.deliveryType === 'delivery'
+@@ -1583,6 +1642,11 @@ function createPublicOrderHandler({
+           orderId: orderRef.id,
+           trackingToken,
+           trackingUrl: `/${storeSlug}/pedido/${trackingToken}`,
++          payment: {
++            mode: paymentSnapshot.paymentMode || 'manual',
++            provider: paymentSnapshot.paymentProvider || null,
++            status: paymentSnapshot.paymentStatus || null,
++          },
+           totals: {
+             subtotalCents,
+             discountCents,
+@@ -1593,15 +1657,59 @@ function createPublicOrderHandler({
+         }
+       })
+ 
++      let onlinePaymentLink = null
++      let onlinePaymentLinkError = null
++
++      if (result.payment?.mode === 'online' && result.payment.provider === 'asaas') {
++        const orderRefForPayment = db.collection('orders').doc(result.orderId)
++        try {
++          const [orderSnapshot, storeSnapshot] = await Promise.all([
++            orderRefForPayment.get(),
++            db.collection('stores').doc(storeDocId).get(),
++          ])
++
++          onlinePaymentLink = await createOrderPaymentLink({
++            db,
++            admin,
++            logger,
++            apiKey: typeof createAsaasOrderPaymentLink === 'function'
++              ? createAsaasOrderPaymentLink()
++              : '',
++            orderRef: orderRefForPayment,
++            orderData: {
++              id: orderSnapshot.id,
++              ...(orderSnapshot.data() || {}),
++            },
++            storeData: storeSnapshot.data() || {},
++          })
++        } catch (paymentError) {
++          logger.error('Public order created but Asaas payment link failed.', {
++            orderId: result.orderId,
++            storeId: storeDocId,
++            error: paymentError?.message || String(paymentError),
++          })
++          onlinePaymentLinkError = paymentError
++          await orderRefForPayment.set(
++            buildAsaasLinkCreationFailurePatch({ admin, error: paymentError }),
++            { merge: true }
++          )
++        }
++      }
++
+       logger.info('Public order created server-side', {
+         orderId: result.orderId,
+         storeId: storeDocId,
+         storeSlug,
+         totalCents: result.totals.totalCents,
+         hasCoupon: Boolean(couponCode),
++        paymentMode: result.payment?.mode || 'manual',
+       })
+ 
+-      if (typeof sendNewOrderPushToStore === 'function') {
++      const shouldNotifyNewOrder =
++        result.payment?.mode !== 'online' ||
++        result.payment?.status === 'paid'
++
++      if (shouldNotifyNewOrder && typeof sendNewOrderPushToStore === 'function') {
+         try {
+           await sendNewOrderPushToStore({
+             storeId: storeDocId,
+@@ -1616,7 +1724,23 @@ function createPublicOrderHandler({
+         }
+       }
+ 
+-      return result
++      return {
++        ...result,
++        ...(onlinePaymentLink
++          ? {
++              paymentUrl: onlinePaymentLink.paymentUrl,
++              invoiceUrl: onlinePaymentLink.invoiceUrl,
++              providerPaymentLinkId: onlinePaymentLink.providerPaymentLinkId,
++            }
++          : {}),
++        ...(onlinePaymentLinkError
++          ? {
++              paymentStatus: 'failed_link_creation',
++              paymentError: 'failed_link_creation',
++              paymentMessage: 'Pedido recebido, mas nao foi possivel gerar o link de pagamento agora. Tente pagar pela tela de acompanhamento.',
++            }
++          : {}),
++      }
+     } catch (error) {
+       if (error instanceof PublicOrderError) {
+         throw new HttpsError(error.code, error.message)
+diff --git a/functions/scripts/backfillPublicCatalog.js b/functions/scripts/backfillPublicCatalog.js
+index bca1550d..780b9623 100644
+--- a/functions/scripts/backfillPublicCatalog.js
++++ b/functions/scripts/backfillPublicCatalog.js
+@@ -5,6 +5,9 @@ const {
+   sanitizePublicProductScheduling,
+   sanitizePublicStoreScheduling,
+ } = require('../shared/publicScheduling')
++const {
++  sanitizePublicStorePayments,
++} = require('../shared/asaasOrders')
+ 
+ admin.initializeApp({
+   projectId:
+@@ -212,6 +215,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
+     isDeleted: data.isDeleted === true,
+     address: sanitizePublicAddress(data),
+     settings: sanitizePublicStoreSettings(data.settings),
++    payments: sanitizePublicStorePayments(data),
+     publicScheduling: sanitizePublicStoreScheduling(data),
+   }
+ 
+diff --git a/src/pages/merchant/KitchenDisplayPage.jsx b/src/pages/merchant/KitchenDisplayPage.jsx
+index c6941231..80bc6785 100644
+--- a/src/pages/merchant/KitchenDisplayPage.jsx
++++ b/src/pages/merchant/KitchenDisplayPage.jsx
+@@ -180,9 +180,28 @@ function getKdsNextAction(_order, _status, cfg) {
+   return cfg.nextAction
+ }
+ 
++function isOnlinePaymentPending(order) {
++  const method = String(order?.payment?.method || order?.paymentMethod || order?.paymentType || '')
++    .toLowerCase()
++    .trim()
++  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
++    .toLowerCase()
++    .trim()
++  const mode = String(order?.payment?.mode || order?.paymentMode || '')
++    .toLowerCase()
++    .trim()
++  const paymentStatus = String(order?.payment?.status || order?.paymentStatus || '')
++    .toLowerCase()
++    .trim()
++
++  if (method !== 'asaas_online' && !(provider === 'asaas' && mode === 'online')) return false
++  return !['paid', 'confirmed', 'pago'].includes(paymentStatus)
++}
++
+ function shouldShowInMainKds(order, now) {
+   const status = normalizeKdsStatus(order?.status)
+   if (!KDS_COLUMNS.includes(status)) return false
++  if (order?.operationalBlockedReason === 'awaiting_online_payment' || isOnlinePaymentPending(order)) return false
+   if (!isScheduledOrder(order)) return true
+   if (status === 'preparando' || status === 'pronto') return true
+   return isOrderOperationalNow(order, { now })
+diff --git a/src/pages/merchant/Settings.jsx b/src/pages/merchant/Settings.jsx
+index e5d0c0bb..1c40e776 100644
+--- a/src/pages/merchant/Settings.jsx
++++ b/src/pages/merchant/Settings.jsx
+@@ -1088,6 +1088,10 @@ export default function Settings() {
+   }, [form, selectedStore])
+ 
+   const pixRequiredAndIncomplete = form.paymentPix && !pixCompleteness.complete
++  const asaasOrderPayments = selectedStore?.payments?.asaas || {}
++  const asaasOrderPaymentsActive =
++    asaasOrderPayments.enabled === true &&
++    String(asaasOrderPayments.status || '').toLowerCase() === 'active'
+   const schedulingLeadInput = useMemo(
+     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
+     [form.scheduling?.minLeadMinutes]
+@@ -2432,6 +2436,33 @@ export default function Settings() {
+               />
+             </div>
+ 
++            <div className={`mt-5 rounded-[1.5rem] border p-4 ${
++              asaasOrderPaymentsActive
++                ? 'border-green-100 bg-green-50 text-green-900'
++                : 'border-gray-100 bg-[#f9fafb] text-[#374151]'
++            }`}>
++              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
++                <div>
++                  <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
++                    Pagamento online Asaas
++                  </p>
++                  <p className="mt-1 text-xs font-bold leading-5">
++                    {asaasOrderPaymentsActive
++                      ? 'Ativo para pedidos piloto. O cliente paga no ambiente seguro Asaas.'
++                      : 'Nao ativo nesta loja. A ativacao e feita pelo suporte/admin, sem pedir API key ao lojista.'}
++                  </p>
++                </div>
++
++                <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${
++                  asaasOrderPaymentsActive
++                    ? 'bg-green-100 text-green-700'
++                    : 'bg-gray-100 text-gray-600'
++                }`}>
++                  {asaasOrderPaymentsActive ? 'Ativo' : 'Inativo'}
++                </span>
++              </div>
++            </div>
++
+             {pixRequiredAndIncomplete && (
+               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800 scroll-mt-24">
+                 Para ativar Pix no cardápio público, preencha a chave, o nome do recebedor e a cidade abaixo.
+diff --git a/src/pages/store/CartDrawer.jsx b/src/pages/store/CartDrawer.jsx
+index f9f1c2b3..93d7ae43 100644
+--- a/src/pages/store/CartDrawer.jsx
++++ b/src/pages/store/CartDrawer.jsx
+@@ -27,7 +27,13 @@ import {
+ import { useCart } from '../../contexts/CartContext'
+ import { scrollToFirstError } from '../../utils/scroll'
+ import { getCartSchedulingState } from '../../utils/publicScheduling'
+-import { getPublicPixConfig, isPublicPaymentMethodAllowed } from '../../utils/publicPaymentMethods'
++import {
++  getPublicAsaasConfig,
++  getPublicPixConfig,
++  getPublicPreorderPaymentPolicy,
++  isPublicAsaasOnlineAllowed,
++  isPublicPaymentMethodAllowed,
++} from '../../utils/publicPaymentMethods'
+ import { functions } from '../../services/firebase'
+ 
+ const CUSTOMER_KEY = '@PratoBy:customer'
+@@ -1472,15 +1478,27 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+ 
+   const paymentOptions = useMemo(() => {
+     const pixConfig = getPublicPixConfig(store)
++    const asaasConfig = getPublicAsaasConfig(store)
+ 
+     const pixEnabled =
+       isPublicPaymentMethodAllowed(store, 'pix') &&
+       pixConfig.enabled === true
++    const asaasOnlineEnabled = isPublicAsaasOnlineAllowed(store)
+ 
+     const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
+     const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
+ 
+     return [
++      asaasOnlineEnabled && {
++        value: 'asaas_online',
++        legacyLabel: 'Online',
++        label: 'Pagamento online',
++        icon: 'Asaas',
++        description: asaasConfig.maxInstallmentCount
++          ? `Pague no ambiente seguro Asaas em ate ${asaasConfig.maxInstallmentCount}x`
++          : 'Pague com Pix, boleto ou cartao no ambiente seguro Asaas',
++        paymentStatus: 'pending',
++      },
+       pixEnabled && {
+         value: 'pix_manual',
+         legacyLabel: 'Pix',
+@@ -1600,6 +1618,9 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+   const selectedSchedulingTimes = selectedSchedulingDate?.slots || []
+   const pixRequiredForSchedule = schedulingState.pixRequired
+   const pixOptionAvailable = paymentOptions.some((option) => option.value === 'pix_manual')
++  const preorderPaymentPolicy = getPublicPreorderPaymentPolicy(store)
++  const asaasRequiredForSchedule = orderTiming === 'scheduled' && preorderPaymentPolicy.mode === 'asaas_online'
++  const asaasOptionAvailable = paymentOptions.some((option) => option.value === 'asaas_online')
+ 
+   useEffect(() => {
+     if (schedulingState.requiresScheduling && orderTiming !== 'scheduled') {
+@@ -1665,13 +1686,22 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+   ])
+ 
+   useEffect(() => {
+-    if (!pixRequiredForSchedule) return
++    if (!pixRequiredForSchedule || asaasRequiredForSchedule) return
+ 
+     if (pixOptionAvailable && paymentMethod !== 'pix_manual') {
+       setPaymentMethod('pix_manual')
+       setChangeFor('')
+     }
+-  }, [paymentMethod, pixOptionAvailable, pixRequiredForSchedule])
++  }, [asaasRequiredForSchedule, paymentMethod, pixOptionAvailable, pixRequiredForSchedule])
++
++  useEffect(() => {
++    if (!asaasRequiredForSchedule) return
++
++    if (asaasOptionAvailable && paymentMethod !== 'asaas_online') {
++      setPaymentMethod('asaas_online')
++      setChangeFor('')
++    }
++  }, [asaasOptionAvailable, asaasRequiredForSchedule, paymentMethod])
+ 
+   const handleQuantity = useCallback(
+     (item, nextQuantity) => {
+@@ -1941,10 +1971,18 @@ if (orderType === 'delivery') {
+       return 'Este pedido exige Pix antecipado, mas a loja não configurou Pix.'
+     }
+ 
+-    if (pixRequiredForSchedule && paymentMethod !== 'pix_manual') {
++    if (pixRequiredForSchedule && !asaasRequiredForSchedule && paymentMethod !== 'pix_manual') {
+       return 'Este pedido exige pagamento antecipado via Pix.'
+     }
+ 
++    if (asaasRequiredForSchedule && !asaasOptionAvailable) {
++      return 'Este pedido exige pagamento online, mas a loja ainda nÃ£o ativou o Asaas.'
++    }
++
++    if (asaasRequiredForSchedule && paymentMethod !== 'asaas_online') {
++      return 'Este pedido exige pagamento online pelo Asaas.'
++    }
++
+     if (paymentMethod === 'pix_manual') {
+       // O frontend confia nas flags públicas para exibir a opção Pix.
+       // O backend (createPublicOrder) fará a validação final da chave e gerará a cobrança/brcode de forma segura.
+@@ -1962,6 +2000,8 @@ if (orderType === 'delivery') {
+ 
+     return ''
+   }, [
++  asaasOptionAvailable,
++  asaasRequiredForSchedule,
+   belowMinimum,
+   blockingCepError,
+   canUseDelivery,
+@@ -2051,6 +2091,12 @@ if (orderType === 'delivery') {
+         ...(address || {}),
+         address,
+         paymentMethod,
++        ...(paymentMethod === 'asaas_online'
++          ? {
++              paymentMode: 'online',
++              paymentProvider: 'asaas',
++            }
++          : {}),
+         changeFor,
+         couponCode: appliedCoupon?.code || null,
+         orderTiming,
+@@ -2077,6 +2123,7 @@ if (orderType === 'delivery') {
+         storeId: finalStoreId,
+         storeSlug,
+         trackingUrl: createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`,
++        paymentUrl: createdOrder.paymentUrl || '',
+         createdAt: new Date().toISOString(),
+       }
+       const savedTrackingRecords = loadTrackingRecords()
+@@ -2826,7 +2873,14 @@ if (orderType === 'delivery') {
+                   )}
+ 
+                   <SectionCard title="Pagamento" icon={FiCreditCard}>
+-                    {pixRequiredForSchedule && (
++                    {asaasRequiredForSchedule && (
++                      <div className="flex items-start gap-2 rounded-2xl border border-green-100 bg-green-50 p-3 text-xs font-bold leading-5 text-green-800">
++                        <FiShield className="mt-0.5 shrink-0" />
++                        <span>Este pedido exige pagamento online antecipado no ambiente seguro Asaas.</span>
++                      </div>
++                    )}
++
++                    {pixRequiredForSchedule && !asaasRequiredForSchedule && (
+                       <div className="flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
+                         <FiShield className="mt-0.5 shrink-0" />
+                         <span>Este pedido exige Pix antecipado. A loja confirma o preparo após o pagamento.</span>
+@@ -2839,7 +2893,9 @@ if (orderType === 'delivery') {
+                       </div>
+                     ) : (
+                       paymentOptions.map((option) => {
+-                        const paymentDisabled = pixRequiredForSchedule && option.value !== 'pix_manual'
++                        const paymentDisabled = asaasRequiredForSchedule
++                          ? option.value !== 'asaas_online'
++                          : pixRequiredForSchedule && option.value !== 'pix_manual'
+ 
+                         return (
+                           <button
+@@ -2930,6 +2986,25 @@ if (orderType === 'delivery') {
+                         </div>
+                       </div>
+                     )}
++
++                    {paymentMethod === 'asaas_online' && (
++                      <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
++                        <div className="flex gap-3">
++                          <FiShield className="mt-0.5 shrink-0 text-green-700" />
++
++                          <div>
++                            <p className="text-sm font-black text-[#111827]">
++                              Pagamento online Asaas
++                            </p>
++
++                            <p className="mt-1 text-xs font-bold leading-5 text-green-800">
++                              Depois de enviar o pedido, voce vera o botao para pagar agora no ambiente seguro Asaas.
++                              A loja comeca o preparo apos a confirmacao automatica.
++                            </p>
++                          </div>
++                        </div>
++                      </div>
++                    )}
+                   </SectionCard>
+ 
+                   <SectionCard title="Cupom de desconto" icon={FiTag}>
+diff --git a/src/pages/store/OrderTrackingPage.jsx b/src/pages/store/OrderTrackingPage.jsx
+index afeaf02d..79051fb2 100644
+--- a/src/pages/store/OrderTrackingPage.jsx
++++ b/src/pages/store/OrderTrackingPage.jsx
+@@ -307,6 +307,18 @@ function isPixManualOrder(order) {
+   ].includes(method)
+ }
+ 
++function isAsaasOnlineOrder(order) {
++  const method = getPaymentMethodId(order)
++  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
++    .toLowerCase()
++    .trim()
++  const mode = String(order?.payment?.mode || order?.paymentMode || '')
++    .toLowerCase()
++    .trim()
++
++  return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
++}
++
+ function isPaymentPaid(order) {
+   const paymentStatus = getPaymentStatusId(order)
+ 
+@@ -317,6 +329,22 @@ function isPaymentPaid(order) {
+   )
+ }
+ 
++function getAsaasPaymentUrl(order) {
++  return (
++    order?.payment?.paymentUrl ||
++    order?.payment?.invoiceUrl ||
++    order?.paymentUrl ||
++    order?.invoiceUrl ||
++    ''
++  )
++}
++
++function isAsaasPaymentPending(order) {
++  if (!isAsaasOnlineOrder(order) || isPaymentPaid(order)) return false
++  const status = getPaymentStatusId(order)
++  return ['', 'pending', 'awaiting_payment', 'failed_link_creation'].includes(status)
++}
++
+ function isPixPaymentPending(order) {
+   if (!isPixManualOrder(order) || isPaymentPaid(order)) return false
+ 
+@@ -1352,6 +1380,124 @@ function PixManualPaymentCard({
+   )
+ }
+ 
++function AsaasOnlinePaymentCard({ order, trackingToken }) {
++  const [loading, setLoading] = useState(false)
++  const [error, setError] = useState('')
++  const paymentUrl = getAsaasPaymentUrl(order)
++  const status = getPaymentStatusId(order)
++  const paid = isPaymentPaid(order)
++  const pending = isAsaasPaymentPending(order)
++  const failed = ['failed', 'expired', 'canceled', 'refunded', 'chargeback_requested'].includes(status)
++
++  const handleOpenPayment = useCallback(async () => {
++    if (paymentUrl) {
++      window.open(paymentUrl, '_blank', 'noopener,noreferrer')
++      return
++    }
++
++    if (!order?.id || !trackingToken) {
++      setError('Link de pagamento indisponivel. Fale com a loja.')
++      return
++    }
++
++    try {
++      setLoading(true)
++      setError('')
++      const createPayment = httpsCallable(functions, 'createAsaasOrderPayment')
++      const result = await createPayment({
++        orderId: order.id,
++        trackingToken,
++      })
++      const nextUrl = result?.data?.paymentUrl || result?.data?.invoiceUrl
++      if (!nextUrl) throw new Error('Link de pagamento indisponivel.')
++      window.open(nextUrl, '_blank', 'noopener,noreferrer')
++    } catch (err) {
++      setError(err?.message || 'Nao foi possivel abrir o pagamento.')
++    } finally {
++      setLoading(false)
++    }
++  }, [order?.id, paymentUrl, trackingToken])
++
++  return (
++    <section className="overflow-hidden rounded-[2rem] border border-green-100 bg-white shadow-sm print:hidden">
++      <div className="bg-green-50 p-5">
++        <div className="flex items-start gap-4">
++          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-green-700 shadow-sm">
++            <FiCreditCard size={24} />
++          </div>
++
++          <div className="min-w-0 flex-1">
++            <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-green-700 shadow-sm">
++              Asaas
++            </span>
++
++            <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
++              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atencao' : 'Aguardando pagamento online'}
++            </h3>
++
++            <p className="mt-2 text-sm font-semibold leading-6 text-green-800">
++              {paid
++                ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
++                : failed
++                  ? 'Nao foi possivel confirmar esse pagamento. Fale com a loja para combinar o proximo passo.'
++                  : 'Pague agora no ambiente seguro Asaas. A loja inicia o preparo apos a confirmacao automatica.'}
++            </p>
++          </div>
++        </div>
++      </div>
++
++      <div className="space-y-4 p-5">
++        <div className="grid gap-3 sm:grid-cols-2">
++          <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
++            <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
++              Valor
++            </p>
++            <p className="mt-1 text-2xl font-black text-[#111827]">
++              {formatMoney(getOrderTotal(order))}
++            </p>
++          </div>
++
++          <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
++            <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
++              Status
++            </p>
++            <p className={`mt-1 text-sm font-black ${paid ? 'text-green-600' : failed ? 'text-red-600' : 'text-amber-700'}`}>
++              {paid ? 'Pago' : failed ? 'Nao confirmado' : 'Aguardando pagamento'}
++            </p>
++          </div>
++        </div>
++
++        {pending && (
++          <button
++            type="button"
++            onClick={handleOpenPayment}
++            disabled={loading}
++            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
++          >
++            {loading ? (
++              <>
++                <FiLoader className="animate-spin" />
++                Abrindo pagamento...
++              </>
++            ) : (
++              <>
++                <FiCreditCard />
++                Pagar agora no ambiente seguro Asaas
++              </>
++            )}
++          </button>
++        )}
++
++        {error && (
++          <p className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">
++            {error}
++          </p>
++        )}
++      </div>
++    </section>
++  )
++}
++
+ function PixQrCodeBox({ pixCopyPaste, orderDisplayNumber }) {
+   if (!pixCopyPaste) return null
+ 
+@@ -1815,10 +1961,12 @@ const isDelivered = status === 'entregue'
+   const orderDisplayNumber = getOrderDisplayNumber(order, orderId)
+   const storePhone = getStorePhone(order, store)
+   const isPixManual = isPixManualOrder(order)
++  const isAsaasOnline = isAsaasOnlineOrder(order)
+   const pixPaymentPending = isPixPaymentPending(order)
+   const pixPaid = isPixManual && isPaymentPaid(order)
+   const pixCopyPaste = getPixCopyPaste(order)
+   const shouldShowPixCard = isPixManual && !isCanceled && !isDelivered && (pixPaymentPending || pixPaid)
++  const shouldShowAsaasCard = isAsaasOnline && !isCanceled && !isDelivered
+   const scheduledOrder = isScheduledOrder(order)
+   const scheduledOrderLabel = formatScheduledOrderDate(order)
+   const showScheduledPixNotice = order?.paymentPolicy === 'pix_required' || pixPaymentPending
+@@ -2374,6 +2522,13 @@ const isDelivered = status === 'entregue'
+           />
+         )}
+ 
++        {shouldShowAsaasCard && (
++          <AsaasOnlinePaymentCard
++            order={order}
++            trackingToken={trackingToken}
++          />
++        )}
++
+         <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm print:hidden">
+ {isCanceled ? (
+   <div className="py-8 text-center">
+diff --git a/src/utils/publicPaymentMethods.js b/src/utils/publicPaymentMethods.js
+index 0dd42297..a3a5be5f 100644
+--- a/src/utils/publicPaymentMethods.js
++++ b/src/utils/publicPaymentMethods.js
+@@ -181,3 +181,32 @@ export function getPublicPixConfig(store) {
+     merchantCity: sanitizePixText(merchantCity, 15),
+   }
+ }
++
++export function getPublicAsaasConfig(store) {
++  const asaas = toObject(store?.payments?.asaas)
++  const status = normalizeMethodKey(asaas.status || (asaas.enabled === true ? 'active' : 'inactive'))
++  const maxInstallmentCount = Number(asaas.maxInstallmentCount)
++
++  return {
++    enabled: asaas.enabled === true && status === 'active',
++    status: status || 'inactive',
++    maxInstallmentCount: Number.isInteger(maxInstallmentCount) && maxInstallmentCount > 1
++      ? Math.min(maxInstallmentCount, 12)
++      : null,
++  }
++}
++
++export function getPublicPreorderPaymentPolicy(store) {
++  const policy = toObject(store?.payments?.preorderPolicy)
++  const mode = normalizeMethodKey(policy.mode || policy.requiredMethod || 'manual')
++
++  return {
++    mode: ['manual', 'pix_manual', 'asaas_online', 'manual_or_asaas'].includes(mode)
++      ? mode
++      : 'manual',
++  }
++}
++
++export function isPublicAsaasOnlineAllowed(store) {
++  return getPublicAsaasConfig(store).enabled === true
++}
+diff --git a/functions/index.js b/functions/index.js
+index 81737b2..ef99eb6 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -13,6 +13,10 @@ const crypto = require('crypto')
+ const { createPublicOrderHandler } = require('./publicOrder')
+ const { createAsaasFunctions } = require('./asaas')
+ const { createMerchantOrderFunctions } = require('./merchantOrder')
++const {
++  createAsaasOrderFunctions,
++  sanitizePublicStorePayments,
++} = require('./shared/asaasOrders')
+ const {
+   disableCustomerOrderPushToken,
+   registerCustomerOrderPushToken,
+@@ -55,6 +59,8 @@ const db = admin.firestore()
+ const asaasFunctions = createAsaasFunctions({ db, admin, logger })
+ const REGION = 'southamerica-east1'
+ const CLOUDINARY_API_SECRET = defineSecret('CLOUDINARY_API_SECRET')
++const ASAAS_ORDERS_API_KEY = defineSecret('ASAAS_ORDERS_API_KEY')
++const ASAAS_ORDERS_WEBHOOK_SECRET = defineSecret('ASAAS_ORDERS_WEBHOOK_SECRET')
+ const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
+ const LEGAL_CONFIG_COLLECTION = 'config'
+ const LEGAL_CONFIG_DOC = 'legal'
+@@ -73,6 +79,22 @@ const merchantOrderFunctions = createMerchantOrderFunctions({
+     orderData,
+   }),
+ })
++const asaasOrderFunctions = createAsaasOrderFunctions({
++  db,
++  admin,
++  HttpsError,
++  logger,
++  region: REGION,
++  apiKeySecret: ASAAS_ORDERS_API_KEY,
++  webhookSecret: ASAAS_ORDERS_WEBHOOK_SECRET,
++  sendNewOrderPushToStore: ({ storeId, orderId }) => sendNewOrderPushToStore({
++    db,
++    admin,
++    logger,
++    storeId,
++    orderId,
++  }),
++})
+ 
+ if (!ENFORCE_APP_CHECK && process.env.FUNCTIONS_EMULATOR !== 'true') {
+   logger.warn('[appCheck] Public callables are running without App Check enforcement. Use monitor mode first, then set ENFORCE_APP_CHECK=true after validating public store, coupon and order flows.')
+@@ -214,6 +236,8 @@ exports.createPaymentMethodUpdateCheckout = asaasFunctions.createPaymentMethodUp
+ exports.asaasWebhook = asaasFunctions.asaasWebhook
+ exports.adminUpdateSubscriptionRequestStatus = asaasFunctions.adminUpdateSubscriptionRequestStatus
+ exports.updateMerchantOrder = merchantOrderFunctions.updateMerchantOrder
++exports.createAsaasOrderPayment = asaasOrderFunctions.createAsaasOrderPayment
++exports.asaasOrderWebhook = asaasOrderFunctions.asaasOrderWebhook
+ 
+ exports.createPublicOrder = onCall(
+   {
+@@ -222,6 +246,7 @@ exports.createPublicOrder = onCall(
+     memory: '256MiB',
+     maxInstances: 10,
+     enforceAppCheck: ENFORCE_APP_CHECK,
++    secrets: [ASAAS_ORDERS_API_KEY],
+   },
+   createPublicOrderHandler({
+     db,
+@@ -236,6 +261,13 @@ exports.createPublicOrder = onCall(
+       storeId,
+       orderId,
+     }),
++    createAsaasOrderPaymentLink: () => {
++      try {
++        return ASAAS_ORDERS_API_KEY.value() || process.env.ASAAS_ORDERS_API_KEY || ''
++      } catch {
++        return process.env.ASAAS_ORDERS_API_KEY || ''
++      }
++    },
+   })
+ )
+ 
+@@ -809,6 +841,7 @@ function sanitizePublicStore(data) {
+   profile.pix = {
+     enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
+   }
++  profile.payments = sanitizePublicStorePayments(data)
+   profile.publicScheduling = sanitizePublicStoreScheduling(data)
+ 
+   return profile
+diff --git a/functions/merchantOrder.js b/functions/merchantOrder.js
+index 9546e79..cb97240 100644
+--- a/functions/merchantOrder.js
++++ b/functions/merchantOrder.js
+@@ -153,6 +153,18 @@ function isManualPixOrder(orderData) {
+   return ['pix', 'pix_manual', 'manual_pix', 'pix_manual_store'].includes(getOrderPaymentMethodId(orderData))
+ }
+ 
++function isAsaasOnlineOrder(orderData) {
++  const method = getOrderPaymentMethodId(orderData)
++  const provider = String(orderData?.payment?.provider || orderData?.paymentProvider || '')
++    .toLowerCase()
++    .trim()
++  const mode = String(orderData?.payment?.mode || orderData?.paymentMode || '')
++    .toLowerCase()
++    .trim()
++
++  return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
++}
++
+ function isOrderPaymentPaid(orderData) {
+   const status = getOrderPaymentStatusId(orderData)
+   return ['paid', 'confirmed', 'pago'].includes(status)
+@@ -165,12 +177,16 @@ function shouldBlockMerchantOrderAction(orderData) {
+ function shouldBlockMerchantPreparationUntilPayment(orderData) {
+   const status = normalizeMerchantOrderStatus(orderData?.status)
+   const paymentStatus = getOrderPaymentStatusId(orderData)
+-  return isManualPixOrder(orderData)
++  return (isManualPixOrder(orderData) || isAsaasOnlineOrder(orderData))
+     && ['pendente', 'confirmado'].includes(status)
+     && !isOrderPaymentPaid(orderData)
+     && ['pending', 'proof_sent', 'manual', ''].includes(paymentStatus)
+ }
+ 
++function shouldBlockMerchantOnlinePayment(orderData) {
++  return isAsaasOnlineOrder(orderData) && !isOrderPaymentPaid(orderData)
++}
++
+ function sanitizeCancellationReason(value) {
+   return String(value || '').trim().slice(0, 280)
+ }
+@@ -255,8 +271,12 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
+     throw new HttpsError('failed-precondition', 'Pedido com valor suspeito precisa de revisao.')
+   }
+ 
++  if (nextStatus !== 'cancelado' && nextStatus !== currentStatus && shouldBlockMerchantOnlinePayment(orderData)) {
++    throw new HttpsError('failed-precondition', 'Aguarde a confirmacao do pagamento online antes de avancar o pedido.')
++  }
++
+   if (nextStatus === 'preparando' && shouldBlockMerchantPreparationUntilPayment(orderData)) {
+-    throw new HttpsError('failed-precondition', 'Confirme o Pix antes de iniciar o preparo.')
++    throw new HttpsError('failed-precondition', 'Confirme o pagamento antes de iniciar o preparo.')
+   }
+ 
+   const statusField = getMerchantOrderStatusField(nextStatus)
+diff --git a/src/pages/merchant/OrdersPage.jsx b/src/pages/merchant/OrdersPage.jsx
+index c8ccf8d..1e3ad69 100644
+--- a/src/pages/merchant/OrdersPage.jsx
++++ b/src/pages/merchant/OrdersPage.jsx
+@@ -544,6 +546,7 @@ function getPaymentMethod(order) {
+   const map = {
+     pix: 'Pix',
+     pix_manual: 'Pix manual',
++    asaas_online: 'Asaas online',
+     card: 'Cartão',
+     cartao: 'Cartão',
+     'cartão': 'Cartão',
+@@ -602,6 +605,18 @@ function isPixManualOrder(order) {
+   ].includes(method)
+ }
+ 
++function isAsaasOnlineOrder(order) {
++  const method = getPaymentMethodId(order)
++  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
++    .toLowerCase()
++    .trim()
++  const mode = String(order?.payment?.mode || order?.paymentMode || '')
++    .toLowerCase()
++    .trim()
++
++  return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
++}
++
+ function isPaymentPaid(order) {
+   const status = getPaymentStatusId(order)
+   const hasPaidStatus = ['paid', 'confirmed', 'pago'].includes(status)
+@@ -629,8 +644,21 @@ function isPixPaymentPending(order) {
+   return !isPaymentPaid(order) && ['pending', 'proof_sent', 'manual', ''].includes(paymentStatus)
+ }
+ 
++function isAsaasPaymentPending(order) {
++  if (!isAsaasOnlineOrder(order)) return false
++
++  const paymentStatus = getPaymentStatusId(order)
++
++  return !isPaymentPaid(order) && ['pending', 'awaiting_payment', 'failed_link_creation', ''].includes(paymentStatus)
++}
++
++function getAsaasPaymentUrl(order) {
++  return order?.payment?.paymentUrl || order?.payment?.invoiceUrl || order?.paymentUrl || order?.invoiceUrl || ''
++}
++
+ function shouldBlockPreparationUntilPayment(order) {
+-  return isPixPaymentPending(order) && ['pendente', 'confirmado'].includes(normalizeStatus(order?.status))
++  return (isPixPaymentPending(order) || isAsaasPaymentPending(order)) &&
++    ['pendente', 'confirmado'].includes(normalizeStatus(order?.status))
+ }
+ 
+ function getPaymentProofUrl(order) {
+@@ -2211,6 +2239,7 @@ const normalizedPaymentMethod = String(paymentMethod || '')
+ const paymentMethodLabelMap = {
+   pix_manual: 'Pix manual',
+   pix: 'Pix',
++  asaas_online: 'Asaas online',
+   cash: 'Dinheiro',
+   money: 'Dinheiro',
+   dinheiro: 'Dinheiro',
+@@ -2230,6 +2259,8 @@ const paymentMethodLabel =
+   paymentMethodLabelMap[normalizedPaymentMethod] ||
+   (normalizedPaymentMethod.includes('pix')
+     ? 'Pix'
++    : normalizedPaymentMethod.includes('asaas')
++      ? 'Asaas online'
+     : normalizedPaymentMethod.includes('cash') ||
+         normalizedPaymentMethod.includes('money') ||
+         normalizedPaymentMethod.includes('dinheiro')
+@@ -2244,6 +2275,8 @@ const paymentMethodLabel =
+ const PaymentMethodIcon =
+   normalizedPaymentMethod.includes('pix')
+     ? FiZap
++    : normalizedPaymentMethod.includes('asaas')
++      ? FiCreditCard
+     : normalizedPaymentMethod.includes('cash') ||
+         normalizedPaymentMethod.includes('money') ||
+         normalizedPaymentMethod.includes('dinheiro')
+@@ -2883,8 +2927,12 @@ function OrderModal({
+   const nextStatus = getNextStatus(status, order)
+   const changeForLabel = getChangeForLabel(order)
+ 
+-  const pixPending = shouldBlockPreparationUntilPayment(order)
++  const paymentBlocked = shouldBlockPreparationUntilPayment(order)
++  const pixPending = isPixPaymentPending(order)
+   const pixPaid = isPixManualOrder(order) && isPaymentPaid(order)
++  const asaasOnline = isAsaasOnlineOrder(order)
++  const asaasPending = isAsaasPaymentPending(order)
++  const asaasPaymentUrl = getAsaasPaymentUrl(order)
+   const paymentProofUrl = getPaymentProofUrl(order)
+ 
+   const currentIndex = STATUS_FLOW.indexOf(status)
+@@ -3024,6 +3072,12 @@ function OrderModal({
+                     Pix pendente
+                   </span>
+                 )}
++                {asaasPending && (
++                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
++                    <FiCreditCard size={12} />
++                    Asaas pendente
++                  </span>
++                )}
+                 {showCustomerThanksAction && (
+                   <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-200 dark:bg-green-950/50 dark:text-green-400 dark:ring-green-900">
+                     <FiMessageCircle size={12} />
+@@ -3051,7 +3105,7 @@ function OrderModal({
+               <span className="rounded-2xl bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
+                 {getPaymentMethod(order)}
+               </span>
+-              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
++              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ (pixPaid || (asaasOnline && isPaymentPaid(order))) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : (pixPending || asaasPending) ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
+                 {getPaymentStatus(order)}
+               </span>
+             </div>
+@@ -3076,6 +3130,16 @@ function OrderModal({
+                     <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} /> 
+                     {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
+                   </button>
++                ) : asaasPending && asaasPaymentUrl ? (
++                  <a
++                    href={asaasPaymentUrl}
++                    target="_blank"
++                    rel="noreferrer"
++                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
++                  >
++                    <FiCreditCard size={18} />
++                    Abrir pagamento
++                  </a>
+                 ) : isWaitingScheduledFuture ? (
+                   <div className="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+                     <FiClock size={18} />
+@@ -3331,8 +3395,8 @@ function OrderModal({
+                       </div>
+                     )}
+                   </div>
+-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : pixPending ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
+-                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : getPaymentMethod(order)}
++                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid || (asaasOnline && isPaymentPaid(order)) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : paymentBlocked ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
++                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : asaasOnline ? (isPaymentPaid(order) ? 'Asaas pago' : 'Asaas pendente') : getPaymentMethod(order)}
+                   </span>
+                 </div>
+                 {status === 'cancelado' && (
+@@ -3405,7 +3469,7 @@ function OrderModal({
+                   {meta.label}
+                 </p>
+                 <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
+-                  {pixPending ? 'Aguardando confirmação do Pix.' : meta.description}
++                  {paymentBlocked ? 'Aguardando confirmacao do pagamento.' : meta.description}
+                 </p>
+               </section>
+ 
+@@ -3457,7 +3521,7 @@ function OrderModal({
+                           Boolean(updatingStatus) ||
+                           (isFinalStatus && !active) ||
+                           isPreviousStatus ||
+-                          (statusOption === 'preparando' && pixPending)
++                          (statusOption === 'preparando' && paymentBlocked)
+                         }
+                         title={manualScheduledPrepare ? 'Adianta o preparo manualmente' : undefined}
+                         className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+@@ -3647,7 +3712,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
+ }
+ 
+     if (nextStatus === 'preparando' && shouldBlockPreparationUntilPayment(order)) {
+-      showToast('error', 'Confirme o pagamento Pix antes de iniciar o preparo.')
++      showToast('error', 'Confirme o pagamento antes de iniciar o preparo.')
+       return
+     }
+ 
+diff --git a/functions/shared/asaasOrders.js b/functions/shared/asaasOrders.js
+new file mode 100644
+index 00000000..00000000
+--- /dev/null
++++ b/functions/shared/asaasOrders.js
+@@ -0,0 +1,729 @@
++const { onCall, onRequest } = require('firebase-functions/v2/https')
++const crypto = require('crypto')
++
++const PROVIDER = 'asaas'
++const ONLINE_MODE = 'online'
++const BLOCKED_REASON = 'awaiting_online_payment'
++const DEFAULT_ASAAS_ORDERS_BASE_URL = 'https://api-sandbox.asaas.com/v3'
++
++const ACTIVE_ASAAS_STATUSES = new Set(['active', 'enabled', 'ativo'])
++const SUPPORTED_WEBHOOK_EVENTS = new Set([
++  'PAYMENT_CREATED',
++  'PAYMENT_CONFIRMED',
++  'PAYMENT_RECEIVED',
++  'PAYMENT_OVERDUE',
++  'PAYMENT_DELETED',
++  'PAYMENT_REFUNDED',
++  'PAYMENT_PARTIALLY_REFUNDED',
++  'PAYMENT_REFUND_DENIED',
++  'PAYMENT_CHARGEBACK_REQUESTED',
++  'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
++])
++const TERMINAL_PAYMENT_STATUSES = new Set([
++  'paid',
++  'confirmed',
++  'refunded',
++  'chargeback_requested',
++  'canceled',
++  'cancelled',
++  'failed',
++  'expired',
++])
++
++function hasValue(value) {
++  return value !== undefined && value !== null && value !== ''
++}
++
++function getSecretValue(secret, envName) {
++  try {
++    return secret?.value?.() || process.env[envName] || ''
++  } catch {
++    return process.env[envName] || ''
++  }
++}
++
++function normalizeText(value) {
++  return String(value || '')
++    .normalize('NFD')
++    .replace(/[\u0300-\u036f]/g, '')
++    .toLowerCase()
++    .trim()
++}
++
++function sanitizeString(value, maxLength = 240) {
++  if (!hasValue(value)) return ''
++  return String(value)
++    .split('')
++    .filter((char) => {
++      const code = char.charCodeAt(0)
++      return code > 31 && code !== 127
++    })
++    .join('')
++    .trim()
++    .slice(0, maxLength)
++}
++
++function safeDocId(value) {
++  return String(value || '').replace(/[/#?[\]]/g, '_').slice(0, 180) || 'unknown'
++}
++
++function stripUndefinedDeep(value) {
++  if (Array.isArray(value)) {
++    return value
++      .map((item) => stripUndefinedDeep(item))
++      .filter((item) => item !== undefined)
++  }
++
++  if (value && typeof value === 'object' && typeof value.toDate !== 'function') {
++    return Object.entries(value).reduce((acc, [key, item]) => {
++      const nextValue = stripUndefinedDeep(item)
++      if (nextValue !== undefined) acc[key] = nextValue
++      return acc
++    }, {})
++  }
++
++  return value === undefined ? undefined : value
++}
++
++function toPositiveInteger(value, fallback = null, min = 1, max = 120) {
++  const parsed = Number(value)
++  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return fallback
++  return parsed
++}
++
++function toCents(value) {
++  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value)
++  const cleaned = String(value || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')
++  const parsed = Number(cleaned)
++  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
++}
++
++function centsToMoney(cents) {
++  return Number((Math.max(0, toCents(cents)) / 100).toFixed(2))
++}
++
++function buildAsaasOrderExternalReference({ storeId, orderId }) {
++  return `pratoby:order:${safeDocId(storeId)}:${safeDocId(orderId)}`
++}
++
++function parseAsaasOrderExternalReference(value) {
++  const parts = String(value || '').split(':')
++  if (parts.length === 4 && parts[0] === 'pratoby' && parts[1] === 'order') {
++    return {
++      storeId: parts[2],
++      orderId: parts[3],
++    }
++  }
++  return { storeId: '', orderId: '' }
++}
++
++function normalizeManualPayments(store = {}) {
++  const methods = store.paymentMethods || {}
++  return stripUndefinedDeep({
++    pix: methods.pix !== false,
++    card: methods.card !== false,
++    cash: methods.cash !== false,
++  })
++}
++
++function normalizeAsaasPublicConfig(store = {}) {
++  const raw = store.payments?.asaas || {}
++  const status = normalizeText(raw.status || (raw.enabled === true ? 'active' : 'inactive'))
++  const enabled = raw.enabled === true && ACTIVE_ASAAS_STATUSES.has(status)
++  const maxInstallmentCount = toPositiveInteger(raw.maxInstallmentCount, null, 1, 12)
++
++  return stripUndefinedDeep({
++    enabled,
++    status: enabled ? 'active' : (status || 'inactive'),
++    billingType: 'UNDEFINED',
++    maxInstallmentCount,
++  })
++}
++
++function normalizePreorderPolicy(store = {}) {
++  const raw = store.payments?.preorderPolicy
++  const source = raw && typeof raw === 'object' && !Array.isArray(raw)
++    ? raw
++    : { mode: raw }
++  const mode = normalizeText(source.mode || source.requiredMethod || 'manual')
++  const safeMode = [
++    'manual',
++    'pix_manual',
++    'asaas_online',
++    'manual_or_asaas',
++  ].includes(mode) ? mode : 'manual'
++
++  return stripUndefinedDeep({
++    mode: safeMode,
++    requiredMethod: safeMode === 'asaas_online' ? 'asaas_online' : undefined,
++  })
++}
++
++function sanitizePublicStorePayments(store = {}) {
++  return stripUndefinedDeep({
++    manual: normalizeManualPayments(store),
++    asaas: normalizeAsaasPublicConfig(store),
++    preorderPolicy: normalizePreorderPolicy(store),
++  })
++}
++
++function isAsaasOnlineActive(store = {}) {
++  const asaas = normalizeAsaasPublicConfig(store)
++  return asaas.enabled === true && asaas.status === 'active'
++}
++
++function orderRequiresAsaasOnline({ store, schedulingDecision }) {
++  if (schedulingDecision?.orderTiming !== 'scheduled') return false
++  return normalizePreorderPolicy(store).mode === 'asaas_online'
++}
++
++function isAsaasOnlinePaymentRequest(input = {}) {
++  const method = normalizeText(input.paymentMethod || input.paymentType)
++  const mode = normalizeText(input.paymentMode)
++  const provider = normalizeText(input.paymentProvider)
++  return method === 'asaas_online' || (mode === ONLINE_MODE && provider === PROVIDER)
++}
++
++function buildAsaasPendingPaymentSnapshot({ totalCents, storeId, storeSlug, orderId }) {
++  return {
++    paymentMethod: 'Asaas Online',
++    paymentType: 'asaas_online',
++    paymentMode: ONLINE_MODE,
++    paymentProvider: PROVIDER,
++    paymentStatus: 'pending',
++    paymentRequiresConfirmation: false,
++    operationalBlockedReason: BLOCKED_REASON,
++    payment: {
++      mode: ONLINE_MODE,
++      provider: PROVIDER,
++      method: 'asaas_online',
++      label: 'Pagamento online',
++      status: 'pending',
++      amount: centsToMoney(totalCents),
++      amountCents: totalCents,
++      grossAmountCents: totalCents,
++      netAmountCents: null,
++      feeCents: null,
++      currency: 'BRL',
++      externalReference: buildAsaasOrderExternalReference({ storeId, orderId }),
++      providerPaymentId: null,
++      providerPaymentLinkId: null,
++      invoiceUrl: null,
++      paymentUrl: null,
++      createdAt: null,
++      paidAt: null,
++      failedAt: null,
++      refundedAt: null,
++      storeSlug,
++    },
++  }
++}
++
++function buildAsaasLinkCreationFailurePatch({ admin, error }) {
++  const now = admin.firestore.FieldValue.serverTimestamp()
++  return stripUndefinedDeep({
++    paymentStatus: 'failed_link_creation',
++    operationalBlockedReason: BLOCKED_REASON,
++    updatedAt: now,
++    payment: {
++      status: 'failed_link_creation',
++      linkCreationFailedAt: now,
++      linkCreationError: sanitizeString(error?.message || 'Falha ao gerar link Asaas.', 300),
++      retryable: true,
++    },
++  })
++}
++
++function getAsaasOrdersBaseUrl() {
++  const configured = process.env.ASAAS_ORDERS_BASE_URL
++  const allowSandboxFallback =
++    process.env.FUNCTIONS_EMULATOR === 'true' ||
++    process.env.ALLOW_ASAAS_ORDERS_SANDBOX_FALLBACK === 'true'
++
++  if (!configured && !allowSandboxFallback) {
++    const error = new Error('ASAAS_ORDERS_BASE_URL precisa ser configurada explicitamente.')
++    error.code = 'failed-precondition'
++    throw error
++  }
++
++  return String(configured || DEFAULT_ASAAS_ORDERS_BASE_URL).replace(/\/+$/, '')
++}
++
++async function callAsaasOrdersApi({ apiKey, path, method = 'POST', body }) {
++  if (!apiKey) {
++    const error = new Error('ASAAS_ORDERS_API_KEY nao configurada.')
++    error.code = 'failed-precondition'
++    throw error
++  }
++
++  const response = await fetch(`${getAsaasOrdersBaseUrl()}${path}`, {
++    method,
++    headers: {
++      accept: 'application/json',
++      'content-type': 'application/json',
++      access_token: apiKey,
++      'User-Agent': 'PratoBy/1.0',
++    },
++    body: body === undefined ? undefined : JSON.stringify(body),
++  })
++
++  const text = await response.text()
++  let payload = {}
++  try {
++    payload = text ? JSON.parse(text) : {}
++  } catch {
++    payload = { raw: text }
++  }
++
++  if (!response.ok) {
++    const error = new Error(payload?.errors?.[0]?.description || payload?.message || 'Falha ao criar pagamento Asaas.')
++    error.code = response.status >= 500 ? 'unavailable' : 'failed-precondition'
++    error.status = response.status
++    error.payload = payload
++    throw error
++  }
++
++  return payload
++}
++
++function buildOrderPaymentLinkPayload({ orderData, storeData }) {
++  // TODO(asaas-orders-production): paymentLinks can create a new charge every time
++  // the payer fills the link. Keep this behind a pilot flag and move to /payments
++  // with a single Asaas customer/charge before broad production rollout.
++  const totalCents = Math.max(0, toCents(orderData.totalCents || orderData.payment?.amountCents))
++  const maxInstallmentCount = normalizeAsaasPublicConfig(storeData).maxInstallmentCount
++  const dueDateLimitDays = toPositiveInteger(storeData.payments?.asaas?.dueDateLimitDays, 2, 1, 30)
++  const externalReference = buildAsaasOrderExternalReference({
++    storeId: orderData.storeId || orderData.storeDocId,
++    orderId: orderData.trackingToken || orderData.id,
++  })
++  const description = sanitizeString(
++    `Pedido ${orderData.displayNumber || orderData.orderNumber || orderData.trackingToken || ''} - ${orderData.storeName || 'PratoBy'}`,
++    500
++  )
++  const callbackUrl = orderData.trackingUrlPath
++    ? `${String(process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://pratoby.com').replace(/\/+$/, '')}${orderData.trackingUrlPath}`
++    : undefined
++
++  return stripUndefinedDeep({
++    name: sanitizeString(`Pedido ${orderData.storeName || 'PratoBy'}`, 100),
++    description,
++    value: centsToMoney(totalCents),
++    billingType: 'UNDEFINED',
++    chargeType: maxInstallmentCount && maxInstallmentCount > 1 ? 'INSTALLMENT' : 'DETACHED',
++    maxInstallmentCount: maxInstallmentCount && maxInstallmentCount > 1 ? maxInstallmentCount : undefined,
++    dueDateLimitDays,
++    externalReference,
++    notificationEnabled: false,
++    callback: callbackUrl
++      ? {
++          successUrl: callbackUrl,
++          autoRedirect: false,
++        }
++      : undefined,
++  })
++}
++
++function getAsaasPaymentUrl(payload = {}) {
++  return payload.url || payload.paymentUrl || payload.invoiceUrl || payload.bankSlipUrl || ''
++}
++
++async function deactivateOrderPaymentLink({ apiKey, paymentLinkId }) {
++  if (!paymentLinkId) return { skipped: true }
++  return callAsaasOrdersApi({
++    apiKey,
++    path: `/paymentLinks/${encodeURIComponent(paymentLinkId)}`,
++    method: 'PUT',
++    body: { active: false },
++  })
++}
++
++async function createOrderPaymentLink({ admin, logger, apiKey, orderRef, orderData, storeData }) {
++  if (!orderRef || !orderData) {
++    const error = new Error('Pedido invalido para pagamento online.')
++    error.code = 'invalid-argument'
++    throw error
++  }
++
++  if (orderData.payment?.provider !== PROVIDER || orderData.payment?.mode !== ONLINE_MODE) {
++    const error = new Error('Pedido nao usa pagamento online Asaas.')
++    error.code = 'failed-precondition'
++    throw error
++  }
++
++  if (!isAsaasOnlineActive(storeData)) {
++    const error = new Error('Pagamento online Asaas indisponivel para esta loja.')
++    error.code = 'failed-precondition'
++    throw error
++  }
++
++  if (TERMINAL_PAYMENT_STATUSES.has(String(orderData.payment?.status || orderData.paymentStatus || '').toLowerCase())) {
++    const error = new Error('Pagamento online ja finalizado para este pedido.')
++    error.code = 'failed-precondition'
++    throw error
++  }
++
++  if (orderData.payment?.paymentUrl || orderData.payment?.invoiceUrl) {
++    return {
++      paymentUrl: orderData.payment.paymentUrl || orderData.payment.invoiceUrl,
++      invoiceUrl: orderData.payment.invoiceUrl || orderData.payment.paymentUrl,
++      providerPaymentLinkId: orderData.payment.providerPaymentLinkId || null,
++      reused: true,
++    }
++  }
++
++  const response = await callAsaasOrdersApi({
++    apiKey,
++    path: '/paymentLinks',
++    body: buildOrderPaymentLinkPayload({ orderData, storeData }),
++  })
++  const paymentUrl = getAsaasPaymentUrl(response)
++
++  if (!paymentUrl) {
++    const error = new Error('Asaas nao retornou URL de pagamento.')
++    error.code = 'failed-precondition'
++    throw error
++  }
++
++  const now = admin.firestore.FieldValue.serverTimestamp()
++  const patch = stripUndefinedDeep({
++    payment: {
++      ...(orderData.payment || {}),
++      providerPaymentLinkId: response.id || response.paymentLink || null,
++      paymentLinkId: response.id || response.paymentLink || null,
++      paymentUrl,
++      invoiceUrl: response.invoiceUrl || paymentUrl,
++      externalReference: response.externalReference || orderData.payment.externalReference,
++      createdAt: now,
++      linkCreationFailedAt: null,
++      linkCreationError: null,
++      retryable: false,
++      status: 'pending',
++    },
++    paymentUrl,
++    paymentStatus: 'pending',
++    updatedAt: now,
++  })
++
++  await orderRef.set(patch, { merge: true })
++
++  logger?.info?.('[asaasOrders] payment link created', {
++    orderId: orderRef.id,
++    paymentLinkId: response.id || response.paymentLink || null,
++  })
++
++  return {
++    paymentUrl,
++    invoiceUrl: response.invoiceUrl || paymentUrl,
++    providerPaymentLinkId: response.id || response.paymentLink || null,
++    reused: false,
++  }
++}
++
++function stringToTimingBytes(value) {
++  const stringValue = String(value || '')
++  const bytes = new Uint8Array(stringValue.length)
++  for (let index = 0; index < stringValue.length; index += 1) {
++    bytes[index] = stringValue.charCodeAt(index)
++  }
++  return bytes
++}
++
++function timingSafeStringEqual(receivedValue, expectedValue) {
++  const expectedBuffer = stringToTimingBytes(expectedValue)
++  const receivedBuffer = stringToTimingBytes(receivedValue)
++  if (!expectedBuffer.length || receivedBuffer.length !== expectedBuffer.length) return false
++  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
++}
++
++function parseWebhookBody(request) {
++  if (request.body && typeof request.body === 'object') return request.body
++  try {
++    return JSON.parse(String(request.rawBody || '{}'))
++  } catch {
++    return {}
++  }
++}
++
++function mapAsaasOrderPaymentStatus(event) {
++  if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') return 'paid'
++  if (event === 'PAYMENT_OVERDUE') return 'expired'
++  if (event === 'PAYMENT_DELETED') return 'canceled'
++  if (event === 'PAYMENT_REFUNDED' || event === 'PAYMENT_PARTIALLY_REFUNDED') return 'refunded'
++  if (event === 'PAYMENT_CHARGEBACK_REQUESTED') return 'chargeback_requested'
++  if (event === 'PAYMENT_REFUND_DENIED' || event === 'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED') return 'failed'
++  return 'pending'
++}
++
++function buildWebhookPaymentPatch({ admin, event, payment, orderData }) {
++  const now = admin.firestore.FieldValue.serverTimestamp()
++  const nextStatus = mapAsaasOrderPaymentStatus(event)
++  const paid = nextStatus === 'paid'
++  const currentStatus = normalizeText(orderData?.status)
++  const canReleaseOrder = paid && !['cancelado', 'canceled', 'cancelled', 'entregue', 'delivered'].includes(currentStatus)
++
++  return stripUndefinedDeep({
++    paymentStatus: nextStatus,
++    paymentRequiresConfirmation: false,
++    operationalBlockedReason: paid ? null : undefined,
++    updatedAt: now,
++    ...(canReleaseOrder ? {
++      status: 'confirmado',
++      confirmedAt: now,
++      paymentConfirmedAt: now,
++      paidAt: now,
++    } : {}),
++    payment: {
++      status: nextStatus,
++      provider: PROVIDER,
++      mode: ONLINE_MODE,
++      method: 'asaas_online',
++      providerPaymentId: payment?.id || null,
++      providerPaymentLinkId: payment?.paymentLink || null,
++      billingType: payment?.billingType || null,
++      invoiceUrl: payment?.invoiceUrl || undefined,
++      paymentUrl: payment?.invoiceUrl || undefined,
++      netAmountCents: hasValue(payment?.netValue) ? Math.round(Number(payment.netValue) * 100) : undefined,
++      grossAmountCents: hasValue(payment?.value) ? Math.round(Number(payment.value) * 100) : undefined,
++      paidAt: paid ? now : undefined,
++      confirmedAt: paid ? now : undefined,
++      failedAt: nextStatus === 'failed' ? now : undefined,
++      refundedAt: nextStatus === 'refunded' ? now : undefined,
++      updatedAt: now,
++      webhookEvent: event,
++    },
++  })
++}
++
++function getWebhookOrderReference(payment = {}) {
++  const fromExternal = parseAsaasOrderExternalReference(payment.externalReference)
++  if (fromExternal.orderId) return fromExternal
++  return { storeId: '', orderId: '' }
++}
++
++function createAsaasOrderFunctions({
++  db,
++  admin,
++  HttpsError,
++  logger,
++  region = 'southamerica-east1',
++  apiKeySecret,
++  webhookSecret,
++  sendNewOrderPushToStore = null,
++}) {
++  const createAsaasOrderPayment = onCall(
++    {
++      region,
++      timeoutSeconds: 60,
++      memory: '256MiB',
++      maxInstances: 10,
++      secrets: [apiKeySecret],
++    },
++    async (request) => {
++      const data = request.data || {}
++      const orderId = String(data.orderId || data.trackingToken || '').trim()
++      const trackingToken = String(data.trackingToken || '').trim()
++
++      if (!/^[A-Za-z0-9_-]{8,180}$/.test(orderId) || !/^[A-Za-z0-9_-]{8,180}$/.test(trackingToken)) {
++        throw new HttpsError('invalid-argument', 'Pedido invalido.')
++      }
++
++      const orderRef = db.collection('orders').doc(orderId)
++      const orderSnapshot = await orderRef.get()
++      if (!orderSnapshot.exists) throw new HttpsError('not-found', 'Pedido nao encontrado.')
++
++      const orderData = { id: orderSnapshot.id, ...(orderSnapshot.data() || {}) }
++      if (String(orderData.trackingToken || '') !== trackingToken) {
++        throw new HttpsError('permission-denied', 'Token de acompanhamento invalido.')
++      }
++
++      const storeId = String(orderData.storeDocId || orderData.storeId || '').trim()
++      const storeSnapshot = await db.collection('stores').doc(storeId).get()
++      if (!storeSnapshot.exists) throw new HttpsError('failed-precondition', 'Loja indisponivel.')
++
++      try {
++        const link = await createOrderPaymentLink({
++          db,
++          admin,
++          logger,
++          apiKey: getSecretValue(apiKeySecret, 'ASAAS_ORDERS_API_KEY'),
++          orderRef,
++          orderData,
++          storeData: storeSnapshot.data() || {},
++        })
++        return { ok: true, orderId, ...link }
++      } catch (error) {
++        throw new HttpsError(error.code || 'internal', error.message || 'Falha ao gerar pagamento.')
++      }
++    }
++  )
++
++  const asaasOrderWebhook = onRequest(
++    {
++      region,
++      timeoutSeconds: 60,
++      memory: '256MiB',
++      maxInstances: 10,
++      secrets: [webhookSecret, apiKeySecret],
++    },
++    async (request, response) => {
++      if (request.method !== 'POST') {
++        response.status(405).json({ ok: false, error: 'method_not_allowed' })
++        return
++      }
++
++      const expectedToken = getSecretValue(webhookSecret, 'ASAAS_ORDERS_WEBHOOK_SECRET')
++      const receivedToken = request.get('asaas-access-token') || request.get('x-asaas-webhook-token') || ''
++      if (!timingSafeStringEqual(receivedToken, expectedToken)) {
++        logger?.warn?.('[asaasOrders] webhook rejected: invalid token')
++        response.status(401).json({ ok: false, error: 'invalid_token' })
++        return
++      }
++
++      const body = parseWebhookBody(request)
++      const eventId = String(body.id || '').trim()
++      const event = String(body.event || '').trim().toUpperCase()
++      const payment = body.payment || {}
++
++      if (!eventId || !event || !payment.id) {
++        response.status(400).json({ ok: false, error: 'invalid_payload' })
++        return
++      }
++
++      let reference = getWebhookOrderReference(payment)
++
++      if (!reference.orderId && payment.paymentLink) {
++        const linkSnapshot = await db.collection('orders')
++          .where('payment.providerPaymentLinkId', '==', payment.paymentLink)
++          .limit(1)
++          .get()
++        if (!linkSnapshot.empty) {
++          const orderDoc = linkSnapshot.docs[0]
++          const orderData = orderDoc.data() || {}
++          reference = {
++            orderId: orderDoc.id,
++            storeId: orderData.storeDocId || orderData.storeId || '',
++          }
++        }
++      }
++
++      const eventDocId = safeDocId(eventId)
++      const eventRef = reference.orderId
++        ? db.collection('orders').doc(reference.orderId).collection('paymentEvents').doc(eventDocId)
++        : db.collection('providerEvents').doc(`asaas_order_${eventDocId}`)
++
++      try {
++        const result = await db.runTransaction(async (transaction) => {
++          const eventSnapshot = await transaction.get(eventRef)
++          const now = admin.firestore.Timestamp.now()
++
++          if (eventSnapshot.exists && ['processed', 'ignored'].includes(eventSnapshot.data()?.status)) {
++            return { duplicate: true }
++          }
++
++          const baseEvent = stripUndefinedDeep({
++            provider: PROVIDER,
++            scope: 'order_payment',
++            eventId,
++            event,
++            paymentId: payment.id,
++            paymentLinkId: payment.paymentLink || null,
++            externalReference: payment.externalReference || null,
++            receivedAt: eventSnapshot.exists ? eventSnapshot.data()?.receivedAt || now : now,
++            raw: body,
++          })
++
++          if (!SUPPORTED_WEBHOOK_EVENTS.has(event)) {
++            transaction.set(eventRef, { ...baseEvent, status: 'ignored', ignoreReason: 'unsupported_event', processedAt: now }, { merge: true })
++            return { ignored: true, reason: 'unsupported_event' }
++          }
++
++          if (!reference.orderId) {
++            transaction.set(eventRef, { ...baseEvent, status: 'ignored', ignoreReason: 'missing_order_reference', processedAt: now }, { merge: true })
++            return { ignored: true, reason: 'missing_order_reference' }
++          }
++
++          const orderRef = db.collection('orders').doc(reference.orderId)
++          const orderSnapshot = await transaction.get(orderRef)
++          if (!orderSnapshot.exists) {
++            transaction.set(eventRef, { ...baseEvent, status: 'ignored', ignoreReason: 'order_not_found', processedAt: now }, { merge: true })
++            return { ignored: true, reason: 'order_not_found' }
++          }
++
++          const orderData = orderSnapshot.data() || {}
++          if (orderData.payment?.provider !== PROVIDER || orderData.payment?.mode !== ONLINE_MODE) {
++            transaction.set(eventRef, { ...baseEvent, status: 'ignored', ignoreReason: 'order_not_asaas_online', processedAt: now }, { merge: true })
++            return { ignored: true, reason: 'order_not_asaas_online' }
++          }
++
++          transaction.set(eventRef, { ...baseEvent, status: 'processed', processedAt: now }, { merge: true })
++          transaction.set(orderRef, buildWebhookPaymentPatch({ admin, event, payment, orderData }), { merge: true })
++
++          return {
++            processed: true,
++            orderId: reference.orderId,
++            storeId: orderData.storeDocId || orderData.storeId || reference.storeId || '',
++            paymentStatus: mapAsaasOrderPaymentStatus(event),
++          }
++        })
++
++        if (result.processed && result.paymentStatus === 'paid' && typeof sendNewOrderPushToStore === 'function') {
++          try {
++            await sendNewOrderPushToStore({
++              storeId: result.storeId || '',
++              orderId: result.orderId,
++            })
++          } catch (pushError) {
++            logger?.warn?.('[asaasOrders] paid order push failed', {
++              orderId: result.orderId,
++              storeId: result.storeId || '',
++              error: pushError?.message || String(pushError),
++            })
++          }
++        }
++
++        if (result.processed && result.paymentStatus === 'paid' && payment.paymentLink) {
++          try {
++            await deactivateOrderPaymentLink({
++              apiKey: getSecretValue(apiKeySecret, 'ASAAS_ORDERS_API_KEY'),
++              paymentLinkId: payment.paymentLink,
++            })
++          } catch (deactivateError) {
++            logger?.error?.('[asaasOrders] failed to deactivate paid payment link', {
++              eventId,
++              paymentLinkId: payment.paymentLink,
++              error: deactivateError?.message || String(deactivateError),
++            })
++          }
++        }
++
++        response.status(200).json({ ok: true, ...result })
++      } catch (error) {
++        logger?.error?.('[asaasOrders] webhook failed', {
++          eventId,
++          event,
++          error: error?.message || String(error),
++        })
++        response.status(500).json({ ok: false, error: 'webhook_processing_failed' })
++      }
++    }
++  )
++
++  return { createAsaasOrderPayment, asaasOrderWebhook }
++}
++
++module.exports = {
++  BLOCKED_REASON,
++  ONLINE_MODE,
++  PROVIDER,
++  buildAsaasOrderExternalReference,
++  buildAsaasLinkCreationFailurePatch,
++  buildAsaasPendingPaymentSnapshot,
++  createAsaasOrderFunctions,
++  createOrderPaymentLink,
++  isAsaasOnlineActive,
++  isAsaasOnlinePaymentRequest,
++  orderRequiresAsaasOnline,
++  parseAsaasOrderExternalReference,
++  sanitizePublicStorePayments,
++}
+diff --git a/functions/shared/asaasOrders.test.js b/functions/shared/asaasOrders.test.js
+new file mode 100644
+index 00000000..00000000
+--- /dev/null
++++ b/functions/shared/asaasOrders.test.js
+@@ -0,0 +1,88 @@
++const assert = require('node:assert/strict')
++const test = require('node:test')
++
++const {
++  buildAsaasOrderExternalReference,
++  buildAsaasPendingPaymentSnapshot,
++  parseAsaasOrderExternalReference,
++  sanitizePublicStorePayments,
++} = require('./asaasOrders')
++
++test('sanitizePublicStorePayments exposes only safe Asaas order fields', () => {
++  const result = sanitizePublicStorePayments({
++    paymentMethods: { pix: true, card: false, cash: true },
++    payments: {
++      asaas: {
++        enabled: true,
++        status: 'active',
++        maxInstallmentCount: 6,
++        apiKey: 'secret',
++        webhookSecret: 'secret',
++      },
++      preorderPolicy: {
++        mode: 'asaas_online',
++      },
++    },
++  })
++
++  assert.deepEqual(result, {
++    manual: { pix: true, card: false, cash: true },
++    asaas: {
++      enabled: true,
++      status: 'active',
++      billingType: 'UNDEFINED',
++      maxInstallmentCount: 6,
++    },
++    preorderPolicy: {
++      mode: 'asaas_online',
++      requiredMethod: 'asaas_online',
++    },
++  })
++  assert.equal(result.asaas.apiKey, undefined)
++  assert.equal(result.asaas.webhookSecret, undefined)
++})
++
++test('sanitizePublicStorePayments keeps inactive Asaas disabled', () => {
++  const result = sanitizePublicStorePayments({
++    payments: {
++      asaas: {
++        enabled: true,
++        status: 'pending',
++        maxInstallmentCount: 99,
++      },
++    },
++  })
++
++  assert.equal(result.asaas.enabled, false)
++  assert.equal(result.asaas.status, 'pending')
++  assert.equal(result.asaas.maxInstallmentCount, null)
++})
++
++test('Asaas order externalReference round-trips store and order ids', () => {
++  const externalReference = buildAsaasOrderExternalReference({
++    storeId: 'store/unsafe',
++    orderId: 'order#unsafe',
++  })
++
++  assert.equal(externalReference, 'pratoby:order:store_unsafe:order_unsafe')
++  assert.deepEqual(parseAsaasOrderExternalReference(externalReference), {
++    storeId: 'store_unsafe',
++    orderId: 'order_unsafe',
++  })
++})
++
++test('buildAsaasPendingPaymentSnapshot stores blocked online payment state', () => {
++  const snapshot = buildAsaasPendingPaymentSnapshot({
++    totalCents: 12345,
++    storeId: 'store1',
++    storeSlug: 'minha-loja',
++    orderId: 'order1',
++  })
++
++  assert.equal(snapshot.paymentMode, 'online')
++  assert.equal(snapshot.paymentProvider, 'asaas')
++  assert.equal(snapshot.paymentStatus, 'pending')
++  assert.equal(snapshot.operationalBlockedReason, 'awaiting_online_payment')
++  assert.equal(snapshot.payment.amount, 123.45)
++  assert.equal(snapshot.payment.externalReference, 'pratoby:order:store1:order1')
++})
