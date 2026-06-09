@@ -300,7 +300,62 @@ function hasRequiredProductOptions(product) {
 }
 
 function isScheduledOnlyProduct(product) {
-  return product?.scheduling?.mode === 'scheduled_only'
+  const scheduling = product?.scheduling || {}
+  return (
+    scheduling.mode === 'scheduled_only' ||
+    scheduling.orderMode === 'scheduled_only' ||
+    product?.orderMode === 'scheduled_only' ||
+    product?.availabilityMode === 'scheduled_only'
+  )
+}
+
+function isTruthySetting(value) {
+  return value === true || value === 'true' || value === 1 || value === '1'
+}
+
+function isDisabledSetting(value) {
+  return value === false || value === 'false' || value === 0 || value === '0'
+}
+
+function getStoreEnabledPaymentOptions(store) {
+  if (!store) return PAYMENT_OPTIONS
+
+  const methods = {
+    ...(store?.paymentMethods || {}),
+    ...(store?.payments?.manual || {}),
+  }
+
+  const hasExplicitConfig = Object.keys(methods).length > 0 || Boolean(store?.pix)
+  if (!hasExplicitConfig) return PAYMENT_OPTIONS
+
+  const pixConfig = store?.pix || store?.payment?.pix || {}
+  const pixEnabled = !isDisabledSetting(methods.pix) &&
+    !isDisabledSetting(methods.pix_manual) &&
+    !isDisabledSetting(pixConfig.enabled)
+
+  const cashEnabled = !isDisabledSetting(methods.cash) &&
+    !isDisabledSetting(methods.dinheiro)
+
+  const creditEnabled = isTruthySetting(methods.credit) ||
+    isTruthySetting(methods.creditCard) ||
+    isTruthySetting(methods.card) ||
+    isTruthySetting(methods.maquininha)
+
+  const debitEnabled = isTruthySetting(methods.debit) ||
+    isTruthySetting(methods.debitCard) ||
+    isTruthySetting(methods.card) ||
+    isTruthySetting(methods.maquininha)
+
+  const genericCardEnabled = isTruthySetting(methods.card) || isTruthySetting(methods.maquininha)
+
+  return PAYMENT_OPTIONS.filter((option) => {
+    if (option.key === 'dinheiro') return cashEnabled
+    if (option.key === 'pix_manual') return pixEnabled
+    if (option.key === 'credito') return creditEnabled
+    if (option.key === 'debito') return debitEnabled
+    if (option.key === 'maquininha') return genericCardEnabled && !isTruthySetting(methods.credit) && !isTruthySetting(methods.debit)
+    return false
+  })
 }
 
 function getLineOptionsPriceCents(line) {
@@ -355,10 +410,23 @@ function buildSelectionPayload(product, groups, selectedByGroup) {
     }))
   ))
 
+  const extras = selectedOptionsFlat.map((option) => ({
+    id: option.id,
+    optionId: option.id,
+    name: option.name,
+    label: option.name,
+    groupId: option.groupId,
+    groupName: option.groupName,
+    priceCents: option.priceCents,
+    price: option.priceCents / 100,
+    quantity: option.quantity || 1,
+  }))
+
   return {
     lineKey: buildLineKey(product.id, selectedOptionsFlat.map((option) => option.id)),
     selectedOptionGroups,
     selectedOptionsFlat,
+    extras,
   }
 }
 
@@ -397,7 +465,7 @@ function ProductItem({ product, quantity, onAdd, onRemove, onObsChange }) {
   const hasRequiredOptions = hasRequiredProductOptions(product)
   const scheduledOnly = isScheduledOnlyProduct(product)
   const unavailable = isProductUnavailableForCounter(product)
-  const blocked = unavailable || scheduledOnly || hasOptions
+  const blocked = unavailable || scheduledOnly
 
   return (
     <article
@@ -478,12 +546,6 @@ function ProductItem({ product, quantity, onAdd, onRemove, onObsChange }) {
           {scheduledOnly && (
             <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold leading-4 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
               Produto sob encomenda. Use o fluxo de agendamento da loja pública.
-            </p>
-          )}
-
-          {hasOptions && !scheduledOnly && (
-            <p className="mt-2 rounded-xl bg-violet-50 px-3 py-2 text-[11px] font-semibold leading-4 text-violet-800 dark:bg-violet-500/10 dark:text-violet-200">
-              Venda pelo cardápio público até o balcão validar opções e preços no backend.
             </p>
           )}
         </div>
@@ -834,13 +896,13 @@ function EmptyState({ search }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
+export default function CounterOrderModal({ storeId, store, onClose, onSuccess }) {
   const [products, setProducts] = useState([])
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [productsError, setProductsError] = useState(null)
   const [productsReloadKey, setProductsReloadKey] = useState(0)
 
-  // cart: { [lineKey]: { productId, qty, obs, selectedOptionGroups, selectedOptionsFlat } }
+  // cart: { [lineKey]: { productId, qty, obs, selectedOptionGroups, selectedOptionsFlat, extras } }
   const [cart, setCart] = useState({})
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
@@ -918,7 +980,8 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
 
     const groups = normalizeOptionGroups(product)
     if (groups.length > 0) {
-      setSubmitError('Produtos com opções ainda precisam ser vendidos pelo cardápio público. O balcão não valida os adicionais no backend.')
+      setSubmitError(null)
+      setConfiguringProduct(product)
       return
     }
 
@@ -934,6 +997,7 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
           obs: prev[productId]?.obs || '',
           selectedOptionGroups: [],
           selectedOptionsFlat: [],
+          extras: [],
         },
       }
     })
@@ -953,6 +1017,7 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
           obs: sanitizePlainText(payload.observation || existing?.obs || '', MAX_ITEM_OBSERVATION_LENGTH),
           selectedOptionGroups: payload.selectedOptionGroups || [],
           selectedOptionsFlat: payload.selectedOptionsFlat || [],
+          extras: payload.extras || [],
         },
       }
     })
@@ -1074,6 +1139,7 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
       obs: item.obs,
       selectedOptionGroups: item.selectedOptionGroups || [],
       selectedOptionsFlat: item.selectedOptionsFlat || [],
+      extras: item.extras || [],
       product: cartProductMap[item.productId],
     }))
     .filter((item) => item.product), [cart, cartProductMap])
@@ -1092,7 +1158,10 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
 
   const totalItems = useMemo(() => cartItems.reduce((acc, item) => acc + item.qty, 0), [cartItems])
   const hasItems = cartItems.length > 0
-  const selectedPayment = PAYMENT_OPTIONS.find((option) => option.key === paymentMethod) || PAYMENT_OPTIONS[0]
+  const enabledPaymentOptions = useMemo(() => getStoreEnabledPaymentOptions(store), [store])
+  const enabledPaymentKeys = useMemo(() => new Set(enabledPaymentOptions.map((option) => option.key)), [enabledPaymentOptions])
+  const selectedPayment = enabledPaymentOptions.find((option) => option.key === paymentMethod) || enabledPaymentOptions[0] || PAYMENT_OPTIONS[0]
+  const paymentAllowedByStore = enabledPaymentKeys.has(paymentMethod)
   const visibleProductsError = safeStoreId ? productsError : 'Loja inválida para criar pedido de balcão.'
   const visibleLoadingProducts = Boolean(safeStoreId && loadingProducts)
   const canSubmit = Boolean(
@@ -1100,10 +1169,19 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
     safeStoreId &&
     totalCents > 0 &&
     ALLOWED_PAYMENT_METHODS.has(paymentMethod) &&
+    paymentAllowedByStore &&
     !visibleLoadingProducts &&
     !visibleProductsError &&
     !submitting
   )
+
+
+  useEffect(() => {
+    if (!enabledPaymentOptions.length) return
+    if (!enabledPaymentOptions.some((option) => option.key === paymentMethod)) {
+      setPaymentMethod(enabledPaymentOptions[0].key)
+    }
+  }, [enabledPaymentOptions, paymentMethod])
 
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
@@ -1124,8 +1202,8 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
       return
     }
 
-    if (!ALLOWED_PAYMENT_METHODS.has(paymentMethod)) {
-      setSubmitError('Método de pagamento inválido.')
+    if (!ALLOWED_PAYMENT_METHODS.has(paymentMethod) || !paymentAllowedByStore) {
+      setSubmitError('Este método de pagamento não está ativo para esta loja. Configure em Pagamentos ou escolha outro método.')
       return
     }
 
@@ -1133,6 +1211,9 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
       productId: String(item.productId || '').trim(),
       quantity: clampQuantity(item.qty),
       observation: sanitizePlainText(item.obs, MAX_ITEM_OBSERVATION_LENGTH),
+      selectedOptionGroups: Array.isArray(item.selectedOptionGroups) ? item.selectedOptionGroups : [],
+      selectedOptionsFlat: Array.isArray(item.selectedOptionsFlat) ? item.selectedOptionsFlat : [],
+      extras: Array.isArray(item.extras) ? item.extras : [],
     })).filter((item) => item.productId)
 
     if (!itemsPayload.length) {
@@ -1159,7 +1240,7 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
     } finally {
       setSubmitting(false)
     }
-  }, [cartItems, customerName, hasItems, note, onSuccess, paymentMethod, safeStoreId, submitting])
+  }, [cartItems, customerName, hasItems, note, onSuccess, paymentAllowedByStore, paymentMethod, safeStoreId, submitting])
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return createPortal(
@@ -1468,8 +1549,17 @@ export default function CounterOrderModal({ storeId, onClose, onSuccess }) {
                       </p>
                     </div>
 
+                    {!enabledPaymentOptions.length && (
+                      <div className="mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+                        <FiAlertTriangle size={15} className="mt-0.5 shrink-0" />
+                        <span>
+                          Nenhuma forma de pagamento presencial está ativa. Configure em <strong>Pagamentos</strong> antes de criar pedidos de balcão.
+                        </span>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                      {PAYMENT_OPTIONS.map((option) => {
+                      {enabledPaymentOptions.map((option) => {
                         const Icon = option.icon
                         const active = paymentMethod === option.key
 

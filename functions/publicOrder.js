@@ -1753,4 +1753,6 @@ function createPublicOrderHandler({
 module.exports = {
   createPublicOrderHandler,
   normalizePublicOrderDeliveryType,
+  buildServerOrderItems,
+  PublicOrderError,
 }

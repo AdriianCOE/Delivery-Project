@@ -1,4 +1,5 @@
 const { onCall } = require('firebase-functions/v2/https')
+const { buildServerOrderItems, PublicOrderError } = require('./publicOrder')
 
 const MERCHANT_ORDER_STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
 const MERCHANT_ORDER_STATUSES = new Set(MERCHANT_ORDER_STATUS_FLOW)
@@ -9,6 +10,15 @@ const MERCHANT_ORDER_RATE_LIMIT_MAX = 60
 
 function uniqueTruthy(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+function isCounterBlockedScheduledOnlyProduct(product) {
+  if (!product) return false
+  if (product.scheduling?.mode === 'scheduled_only') return true
+  if (product.scheduling?.orderMode === 'scheduled_only') return true
+  if (product.orderMode === 'scheduled_only') return true
+  if (product.availabilityMode === 'scheduled_only') return true
+  return false
 }
 
 function isCallableAnonymousAuth(request) {
@@ -667,86 +677,28 @@ function createMerchantOrderFunctions({
       // 4. Rate limit
       await assertCounterOrderRateLimit({ db, admin, HttpsError, logger, uid, storeId })
 
-      // 5. Validar e calcular itens (leitura de publicStores/{storeId}/products)
-      const sanitizedItems = rawItems.map((item, index) => ({
-        productId: sanitizeCounterProductId(item.productId, HttpsError),
-        quantity: sanitizeCounterQuantity(item.quantity, HttpsError),
-        observation: sanitizeCounterObservation(item.observation),
-        _index: index,
-      }))
-
+      // 5. Validar e calcular itens usando o helper do publicOrder
+      let builtItems = []
       let subtotalCents = 0
-      const builtItems = []
+      let schedulingProducts = []
 
-      for (const item of sanitizedItems) {
-        // Tenta direto em publicStores/{storeId}/products/{productId}
-        let productSnap = await db
-          .collection('publicStores')
-          .doc(storeId)
-          .collection('products')
-          .doc(item.productId)
-          .get()
-
-        // Fallback: tenta coleção global products
-        if (!productSnap.exists) {
-          productSnap = await db.collection('products').doc(item.productId).get()
+      try {
+        const storeKeys = uniqueTruthy([storeId, storeSlug])
+        const serverResult = await buildServerOrderItems(db, rawItems, storeKeys)
+        builtItems = serverResult.items
+        subtotalCents = serverResult.subtotalCents
+        schedulingProducts = serverResult.schedulingProducts
+      } catch (err) {
+        if (err instanceof PublicOrderError) {
+          throw new HttpsError(err.code || 'failed-precondition', err.message)
         }
+        throw err
+      }
 
-        if (!productSnap.exists) {
-          throw new HttpsError('not-found', `Produto nao encontrado: ${item.productId}`)
-        }
-
-        const product = productSnap.data() || {}
-
-        // Verificar se produto pertence a loja (para produtos da coleção global)
-        const productStoreId = String(product.storeId || product.storeDocId || '').trim()
-        if (productStoreId && productStoreId !== storeId) {
-          throw new HttpsError('failed-precondition', `Produto nao pertence a loja: ${item.productId}`)
-        }
-
-        // Verificar disponibilidade
-        if (product.isDeleted === true || product.deletedAt) {
-          throw new HttpsError('failed-precondition', `Produto removido: ${product.name || item.productId}`)
-        }
-        if (product.isActive === false || product.active === false) {
-          throw new HttpsError('failed-precondition', `Produto inativo: ${product.name || item.productId}`)
-        }
-        if (product.isAvailable === false || product.available === false) {
-          throw new HttpsError('failed-precondition', `Produto indisponivel: ${product.name || item.productId}`)
-        }
-        const stock = product.stock
-        if (stock !== undefined && stock !== null && stock !== '' && Number(stock) <= 0) {
-          throw new HttpsError('failed-precondition', `Produto sem estoque: ${product.name || item.productId}`)
-        }
-
-        const basePriceCents = getCounterProductPriceCents(product)
-        const unitTotalCents = basePriceCents
-        const itemTotalCents = unitTotalCents * item.quantity
-        subtotalCents += itemTotalCents
-
-        builtItems.push({
-          id: productSnap.id,
-          productId: productSnap.id,
-          originalProductId: productSnap.id,
-          cartItemId: `${productSnap.id}-${item._index}`,
-          name: String(product.name || 'Produto').trim().slice(0, 160),
-          description: String(product.description || '').trim().slice(0, 500),
-          quantity: item.quantity,
-          price: basePriceCents / 100,
-          priceCents: basePriceCents,
-          basePrice: basePriceCents / 100,
-          basePriceCents,
-          unitPrice: unitTotalCents / 100,
-          unitPriceCents: unitTotalCents,
-          totalCents: itemTotalCents,
-          total: itemTotalCents / 100,
-          imageUrl: product.imageUrl || product.image || product.photoUrl || null,
-          observation: item.observation,
-          itemObservation: item.observation,
-          extras: [],
-          selectedOptionsFlat: [],
-          selectedOptionGroups: [],
-        })
+      // Bloquear produto sob encomenda no balcão
+      const scheduledOnly = schedulingProducts.find(isCounterBlockedScheduledOnlyProduct)
+      if (scheduledOnly) {
+        throw new HttpsError('failed-precondition', `O produto "${scheduledOnly.name}" é sob encomenda e deve ser vendido pelo fluxo de agendamento.`)
       }
 
       if (subtotalCents <= 0) {

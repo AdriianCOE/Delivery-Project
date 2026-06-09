@@ -1178,6 +1178,7 @@ function sanitizeStorePaymentsSettingsPatch(value, currentPayments = {}) {
   if (inputPolicy || typeof value.preorderPolicy === 'string') {
     const mode = normalizeSettingsText(inputPolicy?.mode || value.preorderPolicy || 'manual')
     nextPolicy.mode = PREORDER_PAYMENT_POLICY_MODES.has(mode) ? mode : 'manual'
+    nextPolicy.requiredMethod = nextPolicy.mode
 
     const asaasRequiredByPolicy = nextPolicy.mode === 'asaas_online' || nextPolicy.mode === 'manual_or_asaas'
     if (asaasRequiredByPolicy && nextAsaas.enabled !== true) {

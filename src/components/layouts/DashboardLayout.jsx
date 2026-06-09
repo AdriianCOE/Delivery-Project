@@ -222,6 +222,28 @@ const FUTURE_SECTIONS = [
   },
 ]
 
+const DASHBOARD_ROUTE_PREFETCHERS = {
+  '/dashboard/orders': () => import('../../pages/merchant/OrdersPage'),
+  '/dashboard/menu': () => import('../../pages/merchant/MenuManagementPage'),
+  '/dashboard/pagamentos': () => import('../../pages/merchant/PaymentsPage'),
+  '/dashboard/qrcodes': () => import('../../pages/merchant/QRCodePage'),
+  '/dashboard/settings': () => import('../../pages/merchant/Settings'),
+  '/dashboard/stats': () => import('../../pages/merchant/Statistics'),
+  '/dashboard/out-screen': () => import('../../pages/merchant/KitchenDisplayPage'),
+  '/dashboard/out-screen/customer': () => import('../../pages/merchant/CustomerDisplayPage'),
+  '/dashboard/reviews': () => import('../../pages/merchant/Reviews'),
+  '/dashboard/billing': () => import('../../pages/merchant/BillingPage'),
+}
+
+function prefetchDashboardRoute(path) {
+  const prefetcher = DASHBOARD_ROUTE_PREFETCHERS[path]
+  if (!prefetcher) return
+
+  prefetcher().catch(() => {
+    // Prefetch é melhoria de UX. Se falhar, a rota ainda carrega normal depois.
+  })
+}
+
 function cn(...classes) {
   return classes.filter(Boolean).join(' ')
 }
@@ -347,6 +369,8 @@ function MainNavItem({ item, onNavigate, onCustomAction, collapsed = false, badg
   return (
     <NavLink
       to={item.to}
+      onMouseEnter={() => prefetchDashboardRoute(item.to)}
+      onFocus={() => prefetchDashboardRoute(item.to)}
       end={item.end}
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
@@ -434,6 +458,9 @@ function ComingSoonNavItem({ item, onNavigate, collapsed = false }) {
 
   return (
     <NavLink
+      onMouseEnter={() => item.to && prefetchDashboardRoute(item.to)}
+      onFocus={() => item.to && prefetchDashboardRoute(item.to)}
+      onTouchStart={() => item.to && prefetchDashboardRoute(item.to)} 
       to={item.to}
       onClick={onNavigate}
       onMouseEnter={() => setIsHovered(true)}
@@ -1203,6 +1230,19 @@ function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
   )
 }
 export default function DashboardLayout() {
+  useEffect(() => {
+  const timer = window.setTimeout(() => {
+    prefetchDashboardRoute('/dashboard/orders')
+    prefetchDashboardRoute('/dashboard/menu')
+    prefetchDashboardRoute('/dashboard/pagamentos')
+    prefetchDashboardRoute('/dashboard/qrcodes')
+    prefetchDashboardRoute('/dashboard/settings')
+    prefetchDashboardRoute('/dashboard/stats')
+    prefetchDashboardRoute('/dashboard/out-screen')
+  }, 1200)
+
+  return () => window.clearTimeout(timer)
+}, [])
   const location = useLocation()
   const navigate = useNavigate()
   const authContext = useAuth()

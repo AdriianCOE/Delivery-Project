@@ -1,0 +1,326 @@
+219 arquivos, 3.4MB — maior versão até hoje. Muitos arquivos novos. Vou ler sistematicamente os críticos.Tenho o quadro completo. 219 arquivos, 3.4MB. Delta significativo vs análise anterior — muitas features novas. Vou compilar tudo.
+
+---
+
+# PratoBy — Análise MVP · Junho 2026
+
+---
+
+## Notas Gerais
+
+| Dimensão | Nota | Δ vs análise anterior |
+|---|---|---|
+| **Segurança** | 8.5/10 | → |
+| **MVP Vendável** | 8.0/10 | ↑ +0.5 |
+| **UX Mobile** | 7.5/10 | ↑ +0.5 |
+| **Qualidade Técnica** | 8.5/10 | → |
+| **Performance / Custo Firebase** | 7.5/10 | ↑ **+1.0** |
+
+---
+
+## O que foi resolvido desde a última análise
+
+| Item | Status |
+|---|---|
+| `aggregateStorePresence` race condition — usava `.set()` sem transação | ✅ Corrigido — agora usa `.transaction()` |
+| `Statistics.jsx` usava `onSnapshot` em dados históricos (62 dias) | ✅ Corrigido — agora usa `getDocs` |
+| `PaymentsPage` era stub `ComingSoon` | ✅ Implementada — Pix, métodos, política de pré-pagamento |
+| `QRCodePage` era stub | ✅ Implementada — CRUD de mesas, QR por mesa, QR da loja |
+| Pedido de balcão (`createMerchantCounterOrder`) | ✅ Implementado — server-side pricing, rate limit, audit log |
+| Testes unitários ausentes | ✅ Adicionados — `asaasOrders.test.js`, `orderScheduling.test.js`, `publicScheduling.test.js` |
+| CI/CD ausente | ✅ `.github/workflows/playwright.yml` adicionado |
+
+---
+
+## Riscos Críticos
+
+### C-1 — Fluxo `dine_in` / Mesa via QR Code está pela metade — feature quebrada
+
+**Risco:** Funcional crítico  
+**Arquivos:** `StoreFrontPage.jsx`, `CartDrawer.jsx`, `functions/publicOrder.js`
+
+O `2.txt` (spec do Codex no repo) especifica claramente o fluxo completo de pedido por mesa. O backend criou toda a infraestrutura:
+- `storeTables.js` — CRUD de mesas ✅
+- `QRCodePage.jsx` — gera QR com URL `/{slug}?table=<token>` ✅
+
+Mas o fluxo de ponta a ponta está incompleto:
+- `StoreFrontPage.jsx` **não lê** o parâmetro `?table=` da URL — o cliente escaneia o QR e nada acontece
+- `CartDrawer.jsx` **não tem** modo `dine_in` — não envia `tableToken`, `tableId`, `tableLabel` para o backend
+- `publicOrder.js` **não valida** `tableToken` — se o cliente enviasse, seria ignorado; a mesa não é verificada no servidor
+
+**Impacto:** Os QR Codes de mesa estão sendo gerados e distribuídos para clientes, mas quando escaneados, abrem o cardápio como se fosse um pedido normal de retirada/delivery. O lojista não vê a mesa no pedido. A feature anunciada no produto não funciona end-to-end.
+
+**Correção:** Implementar as 3 peças faltantes conforme o spec em `2.txt`:
+1. `StoreFrontPage.jsx`: ler `useSearchParams()` → `?table=token` → buscar mesa via callable ou getDoc
+2. `CartDrawer.jsx`: modo `dine_in` — sem campo de endereço, enviar `tableToken`, `fulfillmentType: 'dine_in'`
+3. `publicOrder.js`: validar `tableToken` → buscar `stores/{storeId}/tables` → verificar `isActive`, `storeId` e que pertence à loja correta
+
+**Prioridade:** 🔴 Antes de divulgar o QR de mesa para clientes
+
+---
+
+### C-2 — `2.txt` (arquivo de prompt/spec) está commitado na raiz do repositório
+
+**Risco:** Informacional / postura profissional  
+**Arquivo:** `2.txt` (linha 345 do repomix)
+
+Um prompt de instrução para o Codex foi commitado como arquivo raiz do projeto. Não é acessível via Firebase Hosting (a hosting serve apenas o diretório `public/` ou o build), mas está no Git e expõe o contexto interno de desenvolvimento, estratégia de features e débitos técnicos assumidos para qualquer pessoa com acesso ao repositório.
+
+**Correção:** Adicionar ao `.gitignore` ou deletar do repo. Mover specs de feature para `docs/`.
+
+---
+
+## Riscos Altos
+
+### A-1 — `CounterOrderModal` lê produtos da `publicStores` subcollection — falha quando loja está billing-blocked
+
+**Arquivo:** `src/pages/merchant/components/CounterOrderModal.jsx` linha 933
+
+```js
+const productsRef = collection(db, 'publicStores', safeStoreId, 'products')
+```
+
+A Firestore rule `publicStores/{storeId}/products` exige `publicStoreExists(storeId)`, que falha para lojas com `isBillingBlocked`, `isBlocked` ou `subscriptionStatus: 'blocked'`. Resultado: um merchant com assinatura vencida não consegue fazer pedido de balcão — a lista de produtos retorna vazia ou erro de permissão.
+
+Ironicamente, o pedido de balcão é o fluxo que menos depende de subscription (é operação interna da loja, não do cliente), então esse bloqueio é indesejado.
+
+**Correção:** Ler da coleção privada `products` com `where('storeId', '==', safeStoreId)` — a Firestore rule permite `canManageStoreId` independentemente de billing status.
+
+---
+
+### A-2 — `asaasOrders.js` tem TODO explícito de produção não resolvido
+
+**Arquivo:** `functions/shared/asaasOrders.js` linha 15194
+
+```js
+// TODO(asaas-orders-production): paymentLinks can create a new charge every time
+// with a single Asaas customer/charge before broad production rollout.
+```
+
+O `createAsaasOrderPayment` é chamado a cada pedido com pagamento online. Se o mesmo pedido tentar criar o link múltiplas vezes (retry do cliente, falha de rede, double-click), uma nova cobrança pode ser criada no Asaas para o mesmo pedido. Não há deduplicação por `orderId` antes da criação.
+
+**Impacto:** Cliente é cobrado duas vezes pelo mesmo pedido. Requer estorno manual.
+
+**Correção:** Antes de chamar a API do Asaas, verificar se o pedido já tem `asaasPaymentLink.providerPaymentLinkId` e reusar. Ou criar lock transacional similar ao `billingLock` da assinatura.
+
+---
+
+### A-3 — `ENFORCE_APP_CHECK` e `CLEANUP_ANONYMOUS_USERS` ainda sem configuração de produção
+
+**Arquivos:** `functions/index.js`, variáveis de ambiente
+
+Ambos os gaps reportados na análise anterior permanecem:
+- `ENFORCE_APP_CHECK` default `false` — bots podem chamar callables públicos sem validação de origem
+- `CLEANUP_ANONYMOUS_USERS_DRY_RUN` default `true` — função roda diariamente mas não deleta nada
+
+Não há mudança de código necessária — são configurações de ambiente.
+
+---
+
+### A-4 — `asaasOrders.js`: `DEFAULT_ASAAS_ORDERS_BASE_URL` aponta para sandbox
+
+**Arquivo:** `functions/shared/asaasOrders.js` linha 14906
+
+```js
+const DEFAULT_ASAAS_ORDERS_BASE_URL = 'https://api-sandbox.asaas.com/v3'
+```
+
+A função `getAsaasOrdersBaseUrl()` lança erro se `ASAAS_ORDERS_BASE_URL` não estiver configurada (exceto em emulador) — o comportamento defensivo está correto. Mas o `ASAAS_ORDERS_API_KEY` é uma variável separada do `ASAAS_API_KEY` da assinatura. Esse segundo secret precisa ser configurado antes de `createAsaasOrderPayment` ir ao ar.
+
+---
+
+### A-5 — `tableToken` não é validado no backend ao criar pedido de mesa
+
+**Arquivo:** `functions/publicOrder.js`
+
+O spec em `2.txt` exige explicitamente:
+> "backend valida tableToken; buscar mesa ativa da loja pelo token; se inválido/inativo, rejeitar; não aceitar mesa de outra loja"
+
+Hoje `publicOrder.js` não recebe, não valida e não persiste `tableToken`. Qualquer cliente pode criar um pedido com `orderType: 'table'` e `tableLabel: 'Mesa 1'` sem que a mesa exista. Isso significa que pedidos por mesa poderiam ter labels falsas no dashboard do lojista.
+
+---
+
+## Riscos Médios
+
+### M-1 — Scheduling: `src/utils/publicScheduling.js` e `functions/shared/publicScheduling.js` são cópias paralelas
+
+**Arquivos:** Ambos (~180 linhas cada)
+
+A mesma lógica de cálculo de slots e janelas de horário existe em dois lugares. Uma correção em um não propaga para o outro. Isso é intencional (backend puro Node.js, frontend browser), mas o padrão é frágil. Qualquer bug de edge-case em `parseTimeToMinutes` ou `resolveWindowsForDate` precisa ser corrigido em dois arquivos.
+
+**Ação:** Os unit tests de `publicScheduling.test.js` cobrem a versão backend. Adicionar o mesmo conjunto de testes para `src/utils/publicScheduling.js`. Ou extrair para um pacote compartilhado se houver monorepo.
+
+---
+
+### M-2 — `PaymentsPage.jsx` carrega loja com múltiplas queries paralelas
+
+**Arquivo:** `src/pages/merchant/PaymentsPage.jsx`
+
+O padrão de loading da BillingPage foi replicado: múltiplas queries de stores por `ownerId`, `ownerUid`, `allowedUserIds`, etc. Mesmo problema que a BillingPage tinha antes — N listeners desnecessários para obter o storeId que já está no `AuthContext`.
+
+**Ação:** Usar `storeId` direto do auth context e um único `onSnapshot(doc(db, 'stores', storeId))`.
+
+---
+
+### M-3 — `findStoreForCallable` ainda pode gerar 16 leituras por chamada
+
+Não resolvido da análise anterior. O `getPublicCatalog`, `getPublicStoreProfile` e `validatePublicCoupon` continuam com fallbacks de slug query quando `storeId` não é passado explicitamente. Confirmar que `StoreFrontPage.jsx` sempre passa o `storeDocId` real.
+
+---
+
+### M-4 — `_requestPhoneVerificationLegacyHandler` — 200 linhas de código OTP não exportado
+
+Não removido da análise anterior. Risco de export acidental persiste.
+
+---
+
+### M-5 — `termsVersion` hardcoded em dois lugares independentes
+
+Não resolvido. `TERMS_VERSION = '2026-05-24'` em `index.js` e `data.termsVersion == '2026-05-24'` em `firestore.rules`. Atualizar termos exige dois deploys coordenados.
+
+---
+
+### M-6 — Smoke test de CI testa apenas "home carrega"
+
+**Arquivo:** `tests/smoke.spec.js`
+
+```js
+test('home carrega sem quebrar', async ({ page }) => {
+  await page.goto('/')
+  await expect(page).toHaveTitle(/PratoBy|Cardápio|Delivery/i)
+})
+```
+
+O CI/CD Playwright foi configurado mas o único teste verifica se a landing page tem um título. Não testa login, cadastro, storefront, carrinho, criação de pedido, dashboard ou qualquer fluxo crítico.
+
+---
+
+## Riscos Baixos / Dívida Técnica
+
+**B-1 — `createMerchantCounterOrder` sets `trackingToken: null`**
+Pedidos de balcão não têm `trackingToken`. O `OrderTrackingPage` e a lógica de customer push tokens buscam o pedido por `trackingToken`. Confirmar que isso não causa NullPointerException em nenhum trigger.
+
+**B-2 — `src/pages/merchant/MenuManagementPage.jsx` (stub) ainda existe ao lado do modular**
+Arquivo de 7 linhas que redireciona. Dead code que confunde.
+
+**B-3 — Scheduling: `maxDaysAhead` máximo de 120 no backend vs sem limite no frontend**
+`toPositiveInteger(value, fallback, min=1, max=120)` em `publicScheduling.js` limita `maxDaysAhead` a 120 dias. Se o lojista configurar 180 no frontend (sem validação), o backend silenciosamente recorta para 120 mas o UI mostra 180.
+
+**B-4 — `asaasOrders.test.js` e `orderScheduling.test.js` não testam casos de erro de rede**
+Os testes cobrem casos felizes e alguns de validação, mas não simulam falhas de API do Asaas ou timeouts. O `createAsaasOrderPayment` não tem retry lógic documentado.
+
+**B-5 — QRCodePage usa `qrcode.react` mas o package.json não foi verificado**
+O `QRCodeSVG` importado de `qrcode.react` requer que o pacote esteja em `package.json`. Se não estiver, o build falha silenciosamente em dev mas quebra em produção.
+
+```bash
+grep "qrcode" package.json # confirmar
+```
+
+---
+
+## O que está bem feito (novidades desta versão)
+
+**`createMerchantCounterOrder` é exemplar:**
+- Server-side pricing via `buildServerOrderItems` (mesmo helper do `publicOrder`) ✅
+- Rate limiting transacional próprio (`createMerchantCounterOrder_uid_storeId`) ✅
+- Validação de role explícita (`['merchant', 'admin', 'developer']`) ✅
+- Audit log com `changedFields` ✅
+- Bloqueio de produtos `scheduled_only` no balcão ✅
+
+**`storeTables.js` é seguro:**
+- Token gerado no backend (`crypto.randomBytes(6)`) — nunca confiado do cliente ✅
+- `assertCanManageStore` server-side ✅
+- Token imutável após criação ✅
+- Soft-delete via `isArchived` ✅
+
+**`asaasOrders.js` com boas práticas:**
+- `timingSafeStringEqual` no webhook ✅
+- Secrets via `defineSecret` ✅
+- `getAsaasOrdersBaseUrl()` com erro explícito se não configurado ✅
+- `sanitizePublicStorePayments` remove `apiKey` e `webhookSecret` da resposta pública ✅
+- Teste verifica que `apiKey` não vaza: `assert.equal(result.asaas.apiKey, undefined)` ✅
+
+**Statistics.jsx finalmente eficiente:**
+`getDocs` para histórico de pedidos + 1 `onSnapshot` de store = custo Firebase proporcional ao uso real ✅
+
+---
+
+## MVP: Estado por Área
+
+| Área | Status | Observação |
+|---|---|---|
+| Fluxo público de pedido | ✅ Completo | Server-side pricing, coupon, rate limit |
+| Asaas billing (assinatura) | ✅ Completo | Trial, planos, webhook, checkout |
+| Pedido de balcão (counter) | ✅ Completo | Server-side pricing, rate limit, audit |
+| Configurações de pagamento | ✅ Completo | `PaymentsPage` — Pix, métodos, política |
+| QR Code da loja | ✅ Completo | Geração, download, cópia de link |
+| QR Code de mesa (dine_in) | 🔴 **Incompleto** | QR gerado mas fluxo de pedido ausente |
+| Agendamento (scheduling) | ✅ Completo | Backend robusto + frontend + testes |
+| Pagamento online por pedido (Asaas) | ⚠️ Beta | TODO de produção não resolvido |
+| WhatsApp notificação de pedido | 🔴 Ausente | Único grande gap de produto restante |
+| Financeiro / Extrato | 🔴 Stub | `ComingSoon` |
+| Equipe / Multi-user | 🔴 Stub | `ComingSoon` |
+| CI/CD | ⚠️ Mínimo | Smoke test só verifica título da página |
+
+---
+
+## Plano de Ação
+
+### 🔴 Fase 1 — Antes de divulgar o QR de mesa (urgente)
+
+| Ação | Arquivo | Risco |
+|---|---|---|
+| Completar fluxo storefront: detectar `?table=token`, mostrar banner de mesa | `StoreFrontPage.jsx` | QR distribuído mas não funcional |
+| Completar CartDrawer: modo `dine_in`, enviar `tableToken`/`tableLabel` | `CartDrawer.jsx` | Pedidos de mesa sem identificação |
+| Completar `publicOrder.js`: validar `tableToken` contra `stores/{id}/tables` | `publicOrder.js` | Mesa não verificada no backend |
+| Deletar `2.txt` do repo (mover para `docs/` ou `.gitignore`) | raiz | Exposição interna |
+| Corrigir `CounterOrderModal`: ler de `products` não de `publicStores/products` | `CounterOrderModal.jsx` | Counter inoperante em billing-blocked |
+
+### 🟠 Fase 2 — Antes de ativar pagamento online por pedido (Asaas Orders)
+
+| Ação | Impacto |
+|---|---|
+| Resolver TODO de deduplicação de payment link no Asaas | Evitar cobrança dupla |
+| Configurar `ASAAS_ORDERS_API_KEY` e `ASAAS_ORDERS_BASE_URL` em produção | Sem isso, feature não funciona |
+| `ENFORCE_APP_CHECK=true` + App Check no Console | Bots livres nas callables públicas |
+| `CLEANUP_ANONYMOUS_USERS_ENABLED=true` + `DRY_RUN=false` | 1.000+ usuários anônimos/semana acumulando |
+
+### 🟡 Fase 3 — Qualidade e expansão
+
+| Ação |
+|---|
+| Implementar WhatsApp Cloud API para notificação de novo pedido ao merchant |
+| Expandir testes E2E: checkout completo, cupom, pedido de balcão, mesa |
+| Corrigir `PaymentsPage` — trocar múltiplas queries por 1 listener direto |
+| Externalizar `termsVersion` para Firestore `/config/terms` |
+| Remover/mover `_requestPhoneVerificationLegacyHandler` |
+| Adicionar testes de erro para `asaasOrders.js` (falha de rede, timeout) |
+| Confirmar `qrcode.react` em `package.json` e validar build |
+
+---
+
+## Perguntas para o dono do produto
+
+1. **QR de mesa:** Os QR Codes já foram distribuídos fisicamente para mesas de algum restaurante piloto? Se sim, o fluxo incompleto precisa ser corrigido antes do próximo cliente testar.
+
+2. **Pagamento online por pedido (Asaas):** É prioritário ativar antes de outros itens? O TODO de deduplicação é pré-condição para produção.
+
+3. **Scheduling:** O fluxo de agendamento está visível no frontend para os clientes? A `publicScheduling.js` + `CartDrawer` já integram o slot picker?
+
+4. **WhatsApp:** Ainda o maior gap de produto. Há previsão de integração? A notificação por FCM (browser) existe mas não alcança o lojista com o app fechado.
+
+5. **Counter order sem `trackingToken`:** Pedido de balcão não tem link de tracking para o cliente (por design, correto?). Confirmar que o `OrderTrackingPage` e os triggers de push de cliente não explodem ao processar pedidos com `trackingToken: null`.
+
+---
+
+## As 5 prioridades imediatas
+
+1. **Completar o fluxo de pedido por mesa (3 arquivos)** — StoreFrontPage + CartDrawer + publicOrder.js. Os QR Codes estão sendo gerados mas não funcionam end-to-end.
+
+2. **Deletar `2.txt` do repo** — Uma linha de `git rm 2.txt && git commit`.
+
+3. **Corrigir `CounterOrderModal` para ler de `products` em vez de `publicStores/products`** — Evita falha silenciosa em stores com billing issue.
+
+4. **Resolver TODO de deduplicação no `createAsaasOrderPayment`** — Pré-condição para pagamento online por pedido ir ao ar sem risco de cobrança dupla.
+
+5. **`ENFORCE_APP_CHECK=true` + configurar `CLEANUP_ANONYMOUS_USERS`** — Duas configurações de ambiente, zero mudança de código.
