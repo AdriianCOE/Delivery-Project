@@ -572,6 +572,7 @@ function getPaymentStatus(order) {
     canceled: 'Cancelado',
     cancelled: 'Cancelado',
     refunded: 'Estornado',
+    partially_refunded: 'Parcialmente estornado',
   }
 
   return map[status] || 'Manual'
@@ -3116,18 +3117,18 @@ function OrderModal({
                     onClick={() => onOpenWhatsApp(order)}
                     className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <FiMessageCircle size={18} className="text-emerald-600 dark:text-emerald-400" /> 
+                    <FiMessageCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
                     WhatsApp
                   </button>
                 )}
-                
+
                 {pixPending ? (
-                  <button 
-                    onClick={() => onConfirmPixPayment(order)} 
+                  <button
+                    onClick={() => onConfirmPixPayment(order)}
                     disabled={Boolean(updatingStatus)}
                     className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} /> 
+                    <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} />
                     {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
                   </button>
                 ) : asaasPending && asaasPaymentUrl ? (
@@ -3146,17 +3147,17 @@ function OrderModal({
                     <span>Agendamento confirmado</span>
                   </div>
                 ) : nextStatus ? (
-                  <button 
-                    onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null} 
+                  <button
+                    onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null}
                     disabled={Boolean(updatingStatus) || !canRunPrimaryStatusAction}
                     className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
                   >
-                    <FiZap size={18}/> 
+                    <FiZap size={18}/>
                     {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
                   </button>
                 ) : null}
 
-                <button 
+                <button
                   onClick={() => printComanda(order, store)}
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-900 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
                 >
@@ -3369,7 +3370,7 @@ function OrderModal({
                 </section>
               )}
 
-              
+
 
               {/* Payment details card */}
               <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
@@ -3876,12 +3877,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       showToast('error', 'Este pedido não é Pix manual.')
       return
     }
-    
+
     if (isPaymentPaid(order)) {
       showToast('success', 'Este pagamento já está confirmado.')
       return
     }
-    
+
     if (shouldBlockOrderAcceptance(order)) {
       showToast(
         'error',
@@ -3889,12 +3890,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       )
       return
     }
-    
+
     if (shouldWarnOrderAcceptance(order)) {
       const confirmedReview = window.confirm(
         'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar o Pix e aceitar o pedido mesmo assim?'
       )
-    
+
       if (!confirmedReview) return
     }
 
@@ -4540,47 +4541,65 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                 type="button"
                 disabled={storeActionLoading}
                 onClick={handleToggleStoreOpen}
-                className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-5 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 ${
+                className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold shadow-sm ring-1 ring-inset transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                   selectedStore?.isOpen
-                    ? 'bg-red-50 text-red-700 ring-red-200 shadow-red-100/50 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/40 dark:hover:bg-red-900/40'
-                    : 'bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40'
+                    ? 'bg-red-50 text-red-700 ring-red-200 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/30 dark:hover:bg-red-900/40'
+                    : 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/30 dark:hover:bg-emerald-900/40'
                 }`}
               >
                 {storeActionLoading ? (
                   <>
                     <FiLoader size={16} className="animate-spin" />
-                    Atualizando...
+                    <span>Atualizando...</span>
                   </>
                 ) : selectedStore?.isOpen ? (
                   <>
                     <FiPower size={16} />
-                    Fechar loja
+                    <span>Fechar loja</span>
                   </>
                 ) : (
                   <>
                     <FiPower size={16} />
-                    Abrir loja
+                    <span>Abrir loja</span>
                   </>
                 )}
               </button>
             )}
+
             <button
               type="button"
               onClick={() => showToast('success', 'Os pedidos já estão sincronizados em tempo real.')}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-5 text-sm font-semibold text-orange-700 shadow-sm transition-all hover:bg-orange-100 active:scale-95 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:hover:bg-orange-500/20"
             >
-              <FiRefreshCw />
-              Tempo real
+              {/* Indicador luminoso pulsante de "Live/Online" */}
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500"></span>
+              </span>
+              <FiRefreshCw size={15} className="animate-pulse text-orange-600 dark:text-orange-400" />
+              <span>Tempo real</span>
             </button>
+
             {selectedStore && canReadOrders && (
               <button
                 type="button"
                 id="counter-order-btn"
                 onClick={() => setCounterOrderOpen(true)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 text-sm font-black text-white shadow-sm shadow-violet-200/60 transition hover:bg-violet-700 active:scale-95 dark:bg-violet-500 dark:shadow-violet-900/30 dark:hover:bg-violet-600"
+                className="group relative inline-flex h-11 items-center justify-center gap-3 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-lg hover:shadow-indigo-600/30 active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:from-indigo-500 dark:to-violet-500 dark:shadow-none dark:focus-visible:ring-offset-zinc-900"
               >
-                <FiPlusCircle size={16} />
-                Novo pedido
+                {/* Camada invisível que ilumina o botão no hover (efeito premium) */}
+                <span className="absolute inset-0 w-full h-full bg-white/0 transition-colors duration-200 group-hover:bg-white/10" />
+
+                {/* O ícone agora dá um giro de 90° e cresce levemente no hover */}
+                <FiPlusCircle
+                  size={18}
+                  className="relative transition-transform duration-300 ease-out group-hover:rotate-90 group-hover:scale-110 text-indigo-100"
+                />
+
+                <span className="relative flex items-center gap-2">
+                  <span>Novo pedido</span>
+                  {/* Tag interna identificando o canal - dá cara de sistema de caixa/PDV profissional */}
+                </span>
               </button>
             )}
           </>
@@ -4731,7 +4750,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                     const Icon = meta?.icon
                     const isSelected = statusFilter === tab.key
                     const hasItems = (statusCounts[tab.key] || 0) > 0
-                    
+
                     const iconColorClass = meta?.dotClass ? meta.dotClass.replace('bg-', 'text-') : 'text-gray-400 dark:text-zinc-500'
 
                     return (
@@ -4748,12 +4767,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                         }`}
                       >
                         {Icon && (
-                          <Icon 
-                            size={15} 
-                            className={`transition-transform duration-300 ${isSelected ? 'text-white/90 scale-110' : iconColorClass} ${isSelected ? '' : 'group-hover:scale-125'}`} 
+                          <Icon
+                            size={15}
+                            className={`transition-transform duration-300 ${isSelected ? 'text-white/90 scale-110' : iconColorClass} ${isSelected ? '' : 'group-hover:scale-125'}`}
                           />
                         )}
-                        
+
                         {tab.label}
 
                         {hasItems && (
@@ -4802,7 +4821,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                           {moreFiltersCount}
                         </span>
                       )}
-                    </motion.button>  
+                    </motion.button>
 
                     <AnimatePresence>
                       {moreFiltersOpen && (
@@ -4951,7 +4970,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             </AnimatePresence>
           </>
         )}
-        
+
       </section>
 
       <AnimatePresence>

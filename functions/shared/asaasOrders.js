@@ -23,6 +23,7 @@ const TERMINAL_PAYMENT_STATUSES = new Set([
   'paid',
   'confirmed',
   'refunded',
+  'partially_refunded',
   'chargeback_requested',
   'canceled',
   'cancelled',
@@ -136,6 +137,9 @@ function normalizeAsaasPublicConfig(store = {}) {
     enabled,
     status: enabled ? 'active' : (status || 'inactive'),
     billingType: 'UNDEFINED',
+    allowPix: raw.allowPix !== false,
+    allowCreditCard: raw.allowCreditCard !== false,
+    allowBoleto: raw.allowBoleto === true,
     maxInstallmentCount,
   })
 }
@@ -236,6 +240,7 @@ function buildAsaasLinkCreationFailurePatch({ admin, error }) {
 
 function getAsaasOrdersBaseUrl() {
   const configured = process.env.ASAAS_ORDERS_BASE_URL
+  // Configure ASAAS_ORDERS_BASE_URL para sandbox ou producao antes do deploy.
   const allowSandboxFallback =
     process.env.FUNCTIONS_EMULATOR === 'true' ||
     process.env.ALLOW_ASAAS_ORDERS_SANDBOX_FALLBACK === 'true'
@@ -449,7 +454,8 @@ function mapAsaasOrderPaymentStatus(event) {
   if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') return 'paid'
   if (event === 'PAYMENT_OVERDUE') return 'expired'
   if (event === 'PAYMENT_DELETED') return 'canceled'
-  if (event === 'PAYMENT_REFUNDED' || event === 'PAYMENT_PARTIALLY_REFUNDED') return 'refunded'
+  if (event === 'PAYMENT_REFUNDED') return 'refunded'
+  if (event === 'PAYMENT_PARTIALLY_REFUNDED') return 'partially_refunded'
   if (event === 'PAYMENT_CHARGEBACK_REQUESTED') return 'chargeback_requested'
   if (event === 'PAYMENT_REFUND_DENIED' || event === 'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED') return 'failed'
   return 'pending'
@@ -489,6 +495,7 @@ function buildWebhookPaymentPatch({ admin, event, payment, orderData }) {
       confirmedAt: paid ? now : undefined,
       failedAt: nextStatus === 'failed' ? now : undefined,
       refundedAt: nextStatus === 'refunded' ? now : undefined,
+      partiallyRefundedAt: nextStatus === 'partially_refunded' ? now : undefined,
       updatedAt: now,
       webhookEvent: event,
     },
@@ -723,6 +730,7 @@ module.exports = {
   createOrderPaymentLink,
   isAsaasOnlineActive,
   isAsaasOnlinePaymentRequest,
+  mapAsaasOrderPaymentStatus,
   orderRequiresAsaasOnline,
   parseAsaasOrderExternalReference,
   sanitizePublicStorePayments,

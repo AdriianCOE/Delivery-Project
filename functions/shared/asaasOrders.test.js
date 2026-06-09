@@ -4,6 +4,7 @@ const test = require('node:test')
 const {
   buildAsaasOrderExternalReference,
   buildAsaasPendingPaymentSnapshot,
+  mapAsaasOrderPaymentStatus,
   parseAsaasOrderExternalReference,
   sanitizePublicStorePayments,
 } = require('./asaasOrders')
@@ -16,6 +17,9 @@ test('sanitizePublicStorePayments exposes only safe Asaas order fields', () => {
         enabled: true,
         status: 'active',
         maxInstallmentCount: 6,
+        allowPix: true,
+        allowCreditCard: false,
+        allowBoleto: true,
         apiKey: 'secret',
         webhookSecret: 'secret',
       },
@@ -31,6 +35,9 @@ test('sanitizePublicStorePayments exposes only safe Asaas order fields', () => {
       enabled: true,
       status: 'active',
       billingType: 'UNDEFINED',
+      allowPix: true,
+      allowCreditCard: false,
+      allowBoleto: true,
       maxInstallmentCount: 6,
     },
     preorderPolicy: {
@@ -56,6 +63,11 @@ test('sanitizePublicStorePayments keeps inactive Asaas disabled', () => {
   assert.equal(result.asaas.enabled, false)
   assert.equal(result.asaas.status, 'pending')
   assert.equal(result.asaas.maxInstallmentCount, null)
+})
+
+test('mapAsaasOrderPaymentStatus keeps partial refund distinct', () => {
+  assert.equal(mapAsaasOrderPaymentStatus('PAYMENT_PARTIALLY_REFUNDED'), 'partially_refunded')
+  assert.equal(mapAsaasOrderPaymentStatus('PAYMENT_REFUNDED'), 'refunded')
 })
 
 test('Asaas order externalReference round-trips store and order ids', () => {

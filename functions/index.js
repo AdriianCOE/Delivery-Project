@@ -32,6 +32,11 @@ const {
   sanitizePublicStoreScheduling,
   sanitizeStoreScheduling,
 } = require('./shared/publicScheduling')
+const {
+  createStoreTableHandler,
+  updateStoreTableHandler,
+  archiveStoreTableHandler,
+} = require('./storeTables')
 
 const {
   BREVO_API_KEY,
@@ -591,6 +596,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
   'number', 'neighborhood', 'complement', 'city', 'state', 'scheduling',
+  'payments',
 ])
 
 const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
@@ -601,6 +607,9 @@ const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
   'isBillingBlocked', 'asaasCustomerId', 'asaasSubscriptionId',
   'asaasPaymentId', 'asaasCheckoutUrl', 'billingMethodConfigured',
   'lastPaymentId', 'lastPaymentStatus',
+  'accountId', 'walletId', 'asaasAccountId', 'asaasWalletId',
+  'apiKey', 'apiToken', 'accessToken', 'webhookSecret', 'clientSecret',
+  'secretKey', 'privateKey',
   'createdAt', 'createdBy', 'deletedAt', 'isDeleted',
 ])
 
@@ -1087,7 +1096,106 @@ function hasForbiddenSettingsKeyDeep(value, depth = 0) {
   ))
 }
 
-function sanitizeStoreSettingsPayload(payload) {
+const ASAAS_ACTIVE_STATUSES = new Set(['active', 'enabled', 'ativo'])
+const PREORDER_PAYMENT_POLICY_MODES = new Set([
+  'manual',
+  'pix_manual',
+  'asaas_online',
+  'manual_or_asaas',
+])
+
+function normalizeSettingsText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function sanitizeSettingsInteger(value, fallback, min, max) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return fallback
+  return parsed
+}
+
+function sanitizeStorePaymentsSettingsPatch(value, currentPayments = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpsError('invalid-argument', 'Configuracao de pagamentos invalida.')
+  }
+
+  if (hasForbiddenSettingsKeyDeep(value)) {
+    throw new HttpsError('permission-denied', 'Configuracao de pagamentos contem dados restritos.')
+  }
+
+  const current = currentPayments && typeof currentPayments === 'object' && !Array.isArray(currentPayments)
+    ? currentPayments
+    : {}
+  const currentAsaas = current.asaas && typeof current.asaas === 'object' && !Array.isArray(current.asaas)
+    ? current.asaas
+    : {}
+  const inputAsaas = value.asaas && typeof value.asaas === 'object' && !Array.isArray(value.asaas)
+    ? value.asaas
+    : null
+  const inputPolicy = value.preorderPolicy && typeof value.preorderPolicy === 'object' && !Array.isArray(value.preorderPolicy)
+    ? value.preorderPolicy
+    : null
+
+  const status = normalizeSettingsText(currentAsaas.status || (currentAsaas.enabled === true ? 'active' : 'inactive'))
+  const canEnableAsaas = ASAAS_ACTIVE_STATUSES.has(status)
+  const nextAsaas = {
+    ...currentAsaas,
+  }
+
+  if (inputAsaas) {
+    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'enabled')) {
+      nextAsaas.enabled = inputAsaas.enabled === true && canEnableAsaas
+    }
+    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'allowPix')) {
+      nextAsaas.allowPix = inputAsaas.allowPix !== false
+    }
+    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'allowCreditCard')) {
+      nextAsaas.allowCreditCard = inputAsaas.allowCreditCard !== false
+    }
+    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'allowBoleto')) {
+      nextAsaas.allowBoleto = inputAsaas.allowBoleto === true
+    }
+    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'maxInstallmentCount')) {
+      nextAsaas.maxInstallmentCount = sanitizeSettingsInteger(
+        inputAsaas.maxInstallmentCount,
+        currentAsaas.maxInstallmentCount || null,
+        1,
+        12
+      )
+    }
+  }
+
+  const nextPolicy = {
+    ...(current.preorderPolicy && typeof current.preorderPolicy === 'object' && !Array.isArray(current.preorderPolicy)
+      ? current.preorderPolicy
+      : {}),
+  }
+
+  if (inputPolicy || typeof value.preorderPolicy === 'string') {
+    const mode = normalizeSettingsText(inputPolicy?.mode || value.preorderPolicy || 'manual')
+    nextPolicy.mode = PREORDER_PAYMENT_POLICY_MODES.has(mode) ? mode : 'manual'
+
+    const asaasRequiredByPolicy = nextPolicy.mode === 'asaas_online' || nextPolicy.mode === 'manual_or_asaas'
+    if (asaasRequiredByPolicy && nextAsaas.enabled !== true) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Ative o pagamento online Asaas antes de exigir ou oferecer Asaas em encomendas.'
+      )
+    }
+  }
+
+  return cleanCallableFirestoreValue({
+    ...current,
+    asaas: nextAsaas,
+    preorderPolicy: nextPolicy,
+  })
+}
+
+function sanitizeStoreSettingsPayload(payload, currentStoreData = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new HttpsError('invalid-argument', 'Payload de configurações inválido.')
   }
@@ -1106,6 +1214,11 @@ function sanitizeStoreSettingsPayload(payload) {
         throw new HttpsError('invalid-argument', 'Configuracao de agendamento invalida.')
       }
       acc.scheduling = sanitizeStoreScheduling(value)
+      return acc
+    }
+
+    if (key === 'payments') {
+      acc.payments = sanitizeStorePaymentsSettingsPatch(value, currentStoreData.payments)
       return acc
     }
 
@@ -1450,7 +1563,7 @@ exports.updateStoreSettings = onCall(
     }
 
     const settingsPayload = data.payload !== undefined ? data.payload : data.updates
-    const patch = sanitizeStoreSettingsPayload(settingsPayload || {})
+    const patch = sanitizeStoreSettingsPayload(settingsPayload || {}, storeData)
     assertPixPaymentSettingsPatch(patch)
     if (Object.keys(patch).length === 0) {
       return { ok: true, updatedFields: [] }
@@ -3758,4 +3871,29 @@ exports.sendWeeklyPerformanceReports = onSchedule(
       }
     }
   }
+)
+
+// ─── Store Tables (QR Code por mesa) ─────────────────────────────────────────
+
+const STORE_TABLE_CALLABLE_OPTIONS = {
+  region: REGION,
+  timeoutSeconds: 30,
+  memory: '256MiB',
+  maxInstances: 5,
+  enforceAppCheck: ENFORCE_APP_CHECK,
+}
+
+exports.createStoreTable = onCall(
+  STORE_TABLE_CALLABLE_OPTIONS,
+  (request) => createStoreTableHandler({ db, HttpsError, logger }, request)
+)
+
+exports.updateStoreTable = onCall(
+  STORE_TABLE_CALLABLE_OPTIONS,
+  (request) => updateStoreTableHandler({ db, HttpsError, logger }, request)
+)
+
+exports.archiveStoreTable = onCall(
+  STORE_TABLE_CALLABLE_OPTIONS,
+  (request) => archiveStoreTableHandler({ db, HttpsError, logger }, request)
 )

@@ -190,6 +190,9 @@ export function getPublicAsaasConfig(store) {
   return {
     enabled: asaas.enabled === true && status === 'active',
     status: status || 'inactive',
+    allowPix: asaas.allowPix !== false,
+    allowCreditCard: asaas.allowCreditCard !== false,
+    allowBoleto: asaas.allowBoleto === true,
     maxInstallmentCount: Number.isInteger(maxInstallmentCount) && maxInstallmentCount > 1
       ? Math.min(maxInstallmentCount, 12)
       : null,

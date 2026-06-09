@@ -29,10 +29,12 @@ import {
   FiAlertTriangle,
   FiArrowUpRight,
   FiBarChart2,
+  FiCalendar,
   FiCheckCircle,
   FiChevronRight,
   FiClock,
   FiCopy,
+  FiCreditCard,
   FiDollarSign,
   FiPower,
   FiLoader,
@@ -49,7 +51,7 @@ import {
   FiUsers,
   FiX,
   FiXCircle,
-  FiPlay,
+  FiZap,
 } from 'react-icons/fi'
 
 function PricingValidationBadge({ order }) {
@@ -609,6 +611,155 @@ function getStoreLogoUrl(store) {
   )
 }
 
+// ─── Helpers para pedidos modernos ──────────────────────────────────────────
+
+function isScheduledOrder(order) {
+  return (
+    order?.orderTiming === 'scheduled' ||
+    order?.isScheduled === true ||
+    Boolean(order?.scheduledFor) ||
+    Boolean(order?.scheduledAt) ||
+    Boolean(order?.scheduledDateKey) ||
+    Boolean(order?.scheduledDate) ||
+    Boolean(order?.scheduledTime) ||
+    Boolean(order?.scheduledTimeLabel)
+  )
+}
+
+function parseDateValue(value) {
+  if (!value) return null
+  if (typeof value?.toDate === 'function') return value.toDate()
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value === 'object') {
+    if (Number.isFinite(Number(value.seconds))) return new Date(Number(value.seconds) * 1000)
+    if (Number.isFinite(Number(value._seconds))) return new Date(Number(value._seconds) * 1000)
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function getScheduledDate(order) {
+  const direct = parseDateValue(order?.scheduledFor ?? order?.scheduledAt)
+  if (direct) return direct
+
+  const dateKey = order?.scheduledDateKey || order?.scheduledDate || order?.scheduledDay || ''
+  const timeKey = order?.scheduledTime || order?.scheduledTimeLabel || ''
+
+  if (dateKey) {
+    const normalizedTime = String(timeKey || '00:00').match(/\d{1,2}:\d{2}/)?.[0] || '00:00'
+    const date = parseDateValue(`${dateKey}T${normalizedTime}:00-03:00`) || parseDateValue(`${dateKey} ${normalizedTime}`)
+    if (date) return date
+  }
+
+  return null
+}
+
+function isSameLocalDay(date, reference = new Date()) {
+  if (!date) return false
+  return (
+    date.getFullYear() === reference.getFullYear() &&
+    date.getMonth() === reference.getMonth() &&
+    date.getDate() === reference.getDate()
+  )
+}
+
+function getScheduledOperationalState(order, nowValue = Date.now()) {
+  if (!isScheduledOrder(order)) return 'asap'
+
+  const status = normalizeStatus(order?.status)
+  if (CANCELED_STATUSES.includes(status)) return 'canceled'
+  if (FINISHED_STATUSES.includes(status)) return 'completed'
+
+  const scheduledDate = getScheduledDate(order)
+  if (!scheduledDate) return 'scheduled_unknown'
+
+  const nowMs = typeof nowValue === 'number' ? nowValue : Number(nowValue || Date.now())
+  const scheduledMs = scheduledDate.getTime()
+  const dueSoonWindowMs = 60 * 60 * 1000
+
+  if (scheduledMs <= nowMs) return 'scheduled_late'
+  if (scheduledMs - nowMs <= dueSoonWindowMs) return 'scheduled_due_soon'
+  return 'scheduled_future'
+}
+
+function isCounterOrder(order) {
+  return (
+    order?.isCounterOrder === true ||
+    order?.orderType === 'counter' ||
+    order?.source === 'merchant_counter' ||
+    order?.source === 'counter' ||
+    order?.fulfillmentType === 'counter'
+  )
+}
+
+/** @returns {'delivery'|'pickup'|'counter'|'table'|'unknown'} */
+function getFulfillmentChannel(order) {
+  if (isCounterOrder(order)) return 'counter'
+  const type = String(order?.deliveryType || order?.fulfillmentType || order?.orderType || '').toLowerCase()
+  if (type === 'dine_in' || type === 'table' || order?.isTableOrder === true) return 'table'
+  if (order?.isDelivery === true || type === 'delivery') return 'delivery'
+  if (type === 'pickup' || type === 'takeaway' || type === 'retirada' || type === 'balcao' || type === 'balcão') return 'pickup'
+  if (order?.isDelivery === false) return 'pickup'
+  return 'unknown'
+}
+
+/** @returns {'online_paid'|'online_pending'|'online_failed'|'online_refunded'|'online_partially_refunded'|'online_chargeback'|'pix_manual'|'cash'|'card'|'other'} */
+function getPaymentBucket(order) {
+  const payment = order?.payment || {}
+  const mode = String(payment.mode || order?.paymentMode || '').toLowerCase()
+  const provider = String(payment.provider || order?.paymentProvider || '').toLowerCase()
+  const status = String(payment.status || order?.paymentStatus || '').toLowerCase()
+  const method = String(payment.method || order?.paymentMethod || order?.paymentLabel || '').toLowerCase()
+
+  const online = mode === 'online' || provider === 'asaas' || mode === 'asaas' || mode === 'card_online'
+
+  if (online) {
+    if (['paid', 'pago', 'confirmed', 'received'].includes(status)) return 'online_paid'
+    if (['failed', 'expired', 'overdue', 'canceled', 'cancelled', 'deleted'].includes(status)) return 'online_failed'
+    if (status === 'partially_refunded' || status === 'partial_refund') return 'online_partially_refunded'
+    if (status === 'refunded') return 'online_refunded'
+    if (status === 'chargeback_requested' || status === 'chargeback') return 'online_chargeback'
+    return 'online_pending'
+  }
+
+  if (mode === 'pix_manual' || mode === 'pix' || method.includes('pix')) return 'pix_manual'
+  if (mode === 'cash' || mode === 'dinheiro' || method.includes('dinheiro')) return 'cash'
+  if (mode === 'card' || mode === 'cartao' || mode === 'cartão' || method.includes('cartão') || method.includes('cartao') || method.includes('crédito') || method.includes('credito') || method.includes('débito') || method.includes('debito') || method.includes('maquininha')) return 'card'
+  return 'other'
+}
+
+function isPaymentPending(order) {
+  return getPaymentBucket(order) === 'online_pending'
+}
+
+function isPaymentFailedOrBlocked(order) {
+  return ['online_failed', 'online_refunded', 'online_partially_refunded', 'online_chargeback'].includes(getPaymentBucket(order))
+}
+
+/** Conta como receita: cancelado não conta; online só conta quando pago. */
+function isRevenueOrder(order) {
+  const status = normalizeStatus(order?.status)
+  if (CANCELED_STATUSES.includes(status)) return false
+
+  const bucket = getPaymentBucket(order)
+  if (bucket.startsWith('online_')) return bucket === 'online_paid'
+
+  return true
+}
+
+function formatScheduledDate(date) {
+  if (!date) return '—'
+  const now = new Date()
+  const todayStart = new Date(now).setHours(0, 0, 0, 0)
+  const tomorrowStart = todayStart + 86400000
+  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (date.getTime() >= todayStart && date.getTime() < tomorrowStart) return `Hoje, ${time}`
+  if (date.getTime() >= tomorrowStart && date.getTime() < tomorrowStart + 86400000) return `Amanhã, ${time}`
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ` ${time}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function toDate(value) {
   if (!value) return null
   if (value?.toDate) return value.toDate()
@@ -700,36 +851,32 @@ function LegacyToast({ toast, onClose }) {
   )
 }
 
-function StatCard({ icon: Icon, label, value, sub, tone = 'orange' }) {
+function StatCard({ icon: Icon, label, value, sub, tone = 'orange', delta }) {
   const tones = {
-    green: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
-    purple: 'bg-purple-50 text-purple-600',
-    red: 'bg-red-50 text-red-600',
-    orange: 'bg-orange-50 text-[#f97316]',
+    green:  { icon: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', glow: 'group-hover:shadow-emerald-100/50' },
+    amber:  { icon: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400',         glow: 'group-hover:shadow-amber-100/50' },
+    purple: { icon: 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400',     glow: 'group-hover:shadow-purple-100/50' },
+    blue:   { icon: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',           glow: 'group-hover:shadow-blue-100/50' },
+    red:    { icon: 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400',                 glow: 'group-hover:shadow-red-100/50' },
+    orange: { icon: 'bg-orange-50 dark:bg-orange-500/10 text-[#f97316]',                           glow: 'group-hover:shadow-orange-100/50' },
   }
 
+  const pal = tones[tone] || tones.orange
   const SafeIcon = Icon || FiActivity
 
   return (
-    <article className="group flex min-w-[220px] shrink-0 snap-start items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-orange-100 hover:shadow-md">
-      <div
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 ${
-          tones[tone] || tones.orange
-        }`}
-      >
+    <article className={`group flex min-w-[200px] shrink-0 snap-start items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-100 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700`}>
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110 ${pal.icon}`}>
         <SafeIcon size={18} />
       </div>
-
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-black uppercase tracking-widest text-[#6b7280]">
+        <p className="truncate text-[10px] font-black uppercase tracking-widest text-[#6b7280] dark:text-zinc-500">
           {label}
         </p>
-        <p className="truncate text-xl font-black tracking-tight text-[#111827]">
+        <p className="truncate text-xl font-black tracking-tight text-[#111827] dark:text-zinc-100">
           {value}
         </p>
-        <p className="truncate text-[11px] font-bold text-[#9ca3af]">
+        <p className="truncate text-[11px] font-bold text-[#9ca3af] dark:text-zinc-500">
           {sub}
         </p>
       </div>
@@ -749,53 +896,104 @@ function StatusPill({ status }) {
   )
 }
 
+const CHANNEL_META = {
+  delivery: { label: 'Delivery', className: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/30 dark:text-sky-400 dark:ring-sky-900/40' },
+  pickup:   { label: 'Retirada', className: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-900/40' },
+  counter:  { label: 'Balcão', className: 'bg-orange-50 text-[#f97316] ring-orange-200 dark:bg-orange-950/20 dark:text-orange-400 dark:ring-orange-900/40' },
+  table:    { label: 'Mesa', className: 'bg-teal-50 text-teal-700 ring-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:ring-teal-900/40' },
+}
+
+const PAYMENT_META = {
+  online_pending:    { label: 'Pag. pendente', className: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40' },
+  online_paid:       { label: 'Pago online', className: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40' },
+  online_failed:     { label: 'Falha pag.', className: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/40' },
+  online_refunded:   { label: 'Estornado', className: 'bg-gray-50 text-gray-600 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700' },
+  online_partially_refunded: { label: 'Parcial estornado', className: 'bg-gray-50 text-gray-600 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700' },
+  online_chargeback: { label: 'Contestação', className: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/40' },
+  pix_manual:        { label: 'Pix manual', className: 'bg-orange-50 text-[#f97316] ring-orange-200 dark:bg-orange-950/20 dark:text-orange-400 dark:ring-orange-900/40' },
+}
+
 function OrderRow({ order, now }) {
   const sla = getOrderSlaState(order, now)
-  const urgent = sla.overdue
+  const scheduled = isScheduledOrder(order)
+  const scheduledDate = getScheduledDate(order)
+  const channel = getFulfillmentChannel(order)
+  const paymentBucket = getPaymentBucket(order)
+  const nowMs = now || Date.now()
+
+  // Pedido agendado futuro não é urgente operacionalmente
+  const isFutureScheduled = scheduled && scheduledDate && scheduledDate.getTime() > nowMs
+  const urgent = sla.overdue && !isFutureScheduled
+
   const customerName = getCustomerName(order)
   const initials = customerName.substring(0, 2).toUpperCase()
   const promoSavings = getOrderPromotionSavings(order)
   const discount = getOrderDiscount(order)
 
+  const channelMeta = CHANNEL_META[channel]
+  const paymentMeta = PAYMENT_META[paymentBucket]
+  const showPaymentBadge = Boolean(paymentMeta) && paymentBucket !== 'cash' && paymentBucket !== 'card' && paymentBucket !== 'other'
+
   return (
     <Link
       to="/dashboard/orders"
-      className={`group grid grid-cols-[auto_1fr] gap-3 border-b border-gray-100 p-4 transition last:border-b-0 sm:grid-cols-[auto_1fr_auto] ${
-  urgent ? 'bg-red-50/70 hover:bg-red-50' : 'hover:bg-gray-50'
-}`}
+      className={`group grid grid-cols-[auto_1fr] gap-3 border-b border-gray-100 p-4 transition last:border-b-0 dark:border-zinc-800 sm:grid-cols-[auto_1fr_auto] ${
+        urgent
+          ? 'bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30'
+          : 'hover:bg-gray-50 dark:hover:bg-zinc-800/60'
+      }`}
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#f97316]">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#f97316] dark:bg-orange-500/10">
         {initials}
       </div>
+
       <div className="min-w-0">
-      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <p className="truncate text-sm font-black text-[#111827]">{customerName}</p>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 font-mono text-[10px] font-black text-gray-600">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">{customerName}</p>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 font-mono text-[10px] font-black text-gray-600 dark:bg-zinc-800 dark:text-zinc-400">
             {getOrderDisplayNumber(order)}
           </span>
-
           <StatusPill status={order.status} />
           <PricingValidationBadge order={order} />
-
+          {channelMeta && (
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ${channelMeta.className}`}>
+              {channelMeta.label}
+            </span>
+          )}
+          {showPaymentBadge && (
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ${paymentMeta.className}`}>
+              {paymentBucket === 'online_pending' && <FiCreditCard size={9} />}
+              {paymentMeta.label}
+            </span>
+          )}
+          {scheduled && scheduledDate && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-black text-purple-700 ring-1 ring-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:ring-purple-900/40">
+              <FiCalendar size={9} />
+              {formatScheduledDate(scheduledDate)}
+            </span>
+          )}
           {urgent && (
-  <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
-    <FiAlertTriangle size={11} />
-    {sla.elapsedMinutes}min nesta etapa
-  </span>
-)}
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+              <FiAlertTriangle size={9} />
+              {sla.elapsedMinutes}min nesta etapa
+            </span>
+          )}
         </div>
-        <p className="mt-1 truncate text-xs text-[#6b7280]">{getOrderItemsSummary(order)}</p>
+
+        <p className="mt-1 truncate text-xs text-[#6b7280] dark:text-zinc-400">{getOrderItemsSummary(order)}</p>
+
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <p className="text-xs font-medium text-gray-400">{timeAgo(order)}</p>
+          <p className="text-xs font-medium text-gray-400 dark:text-zinc-500">{timeAgo(order)}</p>
           {(promoSavings > 0 || discount > 0) && (
-            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-black text-[#f97316]">
+            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-black text-[#f97316] dark:bg-orange-500/10">
               economia {formatCurrency(promoSavings + discount)}
             </span>
           )}
         </div>
       </div>
+
       <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:block sm:text-right">
-        <p className="text-sm font-black text-[#111827]">{formatCurrency(getOrderTotal(order))}</p>
+        <p className="text-sm font-black text-[#111827] dark:text-zinc-100">{formatCurrency(getOrderTotal(order))}</p>
         <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#f97316] opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
           Ver pedido <FiChevronRight size={14} />
         </span>
@@ -909,6 +1107,304 @@ function PeakHoursCard({ peakHours, maxPeakHour, bestHourLabel }) {
           description="Quando houver pedidos no período, os horários de maior movimento aparecerão aqui."
         />
       )}
+    </div>
+  )
+}
+
+// ─── Canal de origem dos pedidos ─────────────────────────────────────────────
+
+function ChannelBreakdown({ breakdown, totalPeriod }) {
+  const total = totalPeriod || 1
+  const channels = [
+    { key: 'delivery', label: 'Delivery', icon: FiTruck,       bar: 'bg-sky-400    dark:bg-sky-500' },
+    { key: 'pickup',   label: 'Retirada', icon: FiShoppingBag, bar: 'bg-violet-400 dark:bg-violet-500' },
+    { key: 'counter',  label: 'Balcão',   icon: FiHome,        bar: 'bg-[#f97316]' },
+    { key: 'table',    label: 'Mesa',     icon: FiUsers,       bar: 'bg-teal-400 dark:bg-teal-500' },
+  ]
+  const hasData = channels.some(({ key }) => (breakdown[key] || 0) > 0)
+
+  return (
+    <div className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Canais</p>
+          <p className="mt-0.5 text-xs text-[#6b7280] dark:text-zinc-400">Origem dos pedidos no período</p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
+          <FiTruck size={16} />
+        </div>
+      </div>
+      {hasData ? (
+        <div className="space-y-3">
+          {channels.map(({ key, label, icon: Icon, bar }) => {
+            const count = breakdown[key] || 0
+            const pct = Math.round((count / total) * 100)
+            return (
+              <div key={key}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-[#6b7280] dark:text-zinc-400">
+                    <Icon size={12} /> {label}
+                  </span>
+                  <span className="text-xs font-black text-[#111827] dark:text-zinc-100">{count} · {pct}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
+                  <div className={`h-2 rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-[#9ca3af] dark:text-zinc-500">Aguardando pedidos para mostrar breakdown.</p>
+      )}
+    </div>
+  )
+}
+
+
+function PaymentBreakdown({ breakdown, totalPeriod, pendingCount = 0 }) {
+  const payments = [
+    { key: 'online', label: 'Pagamento online', icon: FiCreditCard, className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' },
+    { key: 'pix_manual', label: 'Pix manual', icon: FiDollarSign, className: 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300' },
+    { key: 'card', label: 'Maquininha', icon: FiCreditCard, className: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' },
+    { key: 'cash', label: 'Dinheiro', icon: FiDollarSign, className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' },
+  ]
+
+  const total = Math.max(Number(totalPeriod || 0), 1)
+  const hasData = payments.some(({ key }) => (breakdown?.[key] || 0) > 0)
+
+  return (
+    <div className="rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Pagamentos</p>
+          <p className="mt-0.5 text-xs text-[#6b7280] dark:text-zinc-400">Como os pedidos foram pagos no período</p>
+        </div>
+        <Link
+          to="/dashboard/pagamentos"
+          className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-50 px-3 text-xs font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
+        >
+          Configurar <FiChevronRight size={12} />
+        </Link>
+      </div>
+
+      {pendingCount > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-xs font-bold text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          {pendingCount} pedido{pendingCount > 1 ? 's' : ''} aguardando pagamento online.
+        </div>
+      )}
+
+      {hasData ? (
+        <div className="space-y-3">
+          {payments.map(({ key, label, icon: Icon, className }) => {
+            const count = breakdown?.[key] || 0
+            const pct = Math.round((count / total) * 100)
+            return (
+              <div key={key} className="flex items-center gap-3">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${className}`}>
+                  <Icon size={15} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-xs font-black text-[#111827] dark:text-zinc-100">{label}</p>
+                    <p className="shrink-0 text-xs font-black text-[#6b7280] dark:text-zinc-400">{count} · {pct}%</p>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
+                    <div className="h-2 rounded-full bg-[#f97316] transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-[#9ca3af] dark:text-zinc-500">Aguardando pedidos para mostrar pagamentos.</p>
+      )}
+    </div>
+  )
+}
+
+// ─── Agenda de agendamentos ───────────────────────────────────────────────────
+
+function ScheduledAgendaSection({ scheduledFuture = [], scheduledToday = [] }) {
+  const nowMs = Date.now()
+  const list = scheduledFuture.slice(0, 5)
+
+  return (
+    <div className="rounded-[1.7rem] border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-zinc-800">
+        <div>
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Agenda</p>
+          <p className="mt-0.5 text-xs text-[#6b7280] dark:text-zinc-400">
+            {scheduledToday.length > 0
+              ? `${scheduledToday.length} agendamento${scheduledToday.length > 1 ? 's' : ''} hoje`
+              : 'Próximos agendamentos'}
+          </p>
+        </div>
+        <Link
+          to="/dashboard/orders"
+          className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-50 px-3 text-xs font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
+        >
+          Ver todos <FiChevronRight size={12} />
+        </Link>
+      </div>
+
+      {list.length > 0 ? (
+        <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+          {list.map((order) => {
+            const d = getScheduledDate(order)
+            const isPast    = d && d.getTime() < nowMs
+            const isSoon    = d && !isPast && d.getTime() < nowMs + 30 * 60 * 1000
+            const channel   = getFulfillmentChannel(order)
+            const chMeta    = CHANNEL_META[channel]
+            const bucket    = getPaymentBucket(order)
+
+            return (
+              <div key={order.id} className="flex items-center gap-3 p-4">
+                <div className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                  isPast ? 'bg-red-400' : isSoon ? 'animate-pulse bg-amber-400' : 'bg-emerald-400'
+                }`} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-black text-[#111827] dark:text-zinc-100">
+                    {getOrderDisplayNumber(order)}
+                    <span className="font-semibold text-[#6b7280] dark:text-zinc-400">{getCustomerName(order)}</span>
+                    {chMeta && (
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ring-1 ${chMeta.className}`}>{chMeta.label}</span>
+                    )}
+                    {bucket === 'pix_manual' && (
+                      <span className="rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-black text-[#f97316] ring-1 ring-orange-200 dark:bg-orange-950/20 dark:ring-orange-900/40">Pix manual</span>
+                    )}
+                    {bucket === 'online_paid' && (
+                      <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40">Pago online</span>
+                    )}
+                    {bucket === 'online_pending' && (
+                      <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-black text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-400">Pag. pendente</span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#6b7280] dark:text-zinc-400">
+                    <FiCalendar className="mr-1 inline" size={11} />
+                    {formatScheduledDate(d)}
+                    {isPast && <span className="ml-2 font-black text-red-500">• ATRASADO</span>}
+                    {isSoon && <span className="ml-2 font-black text-amber-500">• EM BREVE</span>}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-black text-[#111827] dark:text-zinc-100">
+                  {formatCurrency(getOrderTotal(order))}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 text-gray-300 dark:bg-zinc-800 dark:text-zinc-600">
+            <FiCalendar size={22} />
+          </div>
+          <div>
+            <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Sem agendamentos</p>
+            <p className="mt-1 text-xs text-[#6b7280] dark:text-zinc-400">Nenhuma encomenda agendada no período.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Alertas de atenção ───────────────────────────────────────────────────────
+
+function AttentionAlerts({ urgentOrders, priceReviewOrders, paymentPendingOrders, scheduledLateOrders, storeOpen }) {
+  const alerts = []
+
+  if (!storeOpen) {
+    alerts.push({
+      tone: 'amber',
+      icon: FiPower,
+      title: 'Loja fechada',
+      description: 'Sua loja está fechada. Novos pedidos não serão recebidos.',
+      cta: null,
+    })
+  }
+
+  if (urgentOrders.length > 0) {
+    alerts.push({
+      tone: 'red',
+      icon: FiAlertTriangle,
+      title: `${urgentOrders.length} pedido${urgentOrders.length > 1 ? 's' : ''} atrasado${urgentOrders.length > 1 ? 's' : ''}`,
+      description: 'Pedidos que estão há muito tempo na mesma etapa.',
+      cta: { label: 'Abrir KDS', to: '/dashboard/out-screen' },
+    })
+  }
+
+  if (scheduledLateOrders.length > 0) {
+    alerts.push({
+      tone: 'amber',
+      icon: FiCalendar,
+      title: `${scheduledLateOrders.length} agendamento${scheduledLateOrders.length > 1 ? 's' : ''} em atenção`,
+      description: 'Agendamentos com horário próximo ou já ultrapassado.',
+      cta: { label: 'Ver pedidos', to: '/dashboard/orders' },
+    })
+  }
+
+  if (paymentPendingOrders.length > 0) {
+    alerts.push({
+      tone: 'amber',
+      icon: FiCreditCard,
+      title: `${paymentPendingOrders.length} aguardando pagamento`,
+      description: 'Pedidos online sem confirmação de pagamento.',
+      cta: { label: 'Ver pagamentos', to: '/dashboard/pagamentos' },
+    })
+  }
+
+  if (priceReviewOrders.length > 0) {
+    alerts.push({
+      tone: 'red',
+      icon: FiShield,
+      title: `${priceReviewOrders.length} pedido${priceReviewOrders.length > 1 ? 's' : ''} com alerta de preço`,
+      description: 'Divergência de preço detectada. Revisar antes de aceitar.',
+      cta: { label: 'Ver pedidos', to: '/dashboard/orders' },
+    })
+  }
+
+  if (alerts.length === 0) return null
+
+  const TONE = {
+    red:   { wrap: 'border-red-100 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/20',    icon: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',    text: 'text-red-700 dark:text-red-400',   sub: 'text-red-600/80 dark:text-red-500' },
+    amber: { wrap: 'border-amber-100 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20', icon: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400', text: 'text-amber-700 dark:text-amber-400', sub: 'text-amber-600/80 dark:text-amber-500' },
+  }
+
+  return (
+    <div className="mb-5 rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-red-50 text-red-500 dark:bg-red-500/10">
+          <FiZap size={14} />
+        </div>
+        <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Precisa de atenção</p>
+      </div>
+      <div className="space-y-2">
+        {alerts.map((alert, i) => {
+          const pal = TONE[alert.tone] || TONE.amber
+          const Icon = alert.icon
+          return (
+            <div key={i} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${pal.wrap}`}>
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${pal.icon}`}>
+                <Icon size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-black ${pal.text}`}>{alert.title}</p>
+                <p className={`text-xs ${pal.sub}`}>{alert.description}</p>
+              </div>
+              {alert.cta && (
+                <Link
+                  to={alert.cta.to}
+                  className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-black transition ${pal.text} bg-white/60 hover:bg-white/90 dark:bg-white/5 dark:hover:bg-white/10`}
+                >
+                  {alert.cta.label}
+                </Link>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -1279,7 +1775,9 @@ subscribeOrders(query(
 
   const dashboardData = useMemo(() => {
     const now = Date.now()
-    const startOfToday = new Date().setHours(0, 0, 0, 0)
+    const today = new Date()
+    const startOfToday = new Date(today).setHours(0, 0, 0, 0)
+    const endOfToday = startOfToday + 24 * 60 * 60 * 1000
     const cutoff = period.days === 0 ? startOfToday : now - period.days * 24 * 60 * 60 * 1000
 
     const periodOrders = orders.filter((order) => {
@@ -1287,75 +1785,91 @@ subscribeOrders(query(
       return date ? date.getTime() >= cutoff : false
     })
 
-    const validOrders = periodOrders.filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
-    const deliveredOrders = validOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
-    const activeOrders = orders.filter((order) => isOrderActiveStatus(order.status))
+    const nonCanceledOrders = periodOrders.filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
+    const revenueOrders = periodOrders.filter(isRevenueOrder)
+    const deliveredOrders = periodOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
+    const canceledOrders = periodOrders.filter((order) => CANCELED_STATUSES.includes(normalizeStatus(order.status)))
+    const paymentPendingOrders = orders.filter(isPaymentPending)
+    const paymentProblemOrders = orders.filter(isPaymentFailedOrBlocked)
 
-  const urgentOrders = activeOrders.filter((order) => getOrderSlaState(order, slaNow).overdue)
-const priceReviewOrders = activeOrders.filter((order) => {
-  const status = order?.pricingValidation?.status
+    const activeOrders = orders.filter((order) => {
+      return isOrderActiveStatus(order.status) && !isPaymentPending(order)
+    })
 
-  return status === 'review' || status === 'invalid' || order?.requiresManualPriceReview === true
-})
+    const urgentOrders = activeOrders.filter((order) => {
+      const scheduledState = getScheduledOperationalState(order, slaNow)
+      if (scheduledState === 'scheduled_future') return false
+      return getOrderSlaState(order, slaNow).overdue
+    })
 
-const oldestOverdueMinutes = urgentOrders.reduce((max, order) => {
-  return Math.max(max, getOrderSlaState(order, slaNow).overdueMinutes)
-}, 0)
+    const priceReviewOrders = activeOrders.filter((order) => {
+      const status = order?.pricingValidation?.status
+      return status === 'review' || status === 'invalid' || order?.requiresManualPriceReview === true
+    })
 
-    const revenue = validOrders.reduce((acc, order) => acc + getOrderTotal(order), 0)
-    const subtotal = validOrders.reduce((acc, order) => acc + getOrderSubtotal(order), 0)
-    const promotionSavings = validOrders.reduce((acc, order) => acc + getOrderPromotionSavings(order), 0)
-    const couponDiscounts = validOrders.reduce((acc, order) => acc + getOrderDiscount(order), 0)
-    const averageTicket = validOrders.length > 0 ? revenue / validOrders.length : 0
-    const uniqueCustomers = new Set(validOrders.map(getCustomerPhone).filter(Boolean)).size
-    const completionRate = validOrders.length > 0 ? Math.round((deliveredOrders.length / validOrders.length) * 100) : 0
+    const oldestOverdueMinutes = urgentOrders.reduce((max, order) => {
+      return Math.max(max, getOrderSlaState(order, slaNow).overdueMinutes || 0)
+    }, 0)
 
-    const periodLengthMs =
-  period.days === 0 ? 24 * 60 * 60 * 1000 : period.days * 24 * 60 * 60 * 1000
+    const scheduledOrders = periodOrders.filter(isScheduledOrder)
+    const scheduledToday = scheduledOrders
+      .filter((order) => {
+        const date = getScheduledDate(order)
+        return date && date.getTime() >= startOfToday && date.getTime() < endOfToday
+      })
+      .sort((a, b) => (getScheduledDate(a)?.getTime() || Infinity) - (getScheduledDate(b)?.getTime() || Infinity))
 
-const previousStart = cutoff - periodLengthMs
+    const scheduledFuture = scheduledOrders
+      .filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
+      .sort((a, b) => (getScheduledDate(a)?.getTime() || Infinity) - (getScheduledDate(b)?.getTime() || Infinity))
 
-const previousPeriodOrders = orders.filter((order) => {
-  const date = getOrderDate(order)
-  const time = date?.getTime?.()
+    const scheduledLateOrders = scheduledOrders.filter((order) => {
+      const state = getScheduledOperationalState(order, slaNow)
+      return state === 'scheduled_late' || state === 'scheduled_due_soon'
+    })
 
-  return time ? time >= previousStart && time < cutoff : false
-})
+    const revenue = revenueOrders.reduce((acc, order) => acc + getOrderTotal(order), 0)
+    const subtotal = revenueOrders.reduce((acc, order) => acc + getOrderSubtotal(order), 0)
+    const promotionSavings = revenueOrders.reduce((acc, order) => acc + getOrderPromotionSavings(order), 0)
+    const couponDiscounts = revenueOrders.reduce((acc, order) => acc + getOrderDiscount(order), 0)
+    const averageTicket = revenueOrders.length > 0 ? revenue / revenueOrders.length : 0
+    const uniqueCustomers = new Set(nonCanceledOrders.map(getCustomerPhone).filter(Boolean)).size
+    const completionRate = nonCanceledOrders.length > 0 ? Math.round((deliveredOrders.length / nonCanceledOrders.length) * 100) : 0
 
-const validPreviousOrders = previousPeriodOrders.filter((order) => {
-  return !CANCELED_STATUSES.includes(normalizeStatus(order.status))
-})
+    const periodLengthMs = period.days === 0 ? 24 * 60 * 60 * 1000 : period.days * 24 * 60 * 60 * 1000
+    const previousStart = cutoff - periodLengthMs
 
-const previousRevenue = validPreviousOrders.reduce(
-  (acc, order) => acc + getOrderTotal(order),
-  0
-)
+    const previousPeriodOrders = orders.filter((order) => {
+      const date = getOrderDate(order)
+      const time = date?.getTime?.()
+      return time ? time >= previousStart && time < cutoff : false
+    })
 
-const revenueDelta = getPercentChange(revenue, previousRevenue)
-const ordersDelta = getPercentChange(validOrders.length, validPreviousOrders.length)
+    const previousRevenueOrders = previousPeriodOrders.filter(isRevenueOrder)
+    const validPreviousOrders = previousPeriodOrders.filter((order) => !CANCELED_STATUSES.includes(normalizeStatus(order.status)))
+    const previousRevenue = previousRevenueOrders.reduce((acc, order) => acc + getOrderTotal(order), 0)
 
-const peakHours = Array.from({ length: 24 }, () => 0)
+    const revenueDelta = getPercentChange(revenue, previousRevenue)
+    const ordersDelta = getPercentChange(nonCanceledOrders.length, validPreviousOrders.length)
 
-validOrders.forEach((order) => {
-  const hour = getOrderHour(order)
+    const peakHours = Array.from({ length: 24 }, () => 0)
+    revenueOrders.forEach((order) => {
+      const hour = getOrderHour(order)
+      if (hour !== null) peakHours[hour] += 1
+    })
 
-  if (hour !== null) {
-    peakHours[hour] += 1
-  }
-})
-
-const maxPeakHour = Math.max(...peakHours, 1)
-const bestHour = peakHours.findIndex((count) => count === maxPeakHour && count > 0)
-const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
+    const maxPeakHour = Math.max(...peakHours, 1)
+    const bestHour = peakHours.findIndex((count) => count === maxPeakHour && count > 0)
+    const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
 
     const productMap = new Map()
-    validOrders.forEach((order) => {
+    revenueOrders.forEach((order) => {
       getOrderItems(order).forEach((item) => {
         const name = getItemName(item)
         const qty = getItemQty(item)
-        const revenue = getItemTotal(item)
+        const productRevenue = getItemTotal(item)
         const previous = productMap.get(name) || { name, qty: 0, revenue: 0 }
-        productMap.set(name, { ...previous, qty: previous.qty + qty, revenue: previous.revenue + revenue })
+        productMap.set(name, { ...previous, qty: previous.qty + qty, revenue: previous.revenue + productRevenue })
       })
     })
 
@@ -1365,7 +1879,8 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
     })
 
     const neighborhoodMap = new Map()
-    validOrders.forEach((order) => {
+    revenueOrders.forEach((order) => {
+      if (getFulfillmentChannel(order) !== 'delivery') return
       const neighborhood =
         order?.deliveryAddress?.neighborhood ||
         order?.deliveryAddress?.bairro ||
@@ -1375,19 +1890,53 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
         order?.customer?.bairro ||
         ''
       const name = String(neighborhood).trim()
-      if (name) {
-        neighborhoodMap.set(name, (neighborhoodMap.get(name) || 0) + 1)
-      }
+      if (name) neighborhoodMap.set(name, (neighborhoodMap.get(name) || 0) + 1)
     })
 
     const topNeighborhoods = [...neighborhoodMap.entries()].sort((a, b) => b[1] - a[1])
     const topNeighborhood = topNeighborhoods[0]?.[0] || null
 
+    const channelBreakdown = { delivery: 0, pickup: 0, counter: 0, table: 0, unknown: 0 }
+    nonCanceledOrders.forEach((order) => {
+      const channel = getFulfillmentChannel(order)
+      channelBreakdown[channel] = (channelBreakdown[channel] || 0) + 1
+    })
+
+    const paymentBreakdown = { online: 0, pix_manual: 0, card: 0, cash: 0, other: 0 }
+    nonCanceledOrders.forEach((order) => {
+      const bucket = getPaymentBucket(order)
+      if (bucket.startsWith('online_')) paymentBreakdown.online += 1
+      else if (bucket === 'pix_manual') paymentBreakdown.pix_manual += 1
+      else if (bucket === 'card') paymentBreakdown.card += 1
+      else if (bucket === 'cash') paymentBreakdown.cash += 1
+      else paymentBreakdown.other += 1
+    })
+
+    const pendingCount = activeOrders.filter((o) => normalizeStatus(o.status) === 'pendente').length
+    const preparingCount = activeOrders.filter((o) => normalizeStatus(o.status) === 'preparando').length
+    const routeCount = activeOrders.filter((o) => normalizeStatus(o.status) === 'em_rota').length
+    const counterOrders = periodOrders.filter(isCounterOrder)
+    const onlinePaidOrders = periodOrders.filter((order) => getPaymentBucket(order) === 'online_paid')
+
     return {
       periodOrders,
-      validOrders,
+      validOrders: nonCanceledOrders,
+      revenueOrders,
+      deliveredOrders,
+      canceledOrders,
       activeOrders,
       urgentOrders,
+      priceReviewOrders,
+      paymentPendingOrders,
+      paymentProblemOrders,
+      scheduledOrders,
+      scheduledToday,
+      scheduledFuture,
+      scheduledLateOrders,
+      counterOrders,
+      onlinePaidOrders,
+      channelBreakdown,
+      paymentBreakdown,
       topProducts,
       revenue,
       subtotal,
@@ -1402,15 +1951,14 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
       ordersDelta,
       peakHours,
       maxPeakHour,
-      priceReviewOrders,
       bestHourLabel,
       topProductName: topProducts[0]?.name || null,
-      topNeighborhood: topNeighborhood,
+      topNeighborhood,
       peakHourLabel: bestHour >= 0 ? bestHourLabel : null,
-      pendingCount: orders.filter((o) => normalizeStatus(o.status) === 'pendente').length,
-      preparingCount: orders.filter((o) => normalizeStatus(o.status) === 'preparando').length,
-      routeCount: orders.filter((o) => normalizeStatus(o.status) === 'entregando').length,
-      canceledCount: periodOrders.filter((o) => normalizeStatus(o.status) === 'cancelado').length,
+      pendingCount,
+      preparingCount,
+      routeCount,
+      canceledCount: canceledOrders.length,
     }
   }, [orders, period.days, slaNow])
 
@@ -1458,6 +2006,26 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
         cta: 'Abrir agora',
         action: 'open-store',
         tone: 'green',
+      }
+    }
+
+    if ((dashboardData?.paymentPendingOrders?.length || 0) > 0) {
+      return {
+        title: 'Há pagamentos online pendentes',
+        description: 'Pedidos online só entram na operação depois da confirmação do pagamento.',
+        cta: 'Ver pagamentos',
+        href: '/dashboard/pagamentos',
+        tone: 'amber',
+      }
+    }
+
+    if ((dashboardData?.scheduledLateOrders?.length || 0) > 0) {
+      return {
+        title: 'Agendamentos precisam de atenção',
+        description: 'Há pedidos agendados próximos do horário de preparo ou já atrasados.',
+        cta: 'Ver agendados',
+        href: '/dashboard/orders',
+        tone: 'amber',
       }
     }
 
@@ -1838,47 +2406,6 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               </div>
             </div>
 
-            {/* ATENÇÃO AGORA */}
-            <div className="mb-4 grid gap-3 lg:grid-cols-3">
-              <div className="rounded-3xl border border-amber-100 bg-white p-4 shadow-sm dark:border-amber-900/40 dark:bg-zinc-900">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
-                  Atenção agora
-                </p>
-                <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
-                  {dashboardData?.urgentOrders?.length || 0}
-                </p>
-                <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
-                  {dashboardData?.oldestOverdueMinutes > 0
-                    ? `Maior atraso de etapa: ${dashboardData.oldestOverdueMinutes} min`
-                    : 'Nenhum pedido crítico no momento'}
-                </p>
-              </div>
-
-              <div className="rounded-3xl border border-red-100 bg-white p-4 shadow-sm dark:border-red-900/40 dark:bg-zinc-900">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
-                  Revisão
-                </p>
-                <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
-                  {dashboardData?.priceReviewOrders?.length || 0}
-                </p>
-                <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
-                  Pedidos com alerta de preço
-                </p>
-              </div>
-
-              <div className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm dark:border-emerald-900/40 dark:bg-zinc-900">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
-                  Operação
-                </p>
-                <p className="mt-2 text-2xl font-black text-[#111827] dark:text-zinc-100">
-                  {(dashboardData?.activeOrders?.length || 0) > 0 ? dashboardData.activeOrders.length : 0}
-                </p>
-                <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
-                  Pedidos em andamento agora
-                </p>
-              </div>
-            </div>
-
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <AnimatedSegmentedControl
               options={PERIOD_OPTIONS.map((opt, i) => ({ label: opt.label, value: i }))}
@@ -1897,33 +2424,57 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
               </button>
             </div>
 
-   <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
-<StatCard
-  icon={FiDollarSign}
-  label="Faturamento"
-  value={loading ? '...' : formatCurrency(dashboardData.revenue)}
-  sub={`${formatDelta(dashboardData.revenueDelta)} vs período anterior`}
-  tone={dashboardData.revenueDelta >= 0 ? 'green' : 'red'}
-/>
+            <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
+              <StatCard
+                icon={FiDollarSign}
+                label="Faturamento"
+                value={loading ? '...' : formatCurrency(dashboardData.revenue)}
+                sub={`${formatDelta(dashboardData.revenueDelta)} vs período anterior`}
+                tone={dashboardData.revenueDelta >= 0 ? 'green' : 'red'}
+              />
+              <StatCard
+                icon={FiShoppingBag}
+                label="Pedidos"
+                value={loading ? '...' : dashboardData.validOrders.length}
+                sub={`${formatDelta(dashboardData.ordersDelta)} vs período anterior`}
+                tone={dashboardData.ordersDelta >= 0 ? 'blue' : 'red'}
+              />
+              <StatCard
+                icon={FiTrendingUp}
+                label="Ticket médio"
+                value={loading ? '...' : formatCurrency(dashboardData.averageTicket)}
+                sub={`pico às ${dashboardData.bestHourLabel}`}
+                tone="amber"
+              />
+              <StatCard icon={FiCalendar} label="Agendados" value={loading ? '...' : dashboardData.scheduledOrders.length} sub={`${dashboardData.scheduledToday.length} para hoje`} tone="purple" />
+              <StatCard icon={FiCreditCard} label="Pgto. pendente" value={loading ? '...' : dashboardData.paymentPendingOrders.length} sub="online aguardando confirmação" tone={dashboardData.paymentPendingOrders.length > 0 ? 'red' : 'green'} />
+              <StatCard icon={FiHome} label="Balcão" value={loading ? '...' : dashboardData.counterOrders.length} sub="pedidos presenciais" tone="orange" />
+              <StatCard icon={FiUsers} label="Clientes" value={loading ? '...' : dashboardData.uniqueCustomers} sub="clientes únicos" tone="purple" />
+              <StatCard icon={FiActivity} label="Conclusão" value={loading ? '...' : `${dashboardData.completionRate}%`} sub="entregues/concluídos" tone="green" />
+              <StatCard icon={FiPercent} label="Economia" value={loading ? '...' : formatCurrency(dashboardData.promotionSavings + dashboardData.couponDiscounts)} sub="promoções + cupons" tone="red" />
+            </div>
 
-<StatCard
-  icon={FiShoppingBag}
-  label="Pedidos"
-  value={loading ? '...' : dashboardData.validOrders.length}
-  sub={`${formatDelta(dashboardData.ordersDelta)} vs período anterior`}
-  tone={dashboardData.ordersDelta >= 0 ? 'blue' : 'red'}
-/>
+            <AttentionAlerts
+              urgentOrders={dashboardData.urgentOrders}
+              priceReviewOrders={dashboardData.priceReviewOrders}
+              paymentPendingOrders={dashboardData.paymentPendingOrders}
+              scheduledLateOrders={dashboardData.scheduledLateOrders}
+              storeOpen={isStoreOpen(selectedStore)}
+            />
 
-<StatCard
-  icon={FiTrendingUp}
-  label="Ticket médio"
-  value={loading ? '...' : formatCurrency(dashboardData.averageTicket)}
-  sub={`pico às ${dashboardData.bestHourLabel}`}
-  tone="amber"
-/>
-  <StatCard icon={FiUsers} label="Clientes" value={loading ? '...' : dashboardData.uniqueCustomers} sub="clientes únicos" tone="purple" />
-  <StatCard icon={FiActivity} label="Conclusão" value={loading ? '...' : `${dashboardData.completionRate}%`} sub="pedidos entregues" tone="green" />
-  <StatCard icon={FiPercent} label="Economia" value={loading ? '...' : formatCurrency(dashboardData.promotionSavings + dashboardData.couponDiscounts)} sub="promoções + cupons" tone="red" />
+            <div className="mb-6 grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+              <ScheduledAgendaSection
+                scheduledFuture={dashboardData.scheduledFuture}
+                scheduledToday={dashboardData.scheduledToday}
+              />
+              <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-1">
+                <ChannelBreakdown breakdown={dashboardData.channelBreakdown} totalPeriod={dashboardData.validOrders.length} />
+                <PaymentBreakdown
+                  breakdown={dashboardData.paymentBreakdown}
+                  totalPeriod={dashboardData.validOrders.length}
+                  pendingCount={dashboardData.paymentPendingOrders.length}
+                />
+              </div>
             </div>
 
             {/* INSIGHTS RÁPIDOS */}
@@ -2133,4 +2684,3 @@ const bestHourLabel = bestHour >= 0 ? formatHourLabel(bestHour) : 'Sem dados'
     </div>
   )
 }
-

@@ -1620,6 +1620,10 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const pixOptionAvailable = paymentOptions.some((option) => option.value === 'pix_manual')
   const preorderPaymentPolicy = getPublicPreorderPaymentPolicy(store)
   const asaasRequiredForSchedule = orderTiming === 'scheduled' && preorderPaymentPolicy.mode === 'asaas_online'
+  const prepaidChoiceRequiredForSchedule =
+    orderTiming === 'scheduled' && preorderPaymentPolicy.mode === 'manual_or_asaas'
+  const pixOnlyRequiredForSchedule =
+    pixRequiredForSchedule && !asaasRequiredForSchedule && !prepaidChoiceRequiredForSchedule
   const asaasOptionAvailable = paymentOptions.some((option) => option.value === 'asaas_online')
 
   useEffect(() => {
@@ -1686,13 +1690,13 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   ])
 
   useEffect(() => {
-    if (!pixRequiredForSchedule || asaasRequiredForSchedule) return
+    if (!pixOnlyRequiredForSchedule) return
 
     if (pixOptionAvailable && paymentMethod !== 'pix_manual') {
       setPaymentMethod('pix_manual')
       setChangeFor('')
     }
-  }, [asaasRequiredForSchedule, paymentMethod, pixOptionAvailable, pixRequiredForSchedule])
+  }, [paymentMethod, pixOnlyRequiredForSchedule, pixOptionAvailable])
 
   useEffect(() => {
     if (!asaasRequiredForSchedule) return
@@ -1702,6 +1706,29 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       setChangeFor('')
     }
   }, [asaasOptionAvailable, asaasRequiredForSchedule, paymentMethod])
+
+  useEffect(() => {
+    if (!prepaidChoiceRequiredForSchedule) return
+
+    const currentIsPrepaid = paymentMethod === 'pix_manual' || paymentMethod === 'asaas_online'
+    if (currentIsPrepaid) return
+
+    if (asaasOptionAvailable) {
+      setPaymentMethod('asaas_online')
+      setChangeFor('')
+      return
+    }
+
+    if (pixOptionAvailable) {
+      setPaymentMethod('pix_manual')
+      setChangeFor('')
+    }
+  }, [
+    asaasOptionAvailable,
+    paymentMethod,
+    pixOptionAvailable,
+    prepaidChoiceRequiredForSchedule,
+  ])
 
   const handleQuantity = useCallback(
     (item, nextQuantity) => {
@@ -1967,11 +1994,15 @@ if (orderType === 'delivery') {
 
     if (!paymentMethod) return 'Escolha a forma de pagamento.'
 
-    if (pixRequiredForSchedule && !pixOptionAvailable) {
+    if ((pixOnlyRequiredForSchedule || prepaidChoiceRequiredForSchedule) && !pixOptionAvailable && !asaasOptionAvailable) {
       return 'Este pedido exige Pix antecipado, mas a loja não configurou Pix.'
     }
 
-    if (pixRequiredForSchedule && !asaasRequiredForSchedule && paymentMethod !== 'pix_manual') {
+    if (prepaidChoiceRequiredForSchedule && !['pix_manual', 'asaas_online'].includes(paymentMethod)) {
+      return 'Este pedido exige Pix manual ou pagamento online antecipado.'
+    }
+
+    if (pixOnlyRequiredForSchedule && paymentMethod !== 'pix_manual') {
       return 'Este pedido exige pagamento antecipado via Pix.'
     }
 
@@ -2023,8 +2054,10 @@ if (orderType === 'delivery') {
   orderType,
   orderTiming,
   paymentMethod,
+  asaasOptionAvailable,
+  pixOnlyRequiredForSchedule,
   pixOptionAvailable,
-  pixRequiredForSchedule,
+  prepaidChoiceRequiredForSchedule,
   scheduledDate,
   scheduledTime,
   schedulingDates,
@@ -2880,7 +2913,14 @@ if (orderType === 'delivery') {
                       </div>
                     )}
 
-                    {pixRequiredForSchedule && !asaasRequiredForSchedule && (
+                    {prepaidChoiceRequiredForSchedule && (
+                      <div className="flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
+                        <FiShield className="mt-0.5 shrink-0" />
+                        <span>Este pedido exige Pix manual ou pagamento online antecipado.</span>
+                      </div>
+                    )}
+
+                    {pixOnlyRequiredForSchedule && (
                       <div className="flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
                         <FiShield className="mt-0.5 shrink-0" />
                         <span>Este pedido exige Pix antecipado. A loja confirma o preparo após o pagamento.</span>
@@ -2895,7 +2935,9 @@ if (orderType === 'delivery') {
                       paymentOptions.map((option) => {
                         const paymentDisabled = asaasRequiredForSchedule
                           ? option.value !== 'asaas_online'
-                          : pixRequiredForSchedule && option.value !== 'pix_manual'
+                          : prepaidChoiceRequiredForSchedule
+                            ? !['pix_manual', 'asaas_online'].includes(option.value)
+                            : pixOnlyRequiredForSchedule && option.value !== 'pix_manual'
 
                         return (
                           <button
@@ -2921,7 +2963,7 @@ if (orderType === 'delivery') {
                               </p>
 
                               <p className="mt-0.5 text-xs text-[#6b7280]">
-                                {paymentDisabled ? 'Indisponível para pedido com Pix antecipado' : option.description}
+                                {paymentDisabled ? 'Indisponivel para pedido com pagamento antecipado' : option.description}
                               </p>
                             </div>
 

@@ -68,11 +68,11 @@ const NAV_SECTIONS = [
   },
   {
     title: 'Operação',
-    description: 'Rotina diária da loja',
+    description: 'Pedidos, cozinha e retirada',
     items: [
       {
         label: 'Pedidos',
-        description: 'Tempo real',
+        description: 'Pedidos online, agendados e balcão',
         to: '/dashboard/orders',
         icon: FiShoppingBag,
         priority: 'critical',
@@ -86,23 +86,30 @@ const NAV_SECTIONS = [
       },
       {
         label: 'Painel de Retirada',
-        description: 'Acompanhamento do cliente',
+        description: 'Pedidos prontos para clientes',
         to: '/dashboard/out-screen/customer',
-        icon: FiMonitor,
+        icon: FiClock,
         priority: 'high',
       },
     ],
   },
   {
-    title: 'Cardápio e vendas',
-    description: 'Produtos, vitrine e relacionamento',
+    title: 'Cardápio e loja',
+    description: 'Vitrine pública e experiência do cliente',
     items: [
       {
         label: 'Cardápio',
-        description: 'Produtos e categorias',
+        description: 'Produtos, categorias e adicionais',
         to: '/dashboard/menu',
         icon: FiGrid,
         priority: 'high',
+      },
+      {
+        label: 'QR Codes',
+        description: 'Cardápio impresso e mesas',
+        to: '/dashboard/qrcodes',
+        icon: FiGrid,
+        priority: 'normal',
       },
       {
         label: 'Avaliações',
@@ -114,32 +121,39 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    title: 'Dados e financeiro',
-    description: 'Resultados e cobrança',
+    title: 'Gestão',
+    description: 'Vendas, pagamentos e assinatura',
     items: [
       {
         label: 'Estatísticas',
-        description: 'Resumo de vendas',
+        description: 'Faturamento, canais e produtos',
         to: '/dashboard/stats',
         icon: FiBarChart2,
         priority: 'normal',
       },
       {
+        label: 'Pagamentos',
+        description: 'Pix, maquininha, Asaas e encomendas',
+        to: '/dashboard/pagamentos',
+        icon: FiDollarSign,
+        priority: 'billing',
+      },
+      {
         label: 'Assinatura',
         description: 'Plano, teste e cobrança',
-        icon: FiCreditCard,
         to: '/dashboard/billing',
+        icon: FiCreditCard,
         priority: 'billing',
       },
     ],
   },
   {
-    title: 'Loja e conta',
-    description: 'Configuração e perfil',
+    title: 'Conta',
+    description: 'Loja, operação e segurança',
     items: [
       {
         label: 'Configurações',
-        description: 'Loja, horários e Pix',
+        description: 'Loja, horários, entrega e agendamento',
         to: '/dashboard/settings',
         icon: FiSettings,
         priority: 'settings',
@@ -158,25 +172,26 @@ const NAV_SECTIONS = [
 
 const MAIN_ITEMS = NAV_SECTIONS.flatMap((section) => section.items)
 
+const MOBILE_NAV_PATHS = [
+  '/dashboard/orders',
+  '/dashboard/menu',
+  '/dashboard/out-screen',
+  '/dashboard',
+]
+
 const FUTURE_SECTIONS = [
   {
     title: 'Crescimento',
     items: [
       {
-        label: 'QR Codes',
-        description: 'Mesas, balcão e cardápio impresso',
-        icon: FiGrid,
-        to: '/dashboard/qrcodes',
-      },
-      {
         label: 'Clientes',
-        description: 'Histórico, gasto total e recorrência',
+        description: 'Histórico, recorrência e fidelização',
         icon: FiUsers,
         to: '/dashboard/users',
       },
       {
         label: 'Relatórios',
-        description: 'Produtos, bairros e horários de pico',
+        description: 'Análises avançadas e exportações',
         icon: FiPieChart,
         to: '/dashboard/relatorios',
       },
@@ -202,23 +217,6 @@ const FUTURE_SECTIONS = [
         description: 'Usuários, permissões e funções',
         icon: FiLayers,
         to: '/dashboard/equipe',
-      },
-    ],
-  },
-  {
-    title: 'Financeiro',
-    items: [
-      {
-        label: 'Financeiro',
-        description: 'Recebíveis e resumo de caixa',
-        icon: FiDollarSign,
-        to: '/dashboard/financeiro',
-      },
-      {
-        label: 'Pix automático',
-        description: 'Webhook e confirmação automática',
-        icon: FiCreditCard,
-        to: '/dashboard/pix-automatico',
       },
     ],
   },
@@ -1151,7 +1149,7 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
 
           {!collapsed && (
             <p className="text-center text-[10px] font-bold text-gray-400 dark:text-zinc-600">
-              © 2026 PratoBy
+              PratoBy · Painel do lojista
             </p>
           )}
         </div>
@@ -1161,9 +1159,8 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
 }
 
 function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
-  const desiredMobileKeys = ['/dashboard/orders', '/dashboard/menu', '/dashboard/out-screen', '/dashboard']
-  const mobileItems = desiredMobileKeys.map(to => MAIN_ITEMS.find(item => item.to === to)).filter(Boolean)
-  const hiddenHasNotification = MAIN_ITEMS.filter(item => !desiredMobileKeys.includes(item.to)).some((item) => {
+  const mobileItems = MOBILE_NAV_PATHS.map((to) => MAIN_ITEMS.find((item) => item.to === to)).filter(Boolean)
+  const hiddenHasNotification = MAIN_ITEMS.filter((item) => !MOBILE_NAV_PATHS.includes(item.to)).some((item) => {
     const area = getNavNotificationArea(item)
     return area && notificationCounts[area] > 0
   })
@@ -1409,44 +1406,47 @@ export default function DashboardLayout() {
   const publicStoreHref = storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : ''
 
   const COMMANDS = useMemo(() => {
-    const items = [
-      { id: 'dashboard', label: 'Dashboard', path: '/dashboard', description: 'Visão geral da operação' },
-      { id: 'orders', label: 'Pedidos', path: '/dashboard/orders', description: 'Kanban e comandas em tempo real' },
-      { id: 'menu', label: 'Cardápio', path: '/dashboard/menu', description: 'Gerenciar produtos e categorias' },
-      { id: 'out-screen', label: 'Tela de Cozinha', path: '/dashboard/out-screen', description: 'KDS em tempo real' },
-      { id: 'out-screen-customer', label: 'Painel de Retirada', path: '/dashboard/out-screen/customer', description: 'Acompanhamento do cliente' },
-      { id: 'reviews', label: 'Avaliações', path: '/dashboard/reviews', description: 'Feedback dos clientes' },
-      { id: 'stats', label: 'Estatísticas', path: '/dashboard/stats', description: 'Resumo de vendas e faturamento' },
-      { id: 'billing', label: 'Assinatura', path: '/dashboard/billing', description: 'Dados do plano, faturas e cobranças' },
-      { id: 'settings', label: 'Configurações', path: '/dashboard/settings', description: 'Configurações da loja, horários e Pix' },
-    ]
+  const navCommands = NAV_SECTIONS.flatMap((section) =>
+    section.items
+      .filter((item) => item.to || item.action)
+      .map((item) => ({
+        id: item.to || item.action || item.label,
+        label: item.label,
+        path: item.action ? undefined : item.to,
+        action: item.action,
+        description: item.description || section.description || '',
+      }))
+  )
 
-    if (publicStoreHref) {
-      items.push({
-        id: 'public_store',
-        label: 'Loja pública',
-        path: publicStoreHref,
-        external: true,
-        description: 'Visualizar cardápio do cliente final',
-      })
-    }
+  const extraCommands = []
 
-    items.push({
+  if (publicStoreHref) {
+    extraCommands.push({
+      id: 'public_store',
+      label: 'Loja pública',
+      path: publicStoreHref,
+      external: true,
+      description: 'Visualizar cardápio do cliente final',
+    })
+  }
+
+  extraCommands.push(
+    {
       id: 'support',
       label: 'Suporte',
       action: 'SUPPORT',
       description: 'Falar com o suporte técnico no WhatsApp',
-    })
-
-    items.push({
+    },
+    {
       id: 'logout',
       label: 'Sair',
       action: 'LOGOUT',
-      description: 'Encerrar sessão de forma segura',
-    })
+      description: 'Encerrar sessão com segurança',
+    }
+  )
 
-    return items
-  }, [publicStoreHref])
+  return [...navCommands, ...extraCommands]
+}, [publicStoreHref])
 
   const handleLogout = async () => {
     try {
@@ -1474,10 +1474,10 @@ export default function DashboardLayout() {
     setCommandPaletteOpen(false)
     if (cmd.path) {
       if (cmd.external) {
-        window.open(cmd.path, '_blank')
-      } else {
-        navigate(cmd.path)
-      }
+      window.open(cmd.path, '_blank', 'noopener,noreferrer')
+    } else {
+      navigate(cmd.path)
+    }
     } else if (cmd.action === 'SUPPORT') {
       window.open('https://wa.me/5579999786984?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy.', '_blank')
     } else if (cmd.action === 'LOGOUT') {
@@ -1529,13 +1529,13 @@ export default function DashboardLayout() {
   const avatarInitial = (userData?.displayName || userData?.name || user?.displayName || storeName || 'L')[0]?.toUpperCase() || 'L'
 
   const moreActive = useMemo(() => {
-    const bottomItems = MAIN_ITEMS.slice(0, 4)
-    const isBottomItem = bottomItems.some((item) =>
-      isPathActive(location.pathname, item)
-    )
+  const isBottomItem = MOBILE_NAV_PATHS.some((path) => {
+    const item = MAIN_ITEMS.find((navItem) => navItem.to === path)
+    return item ? isPathActive(location.pathname, item) : location.pathname === path
+  })
 
-    return !isBottomItem
-  }, [location.pathname])
+  return !isBottomItem
+}, [location.pathname])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1978,11 +1978,12 @@ function CommandPalette({ open, onClose, commands, onSelect }) {
   const filteredCommands = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return commands
-    return commands.filter(
-      (cmd) =>
-        cmd.label.toLowerCase().includes(query) ||
-        cmd.description.toLowerCase().includes(query)
-    )
+    return commands.filter((cmd) => {
+      const label = String(cmd.label || '').toLowerCase()
+      const description = String(cmd.description || '').toLowerCase()
+
+      return label.includes(query) || description.includes(query)
+    })
   }, [commands, searchQuery])
 
   useEffect(() => {

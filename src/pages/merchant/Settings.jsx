@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
-import { normalizeBrazilianPhoneForWhatsApp, formatBrazilianPhone, validateBrazilianMobilePhone } from '../../utils/phone'
-import { cleanBrazilianDocument, formatCnpj, formatCpf, isValidCnpj, isValidCpf } from '../../utils/brazilianDocuments'
+import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import { scrollToFirstError } from '../../utils/scroll'
 import {
   doc,
@@ -12,7 +11,6 @@ import {
 import { httpsCallable } from 'firebase/functions'
 
 import {
-  FiAlertCircle,
   FiArrowLeft,
   FiCalendar,
   FiCheckCircle,
@@ -102,18 +100,6 @@ const OPENING_TO_SCHEDULING_DAY = {
   sun: 'sunday',
 }
 
-const SETTINGS_NAV_ITEMS = [
-  { id: 'settings-identity', label: 'Identidade', icon: FiGlobe },
-  { id: 'settings-images', label: 'Logo e banner', icon: FiImage },
-  { id: 'settings-contact', label: 'Contato', icon: FiPhone },
-  { id: 'settings-hours', label: 'Horários', icon: FiClock },
-  { id: 'settings-scheduling', label: 'Agendamento', icon: FiCalendar },
-  { id: 'settings-address', label: 'Endereço', icon: FiMapPin },
-  { id: 'settings-operation', label: 'Operação', icon: FiMonitor },
-  { id: 'settings-notifications', label: 'Alertas', icon: FiZap },
-  { id: 'settings-payments', label: 'Pagamentos', icon: FiShield },
-]
-
 const SEGMENTS = [
   'Restaurante',
   'Pizzaria',
@@ -126,15 +112,6 @@ const SEGMENTS = [
   'Bar',
   'Outro',
 ]
-
-const PIX_KEY_TYPES = ['phone', 'email', 'cpf', 'cnpj', 'random']
-const PIX_KEY_TYPE_LABELS = {
-  phone: 'Telefone',
-  cpf: 'CPF',
-  cnpj: 'CNPJ',
-  email: 'E-mail',
-  random: 'Chave aleatória',
-}
 
 const DEFAULT_FORM = {
   name: '',
@@ -168,14 +145,6 @@ const DEFAULT_FORM = {
   printAfterConfirm: true,
   autoCloseEnabled: false,
   autoCloseGraceMinutes: '30',
-  paymentPix: false,
-  paymentCard: true,
-  paymentCash: true,
-  pixEnabled: false,
-  pixKey: '',
-  pixKeyType: 'phone',
-  pixMerchantName: '',
-  pixMerchantCity: '',
   cep: '',
   street: '',
   number: '',
@@ -303,91 +272,6 @@ function sanitizeTextField(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength)
 }
 
-function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value || '').trim())
-}
-
-function getPixMerchantNameFallback(form, store) {
-  return sanitizeTextField(form.pixMerchantName || form.name || store?.name || store?.storeName, 80)
-}
-
-function getPixMerchantCityFallback(form, store) {
-  return sanitizeTextField(
-    form.pixMerchantCity ||
-      form.city ||
-      store?.address?.city ||
-      store?.city,
-    60
-  )
-}
-
-function getPixConfigCompleteness(form, store) {
-  const keyType = PIX_KEY_TYPES.includes(form.pixKeyType) ? form.pixKeyType : 'phone'
-  const key = sanitizeTextField(form.pixKey, 120)
-  const merchantName = getPixMerchantNameFallback(form, store)
-  const merchantCity = getPixMerchantCityFallback(form, store)
-
-  return {
-    keyType,
-    hasKey: Boolean(key),
-    hasMerchantName: Boolean(merchantName),
-    hasMerchantCity: Boolean(merchantCity),
-    complete: Boolean(key && merchantName && merchantCity),
-  }
-}
-
-function formatPixKeyForInput(value, keyType) {
-  if (keyType === 'phone') return formatBrazilianPhone(value)
-  if (keyType === 'cpf') return formatCpf(value)
-  if (keyType === 'cnpj') return formatCnpj(value)
-  return value
-}
-
-function normalizePixKeyForInput(value, keyType) {
-  if (keyType === 'phone') {
-    const normalized = normalizeBrazilianPhoneForWhatsApp(value)
-    return normalized ? `+55${normalized.replace(/^55/, '')}` : value
-  }
-
-  if (keyType === 'cpf') return cleanBrazilianDocument(value).slice(0, 11)
-  if (keyType === 'cnpj') return cleanBrazilianDocument(value).slice(0, 14)
-  if (keyType === 'email') return String(value || '').trim().toLowerCase().slice(0, 120)
-  return String(value || '').trim().slice(0, 120)
-}
-
-function normalizePixKeyForSave(value, keyType) {
-  const key = sanitizeTextField(value, 120)
-
-  if (keyType === 'phone') {
-    const validatedPixPhone = validateBrazilianMobilePhone(key)
-    if (!validatedPixPhone.ok) {
-      return { ok: false, message: 'A chave Pix de telefone precisa ser um celular brasileiro válido.' }
-    }
-    return { ok: true, value: validatedPixPhone.phoneE164 }
-  }
-
-  if (keyType === 'cpf') {
-    if (!isValidCpf(key)) return { ok: false, message: 'A chave Pix CPF é inválida.' }
-    return { ok: true, value: cleanBrazilianDocument(key) }
-  }
-
-  if (keyType === 'cnpj') {
-    if (!isValidCnpj(key)) return { ok: false, message: 'A chave Pix CNPJ é inválida.' }
-    return { ok: true, value: cleanBrazilianDocument(key) }
-  }
-
-  if (keyType === 'email') {
-    if (!isValidEmail(key)) return { ok: false, message: 'A chave Pix de e-mail é inválida.' }
-    return { ok: true, value: key.toLowerCase() }
-  }
-
-  if (key.length < 8) {
-    return { ok: false, message: 'Informe uma chave Pix aleatória válida.' }
-  }
-
-  return { ok: true, value: key }
-}
-
 function normalizeThemeColor(value) {
   const color = String(value || '').trim()
   return /^#[0-9a-fA-F]{6}$/.test(color) ? color : DEFAULT_THEME
@@ -466,11 +350,6 @@ function normalizeStoreScheduling(value) {
   }
 }
 
-function schedulingRequiresPix(scheduling) {
-  return scheduling?.prepaymentPolicy === 'pix_required_for_scheduled'
-    || scheduling?.prepaymentPolicy === 'pix_required_for_custom_products'
-}
-
 function hasAnySchedulingWindow(scheduling) {
   return SCHEDULING_DAYS.some((day) => {
     return Array.isArray(scheduling?.weeklyWindows?.[day.key])
@@ -478,7 +357,7 @@ function hasAnySchedulingWindow(scheduling) {
   })
 }
 
-function getSchedulingValidationError(scheduling, form, pixCompleteness) {
+function getSchedulingValidationError(scheduling) {
   if (!scheduling?.enabled) return null
 
   if (
@@ -508,10 +387,6 @@ function getSchedulingValidationError(scheduling, form, pixCompleteness) {
         return `Revise os horários de ${day.label}: o início precisa ser antes do fim.`
       }
     }
-  }
-
-  if (schedulingRequiresPix(scheduling) && (!form.paymentPix || !pixCompleteness.complete)) {
-    return 'Para exigir Pix em pedidos agendados, ative e configure o Pix manual da loja.'
   }
 
   return null
@@ -712,14 +587,6 @@ function normalizeOpeningHours(store) {
 function mapStoreToForm(store) {
   const address = getAddressFromStore(store)
   const settings = store?.settings || {}
-  const pix = store?.pix || {}
-  const settingsPix = store?.paymentSettings?.pix || {}
-  const pixKey = pix?.key || settingsPix?.key || store?.pixKey || ''
-  const pixKeyType = pix?.keyType || settingsPix?.keyType || store?.pixKeyType || 'phone'
-  const hasPixConfig = Boolean(pixKey)
-  const paymentPix =
-    store?.paymentMethods?.pix === true ||
-    (store?.paymentMethods?.pix !== false && hasPixConfig)
 
   return {
     ...DEFAULT_FORM,
@@ -778,14 +645,6 @@ function mapStoreToForm(store) {
       store?.autoCloseGraceMinutes ??
       30
     ),
-    paymentPix,
-    paymentCard: store?.paymentMethods?.card ?? true,
-    paymentCash: store?.paymentMethods?.cash ?? true,
-    pixEnabled: pix?.enabled === true || hasPixConfig,
-    pixKey,
-    pixKeyType: PIX_KEY_TYPES.includes(pixKeyType) ? pixKeyType : 'phone',
-    pixMerchantName: pix?.merchantName || settingsPix?.merchantName || store?.name || '',
-    pixMerchantCity: pix?.merchantCity || settingsPix?.merchantCity || address.city || '',
     scheduling: normalizeStoreScheduling(store?.scheduling),
     ...address,
   }
@@ -1045,6 +904,18 @@ function EmptyState() {
   )
 }
 
+const SETTINGS_NAV_ITEMS = [
+  { id: 'settings-identity', label: 'Identidade', icon: FiGlobe },
+  { id: 'settings-images', label: 'Logo e banner', icon: FiImage },
+  { id: 'settings-contact', label: 'Contato', icon: FiPhone },
+  { id: 'settings-hours', label: 'Horários', icon: FiClock },
+  { id: 'settings-scheduling', label: 'Agendamento', icon: FiCalendar },
+  { id: 'settings-address', label: 'Endereço', icon: FiMapPin },
+  { id: 'settings-operation', label: 'Operação', icon: FiMonitor },
+  { id: 'settings-notifications', label: 'Alertas', icon: FiZap },
+  { id: 'settings-payments', label: 'Pagamentos', icon: FiShield },
+]
+
 export default function Settings() {
   const {
     user,
@@ -1052,25 +923,56 @@ export default function Settings() {
     storeIds: authStoreIds = [],
   } = useAuth()
 
-  const knownStoreIds = useMemo(() => {
-    return uniqueArray([
-      authStoreId,
-      ...(Array.isArray(authStoreIds) ? authStoreIds : []),
-      user?.storeId,
-      ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
-    ].map((id) => String(id || '').trim())).slice(0, 10)
-  }, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
+  // 📍 COLE O BLOCO EXATAMENTE AQUI DENTRO:
+  const [activeSection, setActiveSection] = useState('')
 
-  const knownStoreIdsKey = useMemo(() => knownStoreIds.join('|'), [knownStoreIds])
+  useEffect(() => {
+    const observers = []
 
-  const [stores, setStores] = useState([])
-  const [selectedStoreId, setSelectedStoreId] = useState('')
-  const [loadingStores, setLoadingStores] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState('')
-  const [toast, setToast] = useState(null)
-  const [form, setForm] = useState(DEFAULT_FORM)
-  const [blockedDateInput, setBlockedDateInput] = useState('')
+    SETTINGS_NAV_ITEMS.forEach((item) => {
+      const element = document.getElementById(item.id)
+      if (!element) return
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setActiveSection(item.id)
+          }
+        },
+        { rootMargin: '-20% 0px -60% 0px' }
+      )
+
+      observer.observe(element)
+      observers.push({ observer, element })
+    })
+
+    return () => {
+      observers.forEach(({ observer, element }) => observer.unobserve(element))
+    }
+  }, [])
+
+  // Seus outros estados originais continuam normalmente abaixo...
+const [stores, setStores] = useState([])
+const [selectedStoreId, setSelectedStoreId] = useState('')
+const [loadingStores, setLoadingStores] = useState(true)
+const [saving, setSaving] = useState(false)
+const [uploadingImage, setUploadingImage] = useState('')
+const [toast, setToast] = useState(null)
+const [form, setForm] = useState(DEFAULT_FORM)
+const [blockedDateInput, setBlockedDateInput] = useState('')
+
+const knownStoreIds = useMemo(() => {
+  return uniqueArray([
+    authStoreId,
+    ...(Array.isArray(authStoreIds) ? authStoreIds : []),
+    user?.storeId,
+    ...(Array.isArray(user?.storeIds) ? user.storeIds : []),
+  ].map((value) => String(value || '').trim()))
+}, [authStoreId, authStoreIds, user?.storeId, user?.storeIds])
+
+const knownStoreIdsKey = useMemo(() => {
+  return knownStoreIds.join('|')
+}, [knownStoreIds])
 
   const selectedStore = useMemo(() => {
     return stores.find((store) => store.id === selectedStoreId) || stores[0] || null
@@ -1083,11 +985,6 @@ export default function Settings() {
     '--store-theme': form.themeColor || BRAND_GREEN,
   }), [form.themeColor])
 
-  const pixCompleteness = useMemo(() => {
-    return getPixConfigCompleteness(form, selectedStore)
-  }, [form, selectedStore])
-
-  const pixRequiredAndIncomplete = form.paymentPix && !pixCompleteness.complete
   const asaasOrderPayments = selectedStore?.payments?.asaas || {}
   const asaasOrderPaymentsActive =
     asaasOrderPayments.enabled === true &&
@@ -1209,36 +1106,6 @@ export default function Settings() {
         },
       }
     })
-  }, [])
-
-  const updatePaymentPix = useCallback((value) => {
-    setForm((prev) => ({
-      ...prev,
-      paymentPix: value,
-      pixEnabled: value ? true : false,
-      pixMerchantName: value && !prev.pixMerchantName ? prev.name : prev.pixMerchantName,
-      pixMerchantCity: value && !prev.pixMerchantCity ? prev.city : prev.pixMerchantCity,
-    }))
-  }, [])
-
-  const updatePixEnabled = useCallback((value) => {
-    setForm((prev) => ({
-      ...prev,
-      pixEnabled: value,
-      paymentPix: value ? true : false,
-      pixMerchantName: value && !prev.pixMerchantName ? prev.name : prev.pixMerchantName,
-      pixMerchantCity: value && !prev.pixMerchantCity ? prev.city : prev.pixMerchantCity,
-    }))
-  }, [])
-
-  const updatePixKeyType = useCallback((value) => {
-    const nextType = PIX_KEY_TYPES.includes(value) ? value : 'phone'
-
-    setForm((prev) => ({
-      ...prev,
-      pixKeyType: nextType,
-      pixKey: normalizePixKeyForInput(prev.pixKey, nextType),
-    }))
   }, [])
 
   const updateOpeningHour = useCallback((dayId, field, value) => {
@@ -1427,38 +1294,6 @@ export default function Settings() {
       const whatsapp = normalizeBrazilianPhoneForWhatsApp(form.whatsapp)
       const logoUrl = sanitizeImageUrl(form.logoUrl)
       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
-      let normalizedPixKey = sanitizeTextField(form.pixKey, 120)
-      const pixKeyType = PIX_KEY_TYPES.includes(form.pixKeyType) ? form.pixKeyType : 'phone'
-      const pixMerchantName = getPixMerchantNameFallback(form, selectedStore)
-      const pixMerchantCity = getPixMerchantCityFallback(form, selectedStore)
-
-      if (logoUrl === null || bannerUrl === null) {
-        throw new Error('Use imagens HTTPS do Cloudinary ou caminhos internos do PratoBy.')
-      }
-
-      if (!form.paymentPix && !form.paymentCard && !form.paymentCash) {
-        showToast('error', 'Selecione pelo menos uma forma de pagamento.')
-        scrollToFirstError()
-        return
-      }
-
-      if (form.paymentPix) {
-        if (!form.pixEnabled || !pixCompleteness.complete) {
-          showToast('error', 'Para aceitar Pix, configure a chave, o nome e a cidade do Pix manual.')
-          scrollToFirstError()
-          return
-        }
-
-        const pixKeyValidation = normalizePixKeyForSave(form.pixKey, pixKeyType)
-        if (!pixKeyValidation.ok) {
-          showToast('error', pixKeyValidation.message)
-          scrollToFirstError()
-          return
-        }
-
-        normalizedPixKey = pixKeyValidation.value
-      }
-
       if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
       }
@@ -1467,7 +1302,7 @@ export default function Settings() {
       const minOrder = minOrderCents / 100
       const openingHours = normalizeOpeningHoursForSave(form.openingHours)
       const scheduling = normalizeStoreScheduling(form.scheduling)
-      const schedulingValidationError = getSchedulingValidationError(scheduling, form, pixCompleteness)
+      const schedulingValidationError = getSchedulingValidationError(scheduling)
 
       if (schedulingValidationError) {
         showToast('error', schedulingValidationError)
@@ -1549,18 +1384,6 @@ export default function Settings() {
         acceptPickup: Boolean(form.acceptPickup),
         acceptDineIn: Boolean(form.acceptDineIn),
 
-        paymentMethods: {
-          pix: Boolean(form.paymentPix),
-          card: Boolean(form.paymentCard),
-          cash: Boolean(form.paymentCash),
-        },
-        pix: {
-          enabled: Boolean(form.paymentPix),
-          key: normalizedPixKey,
-          keyType: pixKeyType,
-          merchantName: pixMerchantName || cleanName,
-          merchantCity: pixMerchantCity || sanitizeTextField(form.city, 60),
-        },
 
         address: {
           cep: sanitizeTextField(form.cep, 12),
@@ -1587,7 +1410,7 @@ export default function Settings() {
         'phone', 'instagram', 'social', 'isActive', 'activeDays',
         'hoursOpen', 'hoursClose', 'openingHours', 'scheduling', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
-        'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
+        'acceptDineIn', 'address', 'cep', 'street',
         'number', 'neighborhood', 'complement', 'city', 'state'
       ]
 
@@ -1613,7 +1436,7 @@ export default function Settings() {
     } finally {
       setSaving(false)
     }
-  }, [form, pixCompleteness, saving, selectedStore, showToast, user])
+  }, [form, saving, selectedStore, showToast, user])
 
   if (loadingStores) {
     return (
@@ -1676,25 +1499,46 @@ export default function Settings() {
 
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[64px_minmax(0,1fr)_360px] xl:grid-cols-[64px_minmax(0,1fr)_380px] lg:px-8">
         <aside className="lg:sticky lg:top-24 lg:order-1 lg:h-fit">
-          <nav className="flex gap-2 overflow-x-auto rounded-[1.4rem] border border-gray-100 bg-white/90 p-2 shadow-sm backdrop-blur-xl dark:border-zinc-800 dark:bg-[#151922]/90 lg:w-14 lg:flex-col lg:overflow-visible">
-            {SETTINGS_NAV_ITEMS.map((item) => {
-              const Icon = item.icon
+  <nav className="flex gap-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white/80 p-2 shadow-sm backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80 lg:w-14 lg:flex-col lg:overflow-visible">
+    {SETTINGS_NAV_ITEMS.map((item) => {
+      const Icon = item.icon
+      const isActive = activeSection === item.id
 
-              return (
-                <a
-                  key={item.id}
-                  href={`#${item.id}`}
-                  title={item.label}
-                  aria-label={item.label}
-                  className="group flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-gray-400 transition hover:bg-orange-50 hover:text-[#f97316] dark:text-zinc-500 dark:hover:bg-orange-500/10 dark:hover:text-orange-300"
-                >
-                  <Icon size={17} />
-                  <span className="sr-only">{item.label}</span>
-                </a>
-              )
-            })}
-          </nav>
-        </aside>
+      return (
+        <a
+          key={item.id}
+          href={`#${item.id}`}
+          aria-label={item.label}
+          className={`group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${
+            isActive
+              ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400'
+              : 'text-zinc-400 hover:bg-orange-50/50 hover:text-orange-500 dark:text-zinc-500 dark:hover:bg-orange-500/5 dark:hover:text-orange-400'
+          }`}
+        >
+          {/* Pequena barra indicadora na lateral esquerda (ativa apenas no Desktop) */}
+          <span
+            className={`absolute left-0 top-1/4 h-1/2 w-[3px] rounded-r-full bg-orange-500 transition-all duration-200 hidden lg:block ${
+              isActive ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-50 group-hover:opacity-50'
+            }`}
+          />
+
+          {/* Ícone com animação */}
+          <Icon
+            size={18}
+            className={`transition-transform duration-200 ${isActive ? 'scale-100' : 'group-hover:scale-110'}`}
+          />
+
+          {/* Tooltip flutuante Premium */}
+          <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-3 invisible opacity-0 -translate-y-1/2 translate-x-1 scale-95 whitespace-nowrap rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-md transition-all duration-200 group-hover:visible group-hover:opacity-100 group-hover:translate-x-0 group-hover:scale-100 dark:bg-zinc-800 lg:block">
+            {item.label}
+          </span>
+
+          <span className="sr-only">{item.label}</span>
+        </a>
+      )
+    })}
+  </nav>
+</aside>
         <aside className="space-y-5 lg:order-3">
           <StoreSelector
             stores={stores}
@@ -2034,18 +1878,6 @@ export default function Settings() {
                 </div>
               ) : (
                 <>
-                  {schedulingRequiresPix(form.scheduling) && (!form.paymentPix || !pixCompleteness.complete) && (
-                    <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                      <FiAlertCircle className="mt-0.5 shrink-0" size={18} />
-                      <div>
-                        <p className="font-black">Pix manual precisa estar ativo</p>
-                        <p className="mt-1 leading-5">
-                          Você escolheu exigir Pix para agendamentos. Ative Pix em “Pagamentos” e configure chave, nome e cidade antes de salvar.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="grid items-end gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_220px]">
                     <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
                       <Input
@@ -2116,20 +1948,21 @@ export default function Settings() {
                         ))}
                       </div>
                     </div>
-
-                    <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
-                      <Select
-                        label="Pré-pagamento"
-                        value={form.scheduling?.prepaymentPolicy || 'none'}
-                        onChange={(event) => updateScheduling('prepaymentPolicy', event.target.value)}
-                      >
-                        <option value="none">Não exigir</option>
-                        <option value="pix_required_for_scheduled">Exigir Pix para todo pedido agendado</option>
-                        <option value="pix_required_for_custom_products">Exigir Pix apenas para produtos sob encomenda</option>
-                      </Select>
-                      <p className="mt-3 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
-                        Quando o Pix for obrigatório, o cliente deverá escolher Pix manual no checkout.
+                    <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 dark:border-orange-500/25 dark:bg-orange-500/10">
+                      <Label>Pagamento antecipado</Label>
+                      <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
+                        Regras de encomenda ficam em Pagamentos
                       </p>
+                      <p className="mt-2 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                        Configure Pix manual, Asaas online e exigencia de pagamento antecipado em uma area propria.
+                      </p>
+                      <Link
+                        to="/dashboard/pagamentos"
+                        className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+                      >
+                        <FiExternalLink size={14} />
+                        Ir para Pagamentos
+                      </Link>
                     </div>
                   </div>
 
@@ -2406,119 +2239,43 @@ export default function Settings() {
               />
             </div>
           </Section>
-
           <Section
             id="settings-payments"
             icon={FiShield}
             title="Pagamentos"
-            description="Formas de pagamento aceitas e dados para Pix manual."
+            description="Formas de pagamento, Pix manual, Asaas online e regras de encomenda agora ficam em uma area propria."
           >
-            <div className="grid gap-4 md:grid-cols-3">
-              <Toggle
-                checked={form.paymentPix}
-                onChange={updatePaymentPix}
-                label="Pix"
-                description="Aceitar Pix exige chave manual configurada."
-              />
-
-              <Toggle
-                checked={form.paymentCard}
-                onChange={(value) => updateField('paymentCard', value)}
-                label="Cartão"
-                description="Cartão na entrega ou balcão."
-              />
-
-              <Toggle
-                checked={form.paymentCash}
-                onChange={(value) => updateField('paymentCash', value)}
-                label="Dinheiro"
-                description="Permitir pagamento em dinheiro."
-              />
-            </div>
-
-            <div className={`mt-5 rounded-[1.5rem] border p-4 ${
-              asaasOrderPaymentsActive
-                ? 'border-green-100 bg-green-50 text-green-900'
-                : 'border-gray-100 bg-[#f9fafb] text-[#374151]'
-            }`}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="rounded-[1.5rem] border border-orange-100 bg-orange-50/70 p-5 dark:border-orange-500/25 dark:bg-orange-500/10">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
-                    Pagamento online Asaas
+                    Pagamentos agora ficam em uma area propria.
                   </p>
-                  <p className="mt-1 text-xs font-bold leading-5">
-                    {asaasOrderPaymentsActive
-                      ? 'Ativo para pedidos piloto. O cliente paga no ambiente seguro Asaas.'
-                      : 'Nao ativo nesta loja. A ativacao e feita pelo suporte/admin, sem pedir API key ao lojista.'}
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
+                    Configure metodos aceitos, chave Pix, pagamento online Asaas e pagamento antecipado para encomendas sem misturar com as configuracoes gerais da loja.
                   </p>
                 </div>
 
-                <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${
-                  asaasOrderPaymentsActive
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {asaasOrderPaymentsActive ? 'Ativo' : 'Inativo'}
-                </span>
+                <Link
+                  to="/dashboard/pagamentos"
+                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+                >
+                  <FiExternalLink size={16} />
+                  Ir para Pagamentos
+                </Link>
               </div>
-            </div>
 
-            {pixRequiredAndIncomplete && (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800 scroll-mt-24">
-                Para ativar Pix no cardápio público, preencha a chave, o nome do recebedor e a cidade abaixo.
-              </div>
-            )}
-
-            <div className="mt-5 rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4">
-              <Toggle
-                checked={form.pixEnabled}
-                onChange={updatePixEnabled}
-                label="Configurar Pix manual"
-                description="Obrigatório para aceitar Pix. Mostra QR Code/copia e cola no pedido."
-              />
-
-              {form.pixEnabled && (
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <Select
-                    label="Tipo de chave Pix"
-                    value={form.pixKeyType}
-                    onChange={(event) => updatePixKeyType(event.target.value)}
-                  >
-                    {PIX_KEY_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {PIX_KEY_TYPE_LABELS[type]}
-                      </option>
-                    ))}
-                  </Select>
-
-                  <Input
-                    label="Chave Pix"
-                    aria-invalid={!pixCompleteness.hasKey && form.paymentPix}
-                    className={!pixCompleteness.hasKey && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500 scroll-mt-24' : 'scroll-mt-24'}
-                    value={formatPixKeyForInput(form.pixKey, form.pixKeyType)}
-                    onChange={(event) => updateField('pixKey', normalizePixKeyForInput(event.target.value, form.pixKeyType))}
-                    placeholder="Chave Pix da loja"
-                  />
-
-                  <Input
-                    label="Nome no Pix"
-                    aria-invalid={!pixCompleteness.hasMerchantName && form.paymentPix}
-                    className={!pixCompleteness.hasMerchantName && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500 scroll-mt-24' : 'scroll-mt-24'}
-                    value={form.pixMerchantName}
-                    onChange={(event) => updateField('pixMerchantName', event.target.value)}
-                    placeholder="Titular da conta"
-                  />
-
-                  <Input
-                    label="Cidade no Pix"
-                    aria-invalid={!pixCompleteness.hasMerchantCity && form.paymentPix}
-                    className={!pixCompleteness.hasMerchantCity && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500 scroll-mt-24' : 'scroll-mt-24'}
-                    value={form.pixMerchantCity}
-                    onChange={(event) => updateField('pixMerchantCity', event.target.value)}
-                    placeholder="Ex: Aracaju"
-                  />
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
+                  Pix manual: {selectedStore?.paymentMethods?.pix === true ? 'ativo' : 'inativo'}
                 </div>
-              )}
+                <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
+                  Cartao presencial: {selectedStore?.paymentMethods?.card === false ? 'inativo' : 'ativo'}
+                </div>
+                <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
+                  Asaas online: {asaasOrderPaymentsActive ? 'ativo' : 'inativo'}
+                </div>
+              </div>
             </div>
           </Section>
 

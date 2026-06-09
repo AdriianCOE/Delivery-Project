@@ -325,6 +325,27 @@ function isPixManualPaymentMethod(value) {
   return PIX_MANUAL_METHODS.has(String(value || '').trim().toLowerCase())
 }
 
+function isAsaasOnlinePaymentMethod(value) {
+  const method = String(value || '').trim().toLowerCase()
+  return method === 'asaas_online'
+}
+
+function normalizePreorderPaymentMode(store) {
+  const policy = store?.payments?.preorderPolicy
+  const raw = policy && typeof policy === 'object' && !Array.isArray(policy)
+    ? policy.mode || policy.requiredMethod
+    : policy
+  const mode = String(raw || 'manual')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+
+  return ['manual', 'pix_manual', 'asaas_online', 'manual_or_asaas'].includes(mode)
+    ? mode
+    : 'manual'
+}
+
 function hasProductSchedulingContribution(product) {
   return product.mode !== 'store_default'
     || product.minLeadMinutes !== null
@@ -336,22 +357,40 @@ function hasProductSchedulingContribution(product) {
     || product.prepaymentPolicy !== 'store_default'
 }
 
-function resolvePaymentPolicy({ storeScheduling, products, orderTiming, paymentMethod, fail }) {
+function resolvePaymentPolicy({ storeScheduling, products, orderTiming, paymentMethod, preorderPaymentMode, fail }) {
   const explicitProductPix = products.some((product) => product.prepaymentPolicy === 'pix_required')
   const customProductPix = storeScheduling.prepaymentPolicy === 'pix_required_for_custom_products'
     && products.some((product) => product.mode === 'scheduled_only')
   const storeScheduledPix = orderTiming === 'scheduled'
     && storeScheduling.prepaymentPolicy === 'pix_required_for_scheduled'
-  const paymentPolicy = explicitProductPix || customProductPix || storeScheduledPix
-    ? 'pix_required'
-    : 'none'
-  const paymentPolicyReason = explicitProductPix || customProductPix
-    ? 'product_required'
-    : storeScheduledPix
-      ? 'store_scheduled'
-      : null
+  const scheduledOnlineOnly = orderTiming === 'scheduled' && preorderPaymentMode === 'asaas_online'
+  const scheduledManualOrAsaas = orderTiming === 'scheduled' && preorderPaymentMode === 'manual_or_asaas'
+  const scheduledPix = orderTiming === 'scheduled' && preorderPaymentMode === 'pix_manual'
+  const requiresPixPayment = explicitProductPix || customProductPix || storeScheduledPix || scheduledPix
+  const paymentPolicy = scheduledOnlineOnly
+    ? 'asaas_online_required'
+    : scheduledManualOrAsaas
+      ? 'prepaid_required'
+      : requiresPixPayment
+        ? 'pix_required'
+        : 'none'
+  const paymentPolicyReason = scheduledOnlineOnly || scheduledManualOrAsaas || scheduledPix
+    ? 'store_preorder_policy'
+    : explicitProductPix || customProductPix
+      ? 'product_required'
+      : storeScheduledPix
+        ? 'store_scheduled'
+        : null
 
-  if (paymentPolicy === 'pix_required' && !isPixManualPaymentMethod(paymentMethod)) {
+  if (scheduledOnlineOnly && !isAsaasOnlinePaymentMethod(paymentMethod)) {
+    failWith(fail, 'failed-precondition', 'Este pedido exige pagamento online antecipado.')
+  }
+
+  if (scheduledManualOrAsaas && !isPixManualPaymentMethod(paymentMethod) && !isAsaasOnlinePaymentMethod(paymentMethod)) {
+    failWith(fail, 'failed-precondition', 'Este pedido exige Pix manual ou pagamento online antecipado.')
+  }
+
+  if (requiresPixPayment && !scheduledManualOrAsaas && !isPixManualPaymentMethod(paymentMethod)) {
     failWith(fail, 'failed-precondition', 'Este pedido exige pagamento antecipado via Pix.')
   }
 
@@ -536,6 +575,7 @@ function buildOrderSchedulingDecision({
 }) {
   const normalizedProducts = uniqueProducts(products)
   const storeScheduling = normalizeStoreScheduling(store)
+  const preorderPaymentMode = normalizePreorderPaymentMode(store)
   const hasAsapOnly = normalizedProducts.some((product) => product.mode === 'asap_only')
   const hasScheduledOnly = normalizedProducts.some((product) => product.mode === 'scheduled_only')
 
@@ -564,6 +604,7 @@ function buildOrderSchedulingDecision({
       products: normalizedProducts,
       orderTiming,
       paymentMethod,
+      preorderPaymentMode,
       fail,
     })
 
@@ -594,6 +635,7 @@ function buildOrderSchedulingDecision({
     products: normalizedProducts,
     orderTiming,
     paymentMethod,
+    preorderPaymentMode,
     fail,
   })
   const contributingProducts = normalizedProducts.filter(hasProductSchedulingContribution)

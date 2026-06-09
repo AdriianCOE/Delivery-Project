@@ -23,10 +23,8 @@ import DashboardLayout from '../components/layouts/DashboardLayout'
 // Ícones dos placeholders
 import {
   FiCreditCard,
-  FiDollarSign,
   FiGrid,
   FiLayers,
-  FiMonitor,
   FiPieChart,
   FiTruck,
   FiUsers,
@@ -59,11 +57,13 @@ const MerchantDashboard = lazy(() => import('../pages/merchant/MerchantDashboard
 const OrdersPage = lazy(() => import('../pages/merchant/OrdersPage'))
 const Statistics = lazy(() => import('../pages/merchant/Statistics'))
 const Settings = lazy(() => import('../pages/merchant/Settings'))
+const PaymentsPage = lazy(() => import('../pages/merchant/PaymentsPage'))
 const Reviews = lazy(() => import('../pages/merchant/Reviews'))
 const MenuManagementPage = lazy(() => import('../pages/merchant/menu/MenuManagementPage'))
 const BillingPage = lazy(() => import('../pages/merchant/BillingPage'))
 const SubscriptionManagementPage = lazy(() => import('../pages/merchant/SubscriptionManagementPage'))
 const ProfilePage = lazy(() => import('../pages/merchant/ProfilePage'))
+const QRCodePage = lazy(() => import('../pages/merchant/QRCodePage'))
 const KitchenDisplayPage = lazy(() => import('../pages/merchant/KitchenDisplayPage'))
 const CustomerDisplayPage = lazy(() => import('../pages/merchant/CustomerDisplayPage'))
 
@@ -193,8 +193,9 @@ export default function AppRoutes() {
           <Route path="reviews" element={<Reviews />} />
           <Route path="settings" element={<Settings />} />
 
-          <Route path="financeiro" element={<ComingSoon title="Financeiro" icon={FiDollarSign} />} />
-          <Route path="qrcodes" element={<ComingSoon title="QR Codes" icon={FiGrid} />} />
+          <Route path="pagamentos" element={<PaymentsPage />} />
+          <Route path="financeiro" element={<Navigate to="/dashboard/pagamentos" replace />} />
+          <Route path="qrcodes" element={<QRCodePage />} />
           <Route path="users" element={<ComingSoon title="Clientes e CRM" icon={FiUsers} />} />
           <Route path="motobot" element={<ComingSoon title="MotoBot / Motoboys" icon={FiTruck} />} />
           <Route path="motoboy" element={<Navigate to="/dashboard/motobot" replace />} />

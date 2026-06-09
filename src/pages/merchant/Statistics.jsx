@@ -15,6 +15,7 @@ import {
 import {
   FiActivity,
   FiBarChart2,
+  FiCalendar,
   FiCheckCircle,
   FiClock,
   FiCreditCard,
@@ -46,7 +47,7 @@ const SELECTED_STATISTICS_STORE_KEY = 'pratoby:selected_statistics_store'
 const PERIOD_OPTIONS = [
   { label: 'Hoje', value: 'today', days: 0 },
   { label: '7 dias', value: '7d', days: 7 },
-  { label: '30 dias', value: 'month', days: 'current_month' },
+  { label: 'Este mês', value: 'month', days: 'current_month' },
 ]
 
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -75,43 +76,133 @@ function canLoadOperationalOrders({ role, selectedStore, userData }) {
 function normalizeStatus(status) {
   const v = String(status || 'pendente').toLowerCase().trim()
   const map = {
-    novo: 'pendente', received: 'pendente', aguardando: 'pendente', pendente: 'pendente',
-    aceito: 'preparando', confirmado: 'preparando', preparo: 'preparando', preparando: 'preparando',
-    entregando: 'entregando', saiu_para_entrega: 'entregando', em_rota: 'entregando',
-    finalizado: 'entregue', delivered: 'entregue', entregue: 'entregue',
-    canceled: 'cancelado', cancelled: 'cancelado', cancelado: 'cancelado',
+    pending: 'pendente',
+    pending_payment: 'pendente_pagamento',
+    awaiting_payment: 'pendente_pagamento',
+    aguardando_pagamento: 'pendente_pagamento',
+    pendente_pagamento: 'pendente_pagamento',
+    confirmed: 'confirmado',
+    accepted: 'confirmado',
+    preparing: 'preparando',
+    ready: 'pronto',
+    out_for_delivery: 'entregando',
+    em_rota: 'entregando',
+    rota: 'entregando',
+    delivered: 'entregue',
+    completed: 'entregue',
+    complete: 'entregue',
+    finalizado: 'entregue',
+    concluido: 'entregue',
+    concluído: 'entregue',
+    canceled: 'cancelado',
+    cancelled: 'cancelado',
   }
-  return map[v] || 'pendente'
+  return map[v] || v || 'pendente'
 }
 function formatMoney(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
 function fmt(cents) { return formatMoney(Number(cents || 0) / 100) }
 
+function toDate(value) {
+  if (!value) return null
+  if (typeof value?.toDate === 'function') return value.toDate()
+  if (typeof value?._seconds === 'number') return new Date(value._seconds * 1000)
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 function getOrderDate(o) {
-  const c = o?.createdAt
-  if (!c) return null
-  if (c?.toDate) return c.toDate()
-  if (c instanceof Date) return c
-  const d = new Date(c)
-  return isNaN(d.getTime()) ? null : d
+  return toDate(o?.createdAt || o?.created_at || o?.date || o?.orderDate)
+}
+function getPaidDate(o) {
+  return toDate(o?.payment?.paidAt || o?.paidAt || o?.paymentPaidAt || o?.payment?.confirmedAt)
+}
+function getScheduledDate(o) {
+  return toDate(
+    o?.scheduledFor ||
+    o?.scheduledAt ||
+    o?.schedule?.scheduledFor ||
+    o?.scheduling?.scheduledFor ||
+    (o?.scheduledDateKey && o?.scheduledTimeLabel ? `${o.scheduledDateKey}T${o.scheduledTimeLabel}:00` : null) ||
+    (o?.scheduledDate && o?.scheduledTime ? `${o.scheduledDate}T${o.scheduledTime}:00` : null)
+  )
+}
+function getMetricDate(o) {
+  return getPaidDate(o) || getOrderDate(o)
 }
 function getPhone(o) { return o?.customerPhone || o?.customer?.phone || o?.phone || '' }
+
+function normalizePaymentStatus(order) {
+  return String(order?.payment?.status || order?.paymentStatus || order?.asaasPaymentStatus || '')
+    .toLowerCase()
+    .trim()
+}
+
+function isOnlinePayment(order) {
+  const mode = String(order?.payment?.mode || order?.paymentMode || '').toLowerCase()
+  const provider = String(order?.payment?.provider || order?.paymentProvider || '').toLowerCase()
+  return mode === 'online' || provider === 'asaas' || Boolean(order?.payment?.asaasPaymentId || order?.asaasPaymentId)
+}
+
+function isPaidOrder(order) {
+  const paymentStatus = normalizePaymentStatus(order)
+  return Boolean(
+    order?.isPaid ||
+    order?.paid ||
+    paymentStatus === 'paid' ||
+    paymentStatus === 'pago' ||
+    paymentStatus === 'received' ||
+    paymentStatus === 'confirmed' ||
+    paymentStatus === 'payment_confirmed' ||
+    paymentStatus === 'payment_received'
+  )
+}
+
+function isPaymentPending(order) {
+  const paymentStatus = normalizePaymentStatus(order)
+  return Boolean(
+    isOnlinePayment(order) &&
+    !isPaidOrder(order) &&
+    !isCanceled(order) &&
+    ['pending', 'created', 'checkout_pending', 'aguardando_pagamento', 'pendente', ''].includes(paymentStatus)
+  )
+}
+
 function getPayMethod(o) {
-  const r = String(o?.payment?.method || o?.paymentMethod || o?.paymentType || '').toLowerCase()
+  if (isOnlinePayment(o)) return 'online'
+
+  const r = String(o?.payment?.method || o?.paymentMethod || o?.paymentType || o?.payment?.label || '').toLowerCase()
   if (r.includes('pix')) return 'pix'
-  if (r.includes('card') || r.includes('cartao') || r.includes('cartão') || r.includes('credit') || r.includes('debit')) return 'card'
-  if (r.includes('cash') || r.includes('dinheiro')) return 'cash'
+  if (r.includes('dinheiro') || r.includes('cash')) return 'cash'
+  if (r.includes('débito') || r.includes('debito') || r.includes('debit')) return 'debit'
+  if (r.includes('crédito') || r.includes('credito') || r.includes('credit')) return 'credit'
+  if (r.includes('cart') || r.includes('card') || r.includes('maquininha')) return 'card'
   return 'other'
 }
-function getTotalCents(o) { return o?.totalCents != null ? Number(o.totalCents) : Math.round(Number(o?.total || 0) * 100) }
+
+function getPaymentGroup(o) {
+  const method = getPayMethod(o)
+  if (method === 'online') return 'online'
+  if (method === 'pix') return 'pix'
+  if (method === 'cash') return 'cash'
+  if (['credit', 'debit', 'card'].includes(method)) return 'card'
+  return 'other'
+}
+function getTotalCents(o) {
+  const paymentGross = o?.payment?.grossAmountCents
+  if (paymentGross != null && Number.isFinite(Number(paymentGross))) return Number(paymentGross)
+  return o?.totalCents != null ? Number(o.totalCents) : Math.round(Number(o?.total || o?.totalAmount || o?.amount || 0) * 100)
+}
 function getDeliveryCents(o) {
-  if (o?.deliveryFeeCents != null) return Number(o.deliveryFeeCents)
-  if (o?.deliveryFee != null) return Math.round(Number(o.deliveryFee) * 100)
-  return 0
+  const cents = o?.deliveryFeeCents ?? o?.delivery?.feeCents
+  if (cents != null) return Number(cents) || 0
+  const v = o?.deliveryFee ?? o?.delivery?.fee
+  return Math.round(Number(v || 0) * 100)
 }
 function getDiscountCents(o) {
-  if (o?.discountCents != null) return Number(o.discountCents)
-  if (o?.discount != null) return Math.round(Number(o.discount) * 100)
-  return 0
+  const cents = o?.discountCents ?? o?.couponDiscountCents ?? o?.discount?.amountCents ?? o?.discount?.valueCents
+  if (cents != null) return Number(cents) || 0
+  const v = o?.discount ?? o?.discountAmount ?? o?.couponDiscount ?? o?.discount?.amount
+  return Math.round(Number(v || 0) * 100)
 }
 function getNeighborhood(o) {
   const v = o?.neighborhood || o?.deliveryNeighborhood || o?.customer?.neighborhood || o?.delivery?.neighborhood || o?.address?.neighborhood || o?.customerAddress?.neighborhood || ''
@@ -120,17 +211,48 @@ function getNeighborhood(o) {
 function getItems(o) { return Array.isArray(o?.items) ? o.items : [] }
 function isCompleted(o) { return normalizeStatus(o?.status) === 'entregue' }
 function isCanceled(o) { return normalizeStatus(o?.status) === 'cancelado' }
+function isRevenueOrder(o) {
+  if (isCanceled(o)) return false
+  return isCompleted(o) || isPaidOrder(o)
+}
+function isScheduledOrder(o) {
+  return Boolean(
+    o?.orderTiming === 'scheduled' ||
+    o?.scheduledFor ||
+    o?.scheduledAt ||
+    o?.scheduledDate ||
+    o?.scheduledDateKey ||
+    o?.scheduledTime ||
+    o?.schedule?.scheduledFor ||
+    o?.scheduling?.scheduledFor
+  )
+}
+function isCounterOrder(o) {
+  const source = String(o?.source || o?.channel || o?.orderType || o?.type || '').toLowerCase()
+  return Boolean(o?.isCounterOrder || source.includes('counter') || source.includes('balcao') || source.includes('balcão'))
+}
+function getFulfillmentType(o) {
+  if (isCounterOrder(o)) return 'counter'
+  const raw = String(o?.fulfillmentType || o?.deliveryType || o?.orderType || o?.type || '').toLowerCase()
+  if (raw.includes('mesa') || raw.includes('table') || raw.includes('dine')) return 'table'
+  if (raw.includes('balcao') || raw.includes('balcão') || raw.includes('counter')) return 'counter'
+  if (raw.includes('retirada') || raw.includes('pickup') || raw.includes('takeout')) return 'pickup'
+  if (o?.isPickup || o?.pickup) return 'pickup'
+  if (o?.isDelivery === false || o?.acceptDelivery === false) return 'pickup'
+  return 'delivery'
+}
 function getDeliveryDuration(o) {
   const created = getOrderDate(o)
   if (!created) return null
-  const h = (o?.statusHistory || []).find(x => ['entregue', 'finalizado', 'delivered'].includes(String(x.status || '').toLowerCase()))
+  const h = (o?.statusHistory || []).find(x => ['entregue', 'finalizado', 'concluido', 'concluído', 'delivered'].includes(String(x.status || '').toLowerCase()))
   let delivered = null
-  if (h?.timestamp) delivered = h.timestamp.toDate ? h.timestamp.toDate() : new Date(h.timestamp)
-  else if (o?.deliveredAt) delivered = o.deliveredAt.toDate ? o.deliveredAt.toDate() : new Date(o.deliveredAt)
-  else if (o?.updatedAt && normalizeStatus(o.status) === 'entregue') delivered = o.updatedAt.toDate ? o.updatedAt.toDate() : new Date(o.updatedAt)
-  if (delivered && !isNaN(delivered.getTime())) {
+  if (h?.timestamp) delivered = toDate(h.timestamp)
+  else if (o?.deliveredAt) delivered = toDate(o.deliveredAt)
+  else if (o?.completedAt) delivered = toDate(o.completedAt)
+  else if (o?.updatedAt && normalizeStatus(o.status) === 'entregue') delivered = toDate(o.updatedAt)
+  if (delivered && !Number.isNaN(delivered.getTime())) {
     const m = Math.round((delivered - created) / 60000)
-    if (m > 0 && m < 300) return m
+    if (m > 0 && m < 600) return m
   }
   return null
 }
@@ -163,12 +285,17 @@ function getPrevRange(period) {
 function delta(cur, prev) { return prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null }
 function kpisFrom(orders) {
   const canceled = orders.filter(isCanceled)
-  const completed = orders.filter(isCompleted)
-  const revenue = completed.reduce((s, o) => s + getTotalCents(o), 0)
-  return { revenue, valid: orders.filter(o => !isCanceled(o)).length, canceled: canceled.length, completed: completed.length, ticket: completed.length > 0 ? revenue / completed.length : 0 }
+  const revenueOrders = orders.filter(isRevenueOrder)
+  const revenue = revenueOrders.reduce((s, o) => s + getTotalCents(o), 0)
+  return {
+    revenue,
+    valid: orders.filter(o => !isCanceled(o)).length,
+    canceled: canceled.length,
+    completed: orders.filter(isCompleted).length,
+    ticket: revenueOrders.length > 0 ? revenue / revenueOrders.length : 0,
+  }
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, tone = 'green', delta: d, highlight = false }) {
   const tones = {
     green: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -543,11 +670,12 @@ export default function Statistics() {
     const canceled = cur.filter(isCanceled)
     const valid = cur.filter(o => !isCanceled(o))
     const completed = cur.filter(isCompleted)
+    const revenueOrders = cur.filter(isRevenueOrder)
 
-    const revenueCents = completed.reduce((s, o) => s + getTotalCents(o), 0)
+    const revenueCents = revenueOrders.reduce((s, o) => s + getTotalCents(o), 0)
     const totalOrders = valid.length
     const canceledCount = canceled.length
-    const ticket = completed.length > 0 ? revenueCents / completed.length : 0
+    const ticket = revenueOrders.length > 0 ? revenueCents / revenueOrders.length : 0
 
     const pk = kpisFrom(prev)
     const revDelta = delta(revenueCents, pk.revenue)
@@ -559,23 +687,62 @@ export default function Statistics() {
     const totalCustomers = phones.size
     const recurrence = totalOrders > 0 && totalCustomers > 0 ? Math.max(0, Math.round(((totalOrders - totalCustomers) / totalOrders) * 100)) : 0
 
-    // Payments / delivery types
-    const payments = { pix: 0, card: 0, cash: 0, other: 0 }
-    const delTypes = { delivery: 0, pickup: 0, table: 0 }
+    // Newer PratoBy dimensions: Asaas online, balcão, agendamento and pickup/delivery.
+    const payments = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
+    const delTypes = { delivery: 0, pickup: 0, counter: 0, table: 0 }
+    const paymentStatusCounts = { paid: 0, pending: 0, refunded: 0, chargeback: 0, failed: 0 }
     const peakH = Array(24).fill(0)
     const timeB = { manhã: 0, tarde: 0, noite: 0, madrugada: 0 }
     const weekdays = Array(7).fill(0)
+
+    let scheduledCount = 0
+    let scheduledCompleted = 0
+    let scheduledRevenueCents = 0
+    let counterCount = 0
+    let counterRevenueCents = 0
+    let onlineCount = 0
+    let onlinePaidCount = 0
+    let onlinePendingCount = 0
+    let pixManualCount = 0
 
     let delivSum = 0, delivCnt = 0
     completed.forEach(o => { const m = getDeliveryDuration(o); if (m !== null) { delivSum += m; delivCnt++ } })
     const avgDelivery = delivCnt > 0 ? Math.round(delivSum / delivCnt) : null
 
     valid.forEach(o => {
-      const m = getPayMethod(o); payments[m] = (payments[m] || 0) + 1
-      const t = String(o.orderType || o.type || '').toLowerCase()
-      if (t === 'pickup' || t === 'retirada') delTypes.pickup++
-      else if (t === 'dine_in' || t === 'mesa') delTypes.table++
-      else delTypes.delivery++
+      const m = getPayMethod(o)
+      const paymentGroup = getPaymentGroup(o)
+      payments[paymentGroup] = (payments[paymentGroup] || 0) + 1
+
+      if (isOnlinePayment(o)) {
+        onlineCount++
+        if (isPaidOrder(o)) onlinePaidCount++
+        if (isPaymentPending(o)) onlinePendingCount++
+      } else if (m === 'pix') {
+        pixManualCount++
+      }
+
+      const ps = normalizePaymentStatus(o)
+      if (isPaidOrder(o)) paymentStatusCounts.paid++
+      else if (isPaymentPending(o)) paymentStatusCounts.pending++
+      else if (ps.includes('refund')) paymentStatusCounts.refunded++
+      else if (ps.includes('chargeback')) paymentStatusCounts.chargeback++
+      else if (ps.includes('failed') || ps.includes('refused') || ps.includes('denied')) paymentStatusCounts.failed++
+
+      const fulfillment = getFulfillmentType(o)
+      delTypes[fulfillment] = (delTypes[fulfillment] || 0) + 1
+
+      if (isScheduledOrder(o)) {
+        scheduledCount++
+        if (isCompleted(o)) scheduledCompleted++
+        if (isRevenueOrder(o)) scheduledRevenueCents += getTotalCents(o)
+      }
+
+      if (isCounterOrder(o)) {
+        counterCount++
+        if (isRevenueOrder(o)) counterRevenueCents += getTotalCents(o)
+      }
+
       const d = getOrderDate(o)
       if (d) {
         const hr = d.getHours()
@@ -592,13 +759,14 @@ export default function Statistics() {
     const peakHourIdx = peakH.indexOf(Math.max(...peakH))
     const bestWeekday = weekdays.indexOf(Math.max(...weekdays))
 
-    // Neighborhoods
+    // Neighborhoods only make sense for delivery. Pickup/counter stays out of the regional ranking.
     const nbMap = new Map()
     cur.forEach(o => {
+      if (getFulfillmentType(o) !== 'delivery') return
       const nb = getNeighborhood(o)
       const p = nbMap.get(nb) || { neighborhood: nb, ordersCount: 0, completedCount: 0, revenueCents: 0, feeSumCents: 0, feeCnt: 0 }
       if (!isCanceled(o)) p.ordersCount++
-      if (isCompleted(o)) { p.completedCount++; p.revenueCents += getTotalCents(o) }
+      if (isRevenueOrder(o)) { p.completedCount++; p.revenueCents += getTotalCents(o) }
       const fee = getDeliveryCents(o)
       if (fee > 0) { p.feeSumCents += fee; p.feeCnt++ }
       nbMap.set(nb, p)
@@ -614,12 +782,12 @@ export default function Statistics() {
 
     // Products
     const prodMap = new Map()
-    valid.forEach(o => getItems(o).forEach(item => {
+    revenueOrders.forEach(o => getItems(o).forEach(item => {
       const id = item.productId || item.id || item.name || 'Produto'
-      const name = item.name || 'Produto'
-      const qty = Number(item.quantity || 1)
+      const name = item.name || item.productName || 'Produto'
+      const qty = Number(item.quantity || item.qty || 1)
       const pc = item.priceCents != null ? Number(item.priceCents) : Math.round(Number(item.price || 0) * 100)
-      const rc = item.totalCents != null ? Number(item.totalCents) : qty * pc
+      const rc = item.totalCents != null ? Number(item.totalCents) : item.subtotalCents != null ? Number(item.subtotalCents) : qty * pc
       const p = prodMap.get(id) || { name, qty: 0, revenueCents: 0, ordersCount: 0 }
       prodMap.set(id, { name, qty: p.qty + qty, revenueCents: p.revenueCents + rc, ordersCount: p.ordersCount + 1 })
     }))
@@ -632,21 +800,28 @@ export default function Statistics() {
       if (!ph) return
       const name = o?.customerName || o?.customer?.name || o?.clientName || ''
       const p = custMap.get(ph) || { phone: ph, name, orders: 0, revenueCents: 0 }
-      p.orders++; p.revenueCents += getTotalCents(o)
+      p.orders++; if (isRevenueOrder(o)) p.revenueCents += getTotalCents(o)
       if (!p.name && name) p.name = name
       custMap.set(ph, p)
     })
     const topCustomers = Array.from(custMap.values()).sort((a, b) => b.orders - a.orders).slice(0, 5)
 
-    // Status
-    const statusCounts = { pendente: 0, confirmado: 0, preparando: 0, pronto: 0, entregando: 0, entregue: 0, cancelado: 0 }
-    cur.forEach(o => { const s = normalizeStatus(o.status); if (s in statusCounts) statusCounts[s]++ })
+    // Status executivo para lojista: menos operacional, mais decisão.
+    const statusSummary = { completed: 0, canceled: 0, scheduled: 0, paymentPending: 0, ongoing: 0 }
+    cur.forEach(o => {
+      if (isCompleted(o)) statusSummary.completed++
+      else if (isCanceled(o)) statusSummary.canceled++
+      else if (isPaymentPending(o)) statusSummary.paymentPending++
+      else statusSummary.ongoing++
+
+      if (isScheduledOrder(o)) statusSummary.scheduled++
+    })
 
     // Coupons
     const couponMap = new Map()
     let couponOrders = 0, discountCents = 0
     valid.forEach(o => {
-      const code = o.couponCode || o.coupon?.code || o.coupon?.couponCode || o.discountCoupon || ''
+      const code = o.couponCode || o.coupon?.code || o.coupon?.couponCode || o.discountCoupon || o.counterCouponCode || ''
       const disc = getDiscountCents(o)
       if (code && String(code).trim()) {
         const c = String(code).trim().toUpperCase()
@@ -657,14 +832,15 @@ export default function Statistics() {
     })
     const topCoupon = Array.from(couponMap.values()).sort((a, b) => b.count - a.count)[0] || null
 
-    // Daily / hourly series (toggle revenue vs orders)
+    // Daily / hourly series uses revenue orders, so paid online and counter sales count even if status is not "entregue".
     const dayMap = new Map()
     cur.forEach(o => {
       if (isCanceled(o)) return
-      const d = getOrderDate(o); if (!d) return
+      const d = getMetricDate(o); if (!d) return
       let key = period.days === 0 ? `${d.getHours()}h` : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
       const p = dayMap.get(key) || { label: key, revenueCents: 0, orders: 0 }
-      p.revenueCents += getTotalCents(o); p.orders++
+      if (isRevenueOrder(o)) p.revenueCents += getTotalCents(o)
+      p.orders++
       dayMap.set(key, p)
     })
     const dailySeries = Array.from(dayMap.values())
@@ -673,14 +849,18 @@ export default function Statistics() {
     const bestDay = dailySeries.reduce((best, d) => (!best || d.revenueCents > best.revenueCents) ? d : best, null)
 
     const cancelRate = cur.length > 0 ? Math.round((canceledCount / cur.length) * 100) : 0
+    const onlinePaidRate = onlineCount > 0 ? Math.round((onlinePaidCount / onlineCount) * 100) : null
 
     // Insights
     const insights = []
     const peakBlock = Object.entries(timeB).sort((a, b) => b[1] - a[1])[0]
     if (peakBlock?.[1] > 0) insights.push({ icon: FiClock, tone: 'orange', text: `Horário de pico: ${peakHourIdx}h. Turno mais movimentado: ${peakBlock[0]}.` })
-    if (ticket > 0) insights.push({ icon: FiDollarSign, tone: 'green', text: `Ticket médio de ${fmt(ticket)} sobre ${completed.length} pedido${completed.length !== 1 ? 's' : ''} entregue${completed.length !== 1 ? 's' : ''}.` })
+    if (ticket > 0) insights.push({ icon: FiDollarSign, tone: 'green', text: `Ticket médio de ${fmt(ticket)} sobre ${revenueOrders.length} pedido${revenueOrders.length !== 1 ? 's' : ''} pago${revenueOrders.length !== 1 ? 's' : ''}/concluído${revenueOrders.length !== 1 ? 's' : ''}.` })
     if (cancelRate >= 10) insights.push({ icon: FiXCircle, tone: 'red', text: `Taxa de cancelamento em ${cancelRate}% — acima do ideal. Revise tempos de preparo e confirmação.` })
     if (topProducts[0]) insights.push({ icon: FiShoppingBag, tone: 'blue', text: `Produto estrela: "${topProducts[0].name}" com ${topProducts[0].qty} un. vendidas e ${fmt(topProducts[0].revenueCents)} em receita.` })
+    if (scheduledCount > 0) insights.push({ icon: FiCalendar, tone: 'amber', text: `${scheduledCount} pedido${scheduledCount !== 1 ? 's' : ''} agendado${scheduledCount !== 1 ? 's' : ''} no período, com ${fmt(scheduledRevenueCents)} em receita.` })
+    if (counterCount > 0) insights.push({ icon: FiShoppingBag, tone: 'purple', text: `${counterCount} pedido${counterCount !== 1 ? 's' : ''} de balcão registrado${counterCount !== 1 ? 's' : ''} (${fmt(counterRevenueCents)}).` })
+    if (onlineCount > 0) insights.push({ icon: FiCreditCard, tone: onlinePendingCount > 0 ? 'red' : 'green', text: `Pagamento online: ${onlinePaidCount}/${onlineCount} pagamento${onlineCount !== 1 ? 's' : ''} confirmado${onlinePaidCount !== 1 ? 's' : ''}${onlinePendingCount > 0 ? `, ${onlinePendingCount} pendente${onlinePendingCount !== 1 ? 's' : ''}.` : '.'}` })
     if (recurrence > 20) insights.push({ icon: FiUsers, tone: 'amber', text: `${recurrence}% dos pedidos são de clientes recorrentes — excelente fidelização!` })
     if (topCoupon) insights.push({ icon: FiTag, tone: 'purple', text: `Cupom mais ativo: "${topCoupon.code}" usado ${topCoupon.count}× (${fmt(topCoupon.discountCents)} em descontos concedidos).` })
     if (bestDay && dailySeries.length > 1) insights.push({ icon: FiStar, tone: 'green', text: `Melhor dia: ${bestDay.label} com ${fmt(bestDay.revenueCents)} em faturamento e ${bestDay.orders} pedido${bestDay.orders !== 1 ? 's' : ''}.` })
@@ -688,10 +868,16 @@ export default function Statistics() {
 
     return {
       cur, canceledCount, cancelRate, totalOrders, revenueCents, revDelta, ordDelta, tikDelta,
-      ticket, totalCustomers, recurrence, avgDelivery, completedCount: completed.length,
-      payments, delTypes, peakH, maxPeak, peakHourIdx, timeB, weekdays, bestWeekday,
+      ticket, totalCustomers, recurrence, avgDelivery,
+      completedCount: completed.length,
+      revenueOrdersCount: revenueOrders.length,
+      payments, delTypes, paymentStatusCounts,
+      scheduledCount, scheduledCompleted, scheduledRevenueCents,
+      counterCount, counterRevenueCents,
+      onlineCount, onlinePaidCount, onlinePendingCount, onlinePaidRate, pixManualCount,
+      peakH, maxPeak, peakHourIdx, timeB, weekdays, bestWeekday,
       nbByOrders, nbByRevenue, topProducts, topCustomers,
-      statusCounts, couponOrders, discountCents, topCoupon, dailySeries, bestDay, insights,
+      statusSummary, couponOrders, discountCents, topCoupon, dailySeries, bestDay, insights,
     }
   }, [orders, period])
 
@@ -703,7 +889,7 @@ export default function Statistics() {
     <main className="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 min-h-screen">
       <DashboardPageHeader
         title="Estatísticas"
-        description="Acompanhe vendas, pedidos e desempenho da sua loja."
+        description="Visão executiva de vendas, canais, pagamentos e operação da loja."
         icon={FiBarChart2}
       >
         {/* ── Controles alinhados numa única linha ── */}
@@ -787,7 +973,7 @@ export default function Statistics() {
               <KpiCard
                 icon={FiDollarSign} label="Faturamento" tone="green" highlight
                 value={fmt(data.revenueCents)}
-                sub={`${data.completedCount} entregues`}
+                sub={`${data.revenueOrdersCount} pagos/concluídos`}
                 delta={data.revDelta}
               />
               <KpiCard
@@ -799,7 +985,7 @@ export default function Statistics() {
               <KpiCard
                 icon={FiTrendingUp} label="Ticket Médio" tone="orange"
                 value={fmt(data.ticket)}
-                sub="Por pedido entregue"
+                sub="Por pedido pago/concluído"
                 delta={data.tikDelta}
               />
               <KpiCard
@@ -809,11 +995,18 @@ export default function Statistics() {
               />
             </div>
 
-            {/* ── KPIs operacionais ── */}
+            {/* ── KPIs executivos ── */}
+            <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <KpiCard icon={FiCheckCircle} label="Entregues/Concluídos" tone="green" value={`${data.completedCount}`} sub="Operação concluída" />
+              <KpiCard icon={FiXCircle} label="Cancelados" tone="red" value={`${data.canceledCount}`} sub={`Taxa de ${data.cancelRate}%`} />
+              <KpiCard icon={FiCalendar} label="Agendados" tone="amber" value={data.scheduledCount} sub={`${fmt(data.scheduledRevenueCents)} em receita`} />
+              <KpiCard icon={FiCreditCard} label="Pagamento pendente" tone={data.onlinePendingCount > 0 ? 'red' : 'blue'} value={data.onlinePendingCount} sub={data.onlineCount > 0 ? `${data.onlinePaidCount}/${data.onlineCount} online pagos` : 'Sem pendências online'} />
+            </div>
+
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <KpiCard icon={FiCheckCircle} label="Entregues" tone="green" value={`${data.completedCount}`} sub="Operação concluída" />
-              <KpiCard icon={FiXCircle} label="Cancelamentos" tone="red" value={`${data.canceledCount}`} sub={`Taxa de ${data.cancelRate}%`} />
-              <KpiCard icon={FiClock} label="Tempo Médio" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até entrega" />
+              <KpiCard icon={FiShoppingBag} label="Balcão" tone="purple" value={data.counterCount} sub={`${fmt(data.counterRevenueCents)} presencial`} />
+              <KpiCard icon={FiZap} label="Pagamento online" tone="blue" value={data.onlineCount} sub={data.onlineCount > 0 ? `${data.onlinePaidRate ?? 0}% confirmados` : 'Pix/cartão via Asaas'} />
+              <KpiCard icon={FiClock} label="Tempo médio" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até entrega" />
               <KpiCard icon={FiTag} label="Descontos" tone="teal" value={fmt(data.discountCents)} sub={`${data.couponOrders} c/ cupom`} />
             </div>
 
@@ -860,24 +1053,33 @@ export default function Statistics() {
                 </Card>
               )}
 
-              {/* Status */}
-              <Card title="Fluxo de Status" description="Distribuição dos pedidos no período" icon={FiActivity} iconTone="blue">
+              {/* Status executivo */}
+              <Card title="Resumo dos Pedidos" description="Visão executiva do período" icon={FiActivity} iconTone="blue">
                 <div className="space-y-1">
                   {[
-                    { key: 'pendente', label: 'Pendente', color: 'bg-amber-400' },
-                    { key: 'confirmado', label: 'Confirmado', color: 'bg-indigo-500' },
-                    { key: 'preparando', label: 'Preparando', color: 'bg-blue-500' },
-                    { key: 'pronto', label: 'Pronto', color: 'bg-teal-500' },
-                    { key: 'entregando', label: 'Em Rota', color: 'bg-sky-500' },
-                    { key: 'entregue', label: 'Entregue', color: 'bg-emerald-500' },
-                    { key: 'cancelado', label: 'Cancelado', color: 'bg-red-500' },
+                    { key: 'completed', label: 'Entregues/Concluídos', color: 'bg-emerald-500' },
+                    { key: 'canceled', label: 'Cancelados', color: 'bg-red-500' },
+                    { key: 'scheduled', label: 'Agendados', color: 'bg-amber-500' },
+                    { key: 'paymentPending', label: 'Pagamento pendente', color: 'bg-orange-500' },
                   ].map(({ key, label, color }) => (
-                    <HBar key={key} label={label} value={data.statusCounts[key]} total={data.cur.length} color={color} />
+                    <HBar key={key} label={label} value={data.statusSummary[key]} total={data.cur.length} color={color} />
                   ))}
                 </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-zinc-50 p-3 text-center dark:bg-white/[0.04]">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Em andamento</p>
+                    <p className="mt-1 text-lg font-black text-zinc-900 dark:text-zinc-50">{data.statusSummary.ongoing}</p>
+                  </div>
+                  <div className="rounded-xl bg-orange-50 p-3 text-center dark:bg-orange-500/10">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400">Cancelamento</p>
+                    <p className="mt-1 text-lg font-black text-orange-900 dark:text-orange-100">{data.cancelRate}%</p>
+                  </div>
+                </div>
+
                 <div className="mt-3 flex gap-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 p-2.5 text-[11px] font-semibold text-blue-900 dark:text-blue-300 leading-5">
                   <FiActivity className="shrink-0 text-blue-500 mt-0.5" size={12} />
-                  <span>Cancelamento em <strong>{data.cancelRate}%</strong>. Monitore o tempo de preparo para reduzir desistências.</span>
+                  <span>Use esta visão para acompanhar conclusão, cancelamentos, agenda e pagamentos pendentes sem misturar etapas internas da cozinha.</span>
                 </div>
               </Card>
 
@@ -946,29 +1148,48 @@ export default function Statistics() {
                 )}
               </Card>
 
-              {/* Pagamentos + tipos de entrega */}
-              <Card title="Pagamentos e Entrega" description="Como seus clientes pagam e recebem" icon={FiCreditCard} iconTone="purple">
-                <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-1">Forma de pagamento</p>
+              {/* Pagamentos + canais */}
+              <Card title="Pagamentos e Canais" description="Como o cliente pagou e por onde a venda entrou" icon={FiCreditCard} iconTone="purple">
+                <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-1">Pagamentos</p>
                 <div className="space-y-1 mb-4">
                   {[
-                    { key: 'pix', label: 'PIX', color: 'bg-[#f97316]' },
-                    { key: 'card', label: 'Cartão', color: 'bg-blue-500' },
-                    { key: 'cash', label: 'Dinheiro', color: 'bg-emerald-500' },
+                    { key: 'online', label: 'Pagamento online', color: 'bg-indigo-500', sub: 'Pix/cartão via Asaas' },
+                    { key: 'pix', label: 'Pix manual', color: 'bg-[#f97316]', sub: 'Confirmado pela loja' },
+                    { key: 'card', label: 'Maquininha', color: 'bg-blue-500', sub: 'Crédito/débito/cartão presencial' },
+                    { key: 'cash', label: 'Dinheiro', color: 'bg-emerald-500', sub: 'Recebido no balcão/entrega' },
                     { key: 'other', label: 'Outros', color: 'bg-zinc-400 dark:bg-zinc-600' },
-                  ].map(({ key, label, color }) => (
-                    <HBar key={key} label={label} value={data.payments[key]} total={data.totalOrders} color={color} />
+                  ].map(({ key, label, color, sub }) => (
+                    <HBar key={key} label={label} sub={sub} value={data.payments[key]} total={data.totalOrders} color={color} />
                   ))}
                 </div>
-                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-1">Tipo de entrega</p>
-                  <div className="space-y-1">
-                    {[
-                      { key: 'delivery', label: '🛵 Delivery', color: 'bg-[#f97316]' },
-                      { key: 'pickup', label: '🏃 Retirada', color: 'bg-blue-500' },
-                      { key: 'table', label: '🍽️ Mesa', color: 'bg-purple-500' },
-                    ].map(({ key, label, color }) => (
-                      <HBar key={key} label={label} value={data.delTypes[key]} total={data.totalOrders} color={color} />
-                    ))}
+
+                {data.onlineCount > 0 && (
+                  <div className="mb-4 rounded-xl bg-indigo-50 p-3 text-[11px] font-semibold leading-5 text-indigo-900 dark:bg-indigo-500/10 dark:text-indigo-200">
+                    <p className="font-black uppercase tracking-wider">Pagamento online</p>
+                    <p>{data.onlinePaidCount} confirmado(s), {data.onlinePendingCount} pendente(s){data.onlinePaidRate !== null ? ` · confirmação ${data.onlinePaidRate}%` : ''}.</p>
+                  </div>
+                )}
+
+                <div className="grid gap-4 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-1">Canais</p>
+                    <div className="space-y-1">
+                      {[
+                        { key: 'delivery', label: 'Delivery', color: 'bg-[#f97316]' },
+                        { key: 'pickup', label: 'Retirada', color: 'bg-blue-500' },
+                        { key: 'counter', label: 'Balcão', color: 'bg-purple-500' },
+                      ].map(({ key, label, color }) => (
+                        <HBar key={key} label={label} value={data.delTypes[key]} total={data.totalOrders} color={color} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-1">Tipo de pedido</p>
+                    <div className="space-y-1">
+                      <HBar label="Agora" value={Math.max(data.totalOrders - data.scheduledCount, 0)} total={data.totalOrders} color="bg-emerald-500" />
+                      <HBar label="Agendados" value={data.scheduledCount} total={data.totalOrders} color="bg-amber-500" />
+                    </div>
                   </div>
                 </div>
               </Card>

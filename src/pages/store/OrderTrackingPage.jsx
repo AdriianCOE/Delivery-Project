@@ -850,6 +850,7 @@ function getPaymentStatusLabel(order) {
     pago: 'Pago',
     canceled: 'Cancelado',
     refunded: 'Estornado',
+    partially_refunded: 'Parcialmente estornado',
   }
 
   return map[status] || (isPixManualOrder(order) ? 'Aguardando confirmação' : 'Manual')
