@@ -1,0 +1,184 @@
+diff --git a/src/pages/merchant/QRCodePage.jsx b/src/pages/merchant/QRCodePage.jsx
+index 2ead43f0..c45bf949 100644
+--- a/src/pages/merchant/QRCodePage.jsx
++++ b/src/pages/merchant/QRCodePage.jsx
+@@ -9,6 +9,7 @@ import {
+   FiExternalLink,
+   FiGrid,
+   FiLoader,
++  FiLock,
+   FiPlus,
+   FiPrinter,
+   FiX,
+@@ -546,27 +547,33 @@ function TableCard({ table, storeSlug, storeName, onArchive, onToggleActive, onT
+         <QrActionBtn
+           id={`copy-table-${table.id}`}
+           icon={copied ? FiCheck : FiCopy}
+-          label={copied ? 'Copiado!' : 'Copiar'}
++          label={copied ? 'Copiado!' : 'Copiar link'}
+           onClick={handleCopy}
+           variant={copied ? 'primary' : 'ghost'}
+           disabled={!url}
+         />
+-        <QrActionBtn
++        {/* Download e Impressão desabilitados até o checkout por mesa (Fase 2) estar ativo.
++            Evita que lojistas distribuam QR físico antes do fluxo dine_in funcionar. */}
++        <button
+           id={`download-table-${table.id}`}
+-          icon={FiDownload}
+-          label="Baixar"
+-          onClick={handleDownload}
+-          variant="ghost"
+-          disabled={!url}
+-        />
+-        <QrActionBtn
++          type="button"
++          disabled
++          title="Disponível quando o pedido por mesa estiver ativo"
++          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
++        >
++          <FiLock size={12} />
++          Baixar
++        </button>
++        <button
+           id={`print-table-${table.id}`}
+-          icon={FiPrinter}
+-          label="Imprimir"
+-          onClick={handlePrint}
+-          variant="ghost"
+-          disabled={!url}
+-        />
++          type="button"
++          disabled
++          title="Disponível quando o pedido por mesa estiver ativo"
++          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
++        >
++          <FiLock size={12} />
++          Imprimir
++        </button>
+       </div>
+ 
+       {/* Secondary actions */}
+@@ -793,7 +800,7 @@ function TablesEmptyState({ onAdd }) {
+         Nenhuma mesa cadastrada
+       </h3>
+       <p className="mt-2 max-w-xs text-sm text-[#6b7280] dark:text-zinc-400">
+-        Crie QR Codes para identificar pedidos por mesa, balcão ou área externa.
++        Cadastre suas mesas para preparar os tokens — o checkout por mesa será ativado em breve.
+       </p>
+       <button
+         id="add-first-table"
+@@ -802,40 +809,16 @@ function TablesEmptyState({ onAdd }) {
+         className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#f97316] px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600 dark:shadow-orange-900/30"
+       >
+         <FiPlus size={14} />
+-        Adicionar mesa
++        Cadastrar mesa
+       </button>
+     </div>
+   )
+ }
+ 
+-// ─── Quick print tips ─────────────────────────────────────────────────────────
+-
+-function PrintTips() {
+-  const tips = [
+-    'Imprima em tamanho A5 ou A6 para uso em mesas pequenas.',
+-    'Plastifique os QR Codes para maior durabilidade.',
+-    'Use suportes de acrílico para deixar as mesas mais elegantes.',
+-    'Cada mesa tem um token único — não reutilize QR Codes antigos.',
+-  ]
+-
+-  return (
+-    <section className="rounded-[1.5rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+-      <h2 className="mb-3 text-sm font-black text-[#111827] dark:text-zinc-100">
+-        💡 Dicas de impressão
+-      </h2>
+-      <ul className="space-y-2">
+-        {tips.map((tip) => (
+-          <li key={tip} className="flex items-start gap-2 text-sm text-[#6b7280] dark:text-zinc-400">
+-            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-50 text-[10px] font-black text-[#f97316] dark:bg-orange-500/10 dark:text-orange-400">
+-              ✓
+-            </span>
+-            {tip}
+-          </li>
+-        ))}
+-      </ul>
+-    </section>
+-  )
+-}
++// PrintTips: ocultada até o checkout por mesa (Fase 2) estar ativo.
++// Não faz sentido sugerir impressão antes do fluxo dine_in estar funcional.
++// eslint-disable-next-line no-unused-vars
++function PrintTips() { return null }
+ 
+ // ─── Main page ────────────────────────────────────────────────────────────────
+ 
+@@ -1101,13 +1084,13 @@ export default function QRCodePage() {
+ 
+               <div className="rounded-[1.25rem] border border-orange-100 bg-orange-50 p-4 shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10">
+                 <p className="text-[11px] font-black uppercase tracking-wider text-orange-700 dark:text-orange-300">
+-                  Próximo passo
++                  Em preparação
+                 </p>
+                 <p className="mt-2 text-sm font-black text-orange-900 dark:text-orange-100">
+-                  Pedido por mesa
++                  Checkout por mesa
+                 </p>
+                 <p className="mt-1 text-xs font-bold leading-5 text-orange-700 dark:text-orange-300">
+-                  Os links já saem com token seguro para ativar o checkout por mesa depois.
++                  Tokens já são gerados com segurança. Download e impressão serão liberados quando o fluxo estiver ativo.
+                 </p>
+               </div>
+             </section>
+@@ -1191,7 +1174,7 @@ export default function QRCodePage() {
+             {/* ── Seção 2: QR por mesa ── */}
+             <SectionCard
+               title="QR por mesa"
+-              description="Cada mesa tem um QR e token únicos. Clientes escaneiam e o pedido vem identificado."
++              description="Cadastre as mesas e tokens agora. Download e impressão serão liberados quando o checkout por mesa estiver ativo."
+               action={
+                 <button
+                   id="open-add-table-modal"
+@@ -1204,6 +1187,16 @@ export default function QRCodePage() {
+                 </button>
+               }
+             >
++              {/* Banner de aviso — checkout por mesa ainda não está ativo */}
++              <div className="mb-5 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
++                <FiLock size={15} className="mt-0.5 shrink-0 text-orange-600 dark:text-orange-400" />
++                <p className="text-xs font-bold leading-5 text-orange-800 dark:text-orange-300">
++                  <span className="font-black">Checkout por mesa em preparação.</span>{' '}
++                  Você pode cadastrar e organizar as mesas agora — os tokens já são gerados com segurança.
++                  Baixar e imprimir os QR Codes serão liberados quando o fluxo de pedido por mesa estiver ativo.
++                </p>
++              </div>
++
+               {tablesLoading ? (
+                 <div className="flex items-center justify-center py-12">
+                   <FiLoader size={22} className="animate-spin text-[#f97316]" />
+@@ -1226,7 +1219,6 @@ export default function QRCodePage() {
+                 </div>
+               )}
+ 
+-              {/* preparado para o próximo patch */}
+               {tables.length > 0 && (
+                 <div className="mt-5 rounded-xl bg-[#f9fafb] px-4 py-3 dark:bg-zinc-800">
+                   <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400">
+@@ -1234,14 +1226,13 @@ export default function QRCodePage() {
+                     <code className="rounded bg-gray-100 px-1 font-mono text-[11px] dark:bg-zinc-700">
+                       t_3f8ac1b2
+                     </code>
+-                    ). O checkout por mesa estará disponível em breve.
++                    ). Ao ativar o checkout por mesa, cada QR abrirá o cardápio já identificado.
+                   </p>
+                 </div>
+               )}
+             </SectionCard>
+ 
+-            {/* ── Dicas de impressão ── */}
+-            <PrintTips />
++            {/* PrintTips ocultado até checkout por mesa (Fase 2) — ver função PrintTips */}
+           </>
+         )}
+       </div>

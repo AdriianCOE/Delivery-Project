@@ -1,0 +1,1 @@
+import e from"./MenuManagementPage-DG17JLZg.js";export{e as default};
