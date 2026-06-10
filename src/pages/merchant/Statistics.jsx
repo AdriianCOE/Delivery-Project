@@ -228,13 +228,34 @@ function isScheduledOrder(o) {
   )
 }
 function isCounterOrder(o) {
-  const source = String(o?.source || o?.channel || o?.orderType || o?.type || '').toLowerCase()
-  return Boolean(o?.isCounterOrder || source.includes('counter') || source.includes('balcao') || source.includes('balcão'))
+  const raw = String(o?.source || o?.channel || o?.orderType || o?.type || o?.fulfillmentType || o?.deliveryType || '').toLowerCase()
+  return Boolean(
+    o?.isCounterOrder ||
+    raw.includes('counter') ||
+    raw.includes('balcao') ||
+    raw.includes('balcão')
+  )
+}
+function isTableOrder(o) {
+  const raw = String(o?.source || o?.channel || o?.orderType || o?.type || o?.fulfillmentType || o?.deliveryType || '').toLowerCase()
+  return Boolean(
+    o?.isTableOrder ||
+    o?.tableId ||
+    o?.tableToken ||
+    o?.tableNumber ||
+    o?.tableLabel ||
+    raw === 'table_qr' ||
+    raw.includes('mesa') ||
+    raw.includes('table') ||
+    raw.includes('dine_in') ||
+    raw.includes('dine-in') ||
+    raw.includes('consumo_local')
+  )
 }
 function getFulfillmentType(o) {
   if (isCounterOrder(o)) return 'counter'
+  if (isTableOrder(o)) return 'table'
   const raw = String(o?.fulfillmentType || o?.deliveryType || o?.orderType || o?.type || '').toLowerCase()
-  if (raw.includes('mesa') || raw.includes('table') || raw.includes('dine')) return 'table'
   if (raw.includes('balcao') || raw.includes('balcão') || raw.includes('counter')) return 'counter'
   if (raw.includes('retirada') || raw.includes('pickup') || raw.includes('takeout')) return 'pickup'
   if (o?.isPickup || o?.pickup) return 'pickup'
@@ -294,6 +315,61 @@ function kpisFrom(orders) {
     completed: orders.filter(isCompleted).length,
     ticket: revenueOrders.length > 0 ? revenue / revenueOrders.length : 0,
   }
+}
+
+function getOrderId(o) { return o?.orderNumber || o?.shortId || o?.id || '' }
+function getCustomerName(o) { return o?.customerName || o?.customer?.name || o?.clientName || o?.name || '' }
+function getCouponCode(o) { return String(o?.couponCode || o?.coupon?.code || o?.coupon?.couponCode || o?.discountCoupon || o?.counterCouponCode || '').trim() }
+function getOrderTimingLabel(o) { return isScheduledOrder(o) ? 'agendado' : 'agora' }
+function getScheduledLabel(o) {
+  const d = getScheduledDate(o)
+  if (d) return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  return o?.scheduledTimeLabel || o?.scheduledTime || ''
+}
+function getFulfillmentLabel(o) {
+  const labels = { delivery: 'Delivery', pickup: 'Retirada', counter: 'Balcão', table: 'Mesa / Atendimento local' }
+  return labels[getFulfillmentType(o)] || 'Outro'
+}
+function getPaymentLabel(o) {
+  const labels = { online: 'Pagamento online', pix: 'Pix manual', cash: 'Dinheiro', credit: 'Crédito', debit: 'Débito', card: 'Maquininha', other: 'Outro' }
+  return labels[getPayMethod(o)] || 'Outro'
+}
+function getItemsText(o) {
+  return getItems(o).map(item => {
+    const qty = Number(item.quantity || item.qty || 1)
+    const name = item.name || item.productName || 'Produto'
+    return `${qty}x ${name}`
+  }).join(' | ')
+}
+function makeFileSafe(value) {
+  return String(value || 'loja')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 60) || 'loja'
+}
+function csvCell(value) {
+  const text = value == null ? '' : String(value)
+  const escaped = text.replace(/"/g, '""')
+  return /[;"\r\n]/.test(escaped) ? `"${escaped}"` : escaped
+}
+
+function buildCsv(headers, rows) {
+  const lines = [headers, ...rows].map(row => row.map(csvCell).join(';'))
+  return '\uFEFF' + lines.join('\r\n') + '\r\n'
+}
+function downloadCsv(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 function KpiCard({ icon: Icon, label, value, sub, tone = 'green', delta: d, highlight = false }) {
@@ -415,21 +491,23 @@ function Skeleton() {
 }
 
 // Daily/hourly bar chart
-function RevenueChart({ series }) {
+function RevenueChart({ series, mode = 'revenue' }) {
   if (!series?.length) return <Empty icon={FiBarChart2} title="Sem dados" description="Nenhum pedido no período." />
-  const max = Math.max(...series.map(d => d.revenueCents), 1)
+  const isOrdersMode = mode === 'orders'
+  const max = Math.max(...series.map(d => isOrdersMode ? Number(d.orders || 0) : Number(d.revenueCents || 0)), 1)
   return (
     <div className="overflow-x-auto -mx-5 px-5">
       <div className="flex items-end gap-1 h-24 min-w-[280px]">
         {series.map(({ label, revenueCents, orders }) => {
-          const pct = revenueCents > 0 ? Math.max((revenueCents / max) * 100, 5) : 0
+          const value = isOrdersMode ? Number(orders || 0) : Number(revenueCents || 0)
+          const pct = value > 0 ? Math.max((value / max) * 100, 5) : 0
           return (
             <div key={label} className="group relative flex flex-1 flex-col items-center gap-1 min-w-[20px]">
               <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center rounded-lg bg-zinc-900 dark:bg-zinc-700 px-2 py-1.5 text-[9px] font-black text-white whitespace-nowrap z-20 shadow-xl gap-0.5">
-                <span>{fmt(revenueCents)}</span>
-                <span className="opacity-70 font-medium">{orders} ped.</span>
+                <span>{isOrdersMode ? `${orders} ped.` : fmt(revenueCents)}</span>
+                <span className="opacity-70 font-medium">{isOrdersMode ? fmt(revenueCents) : `${orders} ped.`}</span>
               </div>
-              <div className={`w-full rounded-t-sm transition-all duration-500 ${revenueCents > 0 ? 'bg-[#f97316] hover:bg-[#ea580c] cursor-default' : 'bg-zinc-100 dark:bg-zinc-800'}`} style={{ height: `${pct}%` }} />
+              <div className={`w-full rounded-t-sm transition-all duration-500 ${value > 0 ? 'bg-[#f97316] hover:bg-[#ea580c] cursor-default' : 'bg-zinc-100 dark:bg-zinc-800'}`} style={{ height: `${pct}%` }} />
               <span className="text-[8px] font-bold text-zinc-400 dark:text-zinc-600 truncate w-full text-center leading-tight">{label}</span>
             </div>
           )
@@ -689,7 +767,9 @@ export default function Statistics() {
 
     // Newer PratoBy dimensions: Asaas online, balcão, agendamento and pickup/delivery.
     const payments = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
+    const paymentRevenueCents = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
     const delTypes = { delivery: 0, pickup: 0, counter: 0, table: 0 }
+    const channelRevenueCents = { delivery: 0, pickup: 0, counter: 0, table: 0 }
     const paymentStatusCounts = { paid: 0, pending: 0, refunded: 0, chargeback: 0, failed: 0 }
     const peakH = Array(24).fill(0)
     const timeB = { manhã: 0, tarde: 0, noite: 0, madrugada: 0 }
@@ -731,6 +811,12 @@ export default function Statistics() {
 
       const fulfillment = getFulfillmentType(o)
       delTypes[fulfillment] = (delTypes[fulfillment] || 0) + 1
+
+      if (isRevenueOrder(o)) {
+        const total = getTotalCents(o)
+        paymentRevenueCents[paymentGroup] = (paymentRevenueCents[paymentGroup] || 0) + total
+        channelRevenueCents[fulfillment] = (channelRevenueCents[fulfillment] || 0) + total
+      }
 
       if (isScheduledOrder(o)) {
         scheduledCount++
@@ -837,13 +923,23 @@ export default function Statistics() {
     cur.forEach(o => {
       if (isCanceled(o)) return
       const d = getMetricDate(o); if (!d) return
-      let key = period.days === 0 ? `${d.getHours()}h` : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
-      const p = dayMap.get(key) || { label: key, revenueCents: 0, orders: 0 }
+      let key
+      let sortKey
+      if (period.days === 0) {
+        key = `${d.getHours()}h`
+        sortKey = d.getHours()
+      } else {
+        key = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+        const dayStart = new Date(d)
+        dayStart.setHours(0, 0, 0, 0)
+        sortKey = dayStart.getTime()
+      }
+      const p = dayMap.get(key) || { label: key, sortKey, revenueCents: 0, orders: 0 }
       if (isRevenueOrder(o)) p.revenueCents += getTotalCents(o)
       p.orders++
       dayMap.set(key, p)
     })
-    const dailySeries = Array.from(dayMap.values())
+    const dailySeries = Array.from(dayMap.values()).sort((a, b) => a.sortKey - b.sortKey)
 
     // Best day
     const bestDay = dailySeries.reduce((best, d) => (!best || d.revenueCents > best.revenueCents) ? d : best, null)
@@ -871,7 +967,7 @@ export default function Statistics() {
       ticket, totalCustomers, recurrence, avgDelivery,
       completedCount: completed.length,
       revenueOrdersCount: revenueOrders.length,
-      payments, delTypes, paymentStatusCounts,
+      payments, paymentRevenueCents, delTypes, channelRevenueCents, paymentStatusCounts,
       scheduledCount, scheduledCompleted, scheduledRevenueCents,
       counterCount, counterRevenueCents,
       onlineCount, onlinePaidCount, onlinePendingCount, onlinePaidRate, pixManualCount,
@@ -884,6 +980,57 @@ export default function Statistics() {
   const activeBairros = bairrosTab === 'orders' ? data.nbByOrders : data.nbByRevenue
   const displayedBairros = showAllBairros ? activeBairros : activeBairros.slice(0, 5)
   const storeName = selectedStore?.name || selectedStore?.storeName || null
+
+  const handleExportCsv = useCallback((type) => {
+    const storeSlug = makeFileSafe(storeName || selectedStoreId || 'loja')
+    const periodSlug = makeFileSafe(period.label)
+    const baseName = `pratoby-${type}-${periodSlug}-${storeSlug}.csv`
+
+    if (type === 'pedidos') {
+      const headers = ['id', 'dataCriacao', 'status', 'canal', 'tipoPedido', 'agendadoPara', 'pagamentoMetodo', 'pagamentoStatus', 'clienteNome', 'clienteTelefone', 'bairro', 'cupom', 'desconto', 'taxaEntrega', 'total', 'itens']
+      const rows = data.cur.map(order => [
+        getOrderId(order),
+        getOrderDate(order)?.toLocaleString('pt-BR') || '',
+        normalizeStatus(order?.status),
+        getFulfillmentLabel(order),
+        getOrderTimingLabel(order),
+        getScheduledLabel(order),
+        getPaymentLabel(order),
+        normalizePaymentStatus(order),
+        getCustomerName(order),
+        getPhone(order),
+        getFulfillmentType(order) === 'delivery' ? getNeighborhood(order) : '',
+        getCouponCode(order),
+        fmt(getDiscountCents(order)),
+        fmt(getDeliveryCents(order)),
+        fmt(getTotalCents(order)),
+        getItemsText(order),
+      ])
+      downloadCsv(baseName, buildCsv(headers, rows))
+      return
+    }
+
+    if (type === 'produtos') {
+      const headers = ['produto', 'quantidadeVendida', 'pedidos', 'receita']
+      const rows = data.topProducts.map(product => [product.name, product.qty, product.ordersCount, fmt(product.revenueCents)])
+      downloadCsv(baseName, buildCsv(headers, rows))
+      return
+    }
+
+    if (type === 'bairros') {
+      const headers = ['bairro', 'pedidos', 'pedidosConcluidos', 'receita', 'ticketMedio', 'taxaEntregaMedia', 'percentualPedidos']
+      const rows = data.nbByOrders.map(item => [
+        item.neighborhood,
+        item.ordersCount,
+        item.completedCount,
+        fmt(item.revenueCents),
+        fmt(item.ticketCents),
+        fmt(item.avgFeeCents),
+        `${item.pct}%`,
+      ])
+      downloadCsv(baseName, buildCsv(headers, rows))
+    }
+  }, [data, period.label, selectedStoreId, storeName])
 
   return (
     <main className="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 min-h-screen">
@@ -918,6 +1065,25 @@ export default function Statistics() {
               </button>
             ))}
           </div>
+
+          {/* CSV export */}
+          <label className="sr-only" htmlFor="statistics-csv-export">Exportar CSV</label>
+          <select
+            id="statistics-csv-export"
+            value=""
+            onChange={(event) => {
+              const value = event.target.value
+              if (value) handleExportCsv(value)
+            }}
+            disabled={!data.cur?.length}
+            className="h-9 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-xs font-black text-zinc-700 dark:text-zinc-100 outline-none transition-colors hover:border-orange-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-orange-900/30"
+            title="Exportar dados do período em CSV"
+          >
+            <option value="">Exportar CSV</option>
+            <option value="pedidos">Pedidos do período</option>
+            <option value="produtos">Produtos vendidos</option>
+            <option value="bairros">Bairros/regiões</option>
+          </select>
 
           {/* Refresh — mesma linha */}
           <button
@@ -1006,7 +1172,7 @@ export default function Statistics() {
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <KpiCard icon={FiShoppingBag} label="Balcão" tone="purple" value={data.counterCount} sub={`${fmt(data.counterRevenueCents)} presencial`} />
               <KpiCard icon={FiZap} label="Pagamento online" tone="blue" value={data.onlineCount} sub={data.onlineCount > 0 ? `${data.onlinePaidRate ?? 0}% confirmados` : 'Pix/cartão via Asaas'} />
-              <KpiCard icon={FiClock} label="Tempo médio" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até entrega" />
+              <KpiCard icon={FiClock} label="Tempo de conclusão" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até finalização" />
               <KpiCard icon={FiTag} label="Descontos" tone="teal" value={fmt(data.discountCents)} sub={`${data.couponOrders} c/ cupom`} />
             </div>
 
@@ -1016,7 +1182,7 @@ export default function Statistics() {
               {/* Gráfico faturamento/pedidos por dia com toggle */}
               <Card
                 title={period.days === 0 ? 'Evolução por Hora' : 'Evolução por Dia'}
-                description="Receita acumulada no período"
+                description={chartMode === 'revenue' ? 'Receita acumulada no período' : 'Volume de pedidos no período'}
                 icon={FiBarChart2}
                 iconTone="orange"
                 fullWidth
@@ -1030,16 +1196,11 @@ export default function Statistics() {
                   />
                 }
               >
-                <RevenueChart
-                  series={chartMode === 'revenue'
-                    ? data.dailySeries
-                    : data.dailySeries.map(d => ({ ...d, revenueCents: d.orders * 100 })) /* orders as bar height */
-                  }
-                />
+                <RevenueChart series={data.dailySeries} mode={chartMode} />
                 {data.bestDay && (
                   <div className="mt-3 flex items-center gap-2 rounded-xl bg-orange-50 dark:bg-orange-500/10 p-3 text-xs font-semibold text-orange-800 dark:text-orange-300">
                     <FiStar size={13} className="text-[#f97316] shrink-0" />
-                    <span>Melhor {period.days === 0 ? 'hora' : 'dia'}: <strong>{data.bestDay.label}</strong> — {fmt(data.bestDay.revenueCents)} em {data.bestDay.orders} pedidos</span>
+                    <span>Melhor {period.days === 0 ? 'hora' : 'dia'}: <strong>{data.bestDay.label}</strong> — {chartMode === 'revenue' ? `${fmt(data.bestDay.revenueCents)} em ${data.bestDay.orders} pedidos` : `${data.bestDay.orders} pedidos · ${fmt(data.bestDay.revenueCents)}`}</span>
                   </div>
                 )}
               </Card>
@@ -1159,7 +1320,7 @@ export default function Statistics() {
                     { key: 'cash', label: 'Dinheiro', color: 'bg-emerald-500', sub: 'Recebido no balcão/entrega' },
                     { key: 'other', label: 'Outros', color: 'bg-zinc-400 dark:bg-zinc-600' },
                   ].map(({ key, label, color, sub }) => (
-                    <HBar key={key} label={label} sub={sub} value={data.payments[key]} total={data.totalOrders} color={color} />
+                    <HBar key={key} label={label} sub={`${fmt(data.paymentRevenueCents[key])} no período${sub ? ` · ${sub}` : ''}`} value={data.payments[key]} total={data.totalOrders} color={color} />
                   ))}
                 </div>
 
@@ -1178,8 +1339,9 @@ export default function Statistics() {
                         { key: 'delivery', label: 'Delivery', color: 'bg-[#f97316]' },
                         { key: 'pickup', label: 'Retirada', color: 'bg-blue-500' },
                         { key: 'counter', label: 'Balcão', color: 'bg-purple-500' },
+                        { key: 'table', label: 'Mesa / Atendimento local', color: 'bg-teal-500' },
                       ].map(({ key, label, color }) => (
-                        <HBar key={key} label={label} value={data.delTypes[key]} total={data.totalOrders} color={color} />
+                        <HBar key={key} label={label} sub={`${fmt(data.channelRevenueCents[key])} no período`} value={data.delTypes[key]} total={data.totalOrders} color={color} />
                       ))}
                     </div>
                   </div>

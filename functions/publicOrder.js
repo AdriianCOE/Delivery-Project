@@ -17,6 +17,9 @@ class PublicOrderError extends Error {
   }
 }
 
+const DEFAULT_SCHEDULED_SLOT_CAPACITY = 20
+const MAX_SCHEDULED_SLOT_CAPACITY = 500
+
 function fail(code, message) {
   throw new PublicOrderError(code, message)
 }
@@ -839,6 +842,96 @@ function buildFirestoreSchedulingFields(admin, decision) {
   }
 }
 
+function getScheduledSlotCapacity(store) {
+  const candidates = [
+    store?.scheduling?.maxOrdersPerSlot,
+    store?.scheduling?.slotCapacity,
+    store?.maxScheduledOrdersPerSlot,
+  ]
+
+  for (const candidate of candidates) {
+    const value = Number(candidate)
+    if (!Number.isFinite(value) || value <= 0) continue
+    return Math.max(1, Math.min(MAX_SCHEDULED_SLOT_CAPACITY, Math.floor(value)))
+  }
+
+  return DEFAULT_SCHEDULED_SLOT_CAPACITY
+}
+
+async function reserveScheduledSlotInTransaction({
+  db,
+  admin,
+  transaction,
+  store,
+  storeId,
+  orderRef,
+  schedulingDecision,
+}) {
+  if (schedulingDecision?.orderTiming !== 'scheduled' || !schedulingDecision.scheduledSlotKey) return null
+
+  const slotRef = db.collection('scheduledOrderSlots').doc(schedulingDecision.scheduledSlotKey)
+  const slotSnapshot = await transaction.get(slotRef)
+  const slotData = slotSnapshot.exists ? slotSnapshot.data() || {} : {}
+  const activeOrderCount = Number(slotData.activeOrderCount || 0)
+  const capacity = getScheduledSlotCapacity(store)
+
+  if (activeOrderCount >= capacity) {
+    fail('failed-precondition', 'Este horario acabou de lotar. Escolha outro horario.')
+  }
+
+  transaction.set(slotRef, {
+    storeId,
+    slotKey: schedulingDecision.scheduledSlotKey,
+    scheduledDateKey: schedulingDecision.scheduledDateKey,
+    scheduledTimeLabel: schedulingDecision.scheduledTimeLabel,
+    deliveryType: String(schedulingDecision.scheduledSlotKey || '').split('_').pop() || '',
+    capacity,
+    activeOrderCount: admin.firestore.FieldValue.increment(1),
+    orderIds: admin.firestore.FieldValue.arrayUnion(orderRef.id),
+    scheduledFor: schedulingDecision.scheduledFor
+      ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledFor)
+      : null,
+    scheduledWindowEnd: schedulingDecision.scheduledWindowEnd
+      ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledWindowEnd)
+      : null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    ...(slotSnapshot.exists ? {} : {
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }),
+  }, { merge: true })
+
+  return slotRef
+}
+
+async function releaseScheduledSlotInTransaction({
+  db,
+  admin,
+  transaction,
+  orderRef,
+  orderData,
+  reason,
+}) {
+  const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
+  if (!scheduledSlotKey || orderData?.scheduledSlotReleasedAt) return {}
+
+  const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
+  const slotSnapshot = await transaction.get(slotRef)
+
+  if (slotSnapshot.exists) {
+    const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
+    transaction.set(slotRef, {
+      activeOrderCount: Math.max(0, currentCount - 1),
+      orderIds: admin.firestore.FieldValue.arrayRemove(orderRef.id),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+  }
+
+  return {
+    scheduledSlotReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+    scheduledSlotReleaseReason: String(reason || 'payment_failed').slice(0, 80),
+  }
+}
+
 function couponDateToMillis(value) {
   if (!value) return null
   if (typeof value.toMillis === 'function') return value.toMillis()
@@ -1627,7 +1720,16 @@ function createPublicOrderHandler({
           }, { merge: true })
         }
 
-        // TODO(v2): reserve scheduledSlotKey in a capacity document inside this transaction.
+        await reserveScheduledSlotInTransaction({
+          db,
+          admin,
+          transaction,
+          store: liveStore,
+          storeId: storeDocId,
+          orderRef,
+          schedulingDecision,
+        })
+
         transaction.set(orderRef, orderPayload)
 
         if (couponResult?.ref) {
@@ -1647,6 +1749,7 @@ function createPublicOrderHandler({
             provider: paymentSnapshot.paymentProvider || null,
             status: paymentSnapshot.paymentStatus || null,
           },
+          orderTiming: schedulingDecision.orderTiming,
           totals: {
             subtotalCents,
             discountCents,
@@ -1689,10 +1792,23 @@ function createPublicOrderHandler({
             error: paymentError?.message || String(paymentError),
           })
           onlinePaymentLinkError = paymentError
-          await orderRefForPayment.set(
-            buildAsaasLinkCreationFailurePatch({ admin, error: paymentError }),
-            { merge: true }
-          )
+          await db.runTransaction(async (transaction) => {
+            const orderSnapshot = await transaction.get(orderRefForPayment)
+            const orderData = orderSnapshot.exists ? orderSnapshot.data() || {} : {}
+            const releasePatch = await releaseScheduledSlotInTransaction({
+              db,
+              admin,
+              transaction,
+              orderRef: orderRefForPayment,
+              orderData,
+              reason: 'asaas_link_creation_failed',
+            })
+
+            transaction.set(orderRefForPayment, {
+              ...buildAsaasLinkCreationFailurePatch({ admin, error: paymentError }),
+              ...releasePatch,
+            }, { merge: true })
+          })
         }
       }
 
@@ -1706,8 +1822,11 @@ function createPublicOrderHandler({
       })
 
       const shouldNotifyNewOrder =
-        result.payment?.mode !== 'online' ||
-        result.payment?.status === 'paid'
+        result.orderTiming !== 'scheduled' &&
+        (
+          result.payment?.mode !== 'online' ||
+          result.payment?.status === 'paid'
+        )
 
       if (shouldNotifyNewOrder && typeof sendNewOrderPushToStore === 'function') {
         try {

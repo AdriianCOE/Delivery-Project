@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -511,6 +511,7 @@ export default function PaymentsPage() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [form, setForm] = useState(DEFAULT_FORM)
+  const toastTimeoutRef = useRef(null)
 
   const knownStoreIds = useMemo(() => {
     return uniqueArray([
@@ -535,15 +536,23 @@ export default function PaymentsPage() {
   const themeVars = useMemo(() => ({ '--store-theme': selectedStore?.themeColor || DEFAULT_THEME }), [selectedStore?.themeColor])
 
   const showToast = useCallback((type, message) => {
-  setToast({ type, message })
+    setToast({ type, message })
 
-  if (typeof window !== 'undefined') {
-    window.clearTimeout(showToast.timeoutId)
-    showToast.timeoutId = window.setTimeout(() => {
-      setToast(null)
-    }, 4500)
-  }
-}, [])
+    if (typeof window !== 'undefined') {
+      window.clearTimeout(toastTimeoutRef.current)
+      toastTimeoutRef.current = window.setTimeout(() => {
+        setToast(null)
+      }, 4500)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.clearTimeout(toastTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!user?.uid || !knownStoreIds.length) {

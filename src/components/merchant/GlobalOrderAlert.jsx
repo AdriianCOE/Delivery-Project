@@ -26,6 +26,10 @@ import {
   getOrderCustomerName,
   hasValidOrderWhatsAppPhone,
 } from '../../utils/orderSummary'
+import {
+  getScheduledOperationalState,
+  isScheduledOrder,
+} from '../../utils/orderScheduling'
 
 const ALERT_PERMISSION_KEY = '@PratoBy:alertsEnabled'
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -289,8 +293,12 @@ export function GlobalOrderAlert() {
   const notifyNewOrder = useCallback((order) => {
     const orderId = getOrderId(order)
     const orderNumber = getOrderDisplayNumber(order, orderId)
+    const scheduledFuture =
+      isScheduledOrder(order) &&
+      getScheduledOperationalState(order, { now: new Date() }) === 'scheduled_future'
     const internalBody = `${orderNumber} - ${formatMoney(getOrderTotal(order))}`
     const publicBody = `${orderNumber} aguardando confirmacao`
+    const allowLightNotification = notificationPreferenceEnabled(preferences, 'events', 'newOrder')
     const allowToast = notificationPreferenceEnabled(preferences, 'channels', 'toast')
       && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
     const allowSound = notificationPreferenceEnabled(preferences, 'channels', 'sound')
@@ -299,6 +307,25 @@ export function GlobalOrderAlert() {
       && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
     const allowTitle = notificationPreferenceEnabled(preferences, 'channels', 'title')
       && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+
+    if (scheduledFuture) {
+      if (allowLightNotification) {
+        addLocalNotification({
+          id: `order:${orderId}`,
+          area: 'orders',
+          channel: 'local_dashboard',
+          sourceType: 'order',
+          sourceId: orderId,
+          title: 'Pedido agendado recebido',
+          message: internalBody,
+          href: '/dashboard/orders?filter=scheduled',
+          severity: 'info',
+          critical: false,
+          createdAt: order?.createdAt || Date.now(),
+        })
+      }
+      return
+    }
 
     setLatestOrder(allowToast ? order : null)
     setTitleAlertActive(allowTitle)

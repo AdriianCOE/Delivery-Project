@@ -84,14 +84,17 @@ function getCustomerStatusPushContent(status, orderId, orderData = null) {
   }
 }
 
-function getTrackingUrlPath(orderData, orderId) {
+function getTrackingUrlPath(orderData) {
+  const trackingToken = String(orderData?.trackingToken || '').trim()
+  if (!trackingToken) return null
+
   const savedPath = String(orderData?.trackingUrlPath || '').trim()
   if (savedPath.startsWith('/')) return savedPath
 
   const storeSlug = String(orderData?.storeSlug || orderData?.storeId || '').trim()
-  if (storeSlug) return `/${storeSlug}/pedido/${orderId}`
+  if (storeSlug) return `/${storeSlug}/pedido/${trackingToken}`
 
-  return `/pedido/${orderId}`
+  return `/pedido/${trackingToken}`
 }
 
 function getCustomerOrderTokenHash({ orderId, trackingToken, token }) {
@@ -359,16 +362,22 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId, 
   }
 
   const content = getCustomerStatusPushContent(normalizedStatus, normalizedOrderId, currentOrderData)
+  const trackingUrlPath = getTrackingUrlPath(currentOrderData)
+  const messageData = {
+    type: 'order_status_update',
+    orderId: normalizedOrderId,
+    status: normalizedStatus,
+    title: content.title,
+    body: content.body,
+  }
+
+  if (trackingUrlPath) {
+    messageData.url = trackingUrlPath
+  }
+
   const response = await admin.messaging().sendEachForMulticast({
     tokens: tokenDocs.map((entry) => entry.data.token),
-    data: {
-      type: 'order_status_update',
-      orderId: normalizedOrderId,
-      status: normalizedStatus,
-      title: content.title,
-      body: content.body,
-      url: getTrackingUrlPath(currentOrderData, normalizedOrderId),
-    },
+    data: messageData,
   })
 
   const batch = db.batch()

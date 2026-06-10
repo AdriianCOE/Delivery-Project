@@ -62,7 +62,7 @@ test('publishes only safe normalized store scheduling fields', () => {
   assert.equal(result.enabled, true)
   assert.equal(result.minLeadMinutes, 0)
   assert.equal(result.maxDaysAhead, 365)
-  assert.equal(result.slotIntervalMinutes, 5)
+  assert.equal(result.slotIntervalMinutes, 30)
   assert.deepEqual(result.fulfillmentTypes, { delivery: false, pickup: true })
   assert.deepEqual(result.weeklyWindows.monday, [{ start: '08:00', end: '18:00' }])
   assert.deepEqual(result.blockedDates, ['2026-12-25'])

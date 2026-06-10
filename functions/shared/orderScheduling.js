@@ -30,6 +30,7 @@ const PIX_MANUAL_METHODS = new Set([
   'manual_pix',
   'pix_manual_store',
 ])
+const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
 const MINUTE_MS = 60 * 1000
 const DAY_MS = 24 * 60 * MINUTE_MS
 
@@ -70,10 +71,8 @@ function toNullableBoundedInteger(value, min, max) {
 }
 
 function normalizeSlotInterval(value, fallback = null) {
-  if (value === undefined || value === null || value === '') return fallback
   const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(5, Math.min(1440, Math.floor(parsed)))
+  return ALLOWED_SLOT_INTERVALS.has(parsed) ? parsed : fallback
 }
 
 function normalizeProductSlotInterval(value) {

@@ -244,7 +244,7 @@ function printQr({ svgEl, title, subtitle, url }) {
       <div class="qr-wrap">${svgStr}</div>
       <p class="cta">Escaneie para pedir</p>
       <p class="url">${safeUrl}</p>
-      <script>window.onload = function(){ window.print(); setTimeout(function(){ window.close(); }, 250); }<\/script>
+      <script>window.onload = function(){ window.print(); setTimeout(function(){ window.close(); }, 250); }</script>
     </body>
     </html>
   `)
@@ -454,18 +454,6 @@ function TableCard({ table, storeSlug, storeName, onArchive, onToggleActive, onT
     }
   }
 
-  function handleDownload() {
-    const el = svgRef.current?.querySelector('svg')
-    const ok = downloadQrSvg(el, filename)
-    if (!ok) onToast?.('error', 'Não foi possível baixar o QR da mesa.')
-  }
-
-  function handlePrint() {
-    const el = svgRef.current?.querySelector('svg')
-    const ok = printQr({ svgEl: el, title: storeName, subtitle: table.label, url })
-    if (!ok) onToast?.('error', 'Não foi possível abrir a impressão.')
-  }
-
   async function handleArchive() {
     if (archiving) return
     setArchiving(true)
@@ -554,26 +542,28 @@ function TableCard({ table, storeSlug, storeName, onArchive, onToggleActive, onT
         />
         {/* Download e Impressão desabilitados até o checkout por mesa (Fase 2) estar ativo.
             Evita que lojistas distribuam QR físico antes do fluxo dine_in funcionar. */}
-        <button
-          id={`download-table-${table.id}`}
-          type="button"
-          disabled
-          title="Disponível quando o pedido por mesa estiver ativo"
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
-        >
-          <FiLock size={12} />
-          Baixar
-        </button>
-        <button
-          id={`print-table-${table.id}`}
-          type="button"
-          disabled
-          title="Disponível quando o pedido por mesa estiver ativo"
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
-        >
-          <FiLock size={12} />
-          Imprimir
-        </button>
+        <span title="Disponível quando o pedido por mesa estiver ativo">
+          <button
+            id={`download-table-${table.id}`}
+            type="button"
+            disabled
+            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
+          >
+            <FiLock size={12} />
+            Baixar
+          </button>
+        </span>
+        <span title="Disponível quando o pedido por mesa estiver ativo">
+          <button
+            id={`print-table-${table.id}`}
+            type="button"
+            disabled
+            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
+          >
+            <FiLock size={12} />
+            Imprimir
+          </button>
+        </span>
       </div>
 
       {/* Secondary actions */}

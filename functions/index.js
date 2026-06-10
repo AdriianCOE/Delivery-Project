@@ -2388,8 +2388,10 @@ exports.confirmFirebasePhoneVerified = onCall(PHONE_CALLABLE_OPTIONS, async (req
   })
 })
 
-// Deprecated callable names kept to avoid surprise deletions on deploy.
-// Firebase Phone Auth is the active verification path.
+// Deprecated since the Firebase Phone Auth verification rollout (2026-06).
+// These callable names are legacy compatibility stubs only: do not use them in
+// new flows. New phone verification must use Firebase Phone Auth on the client
+// and confirmFirebasePhoneVerification on the backend.
 exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, async () => {
   throw new HttpsError(
     'failed-precondition',

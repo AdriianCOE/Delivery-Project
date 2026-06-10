@@ -244,6 +244,19 @@ test('ignores product intervals outside the supported UI options', () => {
   assert.equal(result.schedulingSnapshot.slotIntervalMinutes, 30)
 })
 
+test('ignores store intervals outside the supported UI options', () => {
+  const result = decide({
+    storeData: store({ scheduling: { slotIntervalMinutes: 5 } }),
+    input: {
+      orderTiming: 'scheduled',
+      scheduledDate: '2026-06-05',
+      scheduledTime: '14:00',
+    },
+  })
+
+  assert.equal(result.schedulingSnapshot.slotIntervalMinutes, 30)
+})
+
 test('applies the smallest max day limit and product fulfillment restrictions', () => {
   assert.throws(
     () => decide({

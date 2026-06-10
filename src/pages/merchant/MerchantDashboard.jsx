@@ -20,6 +20,7 @@ import { db, functions } from '../../services/firebase'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import FloatingToast from '../../components/ui/FloatingToast'
+import DashboardWelcomeCard from './components/DashboardWelcomeCard'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePresence } from '../../hooks/usePresence'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
@@ -654,6 +655,24 @@ function getScheduledDate(order) {
   return null
 }
 
+function getScheduledPreparationLeadMinutes(order) {
+  const candidates = [
+    order?.schedulingSnapshot?.preparationLeadMinutes,
+    order?.schedulingSnapshot?.prepLeadMinutes,
+    order?.preparationLeadMinutes,
+    order?.schedulingSnapshot?.minLeadMinutes,
+  ]
+
+  for (const candidate of candidates) {
+    const value = Number(candidate)
+    if (!Number.isFinite(value) || value <= 0) continue
+    if (value > 240) continue
+    return Math.floor(value)
+  }
+
+  return 60
+}
+
 function isSameLocalDay(date, reference = new Date()) {
   if (!date) return false
   return (
@@ -675,7 +694,7 @@ function getScheduledOperationalState(order, nowValue = Date.now()) {
 
   const nowMs = typeof nowValue === 'number' ? nowValue : Number(nowValue || Date.now())
   const scheduledMs = scheduledDate.getTime()
-  const dueSoonWindowMs = 60 * 60 * 1000
+  const dueSoonWindowMs = getScheduledPreparationLeadMinutes(order) * 60 * 1000
 
   if (scheduledMs <= nowMs) return 'scheduled_late'
   if (scheduledMs - nowMs <= dueSoonWindowMs) return 'scheduled_due_soon'
@@ -2405,6 +2424,16 @@ subscribeOrders(query(
                 )}
               </div>
             </div>
+
+            <DashboardWelcomeCard
+              user={user}
+              store={selectedStore}
+              storeId={selectedStoreId}
+              ordersTodayCount={dashboardData?.validOrders?.length || 0}
+              pendingOrdersCount={dashboardData?.pendingCount || 0}
+              scheduledTodayCount={dashboardData?.scheduledToday?.length || 0}
+              className="mb-7 sm:mb-8"
+            />
 
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <AnimatedSegmentedControl

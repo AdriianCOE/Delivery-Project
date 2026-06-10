@@ -1235,6 +1235,9 @@ function getFirstName(name) {
 function getOrderTrackingLink(order, store) {
   if (typeof window === 'undefined') return ''
 
+  const trackingToken = String(order?.trackingToken || '').trim()
+  if (!trackingToken) return ''
+
   const orderId = order?.firestoreId || order?.id
 
   if (!orderId) return ''
@@ -3494,7 +3497,7 @@ function OrderModal({
                 </div>
                 {scheduled && scheduledState === 'scheduled_future' && (
                   <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-bold leading-5 text-orange-800 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
-                    Este pedido ainda está fora da janela de preparo. Iniciar preparo agora é uma ação manual.
+                    Este pedido ainda está fora da janela de preparo. O preparo será liberado no horário operacional.
                   </div>
                 )}
                 {scheduled && scheduledState === 'scheduled_late' && (
@@ -3509,7 +3512,7 @@ function OrderModal({
                     const active = status === statusOption
                     const optionIndex = STATUS_FLOW.indexOf(statusOption)
                     const isPreviousStatus = optionIndex < currentIndex
-                    const manualScheduledPrepare = scheduledState === 'scheduled_future' && statusOption === 'preparando'
+                    const blockedScheduledPrepare = scheduledState === 'scheduled_future' && statusOption === 'preparando'
                     const naturalScheduledPrepare = scheduledState === 'scheduled_due_soon' && statusOption === 'preparando'
                     const lateScheduledPrepare = scheduledState === 'scheduled_late' && statusOption === 'preparando'
 
@@ -3522,13 +3525,14 @@ function OrderModal({
                           Boolean(updatingStatus) ||
                           (isFinalStatus && !active) ||
                           isPreviousStatus ||
+                          blockedScheduledPrepare ||
                           (statusOption === 'preparando' && paymentBlocked)
                         }
-                        title={manualScheduledPrepare ? 'Adianta o preparo manualmente' : undefined}
+                        title={blockedScheduledPrepare ? 'Aguarde a janela de preparo' : undefined}
                         className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
                           active
                             ? optionMeta.buttonClass
-                            : manualScheduledPrepare
+                            : blockedScheduledPrepare
                               ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200'
                               : lateScheduledPrepare
                                 ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
@@ -3539,8 +3543,8 @@ function OrderModal({
                       >
                         <Icon size={14} />
                         <span>{optionMeta.label}</span>
-                        {manualScheduledPrepare && (
-                          <span className="text-[9px] font-black uppercase tracking-wide">Manual</span>
+                        {blockedScheduledPrepare && (
+                          <span className="text-[9px] font-black uppercase tracking-wide">Aguarde</span>
                         )}
                         {naturalScheduledPrepare && (
                           <span className="text-[9px] font-black uppercase tracking-wide">Fluxo normal</span>

@@ -7,6 +7,8 @@ const MERCHANT_ORDER_FINAL_STATUSES = new Set(['entregue', 'cancelado'])
 const MERCHANT_ORDER_NOTIFY_STATUSES = new Set(['confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado'])
 const MERCHANT_ORDER_RATE_LIMIT_WINDOW_MS = 60 * 1000
 const MERCHANT_ORDER_RATE_LIMIT_MAX = 60
+const MAX_PREPARATION_LEAD_HINT_MINUTES = 240
+const DEFAULT_PREPARATION_LEAD_MINUTES = 60
 
 function uniqueTruthy(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
@@ -83,6 +85,88 @@ function getMerchantOrderStatusField(status) {
     entregue: 'deliveredAt',
     cancelado: 'canceledAt',
   }[status] || null
+}
+
+function timestampToMillis(value) {
+  if (!value) return null
+  if (typeof value.toMillis === 'function') return value.toMillis()
+  if (typeof value.toDate === 'function') return value.toDate().getTime()
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime()
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (value.seconds !== undefined) return Number(value.seconds) * 1000
+  if (value._seconds !== undefined) return Number(value._seconds) * 1000
+
+  const parsed = new Date(value).getTime()
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function getScheduledOrderMillis(orderData) {
+  const direct = timestampToMillis(
+    orderData?.scheduledFor ||
+    orderData?.scheduledAt ||
+    orderData?.scheduledWindowStart ||
+    orderData?.schedule?.scheduledFor ||
+    orderData?.schedulingSnapshot?.scheduledFor
+  )
+  if (direct !== null) return direct
+
+  const dateKey = String(orderData?.scheduledDateKey || orderData?.scheduledDate || '').trim()
+  const timeLabel = String(orderData?.scheduledTimeLabel || orderData?.scheduledTime || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !/^\d{2}:\d{2}$/.test(timeLabel)) return null
+
+  return timestampToMillis(`${dateKey}T${timeLabel}:00-03:00`)
+}
+
+function getPreparationLeadMinutes(orderData) {
+  const candidates = [
+    orderData?.schedulingSnapshot?.preparationLeadMinutes,
+    orderData?.schedulingSnapshot?.prepLeadMinutes,
+    orderData?.preparationLeadMinutes,
+    orderData?.schedulingSnapshot?.minLeadMinutes,
+  ]
+
+  for (const candidate of candidates) {
+    const value = Number(candidate)
+    if (!Number.isFinite(value) || value <= 0) continue
+    if (value > MAX_PREPARATION_LEAD_HINT_MINUTES) continue
+    return Math.floor(value)
+  }
+
+  return DEFAULT_PREPARATION_LEAD_MINUTES
+}
+
+function isScheduledPreparationWindowOpen(orderData, nowMs = Date.now()) {
+  const scheduledMs = getScheduledOrderMillis(orderData)
+  if (scheduledMs === null) return true
+
+  const preparationStartsAtMs = scheduledMs - (getPreparationLeadMinutes(orderData) * 60 * 1000)
+  return nowMs >= preparationStartsAtMs
+}
+
+async function releaseScheduledSlotReservationIfCanceled({
+  db,
+  admin,
+  transaction,
+  orderId,
+  orderData,
+  previousStatus,
+  nextStatus,
+}) {
+  if (nextStatus !== 'cancelado' || previousStatus === 'cancelado' || orderData?.scheduledSlotReleasedAt) return
+
+  const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
+  if (!scheduledSlotKey) return
+
+  const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
+  const slotSnapshot = await transaction.get(slotRef)
+  if (!slotSnapshot.exists) return
+
+  const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
+  transaction.set(slotRef, {
+    activeOrderCount: Math.max(0, currentCount - 1),
+    orderIds: admin.firestore.FieldValue.arrayRemove(orderId),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true })
 }
 
 function getUserStoreKeysFromProfile(userData) {
@@ -289,6 +373,10 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
     throw new HttpsError('failed-precondition', 'Confirme o pagamento antes de iniciar o preparo.')
   }
 
+  if (nextStatus === 'preparando' && !isScheduledPreparationWindowOpen(orderData)) {
+    throw new HttpsError('failed-precondition', 'Este pedido agendado ainda esta fora da janela de preparo.')
+  }
+
   const statusField = getMerchantOrderStatusField(nextStatus)
   const patch = {
     status: nextStatus,
@@ -317,6 +405,11 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
       canceledBy: uid,
       canceledByStore: true,
       canceledAt: now,
+    }
+
+    if (orderData?.scheduledSlotKey && !orderData?.scheduledSlotReleasedAt) {
+      patch.scheduledSlotReleasedAt = now
+      patch.scheduledSlotReleaseReason = 'merchant_cancel'
     }
   }
 
@@ -572,6 +665,16 @@ function createMerchantOrderFunctions({
         } else {
           throw new HttpsError('invalid-argument', 'Acao invalida.')
         }
+
+        await releaseScheduledSlotReservationIfCanceled({
+          db,
+          admin,
+          transaction,
+          orderId,
+          orderData,
+          previousStatus: normalizeMerchantOrderStatus(orderData?.status),
+          nextStatus,
+        })
 
         transaction.update(orderRef, patch)
 

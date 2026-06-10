@@ -30,6 +30,7 @@ const TERMINAL_PAYMENT_STATUSES = new Set([
   'failed',
   'expired',
 ])
+const SLOT_RELEASE_PAYMENT_STATUSES = new Set(['failed', 'canceled', 'expired'])
 
 function hasValue(value) {
   return value !== undefined && value !== null && value !== ''
@@ -502,6 +503,37 @@ function buildWebhookPaymentPatch({ admin, event, payment, orderData }) {
   })
 }
 
+async function releaseScheduledSlotForOrderPaymentInTransaction({
+  db,
+  admin,
+  transaction,
+  orderRef,
+  orderData,
+  paymentStatus,
+}) {
+  if (!SLOT_RELEASE_PAYMENT_STATUSES.has(paymentStatus)) return {}
+
+  const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
+  if (!scheduledSlotKey || orderData?.scheduledSlotReleasedAt) return {}
+
+  const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
+  const slotSnapshot = await transaction.get(slotRef)
+
+  if (slotSnapshot.exists) {
+    const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
+    transaction.set(slotRef, {
+      activeOrderCount: Math.max(0, currentCount - 1),
+      orderIds: admin.firestore.FieldValue.arrayRemove(orderRef.id),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+  }
+
+  return {
+    scheduledSlotReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+    scheduledSlotReleaseReason: `asaas_${paymentStatus}`,
+  }
+}
+
 function getWebhookOrderReference(payment = {}) {
   const fromExternal = parseAsaasOrderExternalReference(payment.externalReference)
   if (fromExternal.orderId) return fromExternal
@@ -663,14 +695,27 @@ function createAsaasOrderFunctions({
             return { ignored: true, reason: 'order_not_asaas_online' }
           }
 
+          const paymentStatus = mapAsaasOrderPaymentStatus(event)
+          const releasePatch = await releaseScheduledSlotForOrderPaymentInTransaction({
+            db,
+            admin,
+            transaction,
+            orderRef,
+            orderData,
+            paymentStatus,
+          })
+
           transaction.set(eventRef, { ...baseEvent, status: 'processed', processedAt: now }, { merge: true })
-          transaction.set(orderRef, buildWebhookPaymentPatch({ admin, event, payment, orderData }), { merge: true })
+          transaction.set(orderRef, {
+            ...buildWebhookPaymentPatch({ admin, event, payment, orderData }),
+            ...releasePatch,
+          }, { merge: true })
 
           return {
             processed: true,
             orderId: reference.orderId,
             storeId: orderData.storeDocId || orderData.storeId || reference.storeId || '',
-            paymentStatus: mapAsaasOrderPaymentStatus(event),
+            paymentStatus,
           }
         })
 

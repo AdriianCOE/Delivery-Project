@@ -2007,7 +2007,7 @@ if (orderType === 'delivery') {
     }
 
     if (asaasRequiredForSchedule && !asaasOptionAvailable) {
-      return 'Este pedido exige pagamento online, mas a loja ainda nÃ£o ativou o Asaas.'
+      return 'Este pedido exige pagamento online, mas a loja ainda não ativou o Asaas.'
     }
 
     if (asaasRequiredForSchedule && paymentMethod !== 'asaas_online') {

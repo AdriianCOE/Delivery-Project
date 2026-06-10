@@ -1,0 +1,1680 @@
+diff --git a/functions/fcmNotifications.js b/functions/fcmNotifications.js
+index e6d94818..16c3c162 100644
+--- a/functions/fcmNotifications.js
++++ b/functions/fcmNotifications.js
+@@ -84,14 +84,17 @@ function getCustomerStatusPushContent(status, orderId, orderData = null) {
+   }
+ }
+ 
+-function getTrackingUrlPath(orderData, orderId) {
++function getTrackingUrlPath(orderData) {
++  const trackingToken = String(orderData?.trackingToken || '').trim()
++  if (!trackingToken) return null
++
+   const savedPath = String(orderData?.trackingUrlPath || '').trim()
+   if (savedPath.startsWith('/')) return savedPath
+ 
+   const storeSlug = String(orderData?.storeSlug || orderData?.storeId || '').trim()
+-  if (storeSlug) return `/${storeSlug}/pedido/${orderId}`
++  if (storeSlug) return `/${storeSlug}/pedido/${trackingToken}`
+ 
+-  return `/pedido/${orderId}`
++  return `/pedido/${trackingToken}`
+ }
+ 
+ function getCustomerOrderTokenHash({ orderId, trackingToken, token }) {
+@@ -359,16 +362,22 @@ async function sendCustomerOrderStatusPushToOrder({ db, admin, logger, orderId,
+   }
+ 
+   const content = getCustomerStatusPushContent(normalizedStatus, normalizedOrderId, currentOrderData)
++  const trackingUrlPath = getTrackingUrlPath(currentOrderData)
++  const messageData = {
++    type: 'order_status_update',
++    orderId: normalizedOrderId,
++    status: normalizedStatus,
++    title: content.title,
++    body: content.body,
++  }
++
++  if (trackingUrlPath) {
++    messageData.url = trackingUrlPath
++  }
++
+   const response = await admin.messaging().sendEachForMulticast({
+     tokens: tokenDocs.map((entry) => entry.data.token),
+-    data: {
+-      type: 'order_status_update',
+-      orderId: normalizedOrderId,
+-      status: normalizedStatus,
+-      title: content.title,
+-      body: content.body,
+-      url: getTrackingUrlPath(currentOrderData, normalizedOrderId),
+-    },
++    data: messageData,
+   })
+ 
+   const batch = db.batch()
+diff --git a/functions/index.js b/functions/index.js
+index 78afbe74..c7c3ff2b 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -2388,8 +2388,10 @@ exports.confirmFirebasePhoneVerified = onCall(PHONE_CALLABLE_OPTIONS, async (req
+   })
+ })
+ 
+-// Deprecated callable names kept to avoid surprise deletions on deploy.
+-// Firebase Phone Auth is the active verification path.
++// Deprecated since the Firebase Phone Auth verification rollout (2026-06).
++// These callable names are legacy compatibility stubs only: do not use them in
++// new flows. New phone verification must use Firebase Phone Auth on the client
++// and confirmFirebasePhoneVerification on the backend.
+ exports.requestPhoneVerification = onCall({ region: 'southamerica-east1' }, async () => {
+   throw new HttpsError(
+     'failed-precondition',
+diff --git a/functions/merchantOrder.js b/functions/merchantOrder.js
+index 20e39a76..508d0b63 100644
+--- a/functions/merchantOrder.js
++++ b/functions/merchantOrder.js
+@@ -7,6 +7,8 @@ const MERCHANT_ORDER_FINAL_STATUSES = new Set(['entregue', 'cancelado'])
+ const MERCHANT_ORDER_NOTIFY_STATUSES = new Set(['confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado'])
+ const MERCHANT_ORDER_RATE_LIMIT_WINDOW_MS = 60 * 1000
+ const MERCHANT_ORDER_RATE_LIMIT_MAX = 60
++const MAX_PREPARATION_LEAD_HINT_MINUTES = 240
++const DEFAULT_PREPARATION_LEAD_MINUTES = 60
+ 
+ function uniqueTruthy(values) {
+   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+@@ -85,6 +87,88 @@ function getMerchantOrderStatusField(status) {
+   }[status] || null
+ }
+ 
++function timestampToMillis(value) {
++  if (!value) return null
++  if (typeof value.toMillis === 'function') return value.toMillis()
++  if (typeof value.toDate === 'function') return value.toDate().getTime()
++  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime()
++  if (typeof value === 'number') return Number.isFinite(value) ? value : null
++  if (value.seconds !== undefined) return Number(value.seconds) * 1000
++  if (value._seconds !== undefined) return Number(value._seconds) * 1000
++
++  const parsed = new Date(value).getTime()
++  return Number.isNaN(parsed) ? null : parsed
++}
++
++function getScheduledOrderMillis(orderData) {
++  const direct = timestampToMillis(
++    orderData?.scheduledFor ||
++    orderData?.scheduledAt ||
++    orderData?.scheduledWindowStart ||
++    orderData?.schedule?.scheduledFor ||
++    orderData?.schedulingSnapshot?.scheduledFor
++  )
++  if (direct !== null) return direct
++
++  const dateKey = String(orderData?.scheduledDateKey || orderData?.scheduledDate || '').trim()
++  const timeLabel = String(orderData?.scheduledTimeLabel || orderData?.scheduledTime || '').trim()
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !/^\d{2}:\d{2}$/.test(timeLabel)) return null
++
++  return timestampToMillis(`${dateKey}T${timeLabel}:00-03:00`)
++}
++
++function getPreparationLeadMinutes(orderData) {
++  const candidates = [
++    orderData?.schedulingSnapshot?.preparationLeadMinutes,
++    orderData?.schedulingSnapshot?.prepLeadMinutes,
++    orderData?.preparationLeadMinutes,
++    orderData?.schedulingSnapshot?.minLeadMinutes,
++  ]
++
++  for (const candidate of candidates) {
++    const value = Number(candidate)
++    if (!Number.isFinite(value) || value <= 0) continue
++    if (value > MAX_PREPARATION_LEAD_HINT_MINUTES) continue
++    return Math.floor(value)
++  }
++
++  return DEFAULT_PREPARATION_LEAD_MINUTES
++}
++
++function isScheduledPreparationWindowOpen(orderData, nowMs = Date.now()) {
++  const scheduledMs = getScheduledOrderMillis(orderData)
++  if (scheduledMs === null) return true
++
++  const preparationStartsAtMs = scheduledMs - (getPreparationLeadMinutes(orderData) * 60 * 1000)
++  return nowMs >= preparationStartsAtMs
++}
++
++async function releaseScheduledSlotReservationIfCanceled({
++  db,
++  admin,
++  transaction,
++  orderId,
++  orderData,
++  previousStatus,
++  nextStatus,
++}) {
++  if (nextStatus !== 'cancelado' || previousStatus === 'cancelado' || orderData?.scheduledSlotReleasedAt) return
++
++  const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
++  if (!scheduledSlotKey) return
++
++  const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
++  const slotSnapshot = await transaction.get(slotRef)
++  if (!slotSnapshot.exists) return
++
++  const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
++  transaction.set(slotRef, {
++    activeOrderCount: Math.max(0, currentCount - 1),
++    orderIds: admin.firestore.FieldValue.arrayRemove(orderId),
++    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++  }, { merge: true })
++}
++
+ function getUserStoreKeysFromProfile(userData) {
+   return uniqueTruthy([
+     userData?.storeId,
+@@ -289,6 +373,10 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
+     throw new HttpsError('failed-precondition', 'Confirme o pagamento antes de iniciar o preparo.')
+   }
+ 
++  if (nextStatus === 'preparando' && !isScheduledPreparationWindowOpen(orderData)) {
++    throw new HttpsError('failed-precondition', 'Este pedido agendado ainda esta fora da janela de preparo.')
++  }
++
+   const statusField = getMerchantOrderStatusField(nextStatus)
+   const patch = {
+     status: nextStatus,
+@@ -318,6 +406,11 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
+       canceledByStore: true,
+       canceledAt: now,
+     }
++
++    if (orderData?.scheduledSlotKey && !orderData?.scheduledSlotReleasedAt) {
++      patch.scheduledSlotReleasedAt = now
++      patch.scheduledSlotReleaseReason = 'merchant_cancel'
++    }
+   }
+ 
+   if (nextStatus === 'entregue') {
+@@ -573,6 +666,16 @@ function createMerchantOrderFunctions({
+           throw new HttpsError('invalid-argument', 'Acao invalida.')
+         }
+ 
++        await releaseScheduledSlotReservationIfCanceled({
++          db,
++          admin,
++          transaction,
++          orderId,
++          orderData,
++          previousStatus: normalizeMerchantOrderStatus(orderData?.status),
++          nextStatus,
++        })
++
+         transaction.update(orderRef, patch)
+ 
+         return {
+diff --git a/functions/publicOrder.js b/functions/publicOrder.js
+index 05659956..6299b577 100644
+--- a/functions/publicOrder.js
++++ b/functions/publicOrder.js
+@@ -17,6 +17,9 @@ class PublicOrderError extends Error {
+   }
+ }
+ 
++const DEFAULT_SCHEDULED_SLOT_CAPACITY = 20
++const MAX_SCHEDULED_SLOT_CAPACITY = 500
++
+ function fail(code, message) {
+   throw new PublicOrderError(code, message)
+ }
+@@ -839,6 +842,96 @@ function buildFirestoreSchedulingFields(admin, decision) {
+   }
+ }
+ 
++function getScheduledSlotCapacity(store) {
++  const candidates = [
++    store?.scheduling?.maxOrdersPerSlot,
++    store?.scheduling?.slotCapacity,
++    store?.maxScheduledOrdersPerSlot,
++  ]
++
++  for (const candidate of candidates) {
++    const value = Number(candidate)
++    if (!Number.isFinite(value) || value <= 0) continue
++    return Math.max(1, Math.min(MAX_SCHEDULED_SLOT_CAPACITY, Math.floor(value)))
++  }
++
++  return DEFAULT_SCHEDULED_SLOT_CAPACITY
++}
++
++async function reserveScheduledSlotInTransaction({
++  db,
++  admin,
++  transaction,
++  store,
++  storeId,
++  orderRef,
++  schedulingDecision,
++}) {
++  if (schedulingDecision?.orderTiming !== 'scheduled' || !schedulingDecision.scheduledSlotKey) return null
++
++  const slotRef = db.collection('scheduledOrderSlots').doc(schedulingDecision.scheduledSlotKey)
++  const slotSnapshot = await transaction.get(slotRef)
++  const slotData = slotSnapshot.exists ? slotSnapshot.data() || {} : {}
++  const activeOrderCount = Number(slotData.activeOrderCount || 0)
++  const capacity = getScheduledSlotCapacity(store)
++
++  if (activeOrderCount >= capacity) {
++    fail('failed-precondition', 'Este horario acabou de lotar. Escolha outro horario.')
++  }
++
++  transaction.set(slotRef, {
++    storeId,
++    slotKey: schedulingDecision.scheduledSlotKey,
++    scheduledDateKey: schedulingDecision.scheduledDateKey,
++    scheduledTimeLabel: schedulingDecision.scheduledTimeLabel,
++    deliveryType: String(schedulingDecision.scheduledSlotKey || '').split('_').pop() || '',
++    capacity,
++    activeOrderCount: admin.firestore.FieldValue.increment(1),
++    orderIds: admin.firestore.FieldValue.arrayUnion(orderRef.id),
++    scheduledFor: schedulingDecision.scheduledFor
++      ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledFor)
++      : null,
++    scheduledWindowEnd: schedulingDecision.scheduledWindowEnd
++      ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledWindowEnd)
++      : null,
++    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++    ...(slotSnapshot.exists ? {} : {
++      createdAt: admin.firestore.FieldValue.serverTimestamp(),
++    }),
++  }, { merge: true })
++
++  return slotRef
++}
++
++async function releaseScheduledSlotInTransaction({
++  db,
++  admin,
++  transaction,
++  orderRef,
++  orderData,
++  reason,
++}) {
++  const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
++  if (!scheduledSlotKey || orderData?.scheduledSlotReleasedAt) return {}
++
++  const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
++  const slotSnapshot = await transaction.get(slotRef)
++
++  if (slotSnapshot.exists) {
++    const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
++    transaction.set(slotRef, {
++      activeOrderCount: Math.max(0, currentCount - 1),
++      orderIds: admin.firestore.FieldValue.arrayRemove(orderRef.id),
++      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++    }, { merge: true })
++  }
++
++  return {
++    scheduledSlotReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
++    scheduledSlotReleaseReason: String(reason || 'payment_failed').slice(0, 80),
++  }
++}
++
+ function couponDateToMillis(value) {
+   if (!value) return null
+   if (typeof value.toMillis === 'function') return value.toMillis()
+@@ -1627,7 +1720,16 @@ function createPublicOrderHandler({
+           }, { merge: true })
+         }
+ 
+-        // TODO(v2): reserve scheduledSlotKey in a capacity document inside this transaction.
++        await reserveScheduledSlotInTransaction({
++          db,
++          admin,
++          transaction,
++          store: liveStore,
++          storeId: storeDocId,
++          orderRef,
++          schedulingDecision,
++        })
++
+         transaction.set(orderRef, orderPayload)
+ 
+         if (couponResult?.ref) {
+@@ -1647,6 +1749,7 @@ function createPublicOrderHandler({
+             provider: paymentSnapshot.paymentProvider || null,
+             status: paymentSnapshot.paymentStatus || null,
+           },
++          orderTiming: schedulingDecision.orderTiming,
+           totals: {
+             subtotalCents,
+             discountCents,
+@@ -1689,10 +1792,23 @@ function createPublicOrderHandler({
+             error: paymentError?.message || String(paymentError),
+           })
+           onlinePaymentLinkError = paymentError
+-          await orderRefForPayment.set(
+-            buildAsaasLinkCreationFailurePatch({ admin, error: paymentError }),
+-            { merge: true }
+-          )
++          await db.runTransaction(async (transaction) => {
++            const orderSnapshot = await transaction.get(orderRefForPayment)
++            const orderData = orderSnapshot.exists ? orderSnapshot.data() || {} : {}
++            const releasePatch = await releaseScheduledSlotInTransaction({
++              db,
++              admin,
++              transaction,
++              orderRef: orderRefForPayment,
++              orderData,
++              reason: 'asaas_link_creation_failed',
++            })
++
++            transaction.set(orderRefForPayment, {
++              ...buildAsaasLinkCreationFailurePatch({ admin, error: paymentError }),
++              ...releasePatch,
++            }, { merge: true })
++          })
+         }
+       }
+ 
+@@ -1706,8 +1822,11 @@ function createPublicOrderHandler({
+       })
+ 
+       const shouldNotifyNewOrder =
+-        result.payment?.mode !== 'online' ||
+-        result.payment?.status === 'paid'
++        result.orderTiming !== 'scheduled' &&
++        (
++          result.payment?.mode !== 'online' ||
++          result.payment?.status === 'paid'
++        )
+ 
+       if (shouldNotifyNewOrder && typeof sendNewOrderPushToStore === 'function') {
+         try {
+diff --git a/functions/shared/asaasOrders.js b/functions/shared/asaasOrders.js
+index 53dc0054..76acb2a3 100644
+--- a/functions/shared/asaasOrders.js
++++ b/functions/shared/asaasOrders.js
+@@ -30,6 +30,7 @@ const TERMINAL_PAYMENT_STATUSES = new Set([
+   'failed',
+   'expired',
+ ])
++const SLOT_RELEASE_PAYMENT_STATUSES = new Set(['failed', 'canceled', 'expired'])
+ 
+ function hasValue(value) {
+   return value !== undefined && value !== null && value !== ''
+@@ -502,6 +503,37 @@ function buildWebhookPaymentPatch({ admin, event, payment, orderData }) {
+   })
+ }
+ 
++async function releaseScheduledSlotForOrderPaymentInTransaction({
++  db,
++  admin,
++  transaction,
++  orderRef,
++  orderData,
++  paymentStatus,
++}) {
++  if (!SLOT_RELEASE_PAYMENT_STATUSES.has(paymentStatus)) return {}
++
++  const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
++  if (!scheduledSlotKey || orderData?.scheduledSlotReleasedAt) return {}
++
++  const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
++  const slotSnapshot = await transaction.get(slotRef)
++
++  if (slotSnapshot.exists) {
++    const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
++    transaction.set(slotRef, {
++      activeOrderCount: Math.max(0, currentCount - 1),
++      orderIds: admin.firestore.FieldValue.arrayRemove(orderRef.id),
++      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++    }, { merge: true })
++  }
++
++  return {
++    scheduledSlotReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
++    scheduledSlotReleaseReason: `asaas_${paymentStatus}`,
++  }
++}
++
+ function getWebhookOrderReference(payment = {}) {
+   const fromExternal = parseAsaasOrderExternalReference(payment.externalReference)
+   if (fromExternal.orderId) return fromExternal
+@@ -663,14 +695,27 @@ function createAsaasOrderFunctions({
+             return { ignored: true, reason: 'order_not_asaas_online' }
+           }
+ 
++          const paymentStatus = mapAsaasOrderPaymentStatus(event)
++          const releasePatch = await releaseScheduledSlotForOrderPaymentInTransaction({
++            db,
++            admin,
++            transaction,
++            orderRef,
++            orderData,
++            paymentStatus,
++          })
++
+           transaction.set(eventRef, { ...baseEvent, status: 'processed', processedAt: now }, { merge: true })
+-          transaction.set(orderRef, buildWebhookPaymentPatch({ admin, event, payment, orderData }), { merge: true })
++          transaction.set(orderRef, {
++            ...buildWebhookPaymentPatch({ admin, event, payment, orderData }),
++            ...releasePatch,
++          }, { merge: true })
+ 
+           return {
+             processed: true,
+             orderId: reference.orderId,
+             storeId: orderData.storeDocId || orderData.storeId || reference.storeId || '',
+-            paymentStatus: mapAsaasOrderPaymentStatus(event),
++            paymentStatus,
+           }
+         })
+ 
+diff --git a/functions/shared/orderScheduling.js b/functions/shared/orderScheduling.js
+index d4bc1f52..f9e9ad98 100644
+--- a/functions/shared/orderScheduling.js
++++ b/functions/shared/orderScheduling.js
+@@ -30,6 +30,7 @@ const PIX_MANUAL_METHODS = new Set([
+   'manual_pix',
+   'pix_manual_store',
+ ])
++const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
+ const MINUTE_MS = 60 * 1000
+ const DAY_MS = 24 * 60 * MINUTE_MS
+ 
+@@ -70,10 +71,8 @@ function toNullableBoundedInteger(value, min, max) {
+ }
+ 
+ function normalizeSlotInterval(value, fallback = null) {
+-  if (value === undefined || value === null || value === '') return fallback
+   const parsed = Number(value)
+-  if (!Number.isFinite(parsed)) return fallback
+-  return Math.max(5, Math.min(1440, Math.floor(parsed)))
++  return ALLOWED_SLOT_INTERVALS.has(parsed) ? parsed : fallback
+ }
+ 
+ function normalizeProductSlotInterval(value) {
+diff --git a/functions/shared/orderScheduling.test.js b/functions/shared/orderScheduling.test.js
+index 0da9285e..5ceb81ea 100644
+--- a/functions/shared/orderScheduling.test.js
++++ b/functions/shared/orderScheduling.test.js
+@@ -244,6 +244,19 @@ test('ignores product intervals outside the supported UI options', () => {
+   assert.equal(result.schedulingSnapshot.slotIntervalMinutes, 30)
+ })
+ 
++test('ignores store intervals outside the supported UI options', () => {
++  const result = decide({
++    storeData: store({ scheduling: { slotIntervalMinutes: 5 } }),
++    input: {
++      orderTiming: 'scheduled',
++      scheduledDate: '2026-06-05',
++      scheduledTime: '14:00',
++    },
++  })
++
++  assert.equal(result.schedulingSnapshot.slotIntervalMinutes, 30)
++})
++
+ test('applies the smallest max day limit and product fulfillment restrictions', () => {
+   assert.throws(
+     () => decide({
+diff --git a/functions/shared/publicScheduling.js b/functions/shared/publicScheduling.js
+index bba22cc5..05d34f4f 100644
+--- a/functions/shared/publicScheduling.js
++++ b/functions/shared/publicScheduling.js
+@@ -23,6 +23,7 @@ const PRODUCT_PREPAYMENT_POLICIES = new Set([
+   'none',
+   'pix_required',
+ ])
++const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
+ 
+ function isObject(value) {
+   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+@@ -43,10 +44,8 @@ function toNullableBoundedInteger(value, min, max) {
+ }
+ 
+ function normalizeSlotInterval(value, fallback = null) {
+-  if (value === undefined || value === null || value === '') return fallback
+   const parsed = Number(value)
+-  if (!Number.isFinite(parsed)) return fallback
+-  return Math.max(5, Math.min(1440, Math.floor(parsed)))
++  return ALLOWED_SLOT_INTERVALS.has(parsed) ? parsed : fallback
+ }
+ 
+ function normalizeProductSlotInterval(value) {
+diff --git a/functions/shared/publicScheduling.test.js b/functions/shared/publicScheduling.test.js
+index 3c079dd9..6cd9eaf1 100644
+--- a/functions/shared/publicScheduling.test.js
++++ b/functions/shared/publicScheduling.test.js
+@@ -62,7 +62,7 @@ test('publishes only safe normalized store scheduling fields', () => {
+   assert.equal(result.enabled, true)
+   assert.equal(result.minLeadMinutes, 0)
+   assert.equal(result.maxDaysAhead, 365)
+-  assert.equal(result.slotIntervalMinutes, 5)
++  assert.equal(result.slotIntervalMinutes, 30)
+   assert.deepEqual(result.fulfillmentTypes, { delivery: false, pickup: true })
+   assert.deepEqual(result.weeklyWindows.monday, [{ start: '08:00', end: '18:00' }])
+   assert.deepEqual(result.blockedDates, ['2026-12-25'])
+diff --git a/src/components/merchant/GlobalOrderAlert.jsx b/src/components/merchant/GlobalOrderAlert.jsx
+index ef50f3c8..0ff1378f 100644
+--- a/src/components/merchant/GlobalOrderAlert.jsx
++++ b/src/components/merchant/GlobalOrderAlert.jsx
+@@ -26,6 +26,10 @@ import {
+   getOrderCustomerName,
+   hasValidOrderWhatsAppPhone,
+ } from '../../utils/orderSummary'
++import {
++  getScheduledOperationalState,
++  isScheduledOrder,
++} from '../../utils/orderScheduling'
+ 
+ const ALERT_PERMISSION_KEY = '@PratoBy:alertsEnabled'
+ const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
+@@ -289,8 +293,12 @@ export function GlobalOrderAlert() {
+   const notifyNewOrder = useCallback((order) => {
+     const orderId = getOrderId(order)
+     const orderNumber = getOrderDisplayNumber(order, orderId)
++    const scheduledFuture =
++      isScheduledOrder(order) &&
++      getScheduledOperationalState(order, { now: new Date() }) === 'scheduled_future'
+     const internalBody = `${orderNumber} - ${formatMoney(getOrderTotal(order))}`
+     const publicBody = `${orderNumber} aguardando confirmacao`
++    const allowLightNotification = notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+     const allowToast = notificationPreferenceEnabled(preferences, 'channels', 'toast')
+       && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+     const allowSound = notificationPreferenceEnabled(preferences, 'channels', 'sound')
+@@ -300,6 +308,25 @@ export function GlobalOrderAlert() {
+     const allowTitle = notificationPreferenceEnabled(preferences, 'channels', 'title')
+       && notificationPreferenceEnabled(preferences, 'events', 'newOrder')
+ 
++    if (scheduledFuture) {
++      if (allowLightNotification) {
++        addLocalNotification({
++          id: `order:${orderId}`,
++          area: 'orders',
++          channel: 'local_dashboard',
++          sourceType: 'order',
++          sourceId: orderId,
++          title: 'Pedido agendado recebido',
++          message: internalBody,
++          href: '/dashboard/orders?filter=scheduled',
++          severity: 'info',
++          critical: false,
++          createdAt: order?.createdAt || Date.now(),
++        })
++      }
++      return
++    }
++
+     setLatestOrder(allowToast ? order : null)
+     setTitleAlertActive(allowTitle)
+     setCopied(false)
+diff --git a/src/pages/landing/components/ProductDemoSection.tsx b/src/pages/landing/components/ProductDemoSection.tsx
+index 8866eeeb..0615c1b6 100644
+--- a/src/pages/landing/components/ProductDemoSection.tsx
++++ b/src/pages/landing/components/ProductDemoSection.tsx
+@@ -136,7 +136,7 @@ function DashboardScreen() {
+             <LogOut size={7} />
+             Sair da conta
+           </button>
+-          <p className="mt-1 text-center text-[6px] text-slate-700">┬® 2026 PratoBy</p>
++          <p className="mt-1 text-center text-[6px] text-slate-700">© 2026 PratoBy</p>
+         </div>
+       </aside>
+ 
+@@ -423,7 +423,7 @@ export function ProductDemoSection() {
+             </motion.div>
+           </motion.div>
+ 
+-          {/* The laptop container ÔÇö flat 2D */}
++          {/* The laptop container — flat 2D */}
+           <div className="relative flex flex-col items-center">
+             {/* Screen lid + bezel */}
+             <div
+diff --git a/src/pages/merchant/MerchantDashboard.jsx b/src/pages/merchant/MerchantDashboard.jsx
+index 84c12ab2..783e6b40 100644
+--- a/src/pages/merchant/MerchantDashboard.jsx
++++ b/src/pages/merchant/MerchantDashboard.jsx
+@@ -20,6 +20,7 @@ import { db, functions } from '../../services/firebase'
+ import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+ import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
+ import FloatingToast from '../../components/ui/FloatingToast'
++import DashboardWelcomeCard from './components/DashboardWelcomeCard'
+ import { useAuth } from '../../contexts/AuthContext'
+ import { usePresence } from '../../hooks/usePresence'
+ import DashboardFooter from '../../components/layouts/DashboardFooter'
+@@ -654,6 +655,24 @@ function getScheduledDate(order) {
+   return null
+ }
+ 
++function getScheduledPreparationLeadMinutes(order) {
++  const candidates = [
++    order?.schedulingSnapshot?.preparationLeadMinutes,
++    order?.schedulingSnapshot?.prepLeadMinutes,
++    order?.preparationLeadMinutes,
++    order?.schedulingSnapshot?.minLeadMinutes,
++  ]
++
++  for (const candidate of candidates) {
++    const value = Number(candidate)
++    if (!Number.isFinite(value) || value <= 0) continue
++    if (value > 240) continue
++    return Math.floor(value)
++  }
++
++  return 60
++}
++
+ function isSameLocalDay(date, reference = new Date()) {
+   if (!date) return false
+   return (
+@@ -675,7 +694,7 @@ function getScheduledOperationalState(order, nowValue = Date.now()) {
+ 
+   const nowMs = typeof nowValue === 'number' ? nowValue : Number(nowValue || Date.now())
+   const scheduledMs = scheduledDate.getTime()
+-  const dueSoonWindowMs = 60 * 60 * 1000
++  const dueSoonWindowMs = getScheduledPreparationLeadMinutes(order) * 60 * 1000
+ 
+   if (scheduledMs <= nowMs) return 'scheduled_late'
+   if (scheduledMs - nowMs <= dueSoonWindowMs) return 'scheduled_due_soon'
+@@ -2406,6 +2425,16 @@ subscribeOrders(query(
+               </div>
+             </div>
+ 
++            <DashboardWelcomeCard
++              user={user}
++              store={selectedStore}
++              storeId={selectedStoreId}
++              ordersTodayCount={dashboardData?.validOrders?.length || 0}
++              pendingOrdersCount={dashboardData?.pendingCount || 0}
++              scheduledTodayCount={dashboardData?.scheduledToday?.length || 0}
++              className="mb-7 sm:mb-8"
++            />
++
+             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+             <AnimatedSegmentedControl
+               options={PERIOD_OPTIONS.map((opt, i) => ({ label: opt.label, value: i }))}
+@@ -2683,4 +2712,4 @@ subscribeOrders(query(
+         <DashboardFooter store={selectedStore} />
+     </div>
+   )
+-}
+\ No newline at end of file
++}
+diff --git a/src/pages/merchant/OrdersPage.jsx b/src/pages/merchant/OrdersPage.jsx
+index f54a6ec3..d7e31c24 100644
+--- a/src/pages/merchant/OrdersPage.jsx
++++ b/src/pages/merchant/OrdersPage.jsx
+@@ -1235,6 +1235,9 @@ function getFirstName(name) {
+ function getOrderTrackingLink(order, store) {
+   if (typeof window === 'undefined') return ''
+ 
++  const trackingToken = String(order?.trackingToken || '').trim()
++  if (!trackingToken) return ''
++
+   const orderId = order?.firestoreId || order?.id
+ 
+   if (!orderId) return ''
+@@ -3494,7 +3497,7 @@ function OrderModal({
+                 </div>
+                 {scheduled && scheduledState === 'scheduled_future' && (
+                   <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-bold leading-5 text-orange-800 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+-                    Este pedido ainda está fora da janela de preparo. Iniciar preparo agora é uma ação manual.
++                    Este pedido ainda está fora da janela de preparo. O preparo será liberado no horário operacional.
+                   </div>
+                 )}
+                 {scheduled && scheduledState === 'scheduled_late' && (
+@@ -3509,7 +3512,7 @@ function OrderModal({
+                     const active = status === statusOption
+                     const optionIndex = STATUS_FLOW.indexOf(statusOption)
+                     const isPreviousStatus = optionIndex < currentIndex
+-                    const manualScheduledPrepare = scheduledState === 'scheduled_future' && statusOption === 'preparando'
++                    const blockedScheduledPrepare = scheduledState === 'scheduled_future' && statusOption === 'preparando'
+                     const naturalScheduledPrepare = scheduledState === 'scheduled_due_soon' && statusOption === 'preparando'
+                     const lateScheduledPrepare = scheduledState === 'scheduled_late' && statusOption === 'preparando'
+ 
+@@ -3522,13 +3525,14 @@ function OrderModal({
+                           Boolean(updatingStatus) ||
+                           (isFinalStatus && !active) ||
+                           isPreviousStatus ||
++                          blockedScheduledPrepare ||
+                           (statusOption === 'preparando' && paymentBlocked)
+                         }
+-                        title={manualScheduledPrepare ? 'Adianta o preparo manualmente' : undefined}
++                        title={blockedScheduledPrepare ? 'Aguarde a janela de preparo' : undefined}
+                         className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                           active
+                             ? optionMeta.buttonClass
+-                            : manualScheduledPrepare
++                            : blockedScheduledPrepare
+                               ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200'
+                               : lateScheduledPrepare
+                                 ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
+@@ -3539,8 +3543,8 @@ function OrderModal({
+                       >
+                         <Icon size={14} />
+                         <span>{optionMeta.label}</span>
+-                        {manualScheduledPrepare && (
+-                          <span className="text-[9px] font-black uppercase tracking-wide">Manual</span>
++                        {blockedScheduledPrepare && (
++                          <span className="text-[9px] font-black uppercase tracking-wide">Aguarde</span>
+                         )}
+                         {naturalScheduledPrepare && (
+                           <span className="text-[9px] font-black uppercase tracking-wide">Fluxo normal</span>
+diff --git a/src/pages/merchant/PaymentsPage.jsx b/src/pages/merchant/PaymentsPage.jsx
+index 0e570207..d2d3e26b 100644
+--- a/src/pages/merchant/PaymentsPage.jsx
++++ b/src/pages/merchant/PaymentsPage.jsx
+@@ -1,4 +1,4 @@
+-import { useCallback, useEffect, useMemo, useState } from 'react'
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+ import { Link } from 'react-router-dom'
+ import { doc, onSnapshot } from 'firebase/firestore'
+ import { httpsCallable } from 'firebase/functions'
+@@ -511,6 +511,7 @@ export default function PaymentsPage() {
+   const [saving, setSaving] = useState(false)
+   const [toast, setToast] = useState(null)
+   const [form, setForm] = useState(DEFAULT_FORM)
++  const toastTimeoutRef = useRef(null)
+ 
+   const knownStoreIds = useMemo(() => {
+     return uniqueArray([
+@@ -535,15 +536,23 @@ export default function PaymentsPage() {
+   const themeVars = useMemo(() => ({ '--store-theme': selectedStore?.themeColor || DEFAULT_THEME }), [selectedStore?.themeColor])
+ 
+   const showToast = useCallback((type, message) => {
+-  setToast({ type, message })
++    setToast({ type, message })
+ 
+-  if (typeof window !== 'undefined') {
+-    window.clearTimeout(showToast.timeoutId)
+-    showToast.timeoutId = window.setTimeout(() => {
+-      setToast(null)
+-    }, 4500)
+-  }
+-}, [])
++    if (typeof window !== 'undefined') {
++      window.clearTimeout(toastTimeoutRef.current)
++      toastTimeoutRef.current = window.setTimeout(() => {
++        setToast(null)
++      }, 4500)
++    }
++  }, [])
++
++  useEffect(() => {
++    return () => {
++      if (typeof window !== 'undefined') {
++        window.clearTimeout(toastTimeoutRef.current)
++      }
++    }
++  }, [])
+ 
+   useEffect(() => {
+     if (!user?.uid || !knownStoreIds.length) {
+diff --git a/src/pages/merchant/QRCodePage.jsx b/src/pages/merchant/QRCodePage.jsx
+index c45bf949..c05059b2 100644
+--- a/src/pages/merchant/QRCodePage.jsx
++++ b/src/pages/merchant/QRCodePage.jsx
+@@ -244,7 +244,7 @@ function printQr({ svgEl, title, subtitle, url }) {
+       <div class="qr-wrap">${svgStr}</div>
+       <p class="cta">Escaneie para pedir</p>
+       <p class="url">${safeUrl}</p>
+-      <script>window.onload = function(){ window.print(); setTimeout(function(){ window.close(); }, 250); }<\/script>
++      <script>window.onload = function(){ window.print(); setTimeout(function(){ window.close(); }, 250); }</script>
+     </body>
+     </html>
+   `)
+@@ -454,18 +454,6 @@ function TableCard({ table, storeSlug, storeName, onArchive, onToggleActive, onT
+     }
+   }
+ 
+-  function handleDownload() {
+-    const el = svgRef.current?.querySelector('svg')
+-    const ok = downloadQrSvg(el, filename)
+-    if (!ok) onToast?.('error', 'Não foi possível baixar o QR da mesa.')
+-  }
+-
+-  function handlePrint() {
+-    const el = svgRef.current?.querySelector('svg')
+-    const ok = printQr({ svgEl: el, title: storeName, subtitle: table.label, url })
+-    if (!ok) onToast?.('error', 'Não foi possível abrir a impressão.')
+-  }
+-
+   async function handleArchive() {
+     if (archiving) return
+     setArchiving(true)
+@@ -554,26 +542,28 @@ function TableCard({ table, storeSlug, storeName, onArchive, onToggleActive, onT
+         />
+         {/* Download e Impressão desabilitados até o checkout por mesa (Fase 2) estar ativo.
+             Evita que lojistas distribuam QR físico antes do fluxo dine_in funcionar. */}
+-        <button
+-          id={`download-table-${table.id}`}
+-          type="button"
+-          disabled
+-          title="Disponível quando o pedido por mesa estiver ativo"
+-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
+-        >
+-          <FiLock size={12} />
+-          Baixar
+-        </button>
+-        <button
+-          id={`print-table-${table.id}`}
+-          type="button"
+-          disabled
+-          title="Disponível quando o pedido por mesa estiver ativo"
+-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
+-        >
+-          <FiLock size={12} />
+-          Imprimir
+-        </button>
++        <span title="Disponível quando o pedido por mesa estiver ativo">
++          <button
++            id={`download-table-${table.id}`}
++            type="button"
++            disabled
++            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
++          >
++            <FiLock size={12} />
++            Baixar
++          </button>
++        </span>
++        <span title="Disponível quando o pedido por mesa estiver ativo">
++          <button
++            id={`print-table-${table.id}`}
++            type="button"
++            disabled
++            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
++          >
++            <FiLock size={12} />
++            Imprimir
++          </button>
++        </span>
+       </div>
+ 
+       {/* Secondary actions */}
+diff --git a/src/pages/merchant/Statistics.jsx b/src/pages/merchant/Statistics.jsx
+index d2cafd54..ee05a757 100644
+--- a/src/pages/merchant/Statistics.jsx
++++ b/src/pages/merchant/Statistics.jsx
+@@ -228,13 +228,34 @@ function isScheduledOrder(o) {
+   )
+ }
+ function isCounterOrder(o) {
+-  const source = String(o?.source || o?.channel || o?.orderType || o?.type || '').toLowerCase()
+-  return Boolean(o?.isCounterOrder || source.includes('counter') || source.includes('balcao') || source.includes('balcão'))
++  const raw = String(o?.source || o?.channel || o?.orderType || o?.type || o?.fulfillmentType || o?.deliveryType || '').toLowerCase()
++  return Boolean(
++    o?.isCounterOrder ||
++    raw.includes('counter') ||
++    raw.includes('balcao') ||
++    raw.includes('balcão')
++  )
++}
++function isTableOrder(o) {
++  const raw = String(o?.source || o?.channel || o?.orderType || o?.type || o?.fulfillmentType || o?.deliveryType || '').toLowerCase()
++  return Boolean(
++    o?.isTableOrder ||
++    o?.tableId ||
++    o?.tableToken ||
++    o?.tableNumber ||
++    o?.tableLabel ||
++    raw === 'table_qr' ||
++    raw.includes('mesa') ||
++    raw.includes('table') ||
++    raw.includes('dine_in') ||
++    raw.includes('dine-in') ||
++    raw.includes('consumo_local')
++  )
+ }
+ function getFulfillmentType(o) {
+   if (isCounterOrder(o)) return 'counter'
++  if (isTableOrder(o)) return 'table'
+   const raw = String(o?.fulfillmentType || o?.deliveryType || o?.orderType || o?.type || '').toLowerCase()
+-  if (raw.includes('mesa') || raw.includes('table') || raw.includes('dine')) return 'table'
+   if (raw.includes('balcao') || raw.includes('balcão') || raw.includes('counter')) return 'counter'
+   if (raw.includes('retirada') || raw.includes('pickup') || raw.includes('takeout')) return 'pickup'
+   if (o?.isPickup || o?.pickup) return 'pickup'
+@@ -296,6 +317,61 @@ function kpisFrom(orders) {
+   }
+ }
+ 
++function getOrderId(o) { return o?.orderNumber || o?.shortId || o?.id || '' }
++function getCustomerName(o) { return o?.customerName || o?.customer?.name || o?.clientName || o?.name || '' }
++function getCouponCode(o) { return String(o?.couponCode || o?.coupon?.code || o?.coupon?.couponCode || o?.discountCoupon || o?.counterCouponCode || '').trim() }
++function getOrderTimingLabel(o) { return isScheduledOrder(o) ? 'agendado' : 'agora' }
++function getScheduledLabel(o) {
++  const d = getScheduledDate(o)
++  if (d) return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
++  return o?.scheduledTimeLabel || o?.scheduledTime || ''
++}
++function getFulfillmentLabel(o) {
++  const labels = { delivery: 'Delivery', pickup: 'Retirada', counter: 'Balcão', table: 'Mesa / Atendimento local' }
++  return labels[getFulfillmentType(o)] || 'Outro'
++}
++function getPaymentLabel(o) {
++  const labels = { online: 'Pagamento online', pix: 'Pix manual', cash: 'Dinheiro', credit: 'Crédito', debit: 'Débito', card: 'Maquininha', other: 'Outro' }
++  return labels[getPayMethod(o)] || 'Outro'
++}
++function getItemsText(o) {
++  return getItems(o).map(item => {
++    const qty = Number(item.quantity || item.qty || 1)
++    const name = item.name || item.productName || 'Produto'
++    return `${qty}x ${name}`
++  }).join(' | ')
++}
++function makeFileSafe(value) {
++  return String(value || 'loja')
++    .normalize('NFD')
++    .replace(/[\u0300-\u036f]/g, '')
++    .replace(/[^a-zA-Z0-9_-]+/g, '-')
++    .replace(/^-+|-+$/g, '')
++    .toLowerCase()
++    .slice(0, 60) || 'loja'
++}
++function csvCell(value) {
++  const text = value == null ? '' : String(value)
++  const escaped = text.replace(/"/g, '""')
++  return /[;"\r\n]/.test(escaped) ? `"${escaped}"` : escaped
++}
++
++function buildCsv(headers, rows) {
++  const lines = [headers, ...rows].map(row => row.map(csvCell).join(';'))
++  return '\uFEFF' + lines.join('\r\n') + '\r\n'
++}
++function downloadCsv(filename, content) {
++  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
++  const url = URL.createObjectURL(blob)
++  const anchor = document.createElement('a')
++  anchor.href = url
++  anchor.download = filename
++  document.body.appendChild(anchor)
++  anchor.click()
++  anchor.remove()
++  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
++}
++
+ function KpiCard({ icon: Icon, label, value, sub, tone = 'green', delta: d, highlight = false }) {
+   const tones = {
+     green: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+@@ -415,21 +491,23 @@ function Skeleton() {
+ }
+ 
+ // Daily/hourly bar chart
+-function RevenueChart({ series }) {
++function RevenueChart({ series, mode = 'revenue' }) {
+   if (!series?.length) return <Empty icon={FiBarChart2} title="Sem dados" description="Nenhum pedido no período." />
+-  const max = Math.max(...series.map(d => d.revenueCents), 1)
++  const isOrdersMode = mode === 'orders'
++  const max = Math.max(...series.map(d => isOrdersMode ? Number(d.orders || 0) : Number(d.revenueCents || 0)), 1)
+   return (
+     <div className="overflow-x-auto -mx-5 px-5">
+       <div className="flex items-end gap-1 h-24 min-w-[280px]">
+         {series.map(({ label, revenueCents, orders }) => {
+-          const pct = revenueCents > 0 ? Math.max((revenueCents / max) * 100, 5) : 0
++          const value = isOrdersMode ? Number(orders || 0) : Number(revenueCents || 0)
++          const pct = value > 0 ? Math.max((value / max) * 100, 5) : 0
+           return (
+             <div key={label} className="group relative flex flex-1 flex-col items-center gap-1 min-w-[20px]">
+               <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center rounded-lg bg-zinc-900 dark:bg-zinc-700 px-2 py-1.5 text-[9px] font-black text-white whitespace-nowrap z-20 shadow-xl gap-0.5">
+-                <span>{fmt(revenueCents)}</span>
+-                <span className="opacity-70 font-medium">{orders} ped.</span>
++                <span>{isOrdersMode ? `${orders} ped.` : fmt(revenueCents)}</span>
++                <span className="opacity-70 font-medium">{isOrdersMode ? fmt(revenueCents) : `${orders} ped.`}</span>
+               </div>
+-              <div className={`w-full rounded-t-sm transition-all duration-500 ${revenueCents > 0 ? 'bg-[#f97316] hover:bg-[#ea580c] cursor-default' : 'bg-zinc-100 dark:bg-zinc-800'}`} style={{ height: `${pct}%` }} />
++              <div className={`w-full rounded-t-sm transition-all duration-500 ${value > 0 ? 'bg-[#f97316] hover:bg-[#ea580c] cursor-default' : 'bg-zinc-100 dark:bg-zinc-800'}`} style={{ height: `${pct}%` }} />
+               <span className="text-[8px] font-bold text-zinc-400 dark:text-zinc-600 truncate w-full text-center leading-tight">{label}</span>
+             </div>
+           )
+@@ -689,7 +767,9 @@ export default function Statistics() {
+ 
+     // Newer PratoBy dimensions: Asaas online, balcão, agendamento and pickup/delivery.
+     const payments = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
++    const paymentRevenueCents = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
+     const delTypes = { delivery: 0, pickup: 0, counter: 0, table: 0 }
++    const channelRevenueCents = { delivery: 0, pickup: 0, counter: 0, table: 0 }
+     const paymentStatusCounts = { paid: 0, pending: 0, refunded: 0, chargeback: 0, failed: 0 }
+     const peakH = Array(24).fill(0)
+     const timeB = { manhã: 0, tarde: 0, noite: 0, madrugada: 0 }
+@@ -732,6 +812,12 @@ export default function Statistics() {
+       const fulfillment = getFulfillmentType(o)
+       delTypes[fulfillment] = (delTypes[fulfillment] || 0) + 1
+ 
++      if (isRevenueOrder(o)) {
++        const total = getTotalCents(o)
++        paymentRevenueCents[paymentGroup] = (paymentRevenueCents[paymentGroup] || 0) + total
++        channelRevenueCents[fulfillment] = (channelRevenueCents[fulfillment] || 0) + total
++      }
++
+       if (isScheduledOrder(o)) {
+         scheduledCount++
+         if (isCompleted(o)) scheduledCompleted++
+@@ -837,13 +923,23 @@ export default function Statistics() {
+     cur.forEach(o => {
+       if (isCanceled(o)) return
+       const d = getMetricDate(o); if (!d) return
+-      let key = period.days === 0 ? `${d.getHours()}h` : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+-      const p = dayMap.get(key) || { label: key, revenueCents: 0, orders: 0 }
++      let key
++      let sortKey
++      if (period.days === 0) {
++        key = `${d.getHours()}h`
++        sortKey = d.getHours()
++      } else {
++        key = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
++        const dayStart = new Date(d)
++        dayStart.setHours(0, 0, 0, 0)
++        sortKey = dayStart.getTime()
++      }
++      const p = dayMap.get(key) || { label: key, sortKey, revenueCents: 0, orders: 0 }
+       if (isRevenueOrder(o)) p.revenueCents += getTotalCents(o)
+       p.orders++
+       dayMap.set(key, p)
+     })
+-    const dailySeries = Array.from(dayMap.values())
++    const dailySeries = Array.from(dayMap.values()).sort((a, b) => a.sortKey - b.sortKey)
+ 
+     // Best day
+     const bestDay = dailySeries.reduce((best, d) => (!best || d.revenueCents > best.revenueCents) ? d : best, null)
+@@ -871,7 +967,7 @@ export default function Statistics() {
+       ticket, totalCustomers, recurrence, avgDelivery,
+       completedCount: completed.length,
+       revenueOrdersCount: revenueOrders.length,
+-      payments, delTypes, paymentStatusCounts,
++      payments, paymentRevenueCents, delTypes, channelRevenueCents, paymentStatusCounts,
+       scheduledCount, scheduledCompleted, scheduledRevenueCents,
+       counterCount, counterRevenueCents,
+       onlineCount, onlinePaidCount, onlinePendingCount, onlinePaidRate, pixManualCount,
+@@ -885,6 +981,57 @@ export default function Statistics() {
+   const displayedBairros = showAllBairros ? activeBairros : activeBairros.slice(0, 5)
+   const storeName = selectedStore?.name || selectedStore?.storeName || null
+ 
++  const handleExportCsv = useCallback((type) => {
++    const storeSlug = makeFileSafe(storeName || selectedStoreId || 'loja')
++    const periodSlug = makeFileSafe(period.label)
++    const baseName = `pratoby-${type}-${periodSlug}-${storeSlug}.csv`
++
++    if (type === 'pedidos') {
++      const headers = ['id', 'dataCriacao', 'status', 'canal', 'tipoPedido', 'agendadoPara', 'pagamentoMetodo', 'pagamentoStatus', 'clienteNome', 'clienteTelefone', 'bairro', 'cupom', 'desconto', 'taxaEntrega', 'total', 'itens']
++      const rows = data.cur.map(order => [
++        getOrderId(order),
++        getOrderDate(order)?.toLocaleString('pt-BR') || '',
++        normalizeStatus(order?.status),
++        getFulfillmentLabel(order),
++        getOrderTimingLabel(order),
++        getScheduledLabel(order),
++        getPaymentLabel(order),
++        normalizePaymentStatus(order),
++        getCustomerName(order),
++        getPhone(order),
++        getFulfillmentType(order) === 'delivery' ? getNeighborhood(order) : '',
++        getCouponCode(order),
++        fmt(getDiscountCents(order)),
++        fmt(getDeliveryCents(order)),
++        fmt(getTotalCents(order)),
++        getItemsText(order),
++      ])
++      downloadCsv(baseName, buildCsv(headers, rows))
++      return
++    }
++
++    if (type === 'produtos') {
++      const headers = ['produto', 'quantidadeVendida', 'pedidos', 'receita']
++      const rows = data.topProducts.map(product => [product.name, product.qty, product.ordersCount, fmt(product.revenueCents)])
++      downloadCsv(baseName, buildCsv(headers, rows))
++      return
++    }
++
++    if (type === 'bairros') {
++      const headers = ['bairro', 'pedidos', 'pedidosConcluidos', 'receita', 'ticketMedio', 'taxaEntregaMedia', 'percentualPedidos']
++      const rows = data.nbByOrders.map(item => [
++        item.neighborhood,
++        item.ordersCount,
++        item.completedCount,
++        fmt(item.revenueCents),
++        fmt(item.ticketCents),
++        fmt(item.avgFeeCents),
++        `${item.pct}%`,
++      ])
++      downloadCsv(baseName, buildCsv(headers, rows))
++    }
++  }, [data, period.label, selectedStoreId, storeName])
++
+   return (
+     <main className="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 min-h-screen">
+       <DashboardPageHeader
+@@ -919,6 +1066,25 @@ export default function Statistics() {
+             ))}
+           </div>
+ 
++          {/* CSV export */}
++          <label className="sr-only" htmlFor="statistics-csv-export">Exportar CSV</label>
++          <select
++            id="statistics-csv-export"
++            value=""
++            onChange={(event) => {
++              const value = event.target.value
++              if (value) handleExportCsv(value)
++            }}
++            disabled={!data.cur?.length}
++            className="h-9 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-xs font-black text-zinc-700 dark:text-zinc-100 outline-none transition-colors hover:border-orange-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-orange-900/30"
++            title="Exportar dados do período em CSV"
++          >
++            <option value="">Exportar CSV</option>
++            <option value="pedidos">Pedidos do período</option>
++            <option value="produtos">Produtos vendidos</option>
++            <option value="bairros">Bairros/regiões</option>
++          </select>
++
+           {/* Refresh — mesma linha */}
+           <button
+             type="button"
+@@ -1006,7 +1172,7 @@ export default function Statistics() {
+             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+               <KpiCard icon={FiShoppingBag} label="Balcão" tone="purple" value={data.counterCount} sub={`${fmt(data.counterRevenueCents)} presencial`} />
+               <KpiCard icon={FiZap} label="Pagamento online" tone="blue" value={data.onlineCount} sub={data.onlineCount > 0 ? `${data.onlinePaidRate ?? 0}% confirmados` : 'Pix/cartão via Asaas'} />
+-              <KpiCard icon={FiClock} label="Tempo médio" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até entrega" />
++              <KpiCard icon={FiClock} label="Tempo de conclusão" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até finalização" />
+               <KpiCard icon={FiTag} label="Descontos" tone="teal" value={fmt(data.discountCents)} sub={`${data.couponOrders} c/ cupom`} />
+             </div>
+ 
+@@ -1016,7 +1182,7 @@ export default function Statistics() {
+               {/* Gráfico faturamento/pedidos por dia com toggle */}
+               <Card
+                 title={period.days === 0 ? 'Evolução por Hora' : 'Evolução por Dia'}
+-                description="Receita acumulada no período"
++                description={chartMode === 'revenue' ? 'Receita acumulada no período' : 'Volume de pedidos no período'}
+                 icon={FiBarChart2}
+                 iconTone="orange"
+                 fullWidth
+@@ -1030,16 +1196,11 @@ export default function Statistics() {
+                   />
+                 }
+               >
+-                <RevenueChart
+-                  series={chartMode === 'revenue'
+-                    ? data.dailySeries
+-                    : data.dailySeries.map(d => ({ ...d, revenueCents: d.orders * 100 })) /* orders as bar height */
+-                  }
+-                />
++                <RevenueChart series={data.dailySeries} mode={chartMode} />
+                 {data.bestDay && (
+                   <div className="mt-3 flex items-center gap-2 rounded-xl bg-orange-50 dark:bg-orange-500/10 p-3 text-xs font-semibold text-orange-800 dark:text-orange-300">
+                     <FiStar size={13} className="text-[#f97316] shrink-0" />
+-                    <span>Melhor {period.days === 0 ? 'hora' : 'dia'}: <strong>{data.bestDay.label}</strong> — {fmt(data.bestDay.revenueCents)} em {data.bestDay.orders} pedidos</span>
++                    <span>Melhor {period.days === 0 ? 'hora' : 'dia'}: <strong>{data.bestDay.label}</strong> — {chartMode === 'revenue' ? `${fmt(data.bestDay.revenueCents)} em ${data.bestDay.orders} pedidos` : `${data.bestDay.orders} pedidos · ${fmt(data.bestDay.revenueCents)}`}</span>
+                   </div>
+                 )}
+               </Card>
+@@ -1159,7 +1320,7 @@ export default function Statistics() {
+                     { key: 'cash', label: 'Dinheiro', color: 'bg-emerald-500', sub: 'Recebido no balcão/entrega' },
+                     { key: 'other', label: 'Outros', color: 'bg-zinc-400 dark:bg-zinc-600' },
+                   ].map(({ key, label, color, sub }) => (
+-                    <HBar key={key} label={label} sub={sub} value={data.payments[key]} total={data.totalOrders} color={color} />
++                    <HBar key={key} label={label} sub={`${fmt(data.paymentRevenueCents[key])} no período${sub ? ` · ${sub}` : ''}`} value={data.payments[key]} total={data.totalOrders} color={color} />
+                   ))}
+                 </div>
+ 
+@@ -1178,8 +1339,9 @@ export default function Statistics() {
+                         { key: 'delivery', label: 'Delivery', color: 'bg-[#f97316]' },
+                         { key: 'pickup', label: 'Retirada', color: 'bg-blue-500' },
+                         { key: 'counter', label: 'Balcão', color: 'bg-purple-500' },
++                        { key: 'table', label: 'Mesa / Atendimento local', color: 'bg-teal-500' },
+                       ].map(({ key, label, color }) => (
+-                        <HBar key={key} label={label} value={data.delTypes[key]} total={data.totalOrders} color={color} />
++                        <HBar key={key} label={label} sub={`${fmt(data.channelRevenueCents[key])} no período`} value={data.delTypes[key]} total={data.totalOrders} color={color} />
+                       ))}
+                     </div>
+                   </div>
+diff --git a/src/pages/store/CartDrawer.jsx b/src/pages/store/CartDrawer.jsx
+index b193b550..03bf62da 100644
+--- a/src/pages/store/CartDrawer.jsx
++++ b/src/pages/store/CartDrawer.jsx
+@@ -2007,7 +2007,7 @@ if (orderType === 'delivery') {
+     }
+ 
+     if (asaasRequiredForSchedule && !asaasOptionAvailable) {
+-      return 'Este pedido exige pagamento online, mas a loja ainda nÃ£o ativou o Asaas.'
++      return 'Este pedido exige pagamento online, mas a loja ainda não ativou o Asaas.'
+     }
+ 
+     if (asaasRequiredForSchedule && paymentMethod !== 'asaas_online') {
+diff --git a/src/utils/fcmNotifications.js b/src/utils/fcmNotifications.js
+index b11b6c72..0bda138c 100644
+--- a/src/utils/fcmNotifications.js
++++ b/src/utils/fcmNotifications.js
+@@ -147,7 +147,7 @@ function getFcmPayloadType(data = {}) {
+ 
+ function getFcmNotificationUrl(data = {}, type = 'new_order') {
+   if (type === 'order_status_update') {
+-    return data.url || data.trackingUrl || data.trackingPath || '/pedido'
++    return data.url || data.trackingUrl || data.trackingPath || '/'
+   }
+ 
+   return data.url || '/dashboard/orders'
+diff --git a/tests/smoke.spec.js b/tests/smoke.spec.js
+index 72a026de..a51b692c 100644
+--- a/tests/smoke.spec.js
++++ b/tests/smoke.spec.js
+@@ -1,6 +1,23 @@
+ import { test, expect } from '@playwright/test'
+ 
+-test('home carrega sem quebrar', async ({ page }) => {
++test('home publica carrega sem quebrar', async ({ page }) => {
+   await page.goto('/')
+   await expect(page).toHaveTitle(/PratoBy|Cardápio|Delivery/i)
+-})
+\ No newline at end of file
++  await expect(page.locator('body')).toContainText(/PratoBy/i)
++})
++
++test('slug publico demo resolve sem depender de dados privados', async ({ page }) => {
++  await page.goto('/capivaras-lanches')
++  await expect(page).toHaveURL(/capivaras-lanches/)
++  await expect(page.locator('body')).toContainText(/PratoBy|Card[aá]pio|Loja|Carregando|n[aã]o encontrada/i)
++})
++
++test('dashboard sem sessao redireciona para login', async ({ page }) => {
++  await page.goto('/dashboard')
++  await expect(page).toHaveURL(/\/login(?:\?|$)/)
++})
++
++test('rota inexistente mostra 404', async ({ page }) => {
++  await page.goto('/404')
++  await expect(page.locator('body')).toContainText(/Erro\s*404|Rota n[aã]o encontrada/i)
++})
+diff --git a/src/pages/merchant/components/DashboardWelcomeCard.jsx b/src/pages/merchant/components/DashboardWelcomeCard.jsx
+new file mode 100644
+index 00000000..0ab49a1a
+--- /dev/null
++++ b/src/pages/merchant/components/DashboardWelcomeCard.jsx
+@@ -0,0 +1,248 @@
++import { useEffect, useMemo, useState } from 'react'
++import { AnimatePresence, motion } from 'framer-motion'
++import { Link } from 'react-router-dom'
++import {
++  FiArrowRight,
++  FiCoffee,
++  FiEdit3,
++  FiShoppingBag,
++  FiSmile,
++  FiX,
++  FiZap,
++} from 'react-icons/fi'
++
++function getGreeting() {
++  const hour = new Date().getHours()
++
++  if (hour < 5) return 'Boa madrugada'
++  if (hour < 12) return 'Bom dia'
++  if (hour < 18) return 'Boa tarde'
++  return 'Boa noite'
++}
++
++function getFirstName(user, store) {
++  const name =
++    user?.displayName ||
++    user?.name ||
++    user?.firstName ||
++    store?.ownerName ||
++    ''
++
++  return String(name).trim().split(/\s+/)[0] || 'chef'
++}
++
++function getStoreName(store) {
++  return store?.name || store?.storeName || store?.displayName || 'sua loja'
++}
++
++function getTodayKey() {
++  const now = new Date()
++  return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`
++}
++
++const dailyMissions = [
++  'Dê uma olhada nos pedidos pendentes antes do movimento começar.',
++  'Confira se os produtos principais estão disponíveis no cardápio.',
++  'Revise seus pagamentos e evite pedido parado por falta de confirmação.',
++  'Compartilhe o QR Code do cardápio e facilite o pedido do cliente.',
++  'Veja suas estatísticas e descubra o que mais vendeu no período.',
++]
++
++function getMissionOfTheDay() {
++  const date = new Date()
++  const index = date.getDate() % dailyMissions.length
++  return dailyMissions[index]
++}
++
++export default function DashboardWelcomeCard({
++  user,
++  store,
++  storeId,
++  ordersTodayCount = 0,
++  pendingOrdersCount = 0,
++  scheduledTodayCount = 0,
++  className = '',
++}) {
++  const [visible, setVisible] = useState(false)
++
++  const storageKey = useMemo(() => {
++    const uid = user?.uid || user?.id || 'anon'
++    const sid = store?.id || storeId || 'store'
++    return `pratoby:dashboard-welcome:${uid}:${sid}:${getTodayKey()}`
++  }, [user?.uid, user?.id, store?.id, storeId])
++
++useEffect(() => {
++  let hiddenToday = false
++
++  try {
++    hiddenToday = localStorage.getItem(storageKey) === 'hidden'
++  } catch {
++    hiddenToday = false
++  }
++
++  if (hiddenToday) {
++    setVisible(false)
++    return undefined
++  }
++
++  const timer = window.setTimeout(() => {
++    setVisible(true)
++  }, 450)
++
++  return () => window.clearTimeout(timer)
++}, [storageKey])
++
++const handleDismiss = () => {
++  try {
++    localStorage.setItem(storageKey, 'hidden')
++  } catch {
++    // LocalStorage indisponível não deve quebrar o dashboard.
++  }
++
++  setVisible(false)
++}
++
++
++  const greeting = getGreeting()
++  const firstName = getFirstName(user, store)
++  const storeName = getStoreName(store)
++  const mission = getMissionOfTheDay()
++
++return (
++  <AnimatePresence>
++    {visible ? (
++      <motion.section
++        initial={{ opacity: 0, y: 18, scale: 0.985 }}
++        animate={{ opacity: 1, y: 0, scale: 1 }}
++        exit={{ opacity: 0, y: -8, scale: 0.99 }}
++        transition={{
++          type: 'spring',
++          stiffness: 180,
++          damping: 22,
++          mass: 0.85,
++        }}
++        className={`relative overflow-hidden rounded-[2rem] border border-orange-200/70 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-5 shadow-sm dark:border-orange-400/20 dark:from-orange-500/10 dark:via-slate-950 dark:to-amber-500/10 sm:p-6 ${className}`}
++      >
++      <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-orange-300/20 blur-3xl" />
++      <div className="pointer-events-none absolute -bottom-16 left-10 h-44 w-44 rounded-full bg-amber-300/20 blur-3xl" />
++
++        <button
++        type="button"
++        onClick={handleDismiss}
++        title="Ocultar por hoje"
++        className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-orange-200/70 bg-white/80 text-slate-500 shadow-sm transition hover:scale-105 hover:text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:text-white"
++        aria-label="Ocultar mensagem de boas-vindas por hoje"
++        >
++        <FiX className="h-4 w-4" />
++        </button>
++
++      <div className="relative pr-10">
++        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700 shadow-sm dark:border-orange-400/20 dark:bg-white/10 dark:text-orange-200">
++          <FiZap className="h-3.5 w-3.5" />
++          Painel pronto
++        </div>
++
++        <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
++          <div>
++            <div className="mb-3 flex items-center gap-3">
++              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
++                <FiSmile className="h-6 w-6" />
++              </div>
++
++              <div>
++                <h2 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">
++                  {greeting}, {firstName}! 👋
++                </h2>
++                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
++                  Bora deixar a <span className="font-bold text-orange-700 dark:text-orange-200">{storeName}</span> vendendo bonito hoje?
++                </p>
++              </div>
++            </div>
++
++            <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
++              Seu painel está pronto para acompanhar pedidos, cuidar do cardápio,
++              ver pagamentos e manter a operação redondinha sem correria.
++            </p>
++
++            <div className="mt-4 rounded-2xl border border-orange-200/70 bg-white/75 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
++              <div className="flex items-start gap-3">
++                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200">
++                  <FiCoffee className="h-4 w-4" />
++                </div>
++
++                <div>
++                  <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
++                    Missão de hoje
++                  </p>
++                  <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
++                    {mission}
++                  </p>
++                </div>
++              </div>
++            </div>
++          </div>
++
++          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
++            <div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
++              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
++                Hoje
++              </p>
++              <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">
++                {ordersTodayCount}
++              </p>
++              <p className="text-xs text-slate-500 dark:text-slate-400">
++                pedidos no período
++              </p>
++            </div>
++
++            <div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
++              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
++                Atenção
++              </p>
++              <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">
++                {pendingOrdersCount}
++              </p>
++              <p className="text-xs text-slate-500 dark:text-slate-400">
++                pedidos pendentes
++              </p>
++            </div>
++
++            <div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
++              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
++                Agendados
++              </p>
++              <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">
++                {scheduledTodayCount}
++              </p>
++              <p className="text-xs text-slate-500 dark:text-slate-400">
++                para hoje
++              </p>
++            </div>
++          </div>
++        </div>
++
++        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
++          <Link
++            to="/dashboard/orders"
++            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
++          >
++            <FiShoppingBag className="h-4 w-4" />
++            Ver pedidos
++            <FiArrowRight className="h-4 w-4" />
++          </Link>
++
++          <Link
++            to="/dashboard/menu"
++            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white/80 px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
++          >
++            <FiEdit3 className="h-4 w-4" />
++            Editar cardápio
++          </Link>
++
++                    </div>
++                </div>
++            </motion.section>
++        ) : null}
++    </AnimatePresence>
++    )
++}
+\ No newline at end of file
+diff --git a/src/utils/publicScheduling.test.js b/src/utils/publicScheduling.test.js
+new file mode 100644
+index 00000000..141c47b2
+--- /dev/null
++++ b/src/utils/publicScheduling.test.js
+@@ -0,0 +1,132 @@
++import test from 'node:test'
++import assert from 'node:assert/strict'
++import { getCartSchedulingState } from './publicScheduling.js'
++
++const NOW = new Date('2026-06-01T12:00:00-03:00')
++
++function weeklyWindows(days) {
++  return {
++    sunday: [],
++    monday: [],
++    tuesday: [],
++    wednesday: [],
++    thursday: [],
++    friday: [],
++    saturday: [],
++    ...days,
++  }
++}
++
++function storeScheduling(overrides = {}) {
++  return {
++    publicScheduling: {
++      enabled: true,
++      minLeadMinutes: 0,
++      maxDaysAhead: 3,
++      slotIntervalMinutes: 30,
++      fulfillmentTypes: { delivery: true, pickup: true },
++      weeklyWindows: weeklyWindows({
++        monday: [{ start: '14:00', end: '16:00' }],
++        tuesday: [{ start: '14:00', end: '16:00' }],
++      }),
++      blockedDates: [],
++      prepaymentPolicy: 'none',
++      ...overrides,
++    },
++  }
++}
++
++function state({ store = storeScheduling(), items = [{}], orderTiming = 'asap' } = {}) {
++  return getCartSchedulingState({
++    store,
++    items,
++    fulfillmentType: 'delivery',
++    orderTiming,
++    now: NOW,
++  })
++}
++
++test('normaliza carrinho comum como asap com agendamento opcional', () => {
++  const result = state()
++
++  assert.equal(result.requiresScheduling, false)
++  assert.equal(result.canOrderNow, true)
++  assert.equal(result.canSchedule, true)
++  assert.equal(result.blockingMessage, '')
++})
++
++test('scheduled_only exige agendamento e bloqueia pedir agora', () => {
++  const result = state({
++    items: [{ id: 'cake', scheduling: { mode: 'scheduled_only' } }],
++    orderTiming: 'scheduled',
++  })
++
++  assert.equal(result.requiresScheduling, true)
++  assert.equal(result.canOrderNow, false)
++  assert.equal(result.canSchedule, true)
++})
++
++test('asap_only bloqueia escolha de horario agendado', () => {
++  const result = state({
++    items: [{ id: 'fries', scheduling: { mode: 'asap_only' } }],
++    orderTiming: 'scheduled',
++  })
++
++  assert.equal(result.canOrderNow, true)
++  assert.equal(result.canSchedule, false)
++  assert.match(result.blockingMessage, /regras diferentes/i)
++})
++
++test('lead time remove slots antes da antecedencia minima', () => {
++  const result = state({
++    store: storeScheduling({
++      minLeadMinutes: 180,
++      slotIntervalMinutes: 60,
++      weeklyWindows: weeklyWindows({
++        monday: [{ start: '13:00', end: '17:00' }],
++      }),
++    }),
++    orderTiming: 'scheduled',
++  })
++
++  assert.equal(result.availableDates[0].dateKey, '2026-06-01')
++  assert.deepEqual(result.availableDates[0].slots.map((slot) => slot.time), ['15:00', '16:00'])
++})
++
++test('datas bloqueadas removem o dia da agenda', () => {
++  const result = state({
++    store: storeScheduling({
++      blockedDates: ['2026-06-01'],
++    }),
++    orderTiming: 'scheduled',
++  })
++
++  assert.equal(result.availableDates[0].dateKey, '2026-06-02')
++})
++
++test('janelas por dia limitam os dias disponiveis', () => {
++  const result = state({
++    store: storeScheduling({
++      weeklyWindows: weeklyWindows({
++        tuesday: [{ start: '10:00', end: '11:00' }],
++      }),
++    }),
++    orderTiming: 'scheduled',
++  })
++
++  assert.deepEqual(result.availableDates.map((date) => date.dateKey), ['2026-06-02'])
++})
++
++test('intervalo de slots respeita 10 minutos', () => {
++  const result = state({
++    store: storeScheduling({
++      slotIntervalMinutes: 10,
++      weeklyWindows: weeklyWindows({
++        monday: [{ start: '14:30', end: '15:00' }],
++      }),
++    }),
++    orderTiming: 'scheduled',
++  })
++
++  assert.deepEqual(result.availableDates[0].slots.map((slot) => slot.time), ['14:30', '14:40', '14:50'])
++})

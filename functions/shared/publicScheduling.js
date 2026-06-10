@@ -23,6 +23,7 @@ const PRODUCT_PREPAYMENT_POLICIES = new Set([
   'none',
   'pix_required',
 ])
+const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -43,10 +44,8 @@ function toNullableBoundedInteger(value, min, max) {
 }
 
 function normalizeSlotInterval(value, fallback = null) {
-  if (value === undefined || value === null || value === '') return fallback
   const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(5, Math.min(1440, Math.floor(parsed)))
+  return ALLOWED_SLOT_INTERVALS.has(parsed) ? parsed : fallback
 }
 
 function normalizeProductSlotInterval(value) {

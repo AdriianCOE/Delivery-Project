@@ -136,7 +136,7 @@ function DashboardScreen() {
             <LogOut size={7} />
             Sair da conta
           </button>
-          <p className="mt-1 text-center text-[6px] text-slate-700">┬® 2026 PratoBy</p>
+          <p className="mt-1 text-center text-[6px] text-slate-700">© 2026 PratoBy</p>
         </div>
       </aside>
 
@@ -423,7 +423,7 @@ export function ProductDemoSection() {
             </motion.div>
           </motion.div>
 
-          {/* The laptop container ÔÇö flat 2D */}
+          {/* The laptop container — flat 2D */}
           <div className="relative flex flex-col items-center">
             {/* Screen lid + bezel */}
             <div

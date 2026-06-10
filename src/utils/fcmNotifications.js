@@ -147,7 +147,7 @@ function getFcmPayloadType(data = {}) {
 
 function getFcmNotificationUrl(data = {}, type = 'new_order') {
   if (type === 'order_status_update') {
-    return data.url || data.trackingUrl || data.trackingPath || '/pedido'
+    return data.url || data.trackingUrl || data.trackingPath || '/'
   }
 
   return data.url || '/dashboard/orders'
