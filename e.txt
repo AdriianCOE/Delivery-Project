@@ -1,0 +1,152 @@
+Você está trabalhando no projeto PratoBy.
+
+Contexto: duas auditorias externas analisaram o repomix/diff recente. O núcleo de pedidos agendados foi aprovado: reserva transacional de slot, capacidade, liberação em cancelamento/falha Asaas, bloqueio de preparo antes da janela e alertas leves para agendados futuros estão corretos. Agora faça uma rodada pequena de correções finais de higiene, UX e regras explícitas.
+
+Não implemente QR de mesa/dine_in agora.
+
+Objetivo do patch:
+Corrigir somente os pontos pendentes das auditorias sem refatorar a arquitetura.
+
+Escopo permitido:
+
+1. Higiene do repositório
+
+* Remover qualquer `.diff` commitado na raiz, especialmente `pratoby-agendamento-sem-dist.diff`, se estiver versionado.
+* Não apagar arquivos locais úteis se não estiverem versionados; apenas remover do Git quando necessário.
+* Adicionar ao `.gitignore`:
+
+  * `*.diff`
+  * `*.patch`
+  * `*repomix*.xml`
+  * `repomix-output.xml`
+* Não incluir `dist`, `node_modules`, `functions/node_modules`, `.firebase`, `coverage`, `.diff`, `.patch` ou `repomix` no diff final.
+
+2. OrdersPage ler filtro pela URL
+
+* Arquivo provável: `src/pages/merchant/OrdersPage.jsx`.
+* Adicionar suporte para `?filter=scheduled`.
+* Se o lojista abrir `/dashboard/orders?filter=scheduled`, a página deve iniciar/ativar o filtro de pedidos agendados.
+* Se a rota já estiver aberta e o query param mudar, o filtro também deve atualizar.
+* Usar o estado/filtro já existente da página. Não criar sistema novo de filtros.
+* Validar valores permitidos. Se `filter` for inválido, manter comportamento padrão.
+* Não quebrar os filtros manuais já existentes.
+
+3. Links de agendados apontarem para o filtro certo
+
+* Arquivo provável: `src/pages/merchant/MerchantDashboard.jsx`.
+* Em cards/agenda/seção de pedidos agendados, links para pedidos agendados devem ir para:
+
+  * `/dashboard/orders?filter=scheduled`
+* Arquivo provável: `src/components/merchant/GlobalOrderAlert.jsx`.
+* Confirmar que notificações leves de pedido agendado usam link compatível com o filtro:
+
+  * `/dashboard/orders?filter=scheduled`
+* Pedido imediato deve continuar indo para a tela de pedidos normal, sem quebrar alerta forte.
+
+4. Regra explícita para scheduledOrderSlots
+
+* Arquivo: `firestore.rules`.
+* Adicionar regra explícita e comentada para a collection `scheduledOrderSlots`.
+* Como essa collection é operacional e manipulada por Admin SDK/Cloud Functions, o client não deve ler nem escrever diretamente.
+* Exemplo de intenção:
+
+  * `allow read, write: if false;`
+* Colocar comentário explicando que Cloud Functions via Admin SDK ignoram rules e que a collection é usada para capacidade de agendamento.
+* Não abrir leitura pública.
+* Não permitir escrita por lojista/client.
+
+5. Asaas Orders dedupe
+
+* Arquivo provável: `functions/shared/asaasOrders.js` e/ou `functions/publicOrder.js`.
+* Auditar o TODO/risco citado pela análise sobre deduplicação de payment link.
+* Se o código já reutiliza `paymentUrl`, `invoiceUrl`, `providerPaymentLinkId` ou cobrança existente antes de criar nova, não alterar lógica. Apenas ajustar comentário/TODO se estiver enganoso.
+* Se ainda houver risco real simples de duplicar cobrança para o mesmo pedido, corrigir com o menor guard possível:
+
+  * reusar link/cobrança existente;
+  * não migrar arquitetura para `/payments`;
+  * não criar nova feature.
+* Garantir que falha de criação de link Asaas continue liberando `scheduledOrderSlots`.
+
+6. termsVersion
+
+* Auditar ocorrência de `termsVersion` hardcoded.
+* Se já estiver centralizado em `config/legal` ou equivalente, não alterar e reportar falso positivo.
+* Se houver duplicação real simples, centralizar o valor sem mudar o valor atual.
+* Não migrar para Firestore agora.
+* Não criar fluxo novo de aceite de termos.
+
+7. Handler legado de telefone
+
+* Auditar `_requestPhoneVerificationLegacyHandler`.
+* Se ele já lança `failed-precondition` e está claramente deprecado, não alterar além de comentário, se necessário.
+* Se ainda estiver confuso, adicionar comentário explícito:
+
+  * legado;
+  * não usar em fluxos novos;
+  * qual fluxo substitui;
+  * motivo de manter temporariamente.
+* Não refatorar grande nem mover arquivos se isso aumentar risco.
+
+8. Slots abandonados / TTL
+
+* Não implementar scheduler novo agora, a menos que já exista infraestrutura clara e segura.
+* Apenas confirmar no relatório se ainda existe risco de slot preso caso webhook Asaas nunca chegue.
+* Se existir, deixar TODO técnico claro e não bloqueante em local apropriado, sem alterar comportamento de produção.
+
+9. Encoding/mojibake
+
+* Procurar mojibake real em linhas adicionadas:
+
+  * `├`
+  * `┬`
+  * `Ã`
+  * `Â`
+  * `�`
+  * `ÔÇ`
+* Corrigir textos quebrados.
+* Não alterar acentos válidos.
+* Manter arquivos fonte em UTF-8 sem BOM.
+
+Fora do escopo:
+
+* Não implementar `StoreFrontPage ?table=token`.
+* Não implementar `CartDrawer dine_in`.
+* Não alterar `publicOrder.js` para validar mesa.
+* Não reativar baixar/imprimir QR de mesa.
+* Não ativar `ENFORCE_APP_CHECK`.
+* Não alterar `CLEANUP_ANONYMOUS_USERS`.
+* Não migrar Asaas para `/payments`.
+* Não mexer em `dist`.
+* Não fazer refactor grande de OrdersPage, Dashboard ou Functions.
+* Não mudar regras de cobrança/assinatura.
+
+Validação obrigatória:
+
+* `npm.cmd run build`
+* `npm.cmd run lint -- --quiet`
+* `node --test functions/shared/orderScheduling.test.js`
+* `node --test functions/shared/publicScheduling.test.js`
+* `node --test src/utils/publicScheduling.test.js`
+* `node --check functions/publicOrder.js`
+* `node --check functions/merchantOrder.js`
+* `node --check functions/shared/asaasOrders.js`
+* `git diff --check`
+
+Antes de finalizar:
+
+* Rodar `git status --short`.
+* Confirmar que não há `dist`, `node_modules`, `.diff`, `.patch` ou `repomix` staged.
+* Gerar diff final UTF-8 sem BOM, sem artefatos.
+
+Resumo final obrigatório:
+
+* Arquivos alterados.
+* O que foi corrigido.
+* O que era falso positivo.
+* O que ficou pendente propositalmente.
+* Se `OrdersPage` agora respeita `?filter=scheduled`.
+* Se `scheduledOrderSlots` tem regra explícita no `firestore.rules`.
+* Se Asaas dedupe era real ou falso positivo.
+* Se não há mojibake em linhas adicionadas.
+* Se build/lint/testes passaram.
+* SHA-256 do diff final.
