@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getItemDisplayOptionGroups } from '../../utils/orderItems'
 import {
@@ -199,6 +200,7 @@ const TIMING_FILTERS = [
   { key: 'scheduled', label: 'Agendados' },
   { key: 'all', label: 'Todos' },
 ]
+const TIMING_FILTER_KEYS = new Set(TIMING_FILTERS.map((filter) => filter.key))
 
 const STATUS_TABS = [...MAIN_STATUS_TABS, ...MORE_STATUS_TABS]
 const MORE_STATUS_FILTER_KEYS = new Set(MORE_STATUS_TABS.map((tab) => tab.key))
@@ -3567,6 +3569,7 @@ function OrderModal({
 }
 
 export default function OrdersPage() {
+  const location = useLocation()
   const {
     user,
     userData,
@@ -3637,6 +3640,12 @@ export default function OrdersPage() {
     const interval = window.setInterval(() => setSlaNow(Date.now()), 30000)
     return () => window.clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    const queryFilter = new URLSearchParams(location.search).get('filter')
+    if (!queryFilter || !TIMING_FILTER_KEYS.has(queryFilter)) return
+    setTimingFilter(queryFilter)
+  }, [location.search])
 
   useEffect(() => {
     if (!moreFiltersOpen) return undefined

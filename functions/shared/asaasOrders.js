@@ -293,9 +293,10 @@ async function callAsaasOrdersApi({ apiKey, path, method = 'POST', body }) {
 }
 
 function buildOrderPaymentLinkPayload({ orderData, storeData }) {
-  // TODO(asaas-orders-production): paymentLinks can create a new charge every time
-  // the payer fills the link. Keep this behind a pilot flag and move to /payments
-  // with a single Asaas customer/charge before broad production rollout.
+  // createOrderPaymentLink reuses paymentUrl/invoiceUrl already saved on the
+  // order, so retries do not create another payment link for the same order.
+  // TODO(asaas-orders-production): Asaas paymentLinks may still create a new
+  // charge when the payer fills the link; move to /payments before broad rollout.
   const totalCents = Math.max(0, toCents(orderData.totalCents || orderData.payment?.amountCents))
   const maxInstallmentCount = normalizeAsaasPublicConfig(storeData).maxInstallmentCount
   const dueDateLimitDays = toPositiveInteger(storeData.payments?.asaas?.dueDateLimitDays, 2, 1, 30)
@@ -378,6 +379,8 @@ async function createOrderPaymentLink({ admin, logger, apiKey, orderRef, orderDa
     }
   }
 
+  // TODO(scheduled-slots-ttl): add a safe cleanup path for pending scheduled
+  // slots if the customer never pays and no Asaas webhook is received.
   const response = await callAsaasOrdersApi({
     apiKey,
     path: '/paymentLinks',

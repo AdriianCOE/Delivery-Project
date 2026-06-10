@@ -1261,7 +1261,7 @@ function ScheduledAgendaSection({ scheduledFuture = [], scheduledToday = [] }) {
           </p>
         </div>
         <Link
-          to="/dashboard/orders"
+          to="/dashboard/orders?filter=scheduled"
           className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-50 px-3 text-xs font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
         >
           Ver todos <FiChevronRight size={12} />
@@ -1360,7 +1360,7 @@ function AttentionAlerts({ urgentOrders, priceReviewOrders, paymentPendingOrders
       icon: FiCalendar,
       title: `${scheduledLateOrders.length} agendamento${scheduledLateOrders.length > 1 ? 's' : ''} em atenção`,
       description: 'Agendamentos com horário próximo ou já ultrapassado.',
-      cta: { label: 'Ver pedidos', to: '/dashboard/orders' },
+      cta: { label: 'Ver pedidos', to: '/dashboard/orders?filter=scheduled' },
     })
   }
 
@@ -2043,7 +2043,7 @@ subscribeOrders(query(
         title: 'Agendamentos precisam de atenção',
         description: 'Há pedidos agendados próximos do horário de preparo ou já atrasados.',
         cta: 'Ver agendados',
-        href: '/dashboard/orders',
+        href: '/dashboard/orders?filter=scheduled',
         tone: 'amber',
       }
     }

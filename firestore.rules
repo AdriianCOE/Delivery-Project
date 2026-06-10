@@ -562,6 +562,13 @@ function validPublicOrderCreate(orderId) {
       }
     }
 
+    // Operational capacity reservations for scheduled orders.
+    // Cloud Functions using the Admin SDK bypass these rules; clients must not
+    // read or write this collection directly.
+    match /scheduledOrderSlots/{slotId} {
+      allow read, write: if false;
+    }
+
     match /auditLogs/{logId} {
       allow get, list: if isAdmin() || ownsStoreScopedData(resource.data);
       allow create, update, delete: if false;
