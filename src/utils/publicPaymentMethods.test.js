@@ -27,10 +27,8 @@ test('Mercado Pago online fica disponível quando a configuração pública est�
 
   assert.equal(isPublicMercadoPagoOnlineAllowed(store), true)
   assert.deepEqual(getPublicMercadoPagoConfig(store), {
-    provider: 'mercadopago',
     enabled: true,
     status: 'active',
-    environment: 'sandbox',
     allowPix: true,
     allowCreditCard: true,
     maxInstallmentCount: 1,

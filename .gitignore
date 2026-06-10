@@ -5,6 +5,7 @@
 
 .firebase/
 repomix-output.xml
+dist/
 
 # Playwright
 node_modules/

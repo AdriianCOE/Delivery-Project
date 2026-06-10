@@ -207,10 +207,8 @@ export function getPublicMercadoPagoConfig(store) {
   const minOrderCents = Number(mercadoPago.minOrderCents)
 
   return {
-    provider: 'mercadopago',
     enabled: mercadoPago.enabled === true && status === 'active',
     status: status || 'not_connected',
-    environment: ['sandbox', 'production'].includes(mercadoPago.environment) ? mercadoPago.environment : 'sandbox',
     allowPix: mercadoPago.allowPix !== false,
     allowCreditCard: mercadoPago.allowCreditCard !== false,
     maxInstallmentCount: Number.isInteger(maxInstallmentCount) && maxInstallmentCount > 1
@@ -252,7 +250,7 @@ export function getPublicPreorderPaymentPolicy(store) {
   }
 }
 
-export function isPublicAsaasOnlineAllowed(store) {
+export function isPublicAsaasOnlineAllowed(_store) {
   return false
 }
 

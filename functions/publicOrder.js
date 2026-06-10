@@ -1236,7 +1236,7 @@ function buildPixPaymentSnapshot({ store, totalCents, storeSlug, trackingToken }
 
   return {
     method: 'pix_manual',
-    label: 'Pix',
+    label: 'Pix com comprovante',
     status: 'pending',
     amount: centsToMoney(totalCents),
     amountCents: totalCents,
@@ -1260,9 +1260,9 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
   const paymentMethods = store?.paymentMethods || {}
 
   if (['pix', 'pix_manual', 'manual_pix', 'pix_manual_store'].includes(method)) {
-    if (paymentMethods.pix === false) fail('failed-precondition', 'Pix indisponivel para esta loja.')
+    if (paymentMethods.pix === false) fail('failed-precondition', 'Pix indisponível para esta loja.')
     const pixSnapshot = buildPixPaymentSnapshot({ store, totalCents, trackingToken, storeSlug })
-    if (!pixSnapshot) fail('failed-precondition', 'Pix da loja nao esta configurado.')
+    if (!pixSnapshot) fail('failed-precondition', 'Pix da loja não está configurado.')
 
     return {
       paymentMethod: 'Pix',
@@ -1277,15 +1277,15 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
   }
 
   if (['card', 'cartao', 'cartao_entrega', 'card_on_delivery'].includes(method)) {
-    if (paymentMethods.card === false) fail('failed-precondition', 'Cartao indisponivel para esta loja.')
+    if (paymentMethods.card === false) fail('failed-precondition', 'Cartão indisponível para esta loja.')
     return {
-      paymentMethod: 'Cartao',
+      paymentMethod: 'Cartão',
       paymentType: 'card_on_delivery',
       paymentStatus: 'pay_on_delivery',
       paymentRequiresConfirmation: false,
       payment: {
         method: 'card_on_delivery',
-        label: 'Maquininha',
+        label: 'Cartão na entrega',
         status: 'pay_on_delivery',
         amount: centsToMoney(totalCents),
         amountCents: totalCents,
@@ -1298,7 +1298,7 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
   }
 
   if (['cash', 'dinheiro'].includes(method)) {
-    if (paymentMethods.cash === false) fail('failed-precondition', 'Dinheiro indisponivel para esta loja.')
+    if (paymentMethods.cash === false) fail('failed-precondition', 'Dinheiro indisponível para esta loja.')
     const changeForCents = hasValue(changeFor) && changeFor !== 'sem_troco' ? moneyToCents(changeFor) : null
     if (changeForCents !== null && changeForCents < totalCents) {
       fail('invalid-argument', 'Valor de troco menor que o total.')
@@ -1312,7 +1312,7 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
       changeFor: changeForCents === null ? 'Sem troco' : centsToMoney(changeForCents),
       payment: {
         method: 'cash',
-        label: 'Dinheiro',
+        label: 'Dinheiro na entrega',
         status: 'pay_on_delivery',
         amount: centsToMoney(totalCents),
         amountCents: totalCents,
@@ -1324,7 +1324,7 @@ function getPaymentMethodSnapshot({ store, paymentMethod, totalCents, changeFor,
     }
   }
 
-  fail('invalid-argument', 'Forma de pagamento invalida.')
+  fail('invalid-argument', 'Forma de pagamento inválida.')
 }
 
 function getPublicOrderPaymentSnapshot({
@@ -1422,7 +1422,7 @@ function assertDeliveryAddressMatchesCepNeighborhood(delivery, deliveryAddress) 
   // Until then, reject mismatches when the client provides the ViaCEP neighborhood and always
   // recalculate the delivery fee from the store delivery table.
   if (deliveryAddress.cepValidated && cep && !cepNeighborhood) {
-    fail('invalid-argument', 'Nao foi possivel confirmar o bairro do CEP. Busque o CEP novamente ou selecione o bairro manualmente.')
+    fail('invalid-argument', 'Não foi possível confirmar o bairro do CEP. Busque o CEP novamente ou selecione o bairro manualmente.')
   }
 
   if (!cepNeighborhood) return

@@ -188,7 +188,10 @@ function normalizePreorderPolicy(store = {}) {
 }
 
 function sanitizePublicStorePayments(store = {}) {
-  const mercadoPago = normalizeMercadoPagoPublicConfig(store)
+  const mercadoPago = { ...normalizeMercadoPagoPublicConfig(store) }
+  delete mercadoPago.environment
+  delete mercadoPago.sandboxMode
+  delete mercadoPago.provider
 
   return stripUndefinedDeep({
     manual: normalizeManualPayments(store),
@@ -219,7 +222,7 @@ function isAsaasOnlinePaymentRequest(input = {}) {
 
 function buildAsaasPendingPaymentSnapshot({ totalCents, storeId, storeSlug, orderId }) {
   return {
-    paymentMethod: 'Asaas Online',
+    paymentMethod: 'Pagamento online',
     paymentType: 'asaas_online',
     paymentMode: ONLINE_MODE,
     paymentProvider: PROVIDER,

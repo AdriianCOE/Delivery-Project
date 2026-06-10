@@ -48,28 +48,22 @@ test('sanitizePublicStorePayments hides Asaas Orders and exposes safe Mercado Pa
       maxInstallmentCount: 6,
     },
     mercadoPago: {
-      provider: 'mercadopago',
       enabled: true,
       status: 'active',
-      environment: 'sandbox',
       allowPix: true,
       allowCreditCard: true,
       maxInstallmentCount: 1,
       requireForScheduled: false,
       minOrderCents: 0,
-      sandboxMode: true,
     },
     mercadopago: {
-      provider: 'mercadopago',
       enabled: true,
       status: 'active',
-      environment: 'sandbox',
       allowPix: true,
       allowCreditCard: true,
       maxInstallmentCount: 1,
       requireForScheduled: false,
       minOrderCents: 0,
-      sandboxMode: true,
     },
     preorderPolicy: {
       mode: 'mercadopago_online',
@@ -81,6 +75,9 @@ test('sanitizePublicStorePayments hides Asaas Orders and exposes safe Mercado Pa
   assert.equal(result.asaas.webhookSecret, undefined)
   assert.equal(result.mercadoPago.accessToken, undefined)
   assert.equal(result.mercadoPago.refreshToken, undefined)
+  assert.equal(result.mercadoPago.provider, undefined)
+  assert.equal(result.mercadoPago.environment, undefined)
+  assert.equal(result.mercadoPago.sandboxMode, undefined)
 })
 
 test('sanitizePublicStorePayments keeps inactive Asaas disabled', () => {

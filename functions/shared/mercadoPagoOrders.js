@@ -39,6 +39,14 @@ const SLOT_RELEASE_PAYMENT_STATUSES = new Set([
   'refunded',
   'charged_back',
 ])
+const ACTIVE_ORDER_STATUSES = [
+  'pendente', 'pending', 'pending_payment', 'novo', 'new', 'received', 'recebido', 'aguardando',
+  'aguardando_confirmacao', 'awaiting_confirmation',
+  'confirmado', 'confirmed', 'aceito', 'accepted',
+  'preparando', 'preparing', 'em_preparo', 'preparo', 'in_preparation', 'in_progress',
+  'pronto', 'pronta', 'ready', 'ready_for_pickup', 'aguardando_retirada',
+  'em_rota', 'out_for_delivery', 'entregando', 'saiu_para_entrega', 'saiu_entrega', 'em_entrega',
+]
 
 function hasValue(value) {
   return value !== undefined && value !== null && value !== ''
@@ -75,6 +83,16 @@ function sanitizeString(value, maxLength = 240) {
 
 function safeDocId(value) {
   return String(value || '').replace(/[/#?[\]]/g, '_').slice(0, 180) || 'unknown'
+}
+
+function uniqueTruthy(values) {
+  return [
+    ...new Set(
+      values
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    ),
+  ]
 }
 
 function stripUndefinedDeep(value) {
@@ -204,10 +222,51 @@ function isMercadoPagoOnlinePaymentRequest(input = {}) {
   return method === 'mercadopago_online' || (mode === ONLINE_MODE && provider === PROVIDER)
 }
 
+function isMercadoPagoOnlineOrderData(orderData = {}) {
+  const payment = orderData.payment || {}
+  return (
+    normalizeText(payment.provider || orderData.paymentProvider) === PROVIDER &&
+    normalizeText(payment.mode || orderData.paymentMode) === ONLINE_MODE
+  ) || normalizeText(orderData.paymentMethod || orderData.paymentType) === 'mercadopago_online'
+}
+
+async function findActiveMercadoPagoOrder({ db, storeId, storeData = {} }) {
+  const storeKeys = uniqueTruthy([
+    storeId,
+    storeData.id,
+    storeData.docId,
+    storeData.storeDocId,
+    storeData.slug,
+    storeData.storeSlug,
+  ]).slice(0, 10)
+
+  for (const key of storeKeys) {
+    for (const field of ['storeDocId', 'storeId']) {
+      const snapshot = await db.collection('orders')
+        .where(field, '==', key)
+        .where('status', 'in', ACTIVE_ORDER_STATUSES)
+        .limit(10)
+        .get()
+
+      const blockingOrder = snapshot.docs.find((doc) => isMercadoPagoOnlineOrderData(doc.data() || {}))
+      if (blockingOrder) {
+        const data = blockingOrder.data() || {}
+        return {
+          id: blockingOrder.id,
+          status: data.status || 'pendente',
+          paymentStatus: data.paymentStatus || data.payment?.status || 'pending_payment',
+        }
+      }
+    }
+  }
+
+  return null
+}
+
 function buildMercadoPagoPendingPaymentSnapshot({ totalCents, storeId, storeSlug, orderId }) {
   const externalReference = buildMercadoPagoExternalReference({ storeId, orderId })
   return {
-    paymentMethod: 'Mercado Pago',
+    paymentMethod: 'Pagamento online',
     paymentType: 'mercadopago_online',
     paymentMode: ONLINE_MODE,
     paymentProvider: PROVIDER,
@@ -223,7 +282,7 @@ function buildMercadoPagoPendingPaymentSnapshot({ totalCents, storeId, storeSlug
       mode: ONLINE_MODE,
       provider: PROVIDER,
       method: 'mercadopago_online',
-      label: 'Mercado Pago',
+      label: 'Pagamento online',
       status: 'pending_payment',
       amount: centsToMoney(totalCents),
       amountCents: totalCents,
@@ -273,7 +332,8 @@ function getPublicAppBaseUrl() {
 function buildTrackingUrl(orderData = {}) {
   if (orderData.trackingUrlPath) return `${getPublicAppBaseUrl()}${orderData.trackingUrlPath}`
   const slug = orderData.storeSlug || orderData.store?.slug || orderData.storeId || ''
-  const token = orderData.trackingToken || orderData.id || ''
+  const token = String(orderData.trackingToken || '').trim()
+  if (!token) return `${getPublicAppBaseUrl()}/${slug}`
   return `${getPublicAppBaseUrl()}/${slug}/pedido/${token}`
 }
 
@@ -677,6 +737,18 @@ function createMercadoPagoOrderFunctions({
 
       if (!canManage) throw new HttpsError('permission-denied', 'Permissao negada.')
 
+      const currentConfig = normalizeMercadoPagoPublicConfig(storeData)
+      if (currentConfig.status === 'active' || currentConfig.enabled === true) {
+        const activeOrder = await findActiveMercadoPagoOrder({ db, storeId, storeData })
+        if (activeOrder) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Finalize ou cancele os pedidos online ativos antes de trocar a conta Mercado Pago.',
+            { reason: 'active-mercadopago-orders', ...activeOrder }
+          )
+        }
+      }
+
       const clientId = getSecretValue(clientIdSecret, 'MERCADOPAGO_CLIENT_ID')
       if (!clientId) throw new HttpsError('failed-precondition', 'MERCADOPAGO_CLIENT_ID nao configurado.')
 
@@ -783,6 +855,100 @@ function createMercadoPagoOrderFunctions({
         })
         response.redirect(`${redirectBase}?mercadopago=error`)
       }
+    }
+  )
+
+  const disconnectMercadoPago = onCall(
+    {
+      region,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+      maxInstances: 10,
+    },
+    async (request) => {
+      const uid = request.auth?.uid
+      if (!uid) throw new HttpsError('unauthenticated', 'Acesso negado.')
+
+      const storeId = String(request.data?.storeId || '').trim()
+      if (!storeId) throw new HttpsError('invalid-argument', 'Loja obrigatoria.')
+
+      const [userSnapshot, storeSnapshot] = await Promise.all([
+        db.collection('users').doc(uid).get(),
+        db.collection('stores').doc(storeId).get(),
+      ])
+      if (!userSnapshot.exists || !storeSnapshot.exists) {
+        throw new HttpsError('permission-denied', 'Loja indisponivel.')
+      }
+
+      const userData = userSnapshot.data() || {}
+      const storeData = storeSnapshot.data() || {}
+      const role = normalizeText(userData.role)
+      const userStoreIds = Array.isArray(userData.storeIds) ? userData.storeIds.map(String) : []
+      const canManage =
+        ['admin', 'developer', 'dev'].includes(role) ||
+        storeData.ownerId === uid ||
+        storeData.ownerUid === uid ||
+        userData.storeId === storeId ||
+        userStoreIds.includes(storeId) ||
+        (Array.isArray(storeData.allowedUserIds) && storeData.allowedUserIds.includes(uid)) ||
+        (Array.isArray(storeData.merchantUids) && storeData.merchantUids.includes(uid))
+
+      if (!canManage) throw new HttpsError('permission-denied', 'Permissao negada.')
+
+      const activeOrder = await findActiveMercadoPagoOrder({ db, storeId, storeData })
+      if (activeOrder) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Finalize ou cancele os pedidos online ativos antes de desconectar o Mercado Pago.',
+          { reason: 'active-mercadopago-orders', ...activeOrder }
+        )
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp()
+      const deleteField = admin.firestore.FieldValue.delete()
+      const batch = db.batch()
+      const providerRef = getProviderRef(db, storeId)
+      const providerSnapshot = await providerRef.get()
+
+      const providerPatch = {
+        provider: PROVIDER,
+        status: 'disconnected',
+        lastError: null,
+        disconnectedBy: uid,
+        disconnectedAt: now,
+        updatedAt: now,
+      }
+
+      if (providerSnapshot.exists) {
+        batch.update(providerRef, {
+          ...providerPatch,
+          accessToken: deleteField,
+          refreshToken: deleteField,
+          accessTokenSecretName: deleteField,
+          refreshTokenSecretName: deleteField,
+        })
+      } else {
+        batch.set(providerRef, providerPatch, { merge: true })
+      }
+
+      batch.update(db.collection('stores').doc(storeId), {
+        'payments.mercadoPago.provider': PROVIDER,
+        'payments.mercadoPago.enabled': false,
+        'payments.mercadoPago.status': 'not_connected',
+        'payments.mercadoPago.allowPix': false,
+        'payments.mercadoPago.allowCreditCard': false,
+        'payments.mercadoPago.requireForScheduled': false,
+        'payments.mercadoPago.environment': deleteField,
+        'payments.mercadoPago.sellerUserId': deleteField,
+        'payments.mercadoPago.publicKey': deleteField,
+        'payments.mercadoPago.disconnectedAt': now,
+        'payments.mercadoPago.updatedAt': now,
+        orderPaymentProvider: deleteField,
+        updatedAt: now,
+      })
+
+      await batch.commit()
+      return { ok: true, storeId, status: 'not_connected' }
     }
   )
 
@@ -904,6 +1070,11 @@ function createMercadoPagoOrderFunctions({
         const payment = await paymentClient.get({ id: paymentId })
         const reference = parseMercadoPagoExternalReference(payment.external_reference || orderData.payment?.externalReference)
 
+        if (reference.storeId && reference.storeId !== safeDocId(storeId)) {
+          response.status(202).json({ ok: true, ignored: true, reason: 'store_reference_mismatch' })
+          return
+        }
+
         if (reference.orderId && reference.orderId !== orderSnapshot.id && reference.orderId !== orderData.trackingToken) {
           response.status(202).json({ ok: true, ignored: true, reason: 'order_reference_mismatch' })
           return
@@ -999,6 +1170,7 @@ function createMercadoPagoOrderFunctions({
   return {
     getMercadoPagoConnectUrl,
     mercadoPagoOAuthCallback,
+    disconnectMercadoPago,
     createMercadoPagoOrderPayment,
     mercadoPagoOrderWebhook,
   }

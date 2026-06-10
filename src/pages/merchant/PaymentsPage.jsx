@@ -11,9 +11,11 @@ import {
   FiInfo,
   FiLoader,
   FiLock,
+  FiRefreshCw,
   FiSave,
   FiShield,
   FiSliders,
+  FiXCircle,
   FiZap,
 } from 'react-icons/fi'
 
@@ -54,8 +56,8 @@ const PREORDER_POLICIES = [
   },
   {
     value: 'pix_manual',
-    title: 'Exigir Pix manual',
-    description: 'Pedidos agendados usam Pix manual e aguardam conferência da loja.',
+    title: 'Exigir Pix com comprovante',
+    description: 'Pedidos agendados usam Pix com comprovante e aguardam conferência da loja.',
   },
   {
     value: 'mercadopago_online',
@@ -64,8 +66,8 @@ const PREORDER_POLICIES = [
   },
   {
     value: 'manual_or_mercadopago',
-    title: 'Permitir Pix manual ou Mercado Pago',
-    description: 'O cliente escolhe Pix manual ou checkout Mercado Pago.',
+    title: 'Permitir Pix com comprovante ou pagamento online',
+    description: 'O cliente escolhe Pix com comprovante ou checkout online.',
   },
 ]
 
@@ -84,24 +86,10 @@ const DEFAULT_FORM = {
   mercadoPagoAllowCreditCard: true,
   mercadoPagoMaxInstallments: 1,
   mercadoPagoRequireForScheduled: false,
-  mercadoPagoMinOrderCents: 0,
   preorderPolicyMode: 'manual',
 }
 
 const INSTALLMENT_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1)
-
-function currencyStringToCents(value) {
-  const text = String(value || '').replace(/[^\d,.-]/g, '').replace(',', '.')
-  const number = Number.parseFloat(text)
-  if (!Number.isFinite(number) || number <= 0) return 0
-  return Math.round(number * 100)
-}
-
-function centsToCurrencyInput(value) {
-  const cents = Number(value) || 0
-  if (cents <= 0) return ''
-  return (cents / 100).toFixed(2).replace('.', ',')
-}
 
 function uniqueArray(values) {
   return [
@@ -400,9 +388,6 @@ function mapStoreToForm(store) {
       ? Math.min(Math.max(Number(mercadoPago.maxInstallmentCount), 1), 12)
       : 1,
     mercadoPagoRequireForScheduled: mercadoPago.requireForScheduled === true,
-    mercadoPagoMinOrderCents: Number.isInteger(Number(mercadoPago.minOrderCents))
-      ? Math.max(Number(mercadoPago.minOrderCents), 0)
-      : 0,
     preorderPolicyMode: getPreorderMode(store),
   }
 }
@@ -564,6 +549,7 @@ export default function PaymentsPage() {
   const [loadingStores, setLoadingStores] = useState(true)
   const [saving, setSaving] = useState(false)
   const [connectingMercadoPago, setConnectingMercadoPago] = useState(false)
+  const [disconnectingMercadoPago, setDisconnectingMercadoPago] = useState(false)
   const [toast, setToast] = useState(null)
   const [form, setForm] = useState(DEFAULT_FORM)
   const toastTimeoutRef = useRef(null)
@@ -734,8 +720,15 @@ export default function PaymentsPage() {
     }))
   }, [])
 
-  const handleConnectMercadoPago = useCallback(async () => {
+  const handleConnectMercadoPago = useCallback(async ({ reconnect = false } = {}) => {
     if (!selectedStore || connectingMercadoPago) return
+
+    if (reconnect && typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        'Trocar a conta Mercado Pago substitui a conexão atual. Faça isso apenas se não houver pedidos online em andamento.'
+      )
+      if (!confirmed) return
+    }
 
     try {
       setConnectingMercadoPago(true)
@@ -751,6 +744,39 @@ export default function PaymentsPage() {
       setConnectingMercadoPago(false)
     }
   }, [connectingMercadoPago, selectedStore, showToast])
+
+  const handleDisconnectMercadoPago = useCallback(async () => {
+    if (!selectedStore || disconnectingMercadoPago) return
+
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        'Desconectar o Mercado Pago remove o pagamento online do cardápio. Pedidos online ativos precisam ser finalizados ou cancelados antes.'
+      )
+      if (!confirmed) return
+    }
+
+    try {
+      setDisconnectingMercadoPago(true)
+      const disconnect = httpsCallable(functions, 'disconnectMercadoPago')
+      await disconnect({ storeId: selectedStore.id })
+      setForm((prev) => ({
+        ...prev,
+        mercadoPagoEnabled: false,
+        mercadoPagoAllowPix: false,
+        mercadoPagoAllowCreditCard: false,
+        mercadoPagoRequireForScheduled: false,
+        preorderPolicyMode: ['mercadopago_online', 'manual_or_mercadopago'].includes(prev.preorderPolicyMode)
+          ? 'manual'
+          : prev.preorderPolicyMode,
+      }))
+      showToast('success', 'Mercado Pago desconectado desta loja.')
+    } catch (error) {
+      console.error(error)
+      showToast('error', error?.message || 'Não foi possível desconectar o Mercado Pago.')
+    } finally {
+      setDisconnectingMercadoPago(false)
+    }
+  }, [disconnectingMercadoPago, selectedStore, showToast])
 
   const handleSave = useCallback(async () => {
     if (!selectedStore || saving) return
@@ -776,7 +802,7 @@ export default function PaymentsPage() {
 
     if (pixWillBeEnabled) {
       if (!form.pixEnabled || !pixCompleteness.complete) {
-        showToast('error', 'Para aceitar Pix, configure chave, nome e cidade do Pix manual.')
+        showToast('error', 'Para aceitar Pix, configure chave, nome e cidade do Pix com comprovante.')
         return
       }
 
@@ -829,7 +855,7 @@ export default function PaymentsPage() {
             allowCreditCard: Boolean(form.mercadoPagoAllowCreditCard),
             maxInstallmentCount: Math.min(Math.max(Number(form.mercadoPagoMaxInstallments) || 1, 1), 12),
             requireForScheduled: Boolean(form.mercadoPagoRequireForScheduled),
-            minOrderCents: Math.max(0, Math.round(Number(form.mercadoPagoMinOrderCents) || 0)),
+            minOrderCents: 0,
           },
           preorderPolicy: {
             mode: form.preorderPolicyMode,
@@ -932,20 +958,20 @@ export default function PaymentsPage() {
                 <FiShield size={18} />
               </div>
               <div>
-                <p className="text-sm font-black text-[#111827] dark:text-zinc-50">Pagamentos online por Mercado Pago</p>
+                <p className="text-sm font-black text-[#111827] dark:text-zinc-50">Pagamentos da loja</p>
                 <p className="mt-1 max-w-3xl text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
-                  As assinaturas do PratoBy continuam no Asaas. Os pedidos online da loja usam Mercado Pago e ficam aguardando aprovação antes da produção.
+                  Configure os métodos aceitos no checkout. Pagamentos online ficam aguardando aprovação automática antes da produção.
                 </p>
               </div>
             </div>
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-black text-orange-700 shadow-sm dark:border-white/10 dark:bg-white/10 dark:text-orange-200">
-              <FiLock size={13} /> Sem cartão no PratoBy
+              <FiLock size={13} /> Sem cartão salvo no PratoBy
             </span>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatusTile
-            label="Pix manual"
+            label="Pix com comprovante"
             value={form.paymentPix ? 'Ativo' : 'Inativo'}
             tone={form.paymentPix ? 'green' : 'gray'}
           />
@@ -986,7 +1012,7 @@ export default function PaymentsPage() {
                     updateField('paymentPix', value)
                     if (value) updatePixEnabled(true)
                   }}
-                  label="Pix manual"
+                  label="Pix com comprovante"
                   description="A loja confere o Pix antes de preparar o pedido."
                 />
                 <Toggle
@@ -1006,14 +1032,14 @@ export default function PaymentsPage() {
 
             <Card
               icon={FiZap}
-              title="Pix manual"
-              description="Pix manual é simples e não tem confirmação automática."
+              title="Pix com comprovante"
+              description="Pix com comprovante é simples e não tem confirmação automática."
             >
               <Toggle
                 checked={form.pixEnabled}
                 onChange={updatePixEnabled}
-                label="Configurar Pix manual"
-                description="Obrigatório para aceitar Pix manual no checkout."
+                label="Configurar Pix com comprovante"
+                description="Obrigatório para aceitar Pix com comprovante no checkout."
               />
 
               {form.pixEnabled && (
@@ -1137,13 +1163,36 @@ export default function PaymentsPage() {
                 {!mercadoPagoConfigurable && (
                   <button
                     type="button"
-                    onClick={handleConnectMercadoPago}
+                    onClick={() => handleConnectMercadoPago()}
                     disabled={connectingMercadoPago}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {connectingMercadoPago ? <FiLoader className="animate-spin" /> : <FiShield />}
                     Conectar Mercado Pago
                   </button>
+                )}
+
+                {mercadoPagoConfigurable && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => handleConnectMercadoPago({ reconnect: true })}
+                      disabled={connectingMercadoPago || disconnectingMercadoPago}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-black text-orange-700 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-orange-500/30 dark:bg-zinc-950 dark:text-orange-200 dark:hover:bg-orange-500/10"
+                    >
+                      {connectingMercadoPago ? <FiLoader className="animate-spin" /> : <FiRefreshCw />}
+                      Trocar conta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectMercadoPago}
+                      disabled={connectingMercadoPago || disconnectingMercadoPago}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-red-500/30 dark:bg-zinc-950 dark:text-red-200 dark:hover:bg-red-500/10"
+                    >
+                      {disconnectingMercadoPago ? <FiLoader className="animate-spin" /> : <FiXCircle />}
+                      Desconectar
+                    </button>
+                  </div>
                 )}
 
                 <Toggle
@@ -1176,7 +1225,7 @@ export default function PaymentsPage() {
                   label="Exigir em pedidos agendados"
                   description="Encomendas ficam aguardando aprovação do pagamento antes da produção."
                 />
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4">
                   <Select
                     label="Parcelamento máximo"
                     value={form.mercadoPagoMaxInstallments}
@@ -1189,15 +1238,6 @@ export default function PaymentsPage() {
                       </option>
                     ))}
                   </Select>
-
-                  <Input
-                    label="Valor mínimo online"
-                    inputMode="decimal"
-                    value={centsToCurrencyInput(form.mercadoPagoMinOrderCents)}
-                    disabled={!mercadoPagoConfigurable || !form.mercadoPagoEnabled}
-                    onChange={(event) => updateField('mercadoPagoMinOrderCents', currencyStringToCents(event.target.value))}
-                    placeholder="Ex: 50,00"
-                  />
                 </div>
               </div>
 
@@ -1206,8 +1246,9 @@ export default function PaymentsPage() {
                   <FiInfo className="mt-0.5 shrink-0 text-[#f97316]" />
                   <div className="space-y-1">
                     <p>As assinaturas do PratoBy continuam sendo cobradas separadamente.</p>
-                    <p>O PratoBy não armazena dados de cartão nem tokens no frontend.</p>
-                    <p>{getMercadoPagoConfig(selectedStore).environment === 'sandbox' ? 'Modo sandbox/teste ativo para esta loja.' : 'Ambiente de produção quando OAuth da loja estiver ativo.'}</p>
+                    <p>O PratoBy não armazena dados de cartão nesta tela.</p>
+                    <p>{getMercadoPagoConfig(selectedStore).environment === 'sandbox' ? 'Ambiente de teste ativo para esta loja.' : 'Ambiente de produção ativo para esta loja.'}</p>
+                    <p>Credenciais e dados sensíveis só podem ser alterados por fluxo seguro do backend/admin.</p>
                   </div>
                 </div>
               </div>
@@ -1216,11 +1257,11 @@ export default function PaymentsPage() {
             <Card
               icon={FiInfo}
               title="Informações e segurança"
-              description="Pagamentos online usam ambiente seguro do provedor."
+              description="Pagamentos online usam ambiente seguro externo ao PratoBy."
             >
               <div className="space-y-3 text-sm font-semibold leading-6 text-[#6b7280] dark:text-zinc-400">
-                <p>O PratoBy não cobra comissão por pedido. Taxas de processamento podem ser cobradas pelo Mercado Pago.</p>
-                <p>Pix manual não confirma automaticamente. A loja precisa conferir antes de preparar.</p>
+                <p>O PratoBy não cobra comissão por pedido. Taxas de processamento podem ser cobradas no pagamento online.</p>
+                <p>Pix com comprovante não confirma automaticamente. A loja precisa conferir antes de preparar.</p>
                 <p>A assinatura do PratoBy continua sendo cobrada separadamente pelo Asaas na área de faturamento.</p>
               </div>
             </Card>
@@ -1234,7 +1275,7 @@ export default function PaymentsPage() {
                 Tudo pronto?
               </p>
               <p className="mt-1 text-xs font-bold leading-5 text-[#6b7280] dark:text-zinc-400">
-                Salvar atualiza métodos aceitos, Pix manual e preferências públicas de pagamento.
+                Salvar atualiza métodos aceitos, Pix com comprovante e preferências públicas de pagamento.
               </p>
             </div>
 

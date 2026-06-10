@@ -852,15 +852,15 @@ function getPaymentLabel(order) {
 
   const map = {
     pix: 'Pix',
-    pix_manual: 'Pix manual',
-    pix_static: 'Pix manual',
+    pix_manual: 'Pix com comprovante',
+    pix_static: 'Pix com comprovante',
     card: 'Cartão',
     credit_card: 'Cartão de crédito',
     debit_card: 'Cartão de débito',
     card_on_delivery: 'Maquininha na entrega',
     cash: 'Dinheiro',
     money: 'Dinheiro',
-    Pix: 'Pix manual',
+    Pix: 'Pix com comprovante',
     Cartão: 'Maquininha na entrega',
     Dinheiro: 'Dinheiro',
   }
@@ -874,12 +874,16 @@ function getPaymentStatusLabel(order) {
   const map = {
     awaiting_payment: 'Aguardando pagamento',
     pending: 'Aguardando confirmação',
+    pending_payment: 'Aguardando pagamento',
     proof_sent: 'Comprovante enviado',
     pay_on_delivery: 'A receber na entrega',
     manual_confirmation: 'Confirmação manual',
     paid: 'Pago',
     pago: 'Pago',
     canceled: 'Cancelado',
+    cancelled: 'Cancelado',
+    failed: 'Falha no pagamento',
+    expired: 'Pagamento expirado',
     refunded: 'Estornado',
     partially_refunded: 'Parcialmente estornado',
   }
@@ -916,7 +920,7 @@ if (status === 'cancelado') {
   if (isPixPaymentPending(order) && status === 'pendente') {
     return {
       title: 'Esperando confirmação de pagamento',
-      description: 'Copie o Pix, faça o pagamento e envie o comprovante para a loja confirmar seu pedido.',
+      description: 'Copie o Pix, faça o pagamento e envie o comprovante pelo WhatsApp para a loja confirmar seu pedido.',
       tone: 'amber',
       icon: FiCreditCard,
     }
@@ -1267,17 +1271,17 @@ function PixManualPaymentCard({
 
           <div className="min-w-0 flex-1">
             <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-700 shadow-sm">
-              Pix
+              Pix com comprovante
             </span>
 
             <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
-              {pixPaid ? 'Pagamento confirmado' : 'Aguardando pagamento Pix'}
+              {pixPaid ? 'Pagamento confirmado' : 'Aguardando Pix com comprovante'}
             </h3>
 
             <p className="mt-2 text-sm font-semibold leading-6 text-amber-800">
               {pixPaid
                 ? 'A loja já confirmou o pagamento. Agora é só acompanhar o preparo do pedido.'
-                : 'Faça o Pix usando o copia e cola abaixo. Depois envie o comprovante para a loja pelo WhatsApp.'}
+                : 'Faça o Pix usando o copia e cola abaixo. Depois envie o comprovante pelo WhatsApp para a loja confirmar.'}
             </p>
           </div>
         </div>
@@ -1299,7 +1303,7 @@ function PixManualPaymentCard({
               Status
             </p>
             <p className={`mt-1 text-sm font-black ${pixPaid ? 'text-green-600' : 'text-amber-700'}`}>
-              {pixPaid ? 'Pago' : proofSent ? 'Comprovante enviado' : 'Aguardando confirmação'}
+              {pixPaid ? 'Pago' : proofSent ? 'Comprovante enviado' : 'Aguardando comprovante'}
             </p>
           </div>
         </div>
@@ -1396,7 +1400,7 @@ function PixManualPaymentCard({
             ) : (
               <>
                 <FiMessageCircle />
-                Enviar comprovante à loja
+                Enviar comprovante pelo WhatsApp
               </>
             )}
           </button>
@@ -1404,7 +1408,7 @@ function PixManualPaymentCard({
 
         {!pixPaid && (
           <p className="text-xs font-semibold leading-5 text-[#6b7280]">
-            O preparo começa após a loja confirmar o pagamento. Se já pagou, envie o comprovante pelo WhatsApp para agilizar.
+            O preparo começa após a loja confirmar o pagamento. Se já pagou, envie o comprovante pelo WhatsApp.
           </p>
         )}
       </div>
@@ -1428,7 +1432,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
     }
 
     if (!order?.id || !trackingToken) {
-      setError('Link de pagamento indisponivel. Fale com a loja.')
+      setError('Link de pagamento indisponível. Fale com a loja.')
       return
     }
 
@@ -1441,10 +1445,10 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
         trackingToken,
       })
       const nextUrl = result?.data?.paymentUrl || result?.data?.invoiceUrl
-      if (!nextUrl) throw new Error('Link de pagamento indisponivel.')
+      if (!nextUrl) throw new Error('Link de pagamento indisponível.')
       window.open(nextUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
-      setError(err?.message || 'Nao foi possivel abrir o pagamento.')
+      setError(err?.message || 'Não foi possível abrir o pagamento.')
     } finally {
       setLoading(false)
     }
@@ -1460,19 +1464,19 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
 
           <div className="min-w-0 flex-1">
             <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-green-700 shadow-sm">
-              Pagamento online legado
+              Pagamento online
             </span>
 
             <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
-              {paid ? 'Pagamento legado confirmado' : failed ? 'Pagamento legado precisa de atencao' : 'Aguardando pagamento online legado'}
+              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atenção' : 'Aguardando pagamento online'}
             </h3>
 
             <p className="mt-2 text-sm font-semibold leading-6 text-green-800">
               {paid
                 ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
                 : failed
-                  ? 'Nao foi possivel confirmar esse pagamento. Fale com a loja para combinar o proximo passo.'
-                  : 'Abra o link de pagamento legado para concluir. A loja inicia o preparo apos a confirmacao automatica.'}
+                  ? 'Não foi possível confirmar esse pagamento. Fale com a loja para combinar o próximo passo.'
+                  : 'Abra o link de pagamento para concluir em ambiente seguro. A loja inicia o preparo após a confirmação automática.'}
             </p>
           </div>
         </div>
@@ -1494,7 +1498,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
               Status
             </p>
             <p className={`mt-1 text-sm font-black ${paid ? 'text-green-600' : failed ? 'text-red-600' : 'text-amber-700'}`}>
-              {paid ? 'Pago' : failed ? 'Nao confirmado' : 'Aguardando pagamento'}
+              {paid ? 'Pago' : failed ? 'Não confirmado' : 'Aguardando pagamento'}
             </p>
           </div>
         </div>
@@ -1514,7 +1518,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
             ) : (
               <>
                 <FiCreditCard />
-                Pagar agora (legado)
+                Pagar agora
               </>
             )}
           </button>
@@ -1546,7 +1550,7 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
     }
 
     if (!order?.id || !trackingToken) {
-      setError('Checkout Mercado Pago indisponivel. Fale com a loja.')
+      setError('Pagamento online indisponível. Fale com a loja.')
       return
     }
 
@@ -1559,10 +1563,10 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
         trackingToken,
       })
       const nextUrl = result?.data?.paymentUrl || result?.data?.initPoint || result?.data?.sandboxInitPoint
-      if (!nextUrl) throw new Error('Checkout Mercado Pago indisponivel.')
+      if (!nextUrl) throw new Error('Pagamento online indisponível.')
       window.open(nextUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
-      setError(err?.message || 'Nao foi possivel abrir o Mercado Pago.')
+      setError(err?.message || 'Não foi possível abrir o pagamento.')
     } finally {
       setLoading(false)
     }
@@ -1578,19 +1582,19 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
 
           <div className="min-w-0 flex-1">
             <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-green-700 shadow-sm">
-              Mercado Pago
+              Pagamento online
             </span>
 
             <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
-              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atencao' : 'Aguardando pagamento'}
+              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atenção' : 'Aguardando pagamento'}
             </h3>
 
             <p className="mt-2 text-sm font-semibold leading-6 text-green-800">
               {paid
-                ? 'O Mercado Pago confirmou o pagamento. Agora acompanhe o preparo do pedido.'
+                ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
                 : failed
-                  ? 'Nao foi possivel confirmar esse pagamento. Fale com a loja para combinar o proximo passo.'
-                  : 'Voce sera redirecionado para o Mercado Pago. O PratoBy nao armazena dados do cartao.'}
+                  ? 'Não foi possível confirmar esse pagamento. Fale com a loja para combinar o próximo passo.'
+                  : 'Você será redirecionado para pagar em ambiente seguro. O PratoBy não armazena dados do cartão.'}
             </p>
           </div>
         </div>
@@ -1606,7 +1610,7 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
           <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
             <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">Status</p>
             <p className={`mt-1 text-sm font-black ${paid ? 'text-green-600' : failed ? 'text-red-600' : 'text-amber-700'}`}>
-              {paid ? 'Pago' : failed ? 'Nao confirmado' : 'Aguardando pagamento'}
+              {paid ? 'Pago' : failed ? 'Não confirmado' : 'Aguardando pagamento'}
             </p>
           </div>
         </div>
@@ -1621,7 +1625,7 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
             {loading ? (
               <>
                 <FiLoader className="animate-spin" />
-                Abrindo Mercado Pago...
+                Abrindo pagamento...
               </>
             ) : (
               <>
@@ -2567,25 +2571,25 @@ const isDelivered = status === 'entregue'
 
                   {customerPushStatus === 'denied' && (
                     <p className="mt-1 text-xs font-bold text-amber-700">
-                      Permissao bloqueada no navegador.
+                      Permissão bloqueada no navegador.
                     </p>
                   )}
 
                   {customerPushStatus === 'missing-vapid-key' && (
                     <p className="mt-1 text-xs font-bold text-amber-700">
-                      Push ainda nao foi configurado pela loja.
+                      Avisos ainda não foram configurados pela loja.
                     </p>
                   )}
 
                   {customerPushStatus === 'missing-tracking-token' && (
                     <p className="mt-1 text-xs font-bold text-amber-700">
-                      Este pedido nao possui token de acompanhamento para ativar avisos.
+                      Este pedido não possui código de acompanhamento para ativar avisos.
                     </p>
                   )}
 
                   {customerPushStatus === 'error' && (
                     <p className="mt-1 text-xs font-bold text-amber-700">
-                      Nao foi possivel ativar os avisos. Tente novamente.
+                      Não foi possível ativar os avisos. Tente novamente.
                     </p>
                   )}
                 </div>

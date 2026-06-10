@@ -1492,35 +1492,36 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       mercadoPagoOnlineEnabled && {
         value: 'mercadopago_online',
         legacyLabel: 'Online',
-        label: 'Mercado Pago',
+        label: 'Pagamento online',
         icon: 'MP',
         description: mercadoPagoConfig.maxInstallmentCount > 1
-          ? `Pague com Pix ou credito em ate ${mercadoPagoConfig.maxInstallmentCount}x no Mercado Pago`
-          : 'Voce sera redirecionado para o Mercado Pago. O PratoBy nao armazena dados do cartao.',
+          ? `Pix, crédito ou débito em ambiente seguro. Crédito em até ${mercadoPagoConfig.maxInstallmentCount}x.`
+          : 'Pix, crédito ou débito em ambiente seguro.',
+        processorDescription: 'Processado pelo Mercado Pago. O PratoBy não armazena dados do cartão.',
         paymentStatus: 'pending_payment',
       },
       pixEnabled && {
         value: 'pix_manual',
         legacyLabel: 'Pix',
-        label: 'Pix',
-        icon: '⚡',
-        description: 'Copie o Pix na próxima tela e aguarde confirmação da loja',
+        label: 'Pix com comprovante',
+        icon: 'PIX',
+        description: 'Copie o Pix na próxima tela, envie o comprovante pelo WhatsApp e aguarde a confirmação da loja.',
         paymentStatus: 'pending',
       },
       cardEnabled && {
         value: 'card_on_delivery',
         legacyLabel: 'Cartão',
-        label: 'Maquininha',
-        icon: '💳',
-        description: 'Débito ou crédito na entrega',
+        label: 'Cartão na entrega',
+        icon: 'CR',
+        description: 'Débito ou crédito na maquininha.',
         paymentStatus: 'pay_on_delivery',
       },
       cashEnabled && {
         value: 'cash',
         legacyLabel: 'Dinheiro',
-        label: 'Dinheiro',
-        icon: '💵',
-        description: 'Informe se precisa de troco',
+        label: 'Dinheiro na entrega',
+        icon: 'R$',
+        description: 'Informe se precisa de troco.',
         paymentStatus: 'pay_on_delivery',
       },
     ].filter(Boolean)
@@ -2004,7 +2005,7 @@ if (orderType === 'delivery') {
     }
 
     if (prepaidChoiceRequiredForSchedule && !['pix_manual', 'mercadopago_online'].includes(paymentMethod)) {
-      return 'Este pedido exige Pix manual ou pagamento online antecipado.'
+      return 'Este pedido exige Pix com comprovante ou pagamento online antecipado.'
     }
 
     if (pixOnlyRequiredForSchedule && paymentMethod !== 'pix_manual') {
@@ -2152,7 +2153,7 @@ if (orderType === 'delivery') {
       const orderId = String(createdOrder.orderId || createdOrder.id || trackingToken || '').trim()
 
       if (!trackingToken) {
-        throw new Error('Pedido criado sem token de acompanhamento.')
+        throw new Error('Pedido criado sem código de acompanhamento.')
       }
 
       const nextTrackingRecord = {
@@ -2917,14 +2918,14 @@ if (orderType === 'delivery') {
                     {mercadoPagoRequiredForSchedule && (
                       <div className="flex items-start gap-2 rounded-2xl border border-green-100 bg-green-50 p-3 text-xs font-bold leading-5 text-green-800">
                         <FiShield className="mt-0.5 shrink-0" />
-                        <span>Sua encomenda sera confirmada apos a aprovacao do pagamento no Mercado Pago.</span>
+                        <span>Sua encomenda será confirmada após a aprovação do pagamento online.</span>
                       </div>
                     )}
 
                     {prepaidChoiceRequiredForSchedule && (
                       <div className="flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
                         <FiShield className="mt-0.5 shrink-0" />
-                        <span>Este pedido exige Pix manual ou pagamento online antecipado.</span>
+                        <span>Este pedido exige Pix com comprovante ou pagamento online antecipado.</span>
                       </div>
                     )}
 
@@ -2971,8 +2972,14 @@ if (orderType === 'delivery') {
                               </p>
 
                               <p className="mt-0.5 text-xs text-[#6b7280]">
-                                {paymentDisabled ? 'Indisponivel para pedido com pagamento antecipado' : option.description}
+                                {paymentDisabled ? 'Indisponível para pedido com pagamento antecipado' : option.description}
                               </p>
+
+                              {!paymentDisabled && option.processorDescription && (
+                                <p className="mt-1 text-[11px] font-bold leading-4 text-[#9ca3af]">
+                                  {option.processorDescription}
+                                </p>
+                              )}
                             </div>
 
                             {paymentMethod === option.value && (
@@ -3025,12 +3032,12 @@ if (orderType === 'delivery') {
 
                           <div>
                             <p className="text-sm font-black text-[#111827]">
-                              Pagamento via Pix
+                              Pix com confirmação da loja
                             </p>
 
                             <p className="mt-1 text-xs font-bold leading-5 text-[#9a3412]">
-                              Depois de enviar o pedido, você verá o Pix copia e cola na tela de acompanhamento.
-                              A loja só iniciará o preparo após confirmar o pagamento.
+                              Depois de enviar o pedido, copie o Pix na tela de acompanhamento e envie o comprovante pelo WhatsApp.
+                              A loja confirma o pedido após conferir o pagamento.
                             </p>
                           </div>
                         </div>
@@ -3044,12 +3051,12 @@ if (orderType === 'delivery') {
 
                           <div>
                             <p className="text-sm font-black text-[#111827]">
-                              Mercado Pago online
+                              Pagamento seguro
                             </p>
 
                             <p className="mt-1 text-xs font-bold leading-5 text-green-800">
-                              Voce sera redirecionado para o Mercado Pago. O PratoBy nao armazena dados do cartao.
-                              Sua encomenda sera confirmada apos a aprovacao do pagamento.
+                              Você será redirecionado para pagar em ambiente seguro. O PratoBy não armazena dados do cartão.
+                              Seu pedido será confirmado após a aprovação do pagamento.
                             </p>
                           </div>
                         </div>

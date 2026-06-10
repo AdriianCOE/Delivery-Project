@@ -397,7 +397,7 @@ function resolvePaymentPolicy({ storeScheduling, products, orderTiming, paymentM
   }
 
   if (scheduledManualOrOnline && !isPixManualPaymentMethod(paymentMethod) && !isMercadoPagoOnlinePaymentMethod(paymentMethod)) {
-    failWith(fail, 'failed-precondition', 'Este pedido exige Pix manual ou pagamento online antecipado.')
+    failWith(fail, 'failed-precondition', 'Este pedido exige Pix com comprovante ou pagamento online antecipado.')
   }
 
   if (requiresPixPayment && !scheduledManualOrOnline && !isPixManualPaymentMethod(paymentMethod)) {

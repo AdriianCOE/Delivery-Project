@@ -273,6 +273,7 @@ exports.createAsaasOrderPayment = asaasOrderFunctions.createAsaasOrderPayment
 exports.asaasOrderWebhook = asaasOrderFunctions.asaasOrderWebhook
 exports.getMercadoPagoConnectUrl = mercadoPagoOrderFunctions.getMercadoPagoConnectUrl
 exports.mercadoPagoOAuthCallback = mercadoPagoOrderFunctions.mercadoPagoOAuthCallback
+exports.disconnectMercadoPago = mercadoPagoOrderFunctions.disconnectMercadoPago
 exports.createMercadoPagoOrderPayment = mercadoPagoOrderFunctions.createMercadoPagoOrderPayment
 exports.mercadoPagoOrderWebhook = mercadoPagoOrderFunctions.mercadoPagoOrderWebhook
 
@@ -445,7 +446,7 @@ exports.markCustomerPixProofSent = onCall(PUBLIC_CALLABLE_OPTIONS, async (reques
     }
 
     if (!isManualPixPublicOrder(orderData)) {
-      throw new HttpsError('failed-precondition', 'Este pedido nao usa Pix manual.')
+      throw new HttpsError('failed-precondition', 'Este pedido não usa Pix com comprovante.')
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp()
@@ -1302,7 +1303,7 @@ function assertPixPaymentSettingsPatch(patch) {
   const pixEnabled = patch.pix?.enabled === true
 
   if (paymentPixEnabled && !pixEnabled) {
-    throw new HttpsError('failed-precondition', 'Para aceitar Pix, configure o Pix manual da loja.')
+    throw new HttpsError('failed-precondition', 'Para aceitar Pix, configure o Pix com comprovante da loja.')
   }
 
   if (!paymentPixEnabled && !pixEnabled) return

@@ -147,7 +147,7 @@ const STATUS_META = {
   },
   pronto: {
     label: 'Pronto',
-    description: 'Aguardando retirada ou proxima etapa',
+    description: 'Aguardando retirada ou próxima etapa',
     icon: FiCheckCircle,
     badgeClass: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25',
     dotClass: 'bg-emerald-500',
@@ -547,9 +547,9 @@ function getPaymentMethod(order) {
 
   const map = {
     pix: 'Pix',
-    pix_manual: 'Pix manual',
-    asaas_online: 'Pagamento online legado',
-    mercadopago_online: 'Mercado Pago',
+    pix_manual: 'Pix com comprovante',
+    asaas_online: 'Pagamento online',
+    mercadopago_online: 'Pagamento online',
     card: 'Cartão',
     cartao: 'Cartão',
     'cartão': 'Cartão',
@@ -568,12 +568,16 @@ function getPaymentStatus(order) {
 
   const map = {
     pending: 'Aguardando confirmação',
+    pending_payment: 'Aguardando pagamento',
+    awaiting_payment: 'Aguardando pagamento',
     proof_sent: 'Comprovante enviado',
     pay_on_delivery: 'A receber na entrega',
     paid: 'Pago',
     confirmed: 'Pago',
     canceled: 'Cancelado',
     cancelled: 'Cancelado',
+    failed: 'Falha no pagamento',
+    expired: 'Pagamento expirado',
     refunded: 'Estornado',
     partially_refunded: 'Parcialmente estornado',
   }
@@ -1926,6 +1930,191 @@ function printComanda(order, store) {
   }, 12000)
 }
 
+function getOperationalPaymentNotice(order) {
+  if (isPixManualOrder(order)) {
+    if (isPaymentPaid(order)) return 'PIX CONFIRMADO'
+    if (getPaymentProofUrl(order)) return 'COMPROVANTE RECEBIDO - CONFERIR'
+    return 'PIX PENDENTE'
+  }
+
+  if (isAsaasOnlineOrder(order) || isMercadoPagoOnlineOrder(order)) {
+    return isPaymentPaid(order) ? 'PAGO ONLINE' : 'PAGAMENTO ONLINE PENDENTE'
+  }
+
+  return String(getPaymentStatus(order) || getPaymentMethod(order) || 'PAGAMENTO').toUpperCase()
+}
+
+function printEtiqueta(order, store) {
+  if (!order) return
+
+  const orderNumber = getOrderDisplayNumber(order)
+  const customerName = getCustomerName(order)
+  const phone = formatDisplayPhone(getCustomerPhone(order)) || 'Não informado'
+  const address = getAddress(order)
+  const items = getOrderItems(order)
+  const total = getOrderTotal(order)
+  const payment = getPaymentLine(order)
+  const paymentNotice = getOperationalPaymentNotice(order)
+  const observation =
+    order.orderObservation ||
+    order.customerObservation ||
+    order.observation ||
+    order.notes ||
+    ''
+  const storeName = store?.name || 'PratoBy'
+  const typeLabel = getOrderTypeLabel(order)
+  const scheduled = isScheduledOrder(order)
+  const scheduledLabel = scheduled ? formatScheduledDate(order).replace(/^Agendado para\s*/i, '') : ''
+  const referenceLine = address.reference ? `<div><strong>Ref:</strong> ${escapeHtml(address.reference)}</div>` : ''
+  const complementLine = address.complement ? `<div><strong>Comp:</strong> ${escapeHtml(address.complement)}</div>` : ''
+
+  const itemRows = items
+    .map((item) => {
+      const options = getItemOptionsSummary(item)
+      const itemObs = item.observation || item.itemObservation || item.notes || ''
+
+      return `
+        <div class="item">
+          <div class="item-main">
+            <span>${escapeHtml(getItemQty(item))}x ${escapeHtml(getItemName(item))}</span>
+            <span>${escapeHtml(formatMoney(getItemTotal(item)))}</span>
+          </div>
+          ${options ? `<div class="item-detail">${escapeHtml(options)}</div>` : ''}
+          ${itemObs ? `<div class="item-note">OBS: ${escapeHtml(itemObs)}</div>` : ''}
+        </div>
+      `
+    })
+    .join('')
+
+  const html = `
+    <!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Etiqueta ${escapeHtml(orderNumber)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          @page { size: 100mm auto; margin: 0; }
+          html, body { margin: 0; padding: 0; background: #fff; color: #111; }
+          body {
+            width: 100mm;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            line-height: 1.35;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .label { width: 94mm; margin: 0 auto; padding: 5mm 3mm; }
+          .top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+          .store { font-size: 11px; font-weight: 800; text-transform: uppercase; }
+          .order { border: 2px solid #111; padding: 6px 8px; text-align: center; font-size: 23px; font-weight: 900; }
+          .muted { color: #555; font-size: 10px; }
+          .notice { margin-top: 5px; font-size: 10px; color: #555; text-align: center; }
+          .pill { display: inline-block; border: 1px solid #111; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+          .section { border-top: 1px dashed #999; margin-top: 8px; padding-top: 8px; }
+          .section-title { font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #444; }
+          .strong { font-size: 15px; font-weight: 900; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+          .box { border: 1px solid #ddd; border-radius: 8px; padding: 7px; }
+          .payment-alert { border: 2px solid #111; border-radius: 8px; padding: 7px; font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase; }
+          .item { margin-top: 6px; }
+          .item-main { display: flex; justify-content: space-between; gap: 8px; font-weight: 800; }
+          .item-main span:first-child { flex: 1; min-width: 0; }
+          .item-detail, .item-note { margin-top: 2px; padding-left: 10px; font-size: 10.5px; color: #333; }
+          .item-note { font-weight: 800; text-transform: uppercase; }
+          .obs { border: 1px solid #111; border-radius: 8px; margin-top: 6px; padding: 7px; font-weight: 800; text-transform: uppercase; }
+          @media screen {
+            body { width: 100%; background: #f3f4f6; padding: 24px 0; }
+            .label { background: #fff; box-shadow: 0 20px 50px rgba(0,0,0,.18); }
+          }
+          @media print {
+            body { width: 100mm; padding: 0; }
+            .label { box-shadow: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="label">
+          <div class="top">
+            <div>
+              <div class="store">${escapeHtml(storeName)}</div>
+              <div class="muted">${escapeHtml(formatDate(order))}</div>
+              <div style="margin-top:6px"><span class="pill">${escapeHtml(typeLabel)}</span></div>
+            </div>
+            <div class="order">${escapeHtml(orderNumber)}</div>
+          </div>
+          <div class="notice">Resumo do pedido — não é nota fiscal.</div>
+
+          <section class="section">
+            <div class="strong">${escapeHtml(customerName)}</div>
+            <div><strong>WhatsApp:</strong> ${escapeHtml(phone)}</div>
+            ${scheduled ? `<div><strong>Agendado:</strong> ${escapeHtml(scheduledLabel || order.scheduledTimeLabel || 'Horário não informado')}</div>` : ''}
+          </section>
+
+          <section class="section">
+            <div class="section-title">${address.isPickup ? 'Retirada' : 'Entrega'}</div>
+            <div>${escapeHtml(address.full)}</div>
+            ${address.neighborhood ? `<div><strong>Bairro:</strong> ${escapeHtml(address.neighborhood)}</div>` : ''}
+            ${complementLine}
+            ${referenceLine}
+          </section>
+
+          <section class="section grid">
+            <div class="box">
+              <div class="section-title">Pagamento</div>
+              <div>${escapeHtml(payment)}</div>
+              <div><strong>Total:</strong> ${escapeHtml(formatMoney(total))}</div>
+            </div>
+            <div class="payment-alert">${escapeHtml(paymentNotice)}</div>
+          </section>
+
+          <section class="section">
+            <div class="section-title">Itens resumidos</div>
+            ${itemRows || '<div class="muted">Nenhum item informado</div>'}
+          </section>
+
+          ${observation ? `<section class="section"><div class="section-title">Observação importante</div><div class="obs">${escapeHtml(observation)}</div></section>` : ''}
+        </main>
+        <script>
+          window.onload = () => {
+            setTimeout(() => window.print(), 250)
+          }
+        </script>
+      </body>
+    </html>
+  `
+
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', `Etiqueta ${orderNumber}`)
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.style.opacity = '0'
+
+  document.body.appendChild(iframe)
+
+  const iframeDoc = iframe.contentWindow?.document
+
+  if (!iframeDoc) {
+    document.body.removeChild(iframe)
+    return
+  }
+
+  iframeDoc.open()
+  iframeDoc.write(html)
+  iframeDoc.close()
+
+  window.setTimeout(() => {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe)
+    }
+  }, 12000)
+}
+
 function StatusBadge({ status }) {
   const currentStatus = normalizeStatus(status)
   const meta = STATUS_META[currentStatus] || STATUS_META.pendente
@@ -2268,23 +2457,23 @@ const normalizedPaymentMethod = String(paymentMethod || '')
   .replace(/\s+/g, '_')
 
 const paymentMethodLabelMap = {
-  pix_manual: 'Pix manual',
+  pix_manual: 'Pix com comprovante',
   pix: 'Pix',
-  asaas_online: 'Pagamento online legado',
-  mercadopago_online: 'Mercado Pago',
+  asaas_online: 'Pagamento online',
+  mercadopago_online: 'Pagamento online',
   cash: 'Dinheiro',
   money: 'Dinheiro',
   dinheiro: 'Dinheiro',
   cash_on_delivery: 'Dinheiro na entrega',
   dinheiro_na_entrega: 'Dinheiro na entrega',
-  card_on_delivery: 'Cartao na entrega',
-  cartao_na_entrega: 'Cartao na entrega',
-  credit_card: 'Cartao de credito',
-  debit_card: 'Cartao de debito',
-  credito: 'Cartao de credito',
-  debito: 'Cartao de debito',
-  cartao_de_credito: 'Cartao de credito',
-  cartao_de_debito: 'Cartao de debito',
+  card_on_delivery: 'Cartão na entrega',
+  cartao_na_entrega: 'Cartão na entrega',
+  credit_card: 'Cartão de crédito',
+  debit_card: 'Cartão de débito',
+  credito: 'Cartão de crédito',
+  debito: 'Cartão de débito',
+  cartao_de_credito: 'Cartão de crédito',
+  cartao_de_debito: 'Cartão de débito',
 }
 
 const paymentMethodLabel =
@@ -2292,9 +2481,9 @@ const paymentMethodLabel =
   (normalizedPaymentMethod.includes('pix')
     ? 'Pix'
     : normalizedPaymentMethod.includes('mercadopago') || normalizedPaymentMethod.includes('mercado_pago')
-      ? 'Mercado Pago'
+      ? 'Pagamento online'
     : normalizedPaymentMethod.includes('asaas')
-      ? 'Pagamento online legado'
+      ? 'Pagamento online'
     : normalizedPaymentMethod.includes('cash') ||
         normalizedPaymentMethod.includes('money') ||
         normalizedPaymentMethod.includes('dinheiro')
@@ -2303,7 +2492,7 @@ const paymentMethodLabel =
           normalizedPaymentMethod.includes('cartao') ||
           normalizedPaymentMethod.includes('credit') ||
           normalizedPaymentMethod.includes('debit')
-        ? 'Cartao'
+        ? 'Cartão'
         : paymentMethod)
 
 const PaymentMethodIcon =
@@ -2553,7 +2742,7 @@ const scheduledNoticeTone =
           {isLatest && (
             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
               <FiZap size={11} />
-              Último pedido
+              Mais recente
             </span>
           )}
 
@@ -2658,7 +2847,7 @@ const scheduledNoticeTone =
                 : `${sla.elapsedMinutes}min nesta etapa · alerta em ${sla.remainingMinutes}min`
               : isFinished
                 ? 'Concluido no historico'
-                : 'Acompanhe a proxima etapa'}
+                : 'Acompanhe a próxima etapa'}
           </p>
         </div>
       </div>
@@ -3018,6 +3207,126 @@ function OrderModal({
       : scheduledState === 'scheduled_due_soon'
         ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
         : 'border-orange-100 bg-orange-50 text-orange-900 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-100'
+  const orderNumberLabel = getOrderDisplayNumber(order)
+  const paymentPaid = pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order))
+  const paymentSummary = isPixManualOrder(order)
+    ? pixPaid
+      ? 'Pix com comprovante confirmado'
+      : paymentProofUrl
+        ? 'Comprovante recebido para conferência'
+        : 'Aguardando comprovante Pix'
+    : (asaasOnline || mercadoPagoOnline)
+      ? paymentPaid
+        ? 'Pagamento online aprovado'
+        : 'Pagamento online aguardando pagamento'
+      : `${getPaymentMethod(order)} · ${getPaymentStatus(order)}`
+  const paymentSummaryClass = paymentPaid
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
+    : paymentBlocked || pixPending || asaasPending || mercadoPagoPending
+      ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200'
+      : 'border-gray-100 bg-white text-gray-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-300'
+  const nextAction = pixPending
+    ? {
+        title: 'Conferir Pix',
+        description: paymentProofUrl
+          ? 'Comprovante enviado. Confira o valor antes de confirmar o pagamento.'
+          : 'Aguarde ou peça o comprovante antes de iniciar o preparo.',
+        icon: FiCreditCard,
+        tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100',
+      }
+    : paymentBlocked
+      ? {
+          title: 'Aguardar pagamento',
+          description: 'Pedido online só deve avançar após confirmação real do pagamento.',
+          icon: FiCreditCard,
+          tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100',
+        }
+      : isWaitingScheduledFuture
+        ? {
+            title: 'Aguardar horário agendado',
+            description: 'Pedido futuro reservado. Não precisa preparar agora.',
+            icon: FiCalendar,
+            tone: 'border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-100',
+          }
+        : nextStatus
+          ? {
+              title: getNextStatusLabel(status, order),
+              description: meta.description || 'Avance o pedido quando a etapa estiver pronta.',
+              icon: FiZap,
+              tone: 'border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-100',
+            }
+          : {
+              title: isFinalStatus ? 'Pedido finalizado' : 'Sem ação principal',
+              description: isFinalStatus ? 'Use as ações secundárias se precisar consultar ou imprimir.' : 'Revise os detalhes do pedido.',
+              icon: FiCheckCircle,
+              tone: 'border-gray-100 bg-white text-gray-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-300',
+            }
+  const NextActionIcon = nextAction.icon
+  const timingSummary = scheduled
+    ? scheduledDateLabel || scheduledOperationalLabel || scheduledTypeLabel
+    : 'Pedido imediato'
+  const fulfillmentSummary = scheduled
+    ? scheduledTypeLabel
+    : address.isPickup
+      ? 'Retirada'
+      : 'Entrega'
+  const operatorSnapshot = [
+    {
+      label: 'Pedido',
+      value: orderNumberLabel,
+      icon: FiShoppingBag,
+    },
+    {
+      label: scheduled ? 'Agendado' : 'Entrada',
+      value: timingSummary,
+      icon: scheduled ? FiCalendar : FiClock,
+    },
+    {
+      label: 'Tipo',
+      value: fulfillmentSummary,
+      icon: address.isPickup ? FiShoppingBag : FiTruck,
+    },
+    {
+      label: 'Pagamento',
+      value: paymentSummary,
+      icon: FiCreditCard,
+      className: paymentSummaryClass,
+    },
+  ]
+  const modalAlerts = [
+    sla.overdue && {
+      label: `Atrasado ${sla.overdueMinutes || sla.elapsedMinutes}min`,
+      icon: FiAlertTriangle,
+      className: 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200',
+    },
+    scheduled && {
+      label: scheduledOperationalLabel || scheduledDistanceLabel || scheduledTypeLabel,
+      icon: FiCalendar,
+      className: scheduledState === 'scheduled_late'
+        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
+        : 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200',
+    },
+    (pixPending || asaasPending || mercadoPagoPending) && {
+      label: pixPending ? 'Pix aguardando conferência' : 'Pagamento online pendente',
+      icon: FiCreditCard,
+      className: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200',
+    },
+    paymentPaid && {
+      label: (asaasOnline || mercadoPagoOnline) ? 'Pagamento online aprovado' : 'Pagamento confirmado',
+      icon: FiCheckCircle,
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200',
+    },
+    hasCustomScheduledProducts && {
+      label: 'Produto sob encomenda',
+      icon: FiPackage,
+      className: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-200',
+    },
+    status === 'cancelado' && cancellationReason && {
+      label: 'Cancelamento com motivo',
+      icon: FiAlertTriangle,
+      className: 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200',
+    },
+  ].filter(Boolean).slice(0, 3)
 
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -3080,60 +3389,74 @@ function OrderModal({
       >
         <header className="animate-fade-in shrink-0 border-b border-gray-100 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#111114]">
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-black tracking-tight text-gray-900 dark:text-zinc-50">
-                  Pedido {getOrderDisplayNumber(order)}
-                </h2>
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 dark:bg-white/10 dark:text-zinc-300">
+                  {orderNumberLabel}
+                </span>
                 <StatusBadge status={order.status} />
-                {sla.overdue && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white ring-1 ring-red-700">
-                    <FiAlertTriangle size={12} className="animate-pulse" />
-                    Etapa atrasada
-                  </span>
-                )}
-                {scheduled && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-orange-700 ring-1 ring-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:ring-orange-900">
-                    <FiCalendar size={12} />
-                    {scheduledOperationalLabel || 'Agendado'}
-                  </span>
-                )}
                 <PricingValidationBadge order={order} />
-                {status === 'cancelado' && cancellationReason && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 ring-1 ring-red-200 dark:bg-red-950/50 dark:text-red-400 dark:ring-red-900">
-                    <FiAlertTriangle size={12} />
-                    Motivo registrado
-                  </span>
-                )}
-                {pixPending && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                    <FiCreditCard size={12} />
-                    Pix pendente
-                  </span>
-                )}
-                {asaasPending && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                    <FiCreditCard size={12} />
-                    Pagamento legado pendente
-                  </span>
-                )}
-                {mercadoPagoPending && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                    <FiCreditCard size={12} />
-                    Mercado Pago pendente
-                  </span>
-                )}
-                {showCustomerThanksAction && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-200 dark:bg-green-950/50 dark:text-green-400 dark:ring-green-900">
-                    <FiMessageCircle size={12} />
-                    Cliente confirmou
-                  </span>
-                )}
               </div>
-              <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-zinc-500">
-                {formatDate(order)} · {store?.name || 'Loja'} · {items.length} item{items.length === 1 ? '' : 's'}
-              </p>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                <div className="min-w-0">
+                  <h2 className="truncate text-2xl font-black tracking-tight text-gray-900 dark:text-zinc-50">
+                    {getCustomerName(order)}
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
+                    {formatDate(order)} · {scheduled ? scheduledTypeLabel : address.isPickup ? 'Retirada' : 'Entrega'} · {items.length} item{items.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+
+                <div className="text-left lg:text-right">
+                  <p className="text-xs font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Total</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-zinc-50">
+                    {formatMoney(getOrderTotal(order))}
+                  </p>
+                </div>
+              </div>
+
+              {modalAlerts.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {modalAlerts.map((alert) => {
+                    const AlertIcon = alert.icon
+                    return (
+                      <span
+                        key={alert.label}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black ${alert.className}`}
+                      >
+                        <AlertIcon size={12} />
+                        {alert.label}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {operatorSnapshot.map((item) => {
+                  const SnapshotIcon = item.icon
+                  return (
+                    <div
+                      key={item.label}
+                      className={`min-w-0 rounded-2xl border px-3 py-2.5 ${
+                        item.className ||
+                        'border-gray-100 bg-gray-50 text-gray-800 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200'
+                      }`}
+                    >
+                      <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide opacity-70">
+                        <SnapshotIcon size={11} />
+                        {item.label}
+                      </p>
+                      <p className="mt-1 truncate text-xs font-black">
+                        {item.value}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+
             <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
               <FiX size={18} />
             </button>
@@ -3141,21 +3464,24 @@ function OrderModal({
         </header>
 
         <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-5 py-3 dark:border-white/10 dark:bg-[#151518]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Left: financial pills */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-2xl bg-orange-50 px-3 py-1.5 text-sm font-black text-orange-600 dark:bg-orange-950 dark:text-orange-400">
-                Total: {formatMoney(getOrderTotal(order))}
-              </span>
-              <span className="rounded-2xl bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
-                {getPaymentMethod(order)}
-              </span>
-              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ (pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order))) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : (pixPending || asaasPending || mercadoPagoPending) ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
-                {getPaymentStatus(order)}
-              </span>
-            </div>
-            {/* Right: action buttons */}
-              <div className="flex items-center gap-3">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <section className={`rounded-2xl border p-3 ${nextAction.tone}`}>
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/70 shadow-sm dark:bg-black/10">
+                  <NextActionIcon size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-wide opacity-70">Próxima ação</p>
+                  <p className="mt-0.5 text-sm font-black">{nextAction.title}</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 opacity-85">{nextAction.description}</p>
+                </div>
+              </div>
+            </section>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+                <span className={`inline-flex min-h-10 items-center rounded-xl border px-3 py-2 text-xs font-black ${paymentSummaryClass}`}>
+                  {paymentSummary}
+                </span>
                 {canOpenWhatsApp && (
                   <button
                     onClick={() => onOpenWhatsApp(order)}
@@ -3193,7 +3519,7 @@ function OrderModal({
                     className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
                     <FiCreditCard size={18} />
-                    Abrir Mercado Pago
+                    Abrir pagamento
                   </a>
                 ) : isWaitingScheduledFuture ? (
                   <div className="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
@@ -3215,9 +3541,23 @@ function OrderModal({
                   onClick={() => printComanda(order, store)}
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-900 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
                 >
-                  <FiPrinter size={18}/> Comanda
+                  <FiPrinter size={18}/> Imprimir comanda
                 </button>
-              </div>
+
+                <button
+                  onClick={() => printEtiqueta(order, store)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                >
+                  <FiPackage size={18}/> Imprimir etiqueta
+                </button>
+
+                <button
+                  onClick={() => onCopyOrder(order)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                >
+                  <FiCopy size={18}/> Copiar resumo
+                </button>
+            </div>
           </div>
           {sla.overdue && (
             <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
@@ -3451,7 +3791,7 @@ function OrderModal({
                     )}
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order)) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : paymentBlocked ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
-                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : mercadoPagoOnline ? (isPaymentPaid(order) ? 'Mercado Pago pago' : 'Mercado Pago pendente') : asaasOnline ? (isPaymentPaid(order) ? 'Pagamento legado pago' : 'Pagamento legado pendente') : getPaymentMethod(order)}
+                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix confirmado' : 'Comprovante pendente') : (mercadoPagoOnline || asaasOnline) ? (isPaymentPaid(order) ? 'Pagamento online pago' : 'Pagamento online pendente') : getPaymentMethod(order)}
                   </span>
                 </div>
                 {status === 'cancelado' && (
@@ -3471,7 +3811,7 @@ function OrderModal({
                 <section className={`rounded-2xl border p-4 shadow-sm ${ pixPaid ? 'border-green-100 bg-green-50 dark:border-green-900 dark:bg-green-950/20' : 'border-orange-100 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20' }`}>
                   <div className="flex items-center justify-between gap-3">
                     <p className={`text-xs font-black uppercase tracking-wider ${pixPaid ? 'text-green-800 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
-                      Pix manual
+                      Pix com comprovante
                     </p>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${ pixPaid ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' }`}>
                       {pixPaid ? 'Pago' : 'Aguardando'}
@@ -3488,7 +3828,7 @@ function OrderModal({
                     </a>
                   ) : (
                     <p className="mt-2 text-xs font-semibold leading-5 text-orange-700 dark:text-orange-400">
-                      Confirme o comprovante no contato do cliente.
+                      Confirme o comprovante recebido pelo contato do cliente antes de iniciar o preparo.
                     </p>
                   )}
                 </section>
@@ -3524,7 +3864,7 @@ function OrderModal({
                   {meta.label}
                 </p>
                 <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
-                  {paymentBlocked ? 'Aguardando confirmacao do pagamento.' : meta.description}
+                  {paymentBlocked ? 'Aguardando confirmação do pagamento.' : meta.description}
                 </p>
               </section>
 
@@ -3936,7 +4276,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     if (!order?.id || updatingStatus) return
 
     if (!isPixManualOrder(order)) {
-      showToast('error', 'Este pedido não é Pix manual.')
+      showToast('error', 'Este pedido não é Pix com comprovante.')
       return
     }
 
@@ -4568,6 +4908,19 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     return result
   }, [dateFilter, orders, search, slaNow, statusFilter, timingFilter])
 
+  const latestVisibleOrderId = useMemo(() => {
+    if (!filteredOrders.length) return ''
+
+    return filteredOrders.reduce((latest, order) => {
+      if (!latest) return order
+
+      const latestDate = getOrderDate(latest)?.getTime() || 0
+      const orderDate = getOrderDate(order)?.getTime() || 0
+
+      return orderDate > latestDate ? order : latest
+    }, null)?.id || ''
+  }, [filteredOrders])
+
   return (
     <main className="min-h-full">
       <DashboardPageHeader
@@ -5023,7 +5376,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                         onCopyOrder={handleCopyOrder}
                         updatingStatus={updatingStatus}
                         isNew={newOrderIds.has(order.id)}
-                        isLatestNew={latestNewOrderId === order.id}
+                        isLatestNew={latestVisibleOrderId === order.id || latestNewOrderId === order.id}
                       />
                     </motion.div>
                   ))
