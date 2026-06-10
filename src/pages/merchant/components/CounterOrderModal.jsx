@@ -6,6 +6,7 @@ import {
   getDocs,
   query,
   orderBy,
+  where,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import {
@@ -929,8 +930,13 @@ export default function CounterOrderModal({ storeId, store, onClose, onSuccess }
       setProductsError(null)
     })
 
-    const productsRef = collection(db, 'publicStores', safeStoreId, 'products')
-    const productsQuery = query(productsRef, orderBy('order', 'asc'))
+    // Lê da coleção privada `products` — acessível via canManageStoreId
+    // independente do status de billing da loja (ao contrário de publicStores).
+    const productsQuery = query(
+      collection(db, 'products'),
+      where('storeId', '==', safeStoreId),
+      orderBy('order', 'asc'),
+    )
 
     getDocs(productsQuery)
       .then((snap) => {
@@ -938,7 +944,10 @@ export default function CounterOrderModal({ storeId, store, onClose, onSuccess }
       })
       .catch(() => {
         // Fallback: tenta sem orderBy (índice pode não existir)
-        getDocs(collection(db, 'publicStores', safeStoreId, 'products'))
+        getDocs(query(
+          collection(db, 'products'),
+          where('storeId', '==', safeStoreId),
+        ))
           .then((snap) => {
             if (active) setProducts(normalizeProducts(snap.docs))
           })

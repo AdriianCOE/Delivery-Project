@@ -1,0 +1,1 @@
+import e from"./MenuManagementPage-pOfypeVx.js";export{e as default};
