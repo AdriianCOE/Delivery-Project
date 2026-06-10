@@ -730,7 +730,7 @@ function getPaymentBucket(order) {
   const status = String(payment.status || order?.paymentStatus || '').toLowerCase()
   const method = String(payment.method || order?.paymentMethod || order?.paymentLabel || '').toLowerCase()
 
-  const online = mode === 'online' || provider === 'asaas' || mode === 'asaas' || mode === 'card_online'
+  const online = mode === 'online' || provider === 'asaas' || provider === 'mercadopago' || mode === 'asaas' || mode === 'mercadopago' || mode === 'card_online'
 
   if (online) {
     if (['paid', 'pago', 'confirmed', 'received'].includes(status)) return 'online_paid'

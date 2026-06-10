@@ -9,7 +9,7 @@ const {
   sanitizePublicStorePayments,
 } = require('./asaasOrders')
 
-test('sanitizePublicStorePayments exposes only safe Asaas order fields', () => {
+test('sanitizePublicStorePayments hides Asaas Orders and exposes safe Mercado Pago fields', () => {
   const result = sanitizePublicStorePayments({
     paymentMethods: { pix: true, card: false, cash: true },
     payments: {
@@ -23,6 +23,12 @@ test('sanitizePublicStorePayments exposes only safe Asaas order fields', () => {
         apiKey: 'secret',
         webhookSecret: 'secret',
       },
+      mercadoPago: {
+        enabled: true,
+        status: 'active',
+        accessToken: 'secret',
+        refreshToken: 'secret',
+      },
       preorderPolicy: {
         mode: 'asaas_online',
       },
@@ -32,21 +38,49 @@ test('sanitizePublicStorePayments exposes only safe Asaas order fields', () => {
   assert.deepEqual(result, {
     manual: { pix: true, card: false, cash: true },
     asaas: {
-      enabled: true,
+      enabled: false,
       status: 'active',
+      legacy: true,
       billingType: 'UNDEFINED',
       allowPix: true,
       allowCreditCard: false,
       allowBoleto: true,
       maxInstallmentCount: 6,
     },
+    mercadoPago: {
+      provider: 'mercadopago',
+      enabled: true,
+      status: 'active',
+      environment: 'sandbox',
+      allowPix: true,
+      allowCreditCard: true,
+      maxInstallmentCount: 1,
+      requireForScheduled: false,
+      minOrderCents: 0,
+      sandboxMode: true,
+    },
+    mercadopago: {
+      provider: 'mercadopago',
+      enabled: true,
+      status: 'active',
+      environment: 'sandbox',
+      allowPix: true,
+      allowCreditCard: true,
+      maxInstallmentCount: 1,
+      requireForScheduled: false,
+      minOrderCents: 0,
+      sandboxMode: true,
+    },
     preorderPolicy: {
-      mode: 'asaas_online',
-      requiredMethod: 'asaas_online',
+      mode: 'mercadopago_online',
+      requiredMethod: 'mercadopago_online',
+      legacyMode: 'asaas_online',
     },
   })
   assert.equal(result.asaas.apiKey, undefined)
   assert.equal(result.asaas.webhookSecret, undefined)
+  assert.equal(result.mercadoPago.accessToken, undefined)
+  assert.equal(result.mercadoPago.refreshToken, undefined)
 })
 
 test('sanitizePublicStorePayments keeps inactive Asaas disabled', () => {
@@ -62,7 +96,10 @@ test('sanitizePublicStorePayments keeps inactive Asaas disabled', () => {
 
   assert.equal(result.asaas.enabled, false)
   assert.equal(result.asaas.status, 'pending')
+  assert.equal(result.asaas.legacy, true)
   assert.equal(result.asaas.maxInstallmentCount, null)
+  assert.equal(result.mercadoPago.enabled, false)
+  assert.equal(result.mercadopago.enabled, false)
 })
 
 test('mapAsaasOrderPaymentStatus keeps partial refund distinct', () => {

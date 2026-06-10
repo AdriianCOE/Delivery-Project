@@ -548,7 +548,8 @@ function getPaymentMethod(order) {
   const map = {
     pix: 'Pix',
     pix_manual: 'Pix manual',
-    asaas_online: 'Asaas online',
+    asaas_online: 'Pagamento online legado',
+    mercadopago_online: 'Mercado Pago',
     card: 'Cartão',
     cartao: 'Cartão',
     'cartão': 'Cartão',
@@ -620,6 +621,18 @@ function isAsaasOnlineOrder(order) {
   return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
 }
 
+function isMercadoPagoOnlineOrder(order) {
+  const method = getPaymentMethodId(order)
+  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(order?.payment?.mode || order?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+
+  return method === 'mercadopago_online' || (provider === 'mercadopago' && mode === 'online')
+}
+
 function isPaymentPaid(order) {
   const status = getPaymentStatusId(order)
   const hasPaidStatus = ['paid', 'confirmed', 'pago'].includes(status)
@@ -655,12 +668,24 @@ function isAsaasPaymentPending(order) {
   return !isPaymentPaid(order) && ['pending', 'awaiting_payment', 'failed_link_creation', ''].includes(paymentStatus)
 }
 
+function isMercadoPagoPaymentPending(order) {
+  if (!isMercadoPagoOnlineOrder(order)) return false
+
+  const paymentStatus = getPaymentStatusId(order)
+
+  return !isPaymentPaid(order) && ['pending', 'pending_payment', 'awaiting_payment', 'failed_link_creation', ''].includes(paymentStatus)
+}
+
 function getAsaasPaymentUrl(order) {
   return order?.payment?.paymentUrl || order?.payment?.invoiceUrl || order?.paymentUrl || order?.invoiceUrl || ''
 }
 
+function getMercadoPagoPaymentUrl(order) {
+  return order?.payment?.paymentUrl || order?.mercadoPago?.paymentUrl || order?.paymentUrl || order?.payment?.initPoint || order?.mercadoPago?.initPoint || order?.payment?.sandboxInitPoint || order?.mercadoPago?.sandboxInitPoint || ''
+}
+
 function shouldBlockPreparationUntilPayment(order) {
-  return (isPixPaymentPending(order) || isAsaasPaymentPending(order)) &&
+  return (isPixPaymentPending(order) || isAsaasPaymentPending(order) || isMercadoPagoPaymentPending(order)) &&
     ['pendente', 'confirmado'].includes(normalizeStatus(order?.status))
 }
 
@@ -2245,7 +2270,8 @@ const normalizedPaymentMethod = String(paymentMethod || '')
 const paymentMethodLabelMap = {
   pix_manual: 'Pix manual',
   pix: 'Pix',
-  asaas_online: 'Asaas online',
+  asaas_online: 'Pagamento online legado',
+  mercadopago_online: 'Mercado Pago',
   cash: 'Dinheiro',
   money: 'Dinheiro',
   dinheiro: 'Dinheiro',
@@ -2265,8 +2291,10 @@ const paymentMethodLabel =
   paymentMethodLabelMap[normalizedPaymentMethod] ||
   (normalizedPaymentMethod.includes('pix')
     ? 'Pix'
+    : normalizedPaymentMethod.includes('mercadopago') || normalizedPaymentMethod.includes('mercado_pago')
+      ? 'Mercado Pago'
     : normalizedPaymentMethod.includes('asaas')
-      ? 'Asaas online'
+      ? 'Pagamento online legado'
     : normalizedPaymentMethod.includes('cash') ||
         normalizedPaymentMethod.includes('money') ||
         normalizedPaymentMethod.includes('dinheiro')
@@ -2281,7 +2309,9 @@ const paymentMethodLabel =
 const PaymentMethodIcon =
   normalizedPaymentMethod.includes('pix')
     ? FiZap
-    : normalizedPaymentMethod.includes('asaas')
+    : normalizedPaymentMethod.includes('asaas') ||
+      normalizedPaymentMethod.includes('mercadopago') ||
+      normalizedPaymentMethod.includes('mercado_pago')
       ? FiCreditCard
     : normalizedPaymentMethod.includes('cash') ||
         normalizedPaymentMethod.includes('money') ||
@@ -2939,6 +2969,9 @@ function OrderModal({
   const asaasOnline = isAsaasOnlineOrder(order)
   const asaasPending = isAsaasPaymentPending(order)
   const asaasPaymentUrl = getAsaasPaymentUrl(order)
+  const mercadoPagoOnline = isMercadoPagoOnlineOrder(order)
+  const mercadoPagoPending = isMercadoPagoPaymentPending(order)
+  const mercadoPagoPaymentUrl = getMercadoPagoPaymentUrl(order)
   const paymentProofUrl = getPaymentProofUrl(order)
 
   const currentIndex = STATUS_FLOW.indexOf(status)
@@ -3081,7 +3114,13 @@ function OrderModal({
                 {asaasPending && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
                     <FiCreditCard size={12} />
-                    Asaas pendente
+                    Pagamento legado pendente
+                  </span>
+                )}
+                {mercadoPagoPending && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                    <FiCreditCard size={12} />
+                    Mercado Pago pendente
                   </span>
                 )}
                 {showCustomerThanksAction && (
@@ -3111,7 +3150,7 @@ function OrderModal({
               <span className="rounded-2xl bg-gray-100 px-3 py-1.5 text-sm font-bold text-gray-700 dark:bg-zinc-800 dark:text-zinc-300">
                 {getPaymentMethod(order)}
               </span>
-              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ (pixPaid || (asaasOnline && isPaymentPaid(order))) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : (pixPending || asaasPending) ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
+              <span className={`rounded-2xl px-3 py-1.5 text-sm font-bold ${ (pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order))) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : (pixPending || asaasPending || mercadoPagoPending) ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
                 {getPaymentStatus(order)}
               </span>
             </div>
@@ -3145,6 +3184,16 @@ function OrderModal({
                   >
                     <FiCreditCard size={18} />
                     Abrir pagamento
+                  </a>
+                ) : mercadoPagoPending && mercadoPagoPaymentUrl ? (
+                  <a
+                    href={mercadoPagoPaymentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                  >
+                    <FiCreditCard size={18} />
+                    Abrir Mercado Pago
                   </a>
                 ) : isWaitingScheduledFuture ? (
                   <div className="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
@@ -3401,8 +3450,8 @@ function OrderModal({
                       </div>
                     )}
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid || (asaasOnline && isPaymentPaid(order)) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : paymentBlocked ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
-                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : asaasOnline ? (isPaymentPaid(order) ? 'Asaas pago' : 'Asaas pendente') : getPaymentMethod(order)}
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order)) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : paymentBlocked ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
+                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix pago' : 'Pix pendente') : mercadoPagoOnline ? (isPaymentPaid(order) ? 'Mercado Pago pago' : 'Mercado Pago pendente') : asaasOnline ? (isPaymentPaid(order) ? 'Pagamento legado pago' : 'Pagamento legado pendente') : getPaymentMethod(order)}
                   </span>
                 </div>
                 {status === 'cancelado' && (

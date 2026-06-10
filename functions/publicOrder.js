@@ -9,6 +9,14 @@ const {
   isAsaasOnlinePaymentRequest,
   orderRequiresAsaasOnline,
 } = require('./shared/asaasOrders')
+const {
+  buildMercadoPagoPendingPaymentSnapshot,
+  buildMercadoPagoPreferenceFailurePatch,
+  createMercadoPagoPreference,
+  isMercadoPagoOnlineActive,
+  isMercadoPagoOnlinePaymentRequest,
+  orderRequiresMercadoPagoOnline,
+} = require('./shared/mercadoPagoOrders')
 
 class PublicOrderError extends Error {
   constructor(code, message) {
@@ -22,6 +30,10 @@ const MAX_SCHEDULED_SLOT_CAPACITY = 500
 
 function fail(code, message) {
   throw new PublicOrderError(code, message)
+}
+
+function isLegacyAsaasOrdersEnabled() {
+  return process.env.ENABLE_LEGACY_ASAAS_ORDERS === 'true'
 }
 
 function hasValue(value) {
@@ -277,7 +289,16 @@ function assertStoreBillingAllowsPublicOrder(store, logger) {
 
   if (subscriptionStatus === 'past_due') {
     const graceEndsAt = getBillingGraceEndsAt(store)
-    if (graceEndsAt && graceEndsAt.getTime() <= Date.now()) {
+
+    if (!graceEndsAt) {
+      logger.warn('createPublicOrder blocked by past_due without grace period', {
+        storeId,
+        subscriptionStatus,
+      })
+      fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+    }
+
+    if (graceEndsAt.getTime() <= Date.now()) {
       logger.warn('createPublicOrder blocked by expired past_due grace period', {
         storeId,
         subscriptionStatus,
@@ -286,7 +307,11 @@ function assertStoreBillingAllowsPublicOrder(store, logger) {
       fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
     }
 
-    logger.warn('createPublicOrder allowed with past_due subscription status', { storeId, subscriptionStatus })
+    logger.warn('createPublicOrder allowed with past_due grace period', {
+      storeId,
+      subscriptionStatus,
+      graceEndsAt: graceEndsAt.toISOString(),
+    })
     return
   }
 
@@ -1312,13 +1337,35 @@ function getPublicOrderPaymentSnapshot({
   storeSlug,
   schedulingDecision,
 }) {
+  const requiresMercadoPagoOnline = orderRequiresMercadoPagoOnline({ store, schedulingDecision })
+  const requestedMercadoPagoOnline = isMercadoPagoOnlinePaymentRequest({
+    ...input,
+    paymentMethod,
+  })
   const requiresAsaasOnline = orderRequiresAsaasOnline({ store, schedulingDecision })
   const requestedAsaasOnline = isAsaasOnlinePaymentRequest({
     ...input,
     paymentMethod,
   })
 
-  if (requiresAsaasOnline || requestedAsaasOnline) {
+  if (requestedAsaasOnline && !isLegacyAsaasOrdersEnabled()) {
+    fail('failed-precondition', 'Pagamento online por Asaas não está mais disponível para novos pedidos.')
+  }
+
+  if (requiresMercadoPagoOnline || requestedMercadoPagoOnline) {
+    if (!isMercadoPagoOnlineActive(store)) {
+      fail('failed-precondition', 'Pagamento online Mercado Pago indisponivel para esta loja.')
+    }
+
+    return buildMercadoPagoPendingPaymentSnapshot({
+      totalCents,
+      storeId: getStoreDocId(store),
+      storeSlug,
+      orderId: trackingToken,
+    })
+  }
+
+  if ((requiresAsaasOnline || requestedAsaasOnline) && isLegacyAsaasOrdersEnabled()) {
     if (typeof input.asaasOrdersApiKeyConfigured === 'boolean' && !input.asaasOrdersApiKeyConfigured) {
       fail('failed-precondition', 'Pagamento online nao configurado.')
     }
@@ -1401,6 +1448,8 @@ function createPublicOrderHandler({
   maxOrderCents = 100000000,
   sendNewOrderPushToStore = null,
   createAsaasOrderPaymentLink = null,
+  mercadoPagoAccessTokenTestSecret = null,
+  mercadoPagoAccessTokenProdSecret = null,
 }) {
   return async (request) => {
     try {
@@ -1762,6 +1811,7 @@ function createPublicOrderHandler({
 
       let onlinePaymentLink = null
       let onlinePaymentLinkError = null
+      let onlinePaymentProvider = result.payment?.provider || null
 
       if (result.payment?.mode === 'online' && result.payment.provider === 'asaas') {
         const orderRefForPayment = db.collection('orders').doc(result.orderId)
@@ -1812,6 +1862,55 @@ function createPublicOrderHandler({
         }
       }
 
+      if (result.payment?.mode === 'online' && result.payment.provider === 'mercadopago') {
+        const orderRefForPayment = db.collection('orders').doc(result.orderId)
+        try {
+          const [orderSnapshot, storeSnapshot] = await Promise.all([
+            orderRefForPayment.get(),
+            db.collection('stores').doc(storeDocId).get(),
+          ])
+
+          onlinePaymentLink = await createMercadoPagoPreference({
+            db,
+            admin,
+            logger,
+            accessTokenTestSecret: mercadoPagoAccessTokenTestSecret,
+            accessTokenProdSecret: mercadoPagoAccessTokenProdSecret,
+            orderRef: orderRefForPayment,
+            orderData: {
+              id: orderSnapshot.id,
+              ...(orderSnapshot.data() || {}),
+            },
+            storeData: storeSnapshot.data() || {},
+          })
+        } catch (paymentError) {
+          logger.error('Public order created but Mercado Pago preference failed.', {
+            orderId: result.orderId,
+            storeId: storeDocId,
+            error: paymentError?.message || String(paymentError),
+          })
+          onlinePaymentProvider = 'mercadopago'
+          onlinePaymentLinkError = paymentError
+          await db.runTransaction(async (transaction) => {
+            const orderSnapshot = await transaction.get(orderRefForPayment)
+            const orderData = orderSnapshot.exists ? orderSnapshot.data() || {} : {}
+            const releasePatch = await releaseScheduledSlotInTransaction({
+              db,
+              admin,
+              transaction,
+              orderRef: orderRefForPayment,
+              orderData,
+              reason: 'mercadopago_preference_creation_failed',
+            })
+
+            transaction.set(orderRefForPayment, {
+              ...buildMercadoPagoPreferenceFailurePatch({ admin, error: paymentError }),
+              ...releasePatch,
+            }, { merge: true })
+          })
+        }
+      }
+
       logger.info('Public order created server-side', {
         orderId: result.orderId,
         storeId: storeDocId,
@@ -1847,8 +1946,12 @@ function createPublicOrderHandler({
         ...result,
         ...(onlinePaymentLink
           ? {
+              provider: onlinePaymentLink.provider || onlinePaymentProvider,
               paymentUrl: onlinePaymentLink.paymentUrl,
               invoiceUrl: onlinePaymentLink.invoiceUrl,
+              preferenceId: onlinePaymentLink.preferenceId,
+              initPoint: onlinePaymentLink.initPoint,
+              sandboxInitPoint: onlinePaymentLink.sandboxInitPoint,
               providerPaymentLinkId: onlinePaymentLink.providerPaymentLinkId,
             }
           : {}),
@@ -1856,7 +1959,9 @@ function createPublicOrderHandler({
           ? {
               paymentStatus: 'failed_link_creation',
               paymentError: 'failed_link_creation',
-              paymentMessage: 'Pedido recebido, mas nao foi possivel gerar o link de pagamento agora. Tente pagar pela tela de acompanhamento.',
+              paymentMessage: onlinePaymentProvider === 'mercadopago'
+                ? 'Pedido recebido, mas nao foi possivel gerar o checkout Mercado Pago agora. Tente pagar pela tela de acompanhamento.'
+                : 'Pedido recebido, mas nao foi possivel gerar o link de pagamento agora. Tente pagar pela tela de acompanhamento.',
             }
           : {}),
       }

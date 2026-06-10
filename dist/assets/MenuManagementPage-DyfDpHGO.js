@@ -1,0 +1,1 @@
+import e from"./MenuManagementPage-C5KzWC6g.js";export{e as default};

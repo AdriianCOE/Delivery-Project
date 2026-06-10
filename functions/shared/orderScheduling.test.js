@@ -344,3 +344,58 @@ test('requires Pix when store or product policy requires it', () => {
   assert.equal(productPix.paymentPolicy, 'pix_required')
   assert.equal(productPix.paymentPolicyReason, 'product_required')
 })
+
+test('requires Mercado Pago for online scheduled preorder policy', () => {
+  const storeData = store({
+    payments: {
+      mercadoPago: { enabled: true, status: 'active' },
+      preorderPolicy: { mode: 'mercadopago_online' },
+    },
+  })
+
+  assert.throws(
+    () => decide({
+      storeData,
+      input: {
+        orderTiming: 'scheduled',
+        scheduledDate: '2026-06-05',
+        scheduledTime: '14:00',
+      },
+      paymentMethod: 'pix_manual',
+    }),
+    /exige pagamento online antecipado/
+  )
+
+  const result = decide({
+    storeData,
+    input: {
+      orderTiming: 'scheduled',
+      scheduledDate: '2026-06-05',
+      scheduledTime: '14:00',
+    },
+    paymentMethod: 'mercadopago_online',
+  })
+
+  assert.equal(result.paymentPolicy, 'mercadopago_online_required')
+  assert.equal(result.paymentPolicyReason, 'store_preorder_policy')
+})
+
+test('maps legacy manual_or_asaas preorder policy to Mercado Pago when connected', () => {
+  const result = decide({
+    storeData: store({
+      payments: {
+        mercadoPago: { enabled: true, status: 'active' },
+        preorderPolicy: { mode: 'manual_or_asaas' },
+      },
+    }),
+    input: {
+      orderTiming: 'scheduled',
+      scheduledDate: '2026-06-05',
+      scheduledTime: '14:00',
+    },
+    paymentMethod: 'mercadopago_online',
+  })
+
+  assert.equal(result.paymentPolicy, 'prepaid_required')
+  assert.equal(result.paymentPolicyReason, 'store_preorder_policy')
+})

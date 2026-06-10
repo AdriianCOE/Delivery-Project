@@ -259,6 +259,18 @@ function isAsaasOnlineOrder(orderData) {
   return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
 }
 
+function isMercadoPagoOnlineOrder(orderData) {
+  const method = getOrderPaymentMethodId(orderData)
+  const provider = String(orderData?.payment?.provider || orderData?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(orderData?.payment?.mode || orderData?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+
+  return method === 'mercadopago_online' || (provider === 'mercadopago' && mode === 'online')
+}
+
 function isOrderPaymentPaid(orderData) {
   const status = getOrderPaymentStatusId(orderData)
   return ['paid', 'confirmed', 'pago'].includes(status)
@@ -271,14 +283,14 @@ function shouldBlockMerchantOrderAction(orderData) {
 function shouldBlockMerchantPreparationUntilPayment(orderData) {
   const status = normalizeMerchantOrderStatus(orderData?.status)
   const paymentStatus = getOrderPaymentStatusId(orderData)
-  return (isManualPixOrder(orderData) || isAsaasOnlineOrder(orderData))
+  return (isManualPixOrder(orderData) || isAsaasOnlineOrder(orderData) || isMercadoPagoOnlineOrder(orderData))
     && ['pendente', 'confirmado'].includes(status)
     && !isOrderPaymentPaid(orderData)
-    && ['pending', 'proof_sent', 'manual', ''].includes(paymentStatus)
+    && ['pending', 'pending_payment', 'proof_sent', 'manual', ''].includes(paymentStatus)
 }
 
 function shouldBlockMerchantOnlinePayment(orderData) {
-  return isAsaasOnlineOrder(orderData) && !isOrderPaymentPaid(orderData)
+  return (isAsaasOnlineOrder(orderData) || isMercadoPagoOnlineOrder(orderData)) && !isOrderPaymentPaid(orderData)
 }
 
 function sanitizeCancellationReason(value) {

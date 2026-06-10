@@ -319,6 +319,18 @@ function isAsaasOnlineOrder(order) {
   return method === 'asaas_online' || (provider === 'asaas' && mode === 'online')
 }
 
+function isMercadoPagoOnlineOrder(order) {
+  const method = getPaymentMethodId(order)
+  const provider = String(order?.payment?.provider || order?.paymentProvider || '')
+    .toLowerCase()
+    .trim()
+  const mode = String(order?.payment?.mode || order?.paymentMode || '')
+    .toLowerCase()
+    .trim()
+
+  return method === 'mercadopago_online' || (provider === 'mercadopago' && mode === 'online')
+}
+
 function isPaymentPaid(order) {
   const paymentStatus = getPaymentStatusId(order)
 
@@ -339,10 +351,29 @@ function getAsaasPaymentUrl(order) {
   )
 }
 
+function getMercadoPagoPaymentUrl(order) {
+  return (
+    order?.payment?.paymentUrl ||
+    order?.mercadoPago?.paymentUrl ||
+    order?.paymentUrl ||
+    order?.payment?.initPoint ||
+    order?.mercadoPago?.initPoint ||
+    order?.payment?.sandboxInitPoint ||
+    order?.mercadoPago?.sandboxInitPoint ||
+    ''
+  )
+}
+
 function isAsaasPaymentPending(order) {
   if (!isAsaasOnlineOrder(order) || isPaymentPaid(order)) return false
   const status = getPaymentStatusId(order)
   return ['', 'pending', 'awaiting_payment', 'failed_link_creation'].includes(status)
+}
+
+function isMercadoPagoPaymentPending(order) {
+  if (!isMercadoPagoOnlineOrder(order) || isPaymentPaid(order)) return false
+  const status = getPaymentStatusId(order)
+  return ['', 'pending', 'pending_payment', 'awaiting_payment', 'failed_link_creation'].includes(status)
 }
 
 function isPixPaymentPending(order) {
@@ -1429,11 +1460,11 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
 
           <div className="min-w-0 flex-1">
             <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-green-700 shadow-sm">
-              Asaas
+              Pagamento online legado
             </span>
 
             <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
-              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atencao' : 'Aguardando pagamento online'}
+              {paid ? 'Pagamento legado confirmado' : failed ? 'Pagamento legado precisa de atencao' : 'Aguardando pagamento online legado'}
             </h3>
 
             <p className="mt-2 text-sm font-semibold leading-6 text-green-800">
@@ -1441,7 +1472,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
                 ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
                 : failed
                   ? 'Nao foi possivel confirmar esse pagamento. Fale com a loja para combinar o proximo passo.'
-                  : 'Pague agora no ambiente seguro Asaas. A loja inicia o preparo apos a confirmacao automatica.'}
+                  : 'Abra o link de pagamento legado para concluir. A loja inicia o preparo apos a confirmacao automatica.'}
             </p>
           </div>
         </div>
@@ -1483,7 +1514,119 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
             ) : (
               <>
                 <FiCreditCard />
-                Pagar agora no ambiente seguro Asaas
+                Pagar agora (legado)
+              </>
+            )}
+          </button>
+        )}
+
+        {error && (
+          <p className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">
+            {error}
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const paymentUrl = getMercadoPagoPaymentUrl(order)
+  const status = getPaymentStatusId(order)
+  const paid = isPaymentPaid(order)
+  const pending = isMercadoPagoPaymentPending(order)
+  const failed = ['failed', 'expired', 'canceled', 'cancelled', 'refunded', 'charged_back', 'amount_mismatch'].includes(status)
+
+  const handleOpenPayment = useCallback(async () => {
+    if (paymentUrl) {
+      window.open(paymentUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+
+    if (!order?.id || !trackingToken) {
+      setError('Checkout Mercado Pago indisponivel. Fale com a loja.')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError('')
+      const createPayment = httpsCallable(functions, 'createMercadoPagoOrderPayment')
+      const result = await createPayment({
+        orderId: order.id,
+        trackingToken,
+      })
+      const nextUrl = result?.data?.paymentUrl || result?.data?.initPoint || result?.data?.sandboxInitPoint
+      if (!nextUrl) throw new Error('Checkout Mercado Pago indisponivel.')
+      window.open(nextUrl, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      setError(err?.message || 'Nao foi possivel abrir o Mercado Pago.')
+    } finally {
+      setLoading(false)
+    }
+  }, [order?.id, paymentUrl, trackingToken])
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-green-100 bg-white shadow-sm print:hidden">
+      <div className="bg-green-50 p-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-green-700 shadow-sm">
+            <FiCreditCard size={24} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-green-700 shadow-sm">
+              Mercado Pago
+            </span>
+
+            <h3 className="mt-3 text-xl font-black tracking-tight text-[#111827]">
+              {paid ? 'Pagamento confirmado' : failed ? 'Pagamento precisa de atencao' : 'Aguardando pagamento'}
+            </h3>
+
+            <p className="mt-2 text-sm font-semibold leading-6 text-green-800">
+              {paid
+                ? 'O Mercado Pago confirmou o pagamento. Agora acompanhe o preparo do pedido.'
+                : failed
+                  ? 'Nao foi possivel confirmar esse pagamento. Fale com a loja para combinar o proximo passo.'
+                  : 'Voce sera redirecionado para o Mercado Pago. O PratoBy nao armazena dados do cartao.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">Valor</p>
+            <p className="mt-1 text-2xl font-black text-[#111827]">{formatMoney(getOrderTotal(order))}</p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">Status</p>
+            <p className={`mt-1 text-sm font-black ${paid ? 'text-green-600' : failed ? 'text-red-600' : 'text-amber-700'}`}>
+              {paid ? 'Pago' : failed ? 'Nao confirmado' : 'Aguardando pagamento'}
+            </p>
+          </div>
+        </div>
+
+        {pending && (
+          <button
+            type="button"
+            onClick={handleOpenPayment}
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {loading ? (
+              <>
+                <FiLoader className="animate-spin" />
+                Abrindo Mercado Pago...
+              </>
+            ) : (
+              <>
+                <FiCreditCard />
+                Pagar agora
               </>
             )}
           </button>
@@ -1963,11 +2106,13 @@ const isDelivered = status === 'entregue'
   const storePhone = getStorePhone(order, store)
   const isPixManual = isPixManualOrder(order)
   const isAsaasOnline = isAsaasOnlineOrder(order)
+  const isMercadoPagoOnline = isMercadoPagoOnlineOrder(order)
   const pixPaymentPending = isPixPaymentPending(order)
   const pixPaid = isPixManual && isPaymentPaid(order)
   const pixCopyPaste = getPixCopyPaste(order)
   const shouldShowPixCard = isPixManual && !isCanceled && !isDelivered && (pixPaymentPending || pixPaid)
   const shouldShowAsaasCard = isAsaasOnline && !isCanceled && !isDelivered
+  const shouldShowMercadoPagoCard = isMercadoPagoOnline && !isCanceled && !isDelivered
   const scheduledOrder = isScheduledOrder(order)
   const scheduledOrderLabel = formatScheduledOrderDate(order)
   const showScheduledPixNotice = order?.paymentPolicy === 'pix_required' || pixPaymentPending
@@ -2525,6 +2670,13 @@ const isDelivered = status === 'entregue'
 
         {shouldShowAsaasCard && (
           <AsaasOnlinePaymentCard
+            order={order}
+            trackingToken={trackingToken}
+          />
+        )}
+
+        {shouldShowMercadoPagoCard && (
+          <MercadoPagoOnlinePaymentCard
             order={order}
             trackingToken={trackingToken}
           />

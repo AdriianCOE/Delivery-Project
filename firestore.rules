@@ -243,6 +243,7 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('trialEndsAt')
         && storeFieldUnchanged('onboardingStatus')
         && storeFieldUnchanged('billingProvider')
+        && storeFieldUnchanged('payments')
         && storeFieldUnchanged('billingMethodConfigured')
         && storeFieldUnchanged('asaasCustomerId')
         && storeFieldUnchanged('asaasSubscriptionId')
@@ -566,6 +567,17 @@ function validPublicOrderCreate(orderId) {
     // Cloud Functions using the Admin SDK bypass these rules; clients must not
     // read or write this collection directly.
     match /scheduledOrderSlots/{slotId} {
+      allow read, write: if false;
+    }
+
+    // Mercado Pago OAuth state and per-store provider credentials are backend-only.
+    // Cloud Functions/Admin SDK manage these documents; clients must never read
+    // access tokens, refresh tokens, nonces or connection internals directly.
+    match /mercadoPagoOAuthStates/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /storePaymentProviders/{storeId}/{document=**} {
       allow read, write: if false;
     }
 

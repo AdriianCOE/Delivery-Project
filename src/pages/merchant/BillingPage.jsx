@@ -311,7 +311,8 @@ function BillingFooter() {
 export default function BillingPage() {
   const auth = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [showCheckoutReturnBanner, setShowCheckoutReturnBanner] = useState(false)
   const { user, userData, storeId, storeIds = [] } = auth
   const [store, setStore] = useState(null)
   const [loadingStore, setLoadingStore] = useState(true)
@@ -338,6 +339,8 @@ export default function BillingPage() {
   const [billingProvince, setBillingProvince] = useState('')
   const [billingComplement, setBillingComplement] = useState('')
   const [billingErrors, setBillingErrors] = useState({})
+
+  const asaasCheckoutResult = searchParams.get('asaasCheckout')
 
   useEffect(() => {
     const uid = user?.uid
@@ -448,6 +451,22 @@ export default function BillingPage() {
     return () => clearTimeout(timer)
   }, [toast])
 
+  useEffect(() => {
+    if (asaasCheckoutResult !== 'success') return
+
+    setShowCheckoutReturnBanner(true)
+
+    setToast({
+      type: 'info',
+      message: 'Checkout concluído no Asaas. Estamos aguardando a confirmação do pagamento.',
+    })
+
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('asaasCheckout')
+
+    setSearchParams(nextParams, { replace: true })
+  }, [asaasCheckoutResult, searchParams, setSearchParams])
+
   // Format CEP with mask: 00000-000
   function formatCep(value) {
     const digits = String(value || '').replace(/\D/g, '').slice(0, 8)
@@ -482,8 +501,21 @@ export default function BillingPage() {
   const currentPeriodEnd = store?.currentPeriodEnd || userData?.currentPeriodEnd
   const lastPaymentStatus = store?.lastPaymentStatus || userData?.lastPaymentStatus || ''
   const billingProvider = store?.billingProvider || userData?.billingProvider || ''
-  const asaasCustomerId = store?.asaasCustomerId || userData?.asaasCustomerId || ''
-  const asaasSubscriptionId = store?.asaasSubscriptionId || userData?.asaasSubscriptionId || ''
+  const asaasCustomerId =
+  store?.billing?.asaasCustomerId ||
+  store?.asaasCustomerId ||
+  userData?.billing?.asaasCustomerId ||
+  userData?.asaasCustomerId ||
+  ''
+
+  const asaasSubscriptionId =
+    store?.billing?.asaasSubscriptionId ||
+    store?.billing?.subscriptionId ||
+    store?.asaasSubscriptionId ||
+    userData?.billing?.asaasSubscriptionId ||
+    userData?.billing?.subscriptionId ||
+    userData?.asaasSubscriptionId ||
+    ''
   const asaasCheckoutUrl = store?.asaasCheckoutUrl || userData?.asaasCheckoutUrl || ''
   const asaasCheckoutExpiresAt =
     store?.asaasCheckoutExpiresAt ||
@@ -502,8 +534,22 @@ export default function BillingPage() {
 
   const canReopenCheckout =
     Boolean(checkoutUrlToOpen) && !hasAsaasBillingSetup && !checkoutIsExpired
+  
+  const canSyncAsaasSubscription = Boolean(store?.id && asaasSubscriptionId)
+
+  const canShowBillingStatusCheck = Boolean(
+    store?.id &&
+      (
+        asaasCustomerId ||
+        asaasSubscriptionId ||
+        hasAsaasBillingSetup ||
+        checkoutUrlToOpen ||
+        showCheckoutReturnBanner
+      )
+  )
+
   const showCheckoutSuccessBanner =
-    searchParams.get('asaasCheckout') === 'success' && !hasAsaasBillingSetup
+    showCheckoutReturnBanner && !hasAsaasBillingSetup
   const trialReminderEmailOptIn = Boolean(userData?.trialReminderEmailOptIn)
   const currentPlanOption = PLAN_OPTIONS.find((planOption) => planOption.id === plan) || PLAN_OPTIONS[0]
   const currentPlanDisplayAmount = billingCycle === 'annual'
@@ -670,21 +716,55 @@ export default function BillingPage() {
   async function handleRefreshBillingStatus() {
     if (isCheckingBillingStatus) return
 
+    if (!store?.id) {
+      setToast({
+        type: 'error',
+        message: 'Selecione uma loja antes de verificar o status da assinatura.',
+      })
+      return
+    }
+
     setIsCheckingBillingStatus(true)
+
     try {
+      let message = 'Status da assinatura atualizado.'
+
+      if (canSyncAsaasSubscription) {
+        const syncAsaasSubscriptionStatus = httpsCallable(functions, 'syncAsaasSubscriptionStatus')
+        const response = await syncAsaasSubscriptionStatus({ storeId: store.id })
+
+        message =
+          response?.data?.message ||
+          'Status sincronizado com o Asaas.'
+      } else {
+        message =
+          'Ainda não encontramos uma assinatura Asaas ativa para sincronizar. Se você acabou de abrir o checkout, conclua o pagamento e aguarde a confirmação.'
+      }
+
       if (auth.refreshUserData) {
         await auth.refreshUserData()
       }
+
       setStoreRefreshNonce((value) => value + 1)
+
       setToast({
-        type: 'info',
-        message: 'Verificando status da assinatura. Se o Asaas confirmar o pagamento, esta página será atualizada.',
+        type: canSyncAsaasSubscription ? 'success' : 'info',
+        message,
       })
     } catch (error) {
       console.error('[BillingPage] error refreshing billing status:', error)
+
+      const friendlyMessage =
+        error?.code === 'functions/not-found'
+          ? 'A função de sincronização ainda não foi publicada. Faça o deploy das Functions e tente novamente.'
+          : error?.code === 'functions/permission-denied'
+            ? 'Você não tem permissão para sincronizar esta assinatura.'
+            : error?.message ||
+              'Não foi possível verificar o status agora. Tente novamente em alguns segundos.'
+
       setToast({
         type: 'error',
-        message: 'Não foi possível verificar o status agora. Tente novamente em alguns segundos.',
+        message: friendlyMessage,
       })
     } finally {
       setIsCheckingBillingStatus(false)
@@ -832,7 +912,7 @@ export default function BillingPage() {
         setToast({
           type: 'success',
           message: response?.data?.status === 'trialing'
-            ? 'Forma de pagamento confirmada. Seu teste grátis foi ativado.'
+            ? 'Checkout criado com sucesso. Seu teste grátis será atualizado após a confirmação do Asaas.'
             : 'Solicitação enviada ao Asaas. Aguarde a atualização do status.',
         })
       }
@@ -996,9 +1076,9 @@ export default function BillingPage() {
             <div className="flex items-start gap-3">
               <FiCheck className="mt-0.5 shrink-0 text-emerald-600" size={18} />
               <div>
-                <p className="font-black text-gray-900 dark:text-white">Forma de pagamento confirmada!</p>
+                <p className="font-black text-gray-900 dark:text-white">Checkout concluído no Asaas</p>
                 <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-                  Seu teste grátis será atualizado automaticamente após a confirmação. Se necessário, use o botão de verificar status no painel abaixo.
+                  Estamos aguardando a confirmação do pagamento pelo Asaas. Use o botão de verificar status no painel abaixo se a atualização demorar.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Link
@@ -1191,11 +1271,11 @@ export default function BillingPage() {
                   </div>
                 )}
 
-                {!hasAsaasBillingSetup && (
+                {canShowBillingStatusCheck && (!hasAsaasBillingSetup || isPastDue || isBlocked || isCanceled) && (
                   <button
                     type="button"
                     onClick={handleRefreshBillingStatus}
-                    disabled={isCheckingBillingStatus}
+                    disabled={isCheckingBillingStatus || !store?.id}
                     className="w-full inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-950/20 text-[11px] font-black text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-zinc-900 disabled:opacity-50"
                   >
                     {isCheckingBillingStatus ? <FiLoader className="animate-spin" size={12} /> : <FiClock size={12} />}

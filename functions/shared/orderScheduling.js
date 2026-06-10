@@ -324,9 +324,19 @@ function isPixManualPaymentMethod(value) {
   return PIX_MANUAL_METHODS.has(String(value || '').trim().toLowerCase())
 }
 
-function isAsaasOnlinePaymentMethod(value) {
+function isMercadoPagoOnlinePaymentMethod(value) {
   const method = String(value || '').trim().toLowerCase()
-  return method === 'asaas_online'
+  return method === 'mercadopago_online'
+}
+
+function isMercadoPagoOnlineActive(store) {
+  const config = store?.payments?.mercadoPago || store?.payments?.mercadopago || {}
+  const status = String(config.status || (config.enabled === true ? 'active' : 'not_connected'))
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+  return config.enabled === true && ['active', 'enabled', 'ativo'].includes(status)
 }
 
 function normalizePreorderPaymentMode(store) {
@@ -340,9 +350,10 @@ function normalizePreorderPaymentMode(store) {
     .toLowerCase()
     .trim()
 
-  return ['manual', 'pix_manual', 'asaas_online', 'manual_or_asaas'].includes(mode)
-    ? mode
-    : 'manual'
+  if (mode === 'asaas_online') return isMercadoPagoOnlineActive(store) ? 'mercadopago_online' : 'manual'
+  if (mode === 'manual_or_asaas') return isMercadoPagoOnlineActive(store) ? 'manual_or_mercadopago' : 'manual'
+
+  return ['manual', 'pix_manual', 'mercadopago_online', 'manual_or_mercadopago'].includes(mode) ? mode : 'manual'
 }
 
 function hasProductSchedulingContribution(product) {
@@ -362,18 +373,18 @@ function resolvePaymentPolicy({ storeScheduling, products, orderTiming, paymentM
     && products.some((product) => product.mode === 'scheduled_only')
   const storeScheduledPix = orderTiming === 'scheduled'
     && storeScheduling.prepaymentPolicy === 'pix_required_for_scheduled'
-  const scheduledOnlineOnly = orderTiming === 'scheduled' && preorderPaymentMode === 'asaas_online'
-  const scheduledManualOrAsaas = orderTiming === 'scheduled' && preorderPaymentMode === 'manual_or_asaas'
+  const scheduledOnlineOnly = orderTiming === 'scheduled' && preorderPaymentMode === 'mercadopago_online'
+  const scheduledManualOrOnline = orderTiming === 'scheduled' && preorderPaymentMode === 'manual_or_mercadopago'
   const scheduledPix = orderTiming === 'scheduled' && preorderPaymentMode === 'pix_manual'
   const requiresPixPayment = explicitProductPix || customProductPix || storeScheduledPix || scheduledPix
   const paymentPolicy = scheduledOnlineOnly
-    ? 'asaas_online_required'
-    : scheduledManualOrAsaas
+    ? 'mercadopago_online_required'
+    : scheduledManualOrOnline
       ? 'prepaid_required'
       : requiresPixPayment
         ? 'pix_required'
         : 'none'
-  const paymentPolicyReason = scheduledOnlineOnly || scheduledManualOrAsaas || scheduledPix
+  const paymentPolicyReason = scheduledOnlineOnly || scheduledManualOrOnline || scheduledPix
     ? 'store_preorder_policy'
     : explicitProductPix || customProductPix
       ? 'product_required'
@@ -381,15 +392,15 @@ function resolvePaymentPolicy({ storeScheduling, products, orderTiming, paymentM
         ? 'store_scheduled'
         : null
 
-  if (scheduledOnlineOnly && !isAsaasOnlinePaymentMethod(paymentMethod)) {
+  if (scheduledOnlineOnly && !isMercadoPagoOnlinePaymentMethod(paymentMethod)) {
     failWith(fail, 'failed-precondition', 'Este pedido exige pagamento online antecipado.')
   }
 
-  if (scheduledManualOrAsaas && !isPixManualPaymentMethod(paymentMethod) && !isAsaasOnlinePaymentMethod(paymentMethod)) {
+  if (scheduledManualOrOnline && !isPixManualPaymentMethod(paymentMethod) && !isMercadoPagoOnlinePaymentMethod(paymentMethod)) {
     failWith(fail, 'failed-precondition', 'Este pedido exige Pix manual ou pagamento online antecipado.')
   }
 
-  if (requiresPixPayment && !scheduledManualOrAsaas && !isPixManualPaymentMethod(paymentMethod)) {
+  if (requiresPixPayment && !scheduledManualOrOnline && !isPixManualPaymentMethod(paymentMethod)) {
     failWith(fail, 'failed-precondition', 'Este pedido exige pagamento antecipado via Pix.')
   }
 

@@ -765,7 +765,7 @@ export default function Statistics() {
     const totalCustomers = phones.size
     const recurrence = totalOrders > 0 && totalCustomers > 0 ? Math.max(0, Math.round(((totalOrders - totalCustomers) / totalOrders) * 100)) : 0
 
-    // Newer PratoBy dimensions: Asaas online, balcão, agendamento and pickup/delivery.
+    // Newer PratoBy dimensions: online payment, balcão, agendamento and pickup/delivery.
     const payments = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
     const paymentRevenueCents = { online: 0, pix: 0, card: 0, cash: 0, other: 0 }
     const delTypes = { delivery: 0, pickup: 0, counter: 0, table: 0 }
@@ -1171,7 +1171,7 @@ export default function Statistics() {
 
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <KpiCard icon={FiShoppingBag} label="Balcão" tone="purple" value={data.counterCount} sub={`${fmt(data.counterRevenueCents)} presencial`} />
-              <KpiCard icon={FiZap} label="Pagamento online" tone="blue" value={data.onlineCount} sub={data.onlineCount > 0 ? `${data.onlinePaidRate ?? 0}% confirmados` : 'Pix/cartão via Asaas'} />
+              <KpiCard icon={FiZap} label="Pagamento online" tone="blue" value={data.onlineCount} sub={data.onlineCount > 0 ? `${data.onlinePaidRate ?? 0}% confirmados` : 'Pix/cartão via Mercado Pago'} />
               <KpiCard icon={FiClock} label="Tempo de conclusão" tone="amber" value={data.avgDelivery !== null ? `${data.avgDelivery} min` : '—'} sub="Criação até finalização" />
               <KpiCard icon={FiTag} label="Descontos" tone="teal" value={fmt(data.discountCents)} sub={`${data.couponOrders} c/ cupom`} />
             </div>
@@ -1314,7 +1314,7 @@ export default function Statistics() {
                 <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-1">Pagamentos</p>
                 <div className="space-y-1 mb-4">
                   {[
-                    { key: 'online', label: 'Pagamento online', color: 'bg-indigo-500', sub: 'Pix/cartão via Asaas' },
+                    { key: 'online', label: 'Pagamento online', color: 'bg-indigo-500', sub: 'Pix/cartão via Mercado Pago' },
                     { key: 'pix', label: 'Pix manual', color: 'bg-[#f97316]', sub: 'Confirmado pela loja' },
                     { key: 'card', label: 'Maquininha', color: 'bg-blue-500', sub: 'Crédito/débito/cartão presencial' },
                     { key: 'cash', label: 'Dinheiro', color: 'bg-emerald-500', sub: 'Recebido no balcão/entrega' },

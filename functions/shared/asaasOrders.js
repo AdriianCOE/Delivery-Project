@@ -1,12 +1,15 @@
 const { onCall, onRequest } = require('firebase-functions/v2/https')
 const crypto = require('crypto')
+const {
+  normalizeMercadoPagoPublicConfig,
+} = require('./mercadoPagoOrders')
 
 const PROVIDER = 'asaas'
 const ONLINE_MODE = 'online'
 const BLOCKED_REASON = 'awaiting_online_payment'
 const DEFAULT_ASAAS_ORDERS_BASE_URL = 'https://api-sandbox.asaas.com/v3'
+const LEGACY_ASAAS_ACTIVE_STATUSES = new Set(['active', 'enabled', 'ativo'])
 
-const ACTIVE_ASAAS_STATUSES = new Set(['active', 'enabled', 'ativo'])
 const SUPPORTED_WEBHOOK_EVENTS = new Set([
   'PAYMENT_CREATED',
   'PAYMENT_CONFIRMED',
@@ -131,12 +134,12 @@ function normalizeManualPayments(store = {}) {
 function normalizeAsaasPublicConfig(store = {}) {
   const raw = store.payments?.asaas || {}
   const status = normalizeText(raw.status || (raw.enabled === true ? 'active' : 'inactive'))
-  const enabled = raw.enabled === true && ACTIVE_ASAAS_STATUSES.has(status)
   const maxInstallmentCount = toPositiveInteger(raw.maxInstallmentCount, null, 1, 12)
 
   return stripUndefinedDeep({
-    enabled,
-    status: enabled ? 'active' : (status || 'inactive'),
+    enabled: false,
+    status: status || 'legacy_disabled',
+    legacy: true,
     billingType: 'UNDEFINED',
     allowPix: raw.allowPix !== false,
     allowCreditCard: raw.allowCreditCard !== false,
@@ -151,30 +154,55 @@ function normalizePreorderPolicy(store = {}) {
     ? raw
     : { mode: raw }
   const mode = normalizeText(source.mode || source.requiredMethod || 'manual')
+  const mercadoPagoEnabled = normalizeMercadoPagoPublicConfig(store).enabled === true
+
+  if (mode === 'asaas_online') {
+    const safeMode = mercadoPagoEnabled ? 'mercadopago_online' : 'manual'
+    return stripUndefinedDeep({
+      mode: safeMode,
+      requiredMethod: safeMode !== 'manual' ? safeMode : undefined,
+      legacyMode: 'asaas_online',
+    })
+  }
+
+  if (mode === 'manual_or_asaas') {
+    const safeMode = mercadoPagoEnabled ? 'manual_or_mercadopago' : 'manual'
+    return stripUndefinedDeep({
+      mode: safeMode,
+      requiredMethod: safeMode !== 'manual' ? safeMode : undefined,
+      legacyMode: 'manual_or_asaas',
+    })
+  }
+
   const safeMode = [
     'manual',
     'pix_manual',
-    'asaas_online',
-    'manual_or_asaas',
+    'mercadopago_online',
+    'manual_or_mercadopago',
   ].includes(mode) ? mode : 'manual'
 
   return stripUndefinedDeep({
     mode: safeMode,
-    requiredMethod: safeMode === 'asaas_online' ? 'asaas_online' : undefined,
+    requiredMethod: safeMode !== 'manual' ? safeMode : undefined,
   })
 }
 
 function sanitizePublicStorePayments(store = {}) {
+  const mercadoPago = normalizeMercadoPagoPublicConfig(store)
+
   return stripUndefinedDeep({
     manual: normalizeManualPayments(store),
     asaas: normalizeAsaasPublicConfig(store),
+    mercadoPago,
+    mercadopago: mercadoPago,
     preorderPolicy: normalizePreorderPolicy(store),
   })
 }
 
 function isAsaasOnlineActive(store = {}) {
-  const asaas = normalizeAsaasPublicConfig(store)
-  return asaas.enabled === true && asaas.status === 'active'
+  const raw = store.payments?.asaas || {}
+  const status = normalizeText(raw.status || (raw.enabled === true ? 'active' : 'inactive'))
+  return raw.enabled === true && LEGACY_ASAAS_ACTIVE_STATUSES.has(status)
 }
 
 function orderRequiresAsaasOnline({ store, schedulingDecision }) {

@@ -58,14 +58,14 @@ const PREORDER_POLICIES = [
     description: 'Pedidos agendados usam Pix manual e aguardam conferência da loja.',
   },
   {
-    value: 'asaas_online',
-    title: 'Exigir pagamento online Asaas',
-    description: 'O pedido fica pendente até o pagamento online ser confirmado.',
+    value: 'mercadopago_online',
+    title: 'Exigir Mercado Pago online',
+    description: 'Encomendas ficam aguardando a aprovação no Mercado Pago.',
   },
   {
-    value: 'manual_or_asaas',
-    title: 'Permitir Pix manual ou Asaas online',
-    description: 'O cliente escolhe uma das duas opções antecipadas.',
+    value: 'manual_or_mercadopago',
+    title: 'Permitir Pix manual ou Mercado Pago',
+    description: 'O cliente escolhe Pix manual ou checkout Mercado Pago.',
   },
 ]
 
@@ -79,18 +79,29 @@ const DEFAULT_FORM = {
   pixKeyType: 'phone',
   pixMerchantName: '',
   pixMerchantCity: '',
-  asaasEnabled: false,
-  asaasAllowPix: true,
-  asaasAllowCreditCard: true,
-  asaasAllowBoleto: false,
-  asaasMaxInstallments: 1,
+  mercadoPagoEnabled: false,
+  mercadoPagoAllowPix: true,
+  mercadoPagoAllowCreditCard: true,
+  mercadoPagoMaxInstallments: 1,
+  mercadoPagoRequireForScheduled: false,
+  mercadoPagoMinOrderCents: 0,
   preorderPolicyMode: 'manual',
 }
 
 const INSTALLMENT_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1)
 
-const ASAAS_DISABLED_HELP =
-  'Configuração assistida pelo suporte PratoBy. Quando a conta Asaas estiver aprovada, você poderá ativar esta opção.'
+function currencyStringToCents(value) {
+  const text = String(value || '').replace(/[^\d,.-]/g, '').replace(',', '.')
+  const number = Number.parseFloat(text)
+  if (!Number.isFinite(number) || number <= 0) return 0
+  return Math.round(number * 100)
+}
+
+function centsToCurrencyInput(value) {
+  const cents = Number(value) || 0
+  if (cents <= 0) return ''
+  return (cents / 100).toFixed(2).replace('.', ',')
+}
 
 function uniqueArray(values) {
   return [
@@ -180,38 +191,36 @@ function normalizeText(value) {
     .trim()
 }
 
-function getAsaasStatus(store) {
-  const asaas = store?.payments?.asaas || {}
-  return normalizeText(asaas.status || (asaas.enabled === true ? 'active' : 'inactive'))
+function getMercadoPagoConfig(store) {
+  return store?.payments?.mercadoPago || store?.payments?.mercadopago || {}
 }
 
-function getAsaasStatusLabel(status) {
+function getMercadoPagoStatus(store) {
+  const mercadoPago = getMercadoPagoConfig(store)
+  return normalizeText(mercadoPago.status || (mercadoPago.enabled === true ? 'active' : 'not_connected'))
+}
+
+function getMercadoPagoStatusLabel(status) {
   const labels = {
-    active: 'Ativo',
-    enabled: 'Ativo',
-    ativo: 'Ativo',
-    pending: 'Em configuração',
-    pending_setup: 'Em configuração',
-    pendingreview: 'Em análise',
-    pending_review: 'Em análise',
-    review: 'Em análise',
-    setup: 'Em configuração',
-    blocked: 'Bloqueado',
-    disabled: 'Desativado',
-    inactive: 'Não configurado',
-    notconfigured: 'Não configurado',
-    not_configured: 'Não configurado',
+    active: 'Conectado',
+    enabled: 'Conectado',
+    pending: 'Pendente',
+    error: 'Com erro',
+    revoked: 'Revogado',
+    not_connected: 'Não conectado',
+    notconnected: 'Não conectado',
+    inactive: 'Não conectado',
   }
-  return labels[status] || 'Não configurado'
+  return labels[status] || 'Não conectado'
 }
 
-function isAsaasConfigurable(store) {
-  return ['active', 'enabled', 'ativo'].includes(getAsaasStatus(store))
+function isMercadoPagoConfigurable(store) {
+  return ['active', 'enabled'].includes(getMercadoPagoStatus(store))
 }
 
-function isAsaasOnlineEnabled(store) {
-  const asaas = store?.payments?.asaas || {}
-  return asaas.enabled === true && isAsaasConfigurable(store)
+function isMercadoPagoOnlineEnabled(store) {
+  const mercadoPago = getMercadoPagoConfig(store)
+  return mercadoPago.enabled === true && isMercadoPagoConfigurable(store)
 }
 
 function formatPixKeyForInput(value, keyType) {
@@ -299,8 +308,11 @@ function normalizePreorderModeValue(value) {
 
   if (['none', 'no_prepayment', 'not_required'].includes(mode)) return 'manual'
   if (['manual_pix', 'pix', 'pix_required', 'pix_required_for_scheduled'].includes(mode)) return 'pix_manual'
-  if (['asaas', 'online', 'online_required', 'asaas_required'].includes(mode)) return 'asaas_online'
+  if (['asaas', 'asaas_required'].includes(mode)) return 'asaas_online'
+  if (['online', 'online_required'].includes(mode)) return 'mercadopago_online'
   if (['pix_or_asaas', 'manual_pix_or_asaas', 'pix_manual_or_asaas'].includes(mode)) return 'manual_or_asaas'
+  if (['mercadopago', 'mercado_pago', 'mercadopago_required', 'mercado_pago_required'].includes(mode)) return 'mercadopago_online'
+  if (['pix_or_mercadopago', 'manual_pix_or_mercadopago', 'pix_manual_or_mercadopago'].includes(mode)) return 'manual_or_mercadopago'
 
   return PREORDER_POLICIES.some((item) => item.value === mode) ? mode : ''
 }
@@ -314,6 +326,14 @@ function getPreorderMode(store) {
       : policy
   )
 
+  if (fromPayments === 'asaas_online') {
+    return isMercadoPagoOnlineEnabled(store) ? 'mercadopago_online' : 'manual'
+  }
+
+  if (fromPayments === 'manual_or_asaas') {
+    return isMercadoPagoOnlineEnabled(store) ? 'manual_or_mercadopago' : 'manual'
+  }
+
   if (fromPayments) return fromPayments
 
   const fromScheduling = normalizePreorderModeValue(
@@ -322,7 +342,34 @@ function getPreorderMode(store) {
     store?.scheduling?.paymentPolicy
   )
 
+  if (fromScheduling === 'asaas_online') {
+    return isMercadoPagoOnlineEnabled(store) ? 'mercadopago_online' : 'manual'
+  }
+
+  if (fromScheduling === 'manual_or_asaas') {
+    return isMercadoPagoOnlineEnabled(store) ? 'manual_or_mercadopago' : 'manual'
+  }
+
   return fromScheduling || 'manual'
+}
+
+function getLegacyAsaasPreorderMode(store) {
+  const policy = store?.payments?.preorderPolicy
+  const fromPayments = normalizePreorderModeValue(
+    policy && typeof policy === 'object' && !Array.isArray(policy)
+      ? policy.mode || policy.requiredMethod || policy.value
+      : policy
+  )
+
+  if (['asaas_online', 'manual_or_asaas'].includes(fromPayments)) return fromPayments
+
+  const fromScheduling = normalizePreorderModeValue(
+    store?.scheduling?.preorderPaymentPolicy ||
+    store?.scheduling?.prepaymentPolicy ||
+    store?.scheduling?.paymentPolicy
+  )
+
+  return ['asaas_online', 'manual_or_asaas'].includes(fromScheduling) ? fromScheduling : ''
 }
 
 function mapStoreToForm(store) {
@@ -332,7 +379,7 @@ function mapStoreToForm(store) {
   const pixKeyType = pix?.keyType || settingsPix?.keyType || store?.pixKeyType || 'phone'
   const hasPixConfig = Boolean(pixKey)
   const paymentMethods = store?.paymentMethods || {}
-  const asaas = store?.payments?.asaas || {}
+  const mercadoPago = getMercadoPagoConfig(store)
   const cardEnabled = paymentMethods.card !== false
 
   return {
@@ -346,13 +393,16 @@ function mapStoreToForm(store) {
     pixKeyType: PIX_KEY_TYPES.includes(pixKeyType) ? pixKeyType : 'phone',
     pixMerchantName: pix.merchantName || settingsPix.merchantName || store?.name || '',
     pixMerchantCity: pix.merchantCity || settingsPix.merchantCity || store?.address?.city || store?.city || '',
-    asaasEnabled: isAsaasOnlineEnabled(store),
-    asaasAllowPix: asaas.allowPix !== false,
-    asaasAllowCreditCard: asaas.allowCreditCard !== false,
-    asaasAllowBoleto: asaas.allowBoleto === true,
-    asaasMaxInstallments: Number.isInteger(Number(asaas.maxInstallmentCount))
-      ? Math.min(Math.max(Number(asaas.maxInstallmentCount), 1), 12)
+    mercadoPagoEnabled: isMercadoPagoOnlineEnabled(store),
+    mercadoPagoAllowPix: mercadoPago.allowPix !== false,
+    mercadoPagoAllowCreditCard: mercadoPago.allowCreditCard !== false,
+    mercadoPagoMaxInstallments: Number.isInteger(Number(mercadoPago.maxInstallmentCount))
+      ? Math.min(Math.max(Number(mercadoPago.maxInstallmentCount), 1), 12)
       : 1,
+    mercadoPagoRequireForScheduled: mercadoPago.requireForScheduled === true,
+    mercadoPagoMinOrderCents: Number.isInteger(Number(mercadoPago.minOrderCents))
+      ? Math.max(Number(mercadoPago.minOrderCents), 0)
+      : 0,
     preorderPolicyMode: getPreorderMode(store),
   }
 }
@@ -378,7 +428,7 @@ function normalizeSchedulingForPaymentPolicy(store, preorderPolicyMode) {
   const current = store?.scheduling && typeof store.scheduling === 'object' && !Array.isArray(store.scheduling)
     ? store.scheduling
     : {}
-  const prepaymentPolicy = ['pix_manual', 'manual_or_asaas'].includes(preorderPolicyMode)
+  const prepaymentPolicy = ['pix_manual', 'manual_or_mercadopago'].includes(preorderPolicyMode)
     ? 'pix_required_for_scheduled'
     : 'none'
 
@@ -390,13 +440,13 @@ function normalizeSchedulingForPaymentPolicy(store, preorderPolicyMode) {
 
 function Card({ icon: Icon, title, description, children, className = '' }) {
   return (
-    <section className={`rounded-[1.7rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-[#151922] ${className}`}>
+    <section className={`group rounded-[1.85rem] border border-gray-100/90 bg-white/95 p-5 shadow-sm shadow-slate-950/[0.03] ring-1 ring-transparent transition duration-200 hover:-translate-y-0.5 hover:border-orange-100 hover:shadow-lg hover:shadow-orange-500/5 dark:border-white/10 dark:bg-[#151922]/95 dark:shadow-black/20 dark:hover:border-orange-400/20 ${className}`}>
       <div className="mb-5 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] ring-1 ring-orange-100 transition group-hover:scale-105 dark:bg-orange-500/10 dark:ring-orange-400/10">
           <Icon size={20} />
         </div>
-        <div>
-          <h2 className="text-base font-black text-[#111827] dark:text-zinc-50">
+        <div className="min-w-0">
+          <h2 className="text-base font-black tracking-tight text-[#111827] dark:text-zinc-50">
             {title}
           </h2>
           {description && (
@@ -453,16 +503,20 @@ function Toggle({ checked, onChange, label, description, disabled = false }) {
         if (!disabled) onChange(!checked)
       }}
       disabled={disabled}
-      className="flex h-full w-full items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 text-left transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:bg-zinc-800/80"
+      className={`flex h-full w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        checked
+          ? 'border-orange-200 bg-orange-50/80 shadow-sm shadow-orange-500/5 dark:border-orange-400/20 dark:bg-orange-500/10'
+          : 'border-gray-100 bg-[#f9fafb] hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:bg-zinc-800/80'
+      }`}
     >
-      <div>
+      <div className="min-w-0">
         <p className="text-sm font-black text-[#111827] dark:text-zinc-100">{label}</p>
         {description && (
           <p className="mt-1 text-xs leading-5 text-[#6b7280] dark:text-zinc-400">{description}</p>
         )}
       </div>
-      <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? 'bg-[#f97316]' : 'bg-gray-300 dark:bg-zinc-700'}`}>
-        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${checked ? 'left-6' : 'left-1'}`} />
+      <span className={`relative h-7 w-12 shrink-0 rounded-full p-1 transition ${checked ? 'bg-[#f97316]' : 'bg-gray-300 dark:bg-zinc-700'}`}>
+        <span className={`block h-5 w-5 rounded-full bg-white shadow transition ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
       </span>
     </button>
   )
@@ -476,9 +530,9 @@ function StatusTile({ label, value, tone = 'gray' }) {
       : 'border-gray-100 bg-white text-[#111827] dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100'
 
   return (
-    <div className={`rounded-2xl border p-4 ${toneClass}`}>
+    <div className={`rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${toneClass}`}>
       <p className="text-[11px] font-black uppercase tracking-[0.08em] opacity-70">{label}</p>
-      <p className="mt-2 text-sm font-black">{value}</p>
+      <p className="mt-2 truncate text-sm font-black">{value}</p>
     </div>
   )
 }
@@ -509,6 +563,7 @@ export default function PaymentsPage() {
   const [selectedStoreId, setSelectedStoreId] = useState('')
   const [loadingStores, setLoadingStores] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [connectingMercadoPago, setConnectingMercadoPago] = useState(false)
   const [toast, setToast] = useState(null)
   const [form, setForm] = useState(DEFAULT_FORM)
   const toastTimeoutRef = useRef(null)
@@ -528,10 +583,11 @@ export default function PaymentsPage() {
   }, [selectedStoreId, stores])
 
   const publicSlug = getStoreSlug(selectedStore)
-  const asaasStatus = getAsaasStatus(selectedStore)
-  const asaasStatusLabel = getAsaasStatusLabel(asaasStatus)
-  const asaasConfigurable = isAsaasConfigurable(selectedStore)
-  const asaasOnlineActive = form.asaasEnabled && asaasConfigurable
+  const mercadoPagoStatus = getMercadoPagoStatus(selectedStore)
+  const mercadoPagoStatusLabel = getMercadoPagoStatusLabel(mercadoPagoStatus)
+  const mercadoPagoConfigurable = isMercadoPagoConfigurable(selectedStore)
+  const mercadoPagoOnlineActive = form.mercadoPagoEnabled && mercadoPagoConfigurable
+  const legacyAsaasPreorderMode = getLegacyAsaasPreorderMode(selectedStore)
   const pixCompleteness = useMemo(() => getPixCompleteness(form, selectedStore), [form, selectedStore])
   const themeVars = useMemo(() => ({ '--store-theme': selectedStore?.themeColor || DEFAULT_THEME }), [selectedStore?.themeColor])
 
@@ -630,20 +686,34 @@ export default function PaymentsPage() {
   }, [])
 
   const updatePreorderPolicyMode = useCallback((mode) => {
-  const nextMode = PREORDER_POLICIES.some((item) => item.value === mode) ? mode : 'manual'
-  const requiresManualPix = ['pix_manual', 'manual_or_asaas'].includes(nextMode)
+    const nextMode = PREORDER_POLICIES.some((item) => item.value === mode) ? mode : 'manual'
+    const requiresManualPix = ['pix_manual', 'manual_or_mercadopago'].includes(nextMode)
+    const requiresMercadoPago = nextMode === 'mercadopago_online'
 
-  setForm((prev) => ({
-    ...prev,
-    preorderPolicyMode: nextMode,
-    paymentPix: requiresManualPix ? true : prev.paymentPix,
-    pixEnabled: requiresManualPix ? true : prev.pixEnabled,
-    pixMerchantName: requiresManualPix && !prev.pixMerchantName ? selectedStore?.name || '' : prev.pixMerchantName,
-    pixMerchantCity: requiresManualPix && !prev.pixMerchantCity
-      ? selectedStore?.address?.city || selectedStore?.city || ''
-      : prev.pixMerchantCity,
-  }))
-}, [selectedStore])
+    setForm((prev) => ({
+      ...prev,
+      preorderPolicyMode: nextMode,
+      mercadoPagoRequireForScheduled: requiresMercadoPago ? true : prev.mercadoPagoRequireForScheduled,
+      paymentPix: requiresManualPix ? true : prev.paymentPix,
+      pixEnabled: requiresManualPix ? true : prev.pixEnabled,
+      pixMerchantName: requiresManualPix && !prev.pixMerchantName ? selectedStore?.name || '' : prev.pixMerchantName,
+      pixMerchantCity: requiresManualPix && !prev.pixMerchantCity
+        ? selectedStore?.address?.city || selectedStore?.city || ''
+        : prev.pixMerchantCity,
+    }))
+  }, [selectedStore])
+
+  const updateMercadoPagoRequireForScheduled = useCallback((value) => {
+    setForm((prev) => ({
+      ...prev,
+      mercadoPagoRequireForScheduled: value,
+      preorderPolicyMode: value && prev.preorderPolicyMode === 'manual'
+        ? 'mercadopago_online'
+        : !value && prev.preorderPolicyMode === 'mercadopago_online'
+          ? 'manual'
+          : prev.preorderPolicyMode,
+    }))
+  }, [])
 
   const updatePixEnabled = useCallback((value) => {
     setForm((prev) => ({
@@ -664,6 +734,24 @@ export default function PaymentsPage() {
     }))
   }, [])
 
+  const handleConnectMercadoPago = useCallback(async () => {
+    if (!selectedStore || connectingMercadoPago) return
+
+    try {
+      setConnectingMercadoPago(true)
+      const getConnectUrl = httpsCallable(functions, 'getMercadoPagoConnectUrl')
+      const result = await getConnectUrl({ storeId: selectedStore.id })
+      const url = result?.data?.url
+      if (!url) throw new Error('URL de conexão Mercado Pago indisponível.')
+      window.location.assign(url)
+    } catch (error) {
+      console.error(error)
+      showToast('error', error?.message || 'Não foi possivel iniciar a conexão com Mercado Pago.')
+    } finally {
+      setConnectingMercadoPago(false)
+    }
+  }, [connectingMercadoPago, selectedStore, showToast])
+
   const handleSave = useCallback(async () => {
     if (!selectedStore || saving) return
 
@@ -673,13 +761,13 @@ export default function PaymentsPage() {
     }
 
     const cardEnabled = Boolean(form.paymentCredit || form.paymentDebit)
-const requiresManualPix = ['pix_manual', 'manual_or_asaas'].includes(form.preorderPolicyMode)
-const pixWillBeEnabled = Boolean(form.paymentPix || requiresManualPix)
+    const requiresManualPix = ['pix_manual', 'manual_or_mercadopago'].includes(form.preorderPolicyMode)
+    const pixWillBeEnabled = Boolean(form.paymentPix || requiresManualPix)
 
-if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
-  showToast('error', 'Selecione pelo menos uma forma de pagamento.')
-  return
-}
+    if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
+      showToast('error', 'Selecione pelo menos uma forma de pagamento.')
+      return
+    }
 
     let normalizedPixKey = sanitizeTextField(form.pixKey, 120)
     const pixKeyType = PIX_KEY_TYPES.includes(form.pixKeyType) ? form.pixKeyType : 'phone'
@@ -701,18 +789,18 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
       normalizedPixKey = pixKeyValidation.value
     }
 
-    if (form.asaasEnabled && !asaasConfigurable) {
-      showToast('error', 'A conta Asaas ainda precisa ser validada pelo suporte antes de ativar pagamento online.')
+    if (form.mercadoPagoEnabled && !mercadoPagoConfigurable) {
+      showToast('error', 'Conecte o Mercado Pago antes de ativar pagamento online de pedidos.')
       return
     }
 
-    if (form.asaasEnabled && !form.asaasAllowPix && !form.asaasAllowCreditCard && !form.asaasAllowBoleto) {
-      showToast('error', 'Selecione pelo menos uma forma de pagamento online do Asaas.')
+    if (form.mercadoPagoEnabled && !form.mercadoPagoAllowPix && !form.mercadoPagoAllowCreditCard) {
+      showToast('error', 'Selecione Pix online ou crédito online no Mercado Pago.')
       return
     }
 
-    if (['asaas_online', 'manual_or_asaas'].includes(form.preorderPolicyMode) && !asaasOnlineActive) {
-      showToast('error', 'Ative o pagamento online Asaas antes de usar essa regra para encomendas.')
+    if (['mercadopago_online', 'manual_or_mercadopago'].includes(form.preorderPolicyMode) && !mercadoPagoOnlineActive) {
+      showToast('error', 'Conecte e ative o Mercado Pago antes de usar essa regra para encomendas.')
       return
     }
 
@@ -735,12 +823,13 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
           merchantCity: pixMerchantCity,
         },
         payments: {
-          asaas: {
-            enabled: Boolean(form.asaasEnabled),
-            allowPix: Boolean(form.asaasAllowPix),
-            allowCreditCard: Boolean(form.asaasAllowCreditCard),
-            allowBoleto: Boolean(form.asaasAllowBoleto),
-            maxInstallmentCount: Math.min(Math.max(Number(form.asaasMaxInstallments) || 1, 1), 12),
+          mercadoPago: {
+            enabled: Boolean(form.mercadoPagoEnabled),
+            allowPix: Boolean(form.mercadoPagoAllowPix),
+            allowCreditCard: Boolean(form.mercadoPagoAllowCreditCard),
+            maxInstallmentCount: Math.min(Math.max(Number(form.mercadoPagoMaxInstallments) || 1, 1), 12),
+            requireForScheduled: Boolean(form.mercadoPagoRequireForScheduled),
+            minOrderCents: Math.max(0, Math.round(Number(form.mercadoPagoMinOrderCents) || 0)),
           },
           preorderPolicy: {
             mode: form.preorderPolicyMode,
@@ -772,9 +861,9 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
       setSaving(false)
     }
   }, [
-    asaasConfigurable,
-    asaasOnlineActive,
     form,
+    mercadoPagoConfigurable,
+    mercadoPagoOnlineActive,
     pixCompleteness.complete,
     saving,
     selectedStore,
@@ -836,6 +925,24 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
             </Select>
           </div>
         )}
+        <div className="mb-5 overflow-hidden rounded-[1.7rem] border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-amber-50 p-4 shadow-sm dark:border-orange-400/20 dark:from-orange-500/10 dark:via-[#151922] dark:to-amber-500/10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#f97316] text-white shadow-sm shadow-orange-500/20">
+                <FiShield size={18} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-[#111827] dark:text-zinc-50">Pagamentos online por Mercado Pago</p>
+                <p className="mt-1 max-w-3xl text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                  As assinaturas do PratoBy continuam no Asaas. Os pedidos online da loja usam Mercado Pago e ficam aguardando aprovação antes da produção.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-black text-orange-700 shadow-sm dark:border-white/10 dark:bg-white/10 dark:text-orange-200">
+              <FiLock size={13} /> Sem cartão no PratoBy
+            </span>
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatusTile
             label="Pix manual"
@@ -843,9 +950,9 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
             tone={form.paymentPix ? 'green' : 'gray'}
           />
           <StatusTile
-            label="Pagamento online"
-            value={asaasOnlineActive ? 'Ativo' : asaasStatusLabel}
-            tone={asaasOnlineActive ? 'green' : 'orange'}
+            label="Mercado Pago"
+            value={mercadoPagoOnlineActive ? 'Ativo' : mercadoPagoStatusLabel}
+            tone={mercadoPagoOnlineActive ? 'green' : 'orange'}
           />
           <StatusTile
             label="Cartão presencial"
@@ -955,10 +1062,22 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
               title="Pagamento antecipado para encomendas"
               description="Defina se pedidos agendados precisam pagar antes da produção."
             >
+              {legacyAsaasPreorderMode && (
+                <div className="mb-4 flex items-start gap-2 rounded-2xl border border-orange-100 bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-700">
+                  <FiInfo className="mt-0.5 shrink-0" />
+                  <span>
+                    {mercadoPagoOnlineActive
+                      ? 'Esta loja tinha regra Asaas Orders antiga. Ela será salva como Mercado Pago para pedidos online.'
+                      : 'Esta loja tinha regra Asaas Orders antiga. Conecte o Mercado Pago para voltar a exigir pagamento online em encomendas.'}
+                  </span>
+                </div>
+              )}
+
               <div className="grid gap-3">
                 {PREORDER_POLICIES.map((policy) => {
-                  const needsAsaas = ['asaas_online', 'manual_or_asaas'].includes(policy.value)
-                  const disabled = needsAsaas && !asaasOnlineActive
+                  const needsMercadoPago = ['mercadopago_online', 'manual_or_mercadopago'].includes(policy.value)
+                  const disabled = needsMercadoPago && !mercadoPagoOnlineActive
+                  const disabledDescription = 'Conecte e ative o Mercado Pago antes de usar esta opção.'
 
                   return (
                     <button
@@ -978,7 +1097,7 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
                         <div>
                           <p className="text-sm font-black">{policy.title}</p>
                           <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
-                            {disabled ? 'Ative o pagamento online Asaas antes de usar esta opção.' : policy.description}
+                            {disabled ? disabledDescription : policy.description}
                           </p>
                         </div>
                         {form.preorderPolicyMode === policy.value && <FiCheckCircle className="text-[#f97316]" />}
@@ -992,71 +1111,104 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
 
           <div className="space-y-6">
             <Card
-              icon={FiShield}
-              title="Pagamento online Asaas"
-              description="O cliente paga fora do PratoBy, no ambiente seguro do Asaas. O PratoBy não armazena cartão."
+              icon={FiCreditCard}
+              title="Mercado Pago"
+              description="O dinheiro dos pedidos online cai direto na conta Mercado Pago conectada do lojista."
+              className="border-orange-100/80 bg-gradient-to-br from-white via-white to-orange-50/60 dark:from-[#151922] dark:via-[#151922] dark:to-orange-500/5"
             >
-              <div className={`rounded-[1.5rem] border p-4 ${asaasOnlineActive ? 'border-green-100 bg-green-50 text-green-900' : 'border-orange-100 bg-orange-50 text-orange-900'}`}>
-                <div className="flex items-center justify-between gap-3">
+              <div className={`overflow-hidden rounded-[1.6rem] border ${mercadoPagoOnlineActive ? 'border-emerald-100 bg-emerald-50 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100' : 'border-orange-100 bg-orange-50 text-orange-900 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100'}`}>
+                <div className="flex items-center justify-between gap-3 p-4">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.08em] opacity-70">Status</p>
-                    <p className="mt-1 text-sm font-black">{asaasOnlineActive ? 'Ativo para pedidos online' : asaasStatusLabel}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.08em] opacity-70">Status da conexão</p>
+                    <p className="mt-1 text-base font-black">{mercadoPagoOnlineActive ? 'Ativo para pedidos online' : mercadoPagoStatusLabel}</p>
+                    <p className="mt-1 text-xs font-semibold opacity-75">
+                      {mercadoPagoOnlineActive
+                        ? 'Checkout Pro disponível no cardápio público.'
+                        : 'Conecte a conta para liberar cartão e Pix online.'}
+                    </p>
                   </div>
-                  {asaasOnlineActive ? <FiCheckCircle size={22} /> : <FiLock size={22} />}
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/70 shadow-sm dark:bg-white/10">
+                    {mercadoPagoOnlineActive ? <FiCheckCircle size={22} /> : <FiLock size={22} />}
+                  </div>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-4">
+                {!mercadoPagoConfigurable && (
+                  <button
+                    type="button"
+                    onClick={handleConnectMercadoPago}
+                    disabled={connectingMercadoPago}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {connectingMercadoPago ? <FiLoader className="animate-spin" /> : <FiShield />}
+                    Conectar Mercado Pago
+                  </button>
+                )}
+
                 <Toggle
-                  checked={form.asaasEnabled}
-                  onChange={(value) => updateField('asaasEnabled', value)}
-                  disabled={!asaasConfigurable}
-                  label="Ativar pagamento online"
-                  description={asaasConfigurable
-                    ? 'Disponibiliza pagamento online quando a configuração administrativa está válida.'
-                    : ASAAS_DISABLED_HELP}
+                  checked={form.mercadoPagoEnabled}
+                  onChange={(value) => updateField('mercadoPagoEnabled', value)}
+                  disabled={!mercadoPagoConfigurable}
+                  label="Ativar Mercado Pago nos pedidos"
+                  description={mercadoPagoConfigurable
+                    ? 'Disponibiliza Checkout Pro no cardápio público.'
+                    : 'Conecte Mercado Pago para ativar pagamentos online de pedidos.'}
                 />
                 <Toggle
-                  checked={form.asaasAllowPix}
-                  onChange={(value) => updateField('asaasAllowPix', value)}
-                  disabled={!asaasConfigurable || !form.asaasEnabled}
+                  checked={form.mercadoPagoAllowPix}
+                  onChange={(value) => updateField('mercadoPagoAllowPix', value)}
+                  disabled={!mercadoPagoConfigurable || !form.mercadoPagoEnabled}
                   label="Permitir Pix online"
-                  description="Preferência pública para o checkout Asaas."
+                  description="O cliente paga Pix pelo Mercado Pago."
                 />
                 <Toggle
-                  checked={form.asaasAllowCreditCard}
-                  onChange={(value) => updateField('asaasAllowCreditCard', value)}
-                  disabled={!asaasConfigurable || !form.asaasEnabled}
-                  label="Permitir cartão de crédito"
-                  description="O cliente informa o cartão no ambiente Asaas."
+                  checked={form.mercadoPagoAllowCreditCard}
+                  onChange={(value) => updateField('mercadoPagoAllowCreditCard', value)}
+                  disabled={!mercadoPagoConfigurable || !form.mercadoPagoEnabled}
+                  label="Permitir crédito online"
+                  description="O cliente informa o cartão apenas no Mercado Pago."
                 />
                 <Toggle
-                  checked={form.asaasAllowBoleto}
-                  onChange={(value) => updateField('asaasAllowBoleto', value)}
-                  disabled={!asaasConfigurable || !form.asaasEnabled}
-                  label="Permitir boleto"
-                  description="Use apenas se o piloto da loja já aceitar boleto."
+                  checked={form.mercadoPagoRequireForScheduled}
+                  onChange={updateMercadoPagoRequireForScheduled}
+                  disabled={!mercadoPagoConfigurable || !form.mercadoPagoEnabled}
+                  label="Exigir em pedidos agendados"
+                  description="Encomendas ficam aguardando aprovação do pagamento antes da produção."
                 />
-                <Select
-                  label="Parcelamento máximo"
-                  value={form.asaasMaxInstallments}
-                  disabled={!asaasConfigurable || !form.asaasEnabled || !form.asaasAllowCreditCard}
-                  onChange={(event) => updateField('asaasMaxInstallments', Number(event.target.value))}
-                >
-                  {INSTALLMENT_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}x
-                    </option>
-                  ))}
-                </Select>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Select
+                    label="Parcelamento máximo"
+                    value={form.mercadoPagoMaxInstallments}
+                    disabled={!mercadoPagoConfigurable || !form.mercadoPagoEnabled || !form.mercadoPagoAllowCreditCard}
+                    onChange={(event) => updateField('mercadoPagoMaxInstallments', Number(event.target.value))}
+                  >
+                    {INSTALLMENT_OPTIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {value}x
+                      </option>
+                    ))}
+                  </Select>
+
+                  <Input
+                    label="Valor mínimo online"
+                    inputMode="decimal"
+                    value={centsToCurrencyInput(form.mercadoPagoMinOrderCents)}
+                    disabled={!mercadoPagoConfigurable || !form.mercadoPagoEnabled}
+                    onChange={(event) => updateField('mercadoPagoMinOrderCents', currencyStringToCents(event.target.value))}
+                    placeholder="Ex: 50,00"
+                  />
+                </div>
               </div>
 
               <div className="mt-5 rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 text-xs font-semibold leading-5 text-[#6b7280] dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
                 <div className="flex gap-3">
                   <FiInfo className="mt-0.5 shrink-0 text-[#f97316]" />
-                  <p>
-                    API key, accountId, walletId, webhook secret e status financeiro real são definidos pelo backend/admin. Esta página salva apenas preferências permitidas.
-                  </p>
+                  <div className="space-y-1">
+                    <p>As assinaturas do PratoBy continuam sendo cobradas separadamente.</p>
+                    <p>O PratoBy não armazena dados de cartão nem tokens no frontend.</p>
+                    <p>{getMercadoPagoConfig(selectedStore).environment === 'sandbox' ? 'Modo sandbox/teste ativo para esta loja.' : 'Ambiente de produção quando OAuth da loja estiver ativo.'}</p>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -1067,9 +1219,9 @@ if (!pixWillBeEnabled && !cardEnabled && !form.paymentCash) {
               description="Pagamentos online usam ambiente seguro do provedor."
             >
               <div className="space-y-3 text-sm font-semibold leading-6 text-[#6b7280] dark:text-zinc-400">
-                <p>O PratoBy não cobra comissão por pedido. Taxas de processamento podem ser cobradas pelo Asaas.</p>
+                <p>O PratoBy não cobra comissão por pedido. Taxas de processamento podem ser cobradas pelo Mercado Pago.</p>
                 <p>Pix manual não confirma automaticamente. A loja precisa conferir antes de preparar.</p>
-                <p>Para ativar ou revisar credenciais Asaas, fale com o suporte PratoBy.</p>
+                <p>A assinatura do PratoBy continua sendo cobrada separadamente pelo Asaas na área de faturamento.</p>
               </div>
             </Card>
           </div>

@@ -985,10 +985,10 @@ const knownStoreIdsKey = useMemo(() => {
     '--store-theme': form.themeColor || BRAND_GREEN,
   }), [form.themeColor])
 
-  const asaasOrderPayments = selectedStore?.payments?.asaas || {}
-  const asaasOrderPaymentsActive =
-    asaasOrderPayments.enabled === true &&
-    String(asaasOrderPayments.status || '').toLowerCase() === 'active'
+  const mercadoPagoOrderPayments = selectedStore?.payments?.mercadoPago || selectedStore?.payments?.mercadopago || {}
+  const mercadoPagoOrderPaymentsActive =
+    mercadoPagoOrderPayments.enabled === true &&
+    String(mercadoPagoOrderPayments.status || '').toLowerCase() === 'active'
   const schedulingLeadInput = useMemo(
     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
     [form.scheduling?.minLeadMinutes]
@@ -1954,7 +1954,7 @@ const knownStoreIdsKey = useMemo(() => {
                         Regras de encomenda ficam em Pagamentos
                       </p>
                       <p className="mt-2 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
-                        Configure Pix manual, Asaas online e exigencia de pagamento antecipado em uma area propria.
+                        Configure Pix manual, Mercado Pago online e exigencia de pagamento antecipado em uma area propria.
                       </p>
                       <Link
                         to="/dashboard/pagamentos"
@@ -2243,7 +2243,7 @@ const knownStoreIdsKey = useMemo(() => {
             id="settings-payments"
             icon={FiShield}
             title="Pagamentos"
-            description="Formas de pagamento, Pix manual, Asaas online e regras de encomenda agora ficam em uma area propria."
+            description="Formas de pagamento, Pix manual, Mercado Pago online e regras de encomenda agora ficam em uma area propria."
           >
             <div className="rounded-[1.5rem] border border-orange-100 bg-orange-50/70 p-5 dark:border-orange-500/25 dark:bg-orange-500/10">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2252,7 +2252,7 @@ const knownStoreIdsKey = useMemo(() => {
                     Pagamentos agora ficam em uma area propria.
                   </p>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
-                    Configure metodos aceitos, chave Pix, pagamento online Asaas e pagamento antecipado para encomendas sem misturar com as configuracoes gerais da loja.
+                    Configure metodos aceitos, chave Pix, Mercado Pago online e pagamento antecipado para encomendas sem misturar com as configuracoes gerais da loja.
                   </p>
                 </div>
 
@@ -2273,7 +2273,7 @@ const knownStoreIdsKey = useMemo(() => {
                   Cartao presencial: {selectedStore?.paymentMethods?.card === false ? 'inativo' : 'ativo'}
                 </div>
                 <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
-                  Asaas online: {asaasOrderPaymentsActive ? 'ativo' : 'inativo'}
+                  Mercado Pago: {mercadoPagoOrderPaymentsActive ? 'ativo' : 'inativo'}
                 </div>
               </div>
             </div>

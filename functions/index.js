@@ -18,6 +18,9 @@ const {
   sanitizePublicStorePayments,
 } = require('./shared/asaasOrders')
 const {
+  createMercadoPagoOrderFunctions,
+} = require('./shared/mercadoPagoOrders')
+const {
   disableCustomerOrderPushToken,
   registerCustomerOrderPushToken,
   sendCustomerOrderStatusPushToOrder,
@@ -66,6 +69,11 @@ const REGION = 'southamerica-east1'
 const CLOUDINARY_API_SECRET = defineSecret('CLOUDINARY_API_SECRET')
 const ASAAS_ORDERS_API_KEY = defineSecret('ASAAS_ORDERS_API_KEY')
 const ASAAS_ORDERS_WEBHOOK_SECRET = defineSecret('ASAAS_ORDERS_WEBHOOK_SECRET')
+const MERCADOPAGO_ACCESS_TOKEN_TEST = defineSecret('MERCADOPAGO_ACCESS_TOKEN_TEST')
+const MERCADOPAGO_ACCESS_TOKEN_PROD = defineSecret('MERCADOPAGO_ACCESS_TOKEN_PROD')
+const MERCADOPAGO_CLIENT_ID = defineSecret('MERCADOPAGO_CLIENT_ID')
+const MERCADOPAGO_CLIENT_SECRET = defineSecret('MERCADOPAGO_CLIENT_SECRET')
+const MERCADOPAGO_WEBHOOK_SECRET = defineSecret('MERCADOPAGO_WEBHOOK_SECRET')
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
 const LEGAL_CONFIG_COLLECTION = 'config'
 const LEGAL_CONFIG_DOC = 'legal'
@@ -92,6 +100,25 @@ const asaasOrderFunctions = createAsaasOrderFunctions({
   region: REGION,
   apiKeySecret: ASAAS_ORDERS_API_KEY,
   webhookSecret: ASAAS_ORDERS_WEBHOOK_SECRET,
+  sendNewOrderPushToStore: ({ storeId, orderId }) => sendNewOrderPushToStore({
+    db,
+    admin,
+    logger,
+    storeId,
+    orderId,
+  }),
+})
+const mercadoPagoOrderFunctions = createMercadoPagoOrderFunctions({
+  db,
+  admin,
+  HttpsError,
+  logger,
+  region: REGION,
+  accessTokenTestSecret: MERCADOPAGO_ACCESS_TOKEN_TEST,
+  accessTokenProdSecret: MERCADOPAGO_ACCESS_TOKEN_PROD,
+  clientIdSecret: MERCADOPAGO_CLIENT_ID,
+  clientSecretSecret: MERCADOPAGO_CLIENT_SECRET,
+  webhookSecret: MERCADOPAGO_WEBHOOK_SECRET,
   sendNewOrderPushToStore: ({ storeId, orderId }) => sendNewOrderPushToStore({
     db,
     admin,
@@ -244,6 +271,10 @@ exports.updateMerchantOrder = merchantOrderFunctions.updateMerchantOrder
 exports.createMerchantCounterOrder = merchantOrderFunctions.createMerchantCounterOrder
 exports.createAsaasOrderPayment = asaasOrderFunctions.createAsaasOrderPayment
 exports.asaasOrderWebhook = asaasOrderFunctions.asaasOrderWebhook
+exports.getMercadoPagoConnectUrl = mercadoPagoOrderFunctions.getMercadoPagoConnectUrl
+exports.mercadoPagoOAuthCallback = mercadoPagoOrderFunctions.mercadoPagoOAuthCallback
+exports.createMercadoPagoOrderPayment = mercadoPagoOrderFunctions.createMercadoPagoOrderPayment
+exports.mercadoPagoOrderWebhook = mercadoPagoOrderFunctions.mercadoPagoOrderWebhook
 
 exports.createPublicOrder = onCall(
   {
@@ -252,7 +283,7 @@ exports.createPublicOrder = onCall(
     memory: '256MiB',
     maxInstances: 10,
     enforceAppCheck: ENFORCE_APP_CHECK,
-    secrets: [ASAAS_ORDERS_API_KEY],
+    secrets: [ASAAS_ORDERS_API_KEY, MERCADOPAGO_ACCESS_TOKEN_TEST, MERCADOPAGO_ACCESS_TOKEN_PROD],
   },
   createPublicOrderHandler({
     db,
@@ -274,6 +305,8 @@ exports.createPublicOrder = onCall(
         return process.env.ASAAS_ORDERS_API_KEY || ''
       }
     },
+    mercadoPagoAccessTokenTestSecret: MERCADOPAGO_ACCESS_TOKEN_TEST,
+    mercadoPagoAccessTokenProdSecret: MERCADOPAGO_ACCESS_TOKEN_PROD,
   })
 )
 
@@ -1096,12 +1129,12 @@ function hasForbiddenSettingsKeyDeep(value, depth = 0) {
   ))
 }
 
-const ASAAS_ACTIVE_STATUSES = new Set(['active', 'enabled', 'ativo'])
+const ONLINE_PAYMENT_ACTIVE_STATUSES = new Set(['active', 'enabled', 'ativo'])
 const PREORDER_PAYMENT_POLICY_MODES = new Set([
   'manual',
   'pix_manual',
-  'asaas_online',
-  'manual_or_asaas',
+  'mercadopago_online',
+  'manual_or_mercadopago',
 ])
 
 function normalizeSettingsText(value) {
@@ -1133,38 +1166,56 @@ function sanitizeStorePaymentsSettingsPatch(value, currentPayments = {}) {
   const currentAsaas = current.asaas && typeof current.asaas === 'object' && !Array.isArray(current.asaas)
     ? current.asaas
     : {}
-  const inputAsaas = value.asaas && typeof value.asaas === 'object' && !Array.isArray(value.asaas)
-    ? value.asaas
+  const currentMercadoPago = current.mercadoPago && typeof current.mercadoPago === 'object' && !Array.isArray(current.mercadoPago)
+    ? current.mercadoPago
+    : {}
+  const inputMercadoPago = value.mercadoPago && typeof value.mercadoPago === 'object' && !Array.isArray(value.mercadoPago)
+    ? value.mercadoPago
     : null
   const inputPolicy = value.preorderPolicy && typeof value.preorderPolicy === 'object' && !Array.isArray(value.preorderPolicy)
     ? value.preorderPolicy
     : null
 
-  const status = normalizeSettingsText(currentAsaas.status || (currentAsaas.enabled === true ? 'active' : 'inactive'))
-  const canEnableAsaas = ASAAS_ACTIVE_STATUSES.has(status)
   const nextAsaas = {
     ...currentAsaas,
   }
 
-  if (inputAsaas) {
-    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'enabled')) {
-      nextAsaas.enabled = inputAsaas.enabled === true && canEnableAsaas
+  const mercadoPagoStatus = normalizeSettingsText(
+    currentMercadoPago.status || (currentMercadoPago.enabled === true ? 'active' : 'not_connected')
+  )
+  const canEnableMercadoPago = ONLINE_PAYMENT_ACTIVE_STATUSES.has(mercadoPagoStatus)
+  const nextMercadoPago = {
+    ...currentMercadoPago,
+    provider: 'mercadopago',
+  }
+
+  if (inputMercadoPago) {
+    if (Object.prototype.hasOwnProperty.call(inputMercadoPago, 'enabled')) {
+      nextMercadoPago.enabled = inputMercadoPago.enabled === true && canEnableMercadoPago
     }
-    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'allowPix')) {
-      nextAsaas.allowPix = inputAsaas.allowPix !== false
+    if (Object.prototype.hasOwnProperty.call(inputMercadoPago, 'allowPix')) {
+      nextMercadoPago.allowPix = inputMercadoPago.allowPix !== false
     }
-    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'allowCreditCard')) {
-      nextAsaas.allowCreditCard = inputAsaas.allowCreditCard !== false
+    if (Object.prototype.hasOwnProperty.call(inputMercadoPago, 'allowCreditCard')) {
+      nextMercadoPago.allowCreditCard = inputMercadoPago.allowCreditCard !== false
     }
-    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'allowBoleto')) {
-      nextAsaas.allowBoleto = inputAsaas.allowBoleto === true
-    }
-    if (Object.prototype.hasOwnProperty.call(inputAsaas, 'maxInstallmentCount')) {
-      nextAsaas.maxInstallmentCount = sanitizeSettingsInteger(
-        inputAsaas.maxInstallmentCount,
-        currentAsaas.maxInstallmentCount || null,
+    if (Object.prototype.hasOwnProperty.call(inputMercadoPago, 'maxInstallmentCount')) {
+      nextMercadoPago.maxInstallmentCount = sanitizeSettingsInteger(
+        inputMercadoPago.maxInstallmentCount,
+        currentMercadoPago.maxInstallmentCount || 1,
         1,
         12
+      )
+    }
+    if (Object.prototype.hasOwnProperty.call(inputMercadoPago, 'requireForScheduled')) {
+      nextMercadoPago.requireForScheduled = inputMercadoPago.requireForScheduled === true
+    }
+    if (Object.prototype.hasOwnProperty.call(inputMercadoPago, 'minOrderCents')) {
+      nextMercadoPago.minOrderCents = sanitizeSettingsInteger(
+        inputMercadoPago.minOrderCents,
+        currentMercadoPago.minOrderCents || 0,
+        0,
+        100000000
       )
     }
   }
@@ -1177,14 +1228,26 @@ function sanitizeStorePaymentsSettingsPatch(value, currentPayments = {}) {
 
   if (inputPolicy || typeof value.preorderPolicy === 'string') {
     const mode = normalizeSettingsText(inputPolicy?.mode || value.preorderPolicy || 'manual')
-    nextPolicy.mode = PREORDER_PAYMENT_POLICY_MODES.has(mode) ? mode : 'manual'
+    if (mode === 'online' || mode === 'online_required') {
+      nextPolicy.mode = 'mercadopago_online'
+      delete nextPolicy.legacyMode
+    } else if (mode === 'asaas_online') {
+      nextPolicy.mode = nextMercadoPago.enabled === true ? 'mercadopago_online' : 'manual'
+      nextPolicy.legacyMode = 'asaas_online'
+    } else if (mode === 'manual_or_asaas') {
+      nextPolicy.mode = nextMercadoPago.enabled === true ? 'manual_or_mercadopago' : 'manual'
+      nextPolicy.legacyMode = 'manual_or_asaas'
+    } else {
+      nextPolicy.mode = PREORDER_PAYMENT_POLICY_MODES.has(mode) ? mode : 'manual'
+      delete nextPolicy.legacyMode
+    }
     nextPolicy.requiredMethod = nextPolicy.mode
 
-    const asaasRequiredByPolicy = nextPolicy.mode === 'asaas_online' || nextPolicy.mode === 'manual_or_asaas'
-    if (asaasRequiredByPolicy && nextAsaas.enabled !== true) {
+    const mercadoPagoRequiredByPolicy = nextPolicy.mode === 'mercadopago_online' || nextPolicy.mode === 'manual_or_mercadopago'
+    if (mercadoPagoRequiredByPolicy && nextMercadoPago.enabled !== true) {
       throw new HttpsError(
         'failed-precondition',
-        'Ative o pagamento online Asaas antes de exigir ou oferecer Asaas em encomendas.'
+        'Conecte e ative o Mercado Pago antes de exigir ou oferecer pagamento online em encomendas.'
       )
     }
   }
@@ -1192,6 +1255,7 @@ function sanitizeStorePaymentsSettingsPatch(value, currentPayments = {}) {
   return cleanCallableFirestoreValue({
     ...current,
     asaas: nextAsaas,
+    mercadoPago: nextMercadoPago,
     preorderPolicy: nextPolicy,
   })
 }

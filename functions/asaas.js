@@ -1488,7 +1488,7 @@ function getSubscriptionManagementActions(context) {
     canChangePlan: hasAsaasSubscription && !terminal && status !== 'past_due' && status !== 'overdue',
     canCancel: hasAsaasSubscription && activeEnough,
     canRequestDueDateChange: hasAsaasSubscription && activeEnough,
-    canUpdatePaymentMethod: true,
+    canUpdatePaymentMethod: hasAsaasSubscription,
     canSyncStatus: hasAsaasSubscription,
   }
 }
@@ -3020,11 +3020,12 @@ function createAsaasFunctions({ db, admin, logger }) {
   )
 
   const createPaymentMethodUpdateCheckout = onCall(
-    {
-      region: REGION,
-      timeoutSeconds: 30,
-      memory: '256MiB',
-    },
+  {
+    region: REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    secrets: [ASAAS_API_KEY],
+  },
     async (request) => {
       const uid = assertCallableMerchantAuth(request)
       const data = request.data || {}

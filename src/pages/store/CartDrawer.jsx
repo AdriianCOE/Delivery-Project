@@ -28,10 +28,10 @@ import { useCart } from '../../contexts/CartContext'
 import { scrollToFirstError } from '../../utils/scroll'
 import { getCartSchedulingState } from '../../utils/publicScheduling'
 import {
-  getPublicAsaasConfig,
+  getPublicMercadoPagoConfig,
   getPublicPixConfig,
   getPublicPreorderPaymentPolicy,
-  isPublicAsaasOnlineAllowed,
+  isPublicMercadoPagoOnlineAllowed,
   isPublicPaymentMethodAllowed,
 } from '../../utils/publicPaymentMethods'
 import { functions } from '../../services/firebase'
@@ -1478,26 +1478,26 @@ export default function CartDrawer({ isOpen, onClose, store }) {
 
   const paymentOptions = useMemo(() => {
     const pixConfig = getPublicPixConfig(store)
-    const asaasConfig = getPublicAsaasConfig(store)
+    const mercadoPagoConfig = getPublicMercadoPagoConfig(store)
 
     const pixEnabled =
       isPublicPaymentMethodAllowed(store, 'pix') &&
       pixConfig.enabled === true
-    const asaasOnlineEnabled = isPublicAsaasOnlineAllowed(store)
+    const mercadoPagoOnlineEnabled = isPublicMercadoPagoOnlineAllowed(store)
 
     const cardEnabled = isPublicPaymentMethodAllowed(store, 'card')
     const cashEnabled = isPublicPaymentMethodAllowed(store, 'cash')
 
     return [
-      asaasOnlineEnabled && {
-        value: 'asaas_online',
+      mercadoPagoOnlineEnabled && {
+        value: 'mercadopago_online',
         legacyLabel: 'Online',
-        label: 'Pagamento online',
-        icon: 'Asaas',
-        description: asaasConfig.maxInstallmentCount
-          ? `Pague no ambiente seguro Asaas em ate ${asaasConfig.maxInstallmentCount}x`
-          : 'Pague com Pix, boleto ou cartao no ambiente seguro Asaas',
-        paymentStatus: 'pending',
+        label: 'Mercado Pago',
+        icon: 'MP',
+        description: mercadoPagoConfig.maxInstallmentCount > 1
+          ? `Pague com Pix ou credito em ate ${mercadoPagoConfig.maxInstallmentCount}x no Mercado Pago`
+          : 'Voce sera redirecionado para o Mercado Pago. O PratoBy nao armazena dados do cartao.',
+        paymentStatus: 'pending_payment',
       },
       pixEnabled && {
         value: 'pix_manual',
@@ -1619,12 +1619,17 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const pixRequiredForSchedule = schedulingState.pixRequired
   const pixOptionAvailable = paymentOptions.some((option) => option.value === 'pix_manual')
   const preorderPaymentPolicy = getPublicPreorderPaymentPolicy(store)
-  const asaasRequiredForSchedule = orderTiming === 'scheduled' && preorderPaymentPolicy.mode === 'asaas_online'
+  const mercadoPagoConfig = getPublicMercadoPagoConfig(store)
+  const mercadoPagoRequiredForSchedule =
+    orderTiming === 'scheduled' &&
+    (preorderPaymentPolicy.mode === 'mercadopago_online' || mercadoPagoConfig.requireForScheduled === true)
   const prepaidChoiceRequiredForSchedule =
-    orderTiming === 'scheduled' && preorderPaymentPolicy.mode === 'manual_or_asaas'
+    orderTiming === 'scheduled' &&
+    preorderPaymentPolicy.mode === 'manual_or_mercadopago'
   const pixOnlyRequiredForSchedule =
-    pixRequiredForSchedule && !asaasRequiredForSchedule && !prepaidChoiceRequiredForSchedule
-  const asaasOptionAvailable = paymentOptions.some((option) => option.value === 'asaas_online')
+    pixRequiredForSchedule && !mercadoPagoRequiredForSchedule && !prepaidChoiceRequiredForSchedule
+  const mercadoPagoOptionAvailable = paymentOptions.some((option) => option.value === 'mercadopago_online')
+  const onlinePaymentOptionAvailable = mercadoPagoOptionAvailable
 
   useEffect(() => {
     if (schedulingState.requiresScheduling && orderTiming !== 'scheduled') {
@@ -1699,22 +1704,22 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   }, [paymentMethod, pixOnlyRequiredForSchedule, pixOptionAvailable])
 
   useEffect(() => {
-    if (!asaasRequiredForSchedule) return
+    if (!mercadoPagoRequiredForSchedule) return
 
-    if (asaasOptionAvailable && paymentMethod !== 'asaas_online') {
-      setPaymentMethod('asaas_online')
+    if (mercadoPagoOptionAvailable && paymentMethod !== 'mercadopago_online') {
+      setPaymentMethod('mercadopago_online')
       setChangeFor('')
     }
-  }, [asaasOptionAvailable, asaasRequiredForSchedule, paymentMethod])
+  }, [mercadoPagoOptionAvailable, mercadoPagoRequiredForSchedule, paymentMethod])
 
   useEffect(() => {
     if (!prepaidChoiceRequiredForSchedule) return
 
-    const currentIsPrepaid = paymentMethod === 'pix_manual' || paymentMethod === 'asaas_online'
+    const currentIsPrepaid = paymentMethod === 'pix_manual' || paymentMethod === 'mercadopago_online'
     if (currentIsPrepaid) return
 
-    if (asaasOptionAvailable) {
-      setPaymentMethod('asaas_online')
+    if (mercadoPagoOptionAvailable) {
+      setPaymentMethod('mercadopago_online')
       setChangeFor('')
       return
     }
@@ -1724,7 +1729,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       setChangeFor('')
     }
   }, [
-    asaasOptionAvailable,
+    mercadoPagoOptionAvailable,
     paymentMethod,
     pixOptionAvailable,
     prepaidChoiceRequiredForSchedule,
@@ -1994,11 +1999,11 @@ if (orderType === 'delivery') {
 
     if (!paymentMethod) return 'Escolha a forma de pagamento.'
 
-    if ((pixOnlyRequiredForSchedule || prepaidChoiceRequiredForSchedule) && !pixOptionAvailable && !asaasOptionAvailable) {
+    if ((pixOnlyRequiredForSchedule || prepaidChoiceRequiredForSchedule) && !pixOptionAvailable && !onlinePaymentOptionAvailable) {
       return 'Este pedido exige Pix antecipado, mas a loja não configurou Pix.'
     }
 
-    if (prepaidChoiceRequiredForSchedule && !['pix_manual', 'asaas_online'].includes(paymentMethod)) {
+    if (prepaidChoiceRequiredForSchedule && !['pix_manual', 'mercadopago_online'].includes(paymentMethod)) {
       return 'Este pedido exige Pix manual ou pagamento online antecipado.'
     }
 
@@ -2006,12 +2011,12 @@ if (orderType === 'delivery') {
       return 'Este pedido exige pagamento antecipado via Pix.'
     }
 
-    if (asaasRequiredForSchedule && !asaasOptionAvailable) {
-      return 'Este pedido exige pagamento online, mas a loja ainda não ativou o Asaas.'
+    if (mercadoPagoRequiredForSchedule && !mercadoPagoOptionAvailable) {
+      return 'Este pedido exige pagamento online, mas a loja ainda nao conectou o Mercado Pago.'
     }
 
-    if (asaasRequiredForSchedule && paymentMethod !== 'asaas_online') {
-      return 'Este pedido exige pagamento online pelo Asaas.'
+    if (mercadoPagoRequiredForSchedule && paymentMethod !== 'mercadopago_online') {
+      return 'Este pedido exige pagamento online pelo Mercado Pago.'
     }
 
     if (paymentMethod === 'pix_manual') {
@@ -2031,8 +2036,6 @@ if (orderType === 'delivery') {
 
     return ''
   }, [
-  asaasOptionAvailable,
-  asaasRequiredForSchedule,
   belowMinimum,
   blockingCepError,
   canUseDelivery,
@@ -2050,11 +2053,13 @@ if (orderType === 'delivery') {
   customer.street,
   deliveryNeighborhoods.length,
   loadingCep,
+  mercadoPagoOptionAvailable,
+  mercadoPagoRequiredForSchedule,
   missingForMin,
+  onlinePaymentOptionAvailable,
   orderType,
   orderTiming,
   paymentMethod,
-  asaasOptionAvailable,
   pixOnlyRequiredForSchedule,
   pixOptionAvailable,
   prepaidChoiceRequiredForSchedule,
@@ -2124,10 +2129,10 @@ if (orderType === 'delivery') {
         ...(address || {}),
         address,
         paymentMethod,
-        ...(paymentMethod === 'asaas_online'
+        ...(paymentMethod === 'mercadopago_online'
           ? {
               paymentMode: 'online',
-              paymentProvider: 'asaas',
+              paymentProvider: 'mercadopago',
             }
           : {}),
         changeFor,
@@ -2176,6 +2181,9 @@ if (orderType === 'delivery') {
 
       clearCart()
       onClose?.()
+      if (createdOrder.paymentUrl && paymentMethod === 'mercadopago_online') {
+        window.open(createdOrder.paymentUrl, '_blank', 'noopener,noreferrer')
+      }
       navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`)
     } catch (error) {
       console.error(error)
@@ -2906,10 +2914,10 @@ if (orderType === 'delivery') {
                   )}
 
                   <SectionCard title="Pagamento" icon={FiCreditCard}>
-                    {asaasRequiredForSchedule && (
+                    {mercadoPagoRequiredForSchedule && (
                       <div className="flex items-start gap-2 rounded-2xl border border-green-100 bg-green-50 p-3 text-xs font-bold leading-5 text-green-800">
                         <FiShield className="mt-0.5 shrink-0" />
-                        <span>Este pedido exige pagamento online antecipado no ambiente seguro Asaas.</span>
+                        <span>Sua encomenda sera confirmada apos a aprovacao do pagamento no Mercado Pago.</span>
                       </div>
                     )}
 
@@ -2933,10 +2941,10 @@ if (orderType === 'delivery') {
                       </div>
                     ) : (
                       paymentOptions.map((option) => {
-                        const paymentDisabled = asaasRequiredForSchedule
-                          ? option.value !== 'asaas_online'
+                        const paymentDisabled = mercadoPagoRequiredForSchedule
+                            ? option.value !== 'mercadopago_online'
                           : prepaidChoiceRequiredForSchedule
-                            ? !['pix_manual', 'asaas_online'].includes(option.value)
+                            ? !['pix_manual', 'mercadopago_online'].includes(option.value)
                             : pixOnlyRequiredForSchedule && option.value !== 'pix_manual'
 
                         return (
@@ -3029,19 +3037,19 @@ if (orderType === 'delivery') {
                       </div>
                     )}
 
-                    {paymentMethod === 'asaas_online' && (
+                    {paymentMethod === 'mercadopago_online' && (
                       <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
                         <div className="flex gap-3">
                           <FiShield className="mt-0.5 shrink-0 text-green-700" />
 
                           <div>
                             <p className="text-sm font-black text-[#111827]">
-                              Pagamento online Asaas
+                              Mercado Pago online
                             </p>
 
                             <p className="mt-1 text-xs font-bold leading-5 text-green-800">
-                              Depois de enviar o pedido, voce vera o botao para pagar agora no ambiente seguro Asaas.
-                              A loja comeca o preparo apos a confirmacao automatica.
+                              Voce sera redirecionado para o Mercado Pago. O PratoBy nao armazena dados do cartao.
+                              Sua encomenda sera confirmada apos a aprovacao do pagamento.
                             </p>
                           </div>
                         </div>

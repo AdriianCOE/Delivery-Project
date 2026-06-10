@@ -188,8 +188,9 @@ export function getPublicAsaasConfig(store) {
   const maxInstallmentCount = Number(asaas.maxInstallmentCount)
 
   return {
-    enabled: asaas.enabled === true && status === 'active',
-    status: status || 'inactive',
+    enabled: false,
+    status: status || 'legacy_disabled',
+    legacy: true,
     allowPix: asaas.allowPix !== false,
     allowCreditCard: asaas.allowCreditCard !== false,
     allowBoleto: asaas.allowBoleto === true,
@@ -199,17 +200,62 @@ export function getPublicAsaasConfig(store) {
   }
 }
 
+export function getPublicMercadoPagoConfig(store) {
+  const mercadoPago = toObject(store?.payments?.mercadoPago || store?.payments?.mercadopago)
+  const status = normalizeMethodKey(mercadoPago.status || (mercadoPago.enabled === true ? 'active' : 'not_connected'))
+  const maxInstallmentCount = Number(mercadoPago.maxInstallmentCount)
+  const minOrderCents = Number(mercadoPago.minOrderCents)
+
+  return {
+    provider: 'mercadopago',
+    enabled: mercadoPago.enabled === true && status === 'active',
+    status: status || 'not_connected',
+    environment: ['sandbox', 'production'].includes(mercadoPago.environment) ? mercadoPago.environment : 'sandbox',
+    allowPix: mercadoPago.allowPix !== false,
+    allowCreditCard: mercadoPago.allowCreditCard !== false,
+    maxInstallmentCount: Number.isInteger(maxInstallmentCount) && maxInstallmentCount > 1
+      ? Math.min(maxInstallmentCount, 12)
+      : 1,
+    requireForScheduled: mercadoPago.requireForScheduled === true,
+    minOrderCents: Number.isInteger(minOrderCents) && minOrderCents > 0 ? minOrderCents : 0,
+  }
+}
+
 export function getPublicPreorderPaymentPolicy(store) {
   const policy = toObject(store?.payments?.preorderPolicy)
   const mode = normalizeMethodKey(policy.mode || policy.requiredMethod || 'manual')
+  const mercadoPagoAvailable = isPublicMercadoPagoOnlineAllowed(store)
+
+  if (mode === 'asaas_online') {
+    return {
+      mode: mercadoPagoAvailable ? 'mercadopago_online' : 'manual',
+      legacyMode: 'asaas_online',
+    }
+  }
+
+  if (mode === 'manual_or_asaas') {
+    return {
+      mode: mercadoPagoAvailable ? 'manual_or_mercadopago' : 'manual',
+      legacyMode: 'manual_or_asaas',
+    }
+  }
 
   return {
-    mode: ['manual', 'pix_manual', 'asaas_online', 'manual_or_asaas'].includes(mode)
+    mode: [
+      'manual',
+      'pix_manual',
+      'mercadopago_online',
+      'manual_or_mercadopago',
+    ].includes(mode)
       ? mode
       : 'manual',
   }
 }
 
 export function isPublicAsaasOnlineAllowed(store) {
-  return getPublicAsaasConfig(store).enabled === true
+  return false
+}
+
+export function isPublicMercadoPagoOnlineAllowed(store) {
+  return getPublicMercadoPagoConfig(store).enabled === true
 }
