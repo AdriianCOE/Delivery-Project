@@ -50,6 +50,14 @@
       ]
     },
     {
+      "collectionGroup": "stores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subscriptionStatus", "order": "ASCENDING" },
+        { "fieldPath": "trialEndsAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "reviews",
       "queryScope": "COLLECTION",
       "fields": [
