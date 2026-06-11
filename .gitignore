@@ -4,6 +4,7 @@
 .env.*.local
 
 .firebase/
+firebase-debug.log
 repomix-output.xml
 dist/
 

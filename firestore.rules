@@ -273,6 +273,9 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('cancelScheduledAtPeriodEnd')
         && storeFieldUnchanged('subscriptionCancelRequestedAt')
         && storeFieldUnchanged('subscriptionCancelRequestedBy')
+        && storeFieldUnchanged('subscriptionReactivatedAt')
+        && storeFieldUnchanged('subscriptionReactivatedBy')
+        && storeFieldUnchanged('trialTransitionProcessedAt')
         && storeFieldUnchanged('amountCents')
         && storeFieldUnchanged('billingType');
     }

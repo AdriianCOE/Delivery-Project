@@ -54,7 +54,7 @@ const INTERNAL_STATUSES = new Set([
   'canceled',
   'blocked',
 ])
-const ASAAS_BILLING_TYPES = new Set(['UNDEFINED', 'BOLETO', 'PIX'])
+const ASAAS_BILLING_TYPES = new Set(['UNDEFINED', 'BOLETO', 'PIX', 'CREDIT_CARD'])
 const PRIVILEGED_ROLES = new Set(['admin', 'developer', 'dev', 'superadmin'])
 const PLAN_ORDER = {
   essential: 1,
@@ -587,6 +587,63 @@ async function createAsaasSubscription({
       description: `PratoBy ${planName} (${billingCycle === 'annual' ? 'anual' : 'mensal'})`,
       externalReference: `pratoby:${uid}:${storeId}`,
     },
+  })
+}
+
+function buildAsaasSubscriptionPlanPayload({
+  plan,
+  billingCycle,
+  nextDueDate,
+  billingType,
+  updatePendingPayments = false,
+}) {
+  const billingPlan = getKnownPlan(plan)
+  const cycle = getKnownBillingCycle(billingCycle)
+  const amountCents = getPlanAmountCents(billingPlan, cycle)
+  const planName = PLAN_CATALOG[billingPlan].name
+  const payload = {
+    value: amountCents / 100,
+    cycle: getAsaasCycle(cycle),
+    description: `PratoBy ${planName} (${cycle === 'annual' ? 'anual' : 'mensal'})`,
+  }
+
+  if (nextDueDate) payload.nextDueDate = nextDueDate
+  if (billingType) payload.billingType = String(billingType).trim().toUpperCase()
+  if (updatePendingPayments) payload.updatePendingPayments = true
+
+  return payload
+}
+
+async function updateAsaasSubscriptionPlan({
+  providerSubscriptionId,
+  plan,
+  billingCycle,
+  nextDueDate,
+  billingType,
+}) {
+  if (!providerSubscriptionId) {
+    throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para atualizar plano.')
+  }
+
+  return await asaasRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}`, {
+    method: 'PUT',
+    body: buildAsaasSubscriptionPlanPayload({
+      plan,
+      billingCycle,
+      nextDueDate,
+      billingType,
+      updatePendingPayments: true,
+    }),
+  })
+}
+
+async function cancelAsaasSubscription(providerSubscriptionId) {
+  if (!providerSubscriptionId) {
+    throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para cancelar.')
+  }
+
+  return await asaasRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}`, {
+    method: 'DELETE',
   })
 }
 
@@ -1203,6 +1260,93 @@ async function markStartAsaasSubscriptionRecovery({
       recoveryError: recoveryError.message || String(recoveryError),
     })
   }
+}
+
+function buildManagementRecoveryId({ operation, storeId, operationId }) {
+  return safeDocId(`asaas_management_${operation}_${storeId}_${operationId}`)
+}
+
+function buildManagementOperationId() {
+  return crypto.randomBytes(12).toString('hex')
+}
+
+async function markAsaasManagementRecovery({
+  db,
+  admin,
+  logger,
+  operation,
+  operationId,
+  uid,
+  storeId,
+  localSubscriptionId,
+  providerSubscriptionId,
+  providerResult,
+  desiredState,
+  error,
+}) {
+  const now = admin.firestore.Timestamp.now()
+  const errorMessage = error.message || String(error)
+  const recoveryId = buildManagementRecoveryId({ operation, storeId, operationId })
+
+  try {
+    const batch = db.batch()
+    const recoveryPayload = {
+      provider: BILLING_PROVIDER,
+      status: 'pending',
+      reason: 'local_persistence_failed_after_provider_operation',
+      operation,
+      operationId,
+      uid,
+      storeId,
+      localSubscriptionId: localSubscriptionId || null,
+      providerSubscriptionId: providerSubscriptionId || null,
+      providerResult: sanitizeAuditPayload(providerResult || {}),
+      desiredState: sanitizeAuditPayload(desiredState || {}),
+      error: errorMessage,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    batch.set(db.collection('billingRecovery').doc(recoveryId), recoveryPayload, { merge: true })
+    batch.set(db.collection('auditLogs').doc(), {
+      action: 'asaas_management_recovery_needed',
+      entity: 'subscription',
+      entityId: localSubscriptionId || providerSubscriptionId || storeId,
+      uid,
+      storeId,
+      provider: BILLING_PROVIDER,
+      operation,
+      operationId,
+      recoveryId,
+      providerSubscriptionId: providerSubscriptionId || null,
+      error: errorMessage,
+      createdAt: now,
+      source: 'asaas_integration',
+    })
+    await batch.commit()
+  } catch (recoveryError) {
+    logger.error('Failed to write Asaas management recovery record', {
+      operation,
+      operationId,
+      storeId,
+      originalError: errorMessage,
+      recoveryError: recoveryError.message || String(recoveryError),
+    })
+  }
+
+  return recoveryId
+}
+
+function toProviderUpdatedLocalPersistenceError(operation, recoveryId, error) {
+  return new HttpsError(
+    'internal',
+    'O Asaas foi atualizado, mas falhou ao salvar o estado local. O suporte precisa reconciliar a assinatura antes de nova tentativa.',
+    {
+      operation,
+      recoveryId,
+      originalCode: error.code || null,
+    }
+  )
 }
 
 function toExternalProvisioningError(error) {
@@ -2764,6 +2908,7 @@ function createAsaasFunctions({ db, admin, logger }) {
       region: REGION,
       timeoutSeconds: 30,
       memory: '256MiB',
+      secrets: [ASAAS_API_KEY],
     },
     async (request) => {
       const uid = assertCallableMerchantAuth(request)
@@ -2782,7 +2927,66 @@ function createAsaasFunctions({ db, admin, logger }) {
         action: 'changeSubscriptionPlan',
       })
 
-      return await db.runTransaction(async (transaction) => {
+      const initialContext = await resolveManagementContext({
+        db,
+        uid,
+        requestedStoreId,
+      })
+      const initialCurrentPlan = getContextPlan(initialContext)
+      const initialBillingCycle = getContextBillingCycle(initialContext)
+      const providerPlanUpdateRequired = isTrialActive(initialContext)
+      const providerSubscriptionId = initialContext.existingReference?.providerSubscriptionId || null
+      const providerOperationId = buildManagementOperationId()
+      let providerPlanUpdate = null
+      let providerDesiredState = null
+
+      if (providerPlanUpdateRequired) {
+        const billingCycle = requestedBillingCycle || initialBillingCycle
+        if (targetPlan === initialCurrentPlan && billingCycle === initialBillingCycle) {
+          throw new HttpsError('failed-precondition', 'Este ja e o plano atual.')
+        }
+
+        if (providerSubscriptionId) {
+          const trialEndsAt = toDate(getContextTrialEndsAt(initialContext))
+          providerDesiredState = {
+            operation: 'change_trial_plan',
+            targetPlan,
+            billingCycle,
+            nextDueDate: trialEndsAt ? formatDateInSaoPaulo(trialEndsAt) : null,
+            updatePendingPayments: true,
+          }
+          try {
+            providerPlanUpdate = await updateAsaasSubscriptionPlan({
+              providerSubscriptionId,
+              plan: targetPlan,
+              billingCycle,
+              nextDueDate: trialEndsAt ? formatDateInSaoPaulo(trialEndsAt) : undefined,
+              billingType: initialContext.existingReference?.canonicalSubscription?.billingType,
+            })
+          } catch (error) {
+            logger.error('Failed to update Asaas subscription plan during trial', {
+              uid,
+              storeId: requestedStoreId,
+              providerSubscriptionId,
+              targetPlan,
+              billingCycle,
+              error: error.message || String(error),
+            })
+            throw new HttpsError(
+              'internal',
+              'Nao foi possivel atualizar o plano no Asaas. Nenhuma alteracao foi salva.'
+            )
+          }
+        } else if (getAsaasCheckoutId(initialContext.storeData) || getAsaasCheckoutId(initialContext.userData)) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Existe checkout Asaas sem assinatura vinculada. Reabra o checkout ou fale com o suporte para alterar o plano com seguranca.'
+          )
+        }
+      }
+
+      try {
+        return await db.runTransaction(async (transaction) => {
         const context = await resolveManagementContextInTransaction({
           db,
           transaction,
@@ -2797,6 +3001,11 @@ function createAsaasFunctions({ db, admin, logger }) {
         const amountCents = getPlanAmountCents(targetPlan, billingCycle)
         const currentAmountCents = getPlanAmountCents(currentPlan, currentBillingCycle)
         const now = admin.firestore.Timestamp.now()
+        const currentProviderSubscriptionId = context.existingReference?.providerSubscriptionId || null
+
+        if (providerPlanUpdateRequired && currentProviderSubscriptionId !== providerSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Assinatura da loja mudou durante a alteracao de plano.')
+        }
 
         if (targetPlan === currentPlan && billingCycle === currentBillingCycle) {
           throw new HttpsError('failed-precondition', 'Este ja e o plano atual.')
@@ -2856,6 +3065,8 @@ function createAsaasFunctions({ db, admin, logger }) {
               billingCycle,
               currentAmountCents,
               amountCents,
+              providerSubscriptionId,
+              providerStatus: providerPlanUpdate?.status || null,
             },
           })
 
@@ -2931,7 +3142,28 @@ function createAsaasFunctions({ db, admin, logger }) {
           effectiveMode,
           message: 'Solicitacao enviada. O suporte confirmara a alteracao com seguranca.',
         }
-      })
+        })
+      } catch (error) {
+        if (providerPlanUpdateRequired && providerPlanUpdate) {
+          const recoveryId = await markAsaasManagementRecovery({
+            db,
+            admin,
+            logger,
+            operation: 'change_trial_plan',
+            operationId: providerOperationId,
+            uid,
+            storeId: requestedStoreId,
+            localSubscriptionId: initialContext.existingReference?.localSubscriptionId || null,
+            providerSubscriptionId,
+            providerResult: providerPlanUpdate,
+            desiredState: providerDesiredState,
+            error,
+          })
+          throw toProviderUpdatedLocalPersistenceError('change_trial_plan', recoveryId, error)
+        }
+
+        throw error
+      }
     }
   )
 
@@ -2940,6 +3172,7 @@ function createAsaasFunctions({ db, admin, logger }) {
       region: REGION,
       timeoutSeconds: 30,
       memory: '256MiB',
+      secrets: [ASAAS_API_KEY],
     },
     async (request) => {
       const uid = assertCallableMerchantAuth(request)
@@ -2965,7 +3198,51 @@ function createAsaasFunctions({ db, admin, logger }) {
         action: 'cancelSubscription',
       })
 
-      return await db.runTransaction(async (transaction) => {
+      const initialContext = await resolveManagementContext({
+        db,
+        uid,
+        requestedStoreId,
+      })
+      const initialStatus = getContextSubscriptionStatus(initialContext)
+      const providerCancellationRequired = isTrialActive(initialContext)
+      const providerSubscriptionId = initialContext.existingReference?.providerSubscriptionId || null
+      const providerOperationId = buildManagementOperationId()
+      let providerCancellation = null
+
+      if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(initialStatus)) {
+        throw new HttpsError('failed-precondition', 'Assinatura ja esta bloqueada ou cancelada.')
+      }
+
+      if (providerCancellationRequired) {
+        if (getContextCancelAtTrialEnd(initialContext)) {
+          throw new HttpsError('failed-precondition', 'A continuidade apos o trial ja esta cancelada.')
+        }
+
+        if (providerSubscriptionId) {
+          try {
+            providerCancellation = await cancelAsaasSubscription(providerSubscriptionId)
+          } catch (error) {
+            logger.error('Failed to cancel Asaas trial continuation', {
+              uid,
+              storeId: requestedStoreId,
+              providerSubscriptionId,
+              error: error.message || String(error),
+            })
+            throw new HttpsError(
+              'internal',
+              'Nao foi possivel cancelar a cobranca futura no Asaas. Nenhuma alteracao foi salva.'
+            )
+          }
+        } else if (getAsaasCheckoutId(initialContext.storeData) || getAsaasCheckoutId(initialContext.userData)) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Existe checkout Asaas sem assinatura vinculada. Reabra o checkout ou fale com o suporte para cancelar a continuidade com seguranca.'
+          )
+        }
+      }
+
+      try {
+        return await db.runTransaction(async (transaction) => {
         const context = await resolveManagementContextInTransaction({
           db,
           transaction,
@@ -2974,10 +3251,14 @@ function createAsaasFunctions({ db, admin, logger }) {
         })
         const currentStatus = getContextSubscriptionStatus(context)
         const now = admin.firestore.Timestamp.now()
-        const providerSubscriptionId = context.existingReference?.providerSubscriptionId || null
+        const currentProviderSubscriptionId = context.existingReference?.providerSubscriptionId || null
 
         if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(currentStatus)) {
           throw new HttpsError('failed-precondition', 'Assinatura ja esta bloqueada ou cancelada.')
+        }
+
+        if (providerCancellationRequired && currentProviderSubscriptionId !== providerSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Assinatura da loja mudou durante o cancelamento.')
         }
 
         if (isTrialActive(context)) {
@@ -3048,7 +3329,7 @@ function createAsaasFunctions({ db, admin, logger }) {
               reason: sanitizeTextField(data.reason, 800),
               currentStatus,
               trialEndsAt: serializeDate(trialEndsAt),
-              providerSubscriptionId,
+              providerSubscriptionId: currentProviderSubscriptionId,
             },
             auditAction: 'trial_continuity_cancelled',
           })
@@ -3070,7 +3351,7 @@ function createAsaasFunctions({ db, admin, logger }) {
           )
         }
 
-        if (!providerSubscriptionId) {
+        if (!currentProviderSubscriptionId) {
           throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para esta loja.')
         }
 
@@ -3094,7 +3375,7 @@ function createAsaasFunctions({ db, admin, logger }) {
                 context.userData?.currentPeriodEnd
               )
             ),
-            providerSubscriptionId,
+            providerSubscriptionId: currentProviderSubscriptionId,
           },
           auditAction: 'cancellation_requested',
         })
@@ -3133,7 +3414,32 @@ function createAsaasFunctions({ db, admin, logger }) {
           alreadyExists: requestResult.alreadyExists,
           message: 'Solicitacao de cancelamento enviada. O suporte confirmara o processamento.',
         }
-      })
+        })
+      } catch (error) {
+        if (providerCancellationRequired && providerCancellation) {
+          const recoveryId = await markAsaasManagementRecovery({
+            db,
+            admin,
+            logger,
+            operation: 'cancel_trial_continuity',
+            operationId: providerOperationId,
+            uid,
+            storeId: requestedStoreId,
+            localSubscriptionId: initialContext.existingReference?.localSubscriptionId || null,
+            providerSubscriptionId,
+            providerResult: providerCancellation,
+            desiredState: {
+              operation: 'cancel_trial_continuity',
+              cancelAtTrialEnd: true,
+              cancelScheduledAtPeriodEnd: true,
+            },
+            error,
+          })
+          throw toProviderUpdatedLocalPersistenceError('cancel_trial_continuity', recoveryId, error)
+        }
+
+        throw error
+      }
     }
   )
 
@@ -3142,6 +3448,7 @@ function createAsaasFunctions({ db, admin, logger }) {
       region: REGION,
       timeoutSeconds: 30,
       memory: '256MiB',
+      secrets: [ASAAS_API_KEY],
     },
     async (request) => {
       const uid = assertCallableMerchantAuth(request)
@@ -3156,7 +3463,72 @@ function createAsaasFunctions({ db, admin, logger }) {
         action: 'reactivateTrialContinuation',
       })
 
-      return await db.runTransaction(async (transaction) => {
+      const initialContext = await resolveManagementContext({
+        db,
+        uid,
+        requestedStoreId,
+      })
+
+      if (!isTrialActive(initialContext)) {
+        throw new HttpsError('failed-precondition', 'O trial nao esta ativo para reativar continuidade.')
+      }
+
+      if (!getContextCancelAtTrialEnd(initialContext)) {
+        return {
+          ok: true,
+          status: 'already_active',
+          message: 'A continuidade apos o trial ja esta ativa.',
+        }
+      }
+
+      const asaasCustomerId = initialContext.existingReference?.asaasCustomerId || null
+      if (!asaasCustomerId) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Cliente Asaas nao encontrado. Reabra o checkout para reativar a continuidade com seguranca.'
+        )
+      }
+
+      const providerOperationId = buildManagementOperationId()
+      const initialTrialEndsAt = toDate(getContextTrialEndsAt(initialContext))
+      const initialBillingPlan = getContextPlan(initialContext)
+      const initialBillingCycle = getContextBillingCycle(initialContext)
+      const billingType = initialContext.existingReference?.canonicalSubscription?.billingType || 'UNDEFINED'
+      let providerSubscription = null
+
+      try {
+        providerSubscription = await createAsaasSubscription({
+          customerId: asaasCustomerId,
+          uid,
+          storeId: requestedStoreId,
+          plan: initialBillingPlan,
+          billingCycle: initialBillingCycle,
+          nextDueDate: initialTrialEndsAt ? formatDateInSaoPaulo(initialTrialEndsAt) : undefined,
+          billingType,
+        })
+      } catch (error) {
+        logger.error('Failed to recreate Asaas trial continuation', {
+          uid,
+          storeId: requestedStoreId,
+          asaasCustomerId,
+          billingPlan: initialBillingPlan,
+          billingCycle: initialBillingCycle,
+          error: error.message || String(error),
+        })
+        throw new HttpsError(
+          'internal',
+          'Nao foi possivel recriar a cobranca futura no Asaas. Nenhuma alteracao foi salva.'
+        )
+      }
+
+      const newProviderSubscriptionId = providerSubscription?.id || null
+      if (!newProviderSubscriptionId) {
+        throw new HttpsError('internal', 'Asaas nao retornou o identificador da nova assinatura.')
+      }
+      const newLocalSubscriptionId = buildLocalSubscriptionId(newProviderSubscriptionId)
+
+      try {
+        return await db.runTransaction(async (transaction) => {
         const context = await resolveManagementContextInTransaction({
           db,
           transaction,
@@ -3170,11 +3542,7 @@ function createAsaasFunctions({ db, admin, logger }) {
         }
 
         if (!getContextCancelAtTrialEnd(context)) {
-          return {
-            ok: true,
-            status: 'already_active',
-            message: 'A continuidade apos o trial ja esta ativa.',
-          }
+          throw new HttpsError('failed-precondition', 'A continuidade mudou durante a reativacao.')
         }
 
         const trialStartedAt = getPreferredDate(
@@ -3183,9 +3551,11 @@ function createAsaasFunctions({ db, admin, logger }) {
           context.userData?.trialStartedAt
         )
         const trialEndsAt = getContextTrialEndsAt(context)
+        const billingPlan = getContextPlan(context)
+        const billingCycle = getContextBillingCycle(context)
         const planState = buildPlanStateFields({
-          plan: getContextPlan(context),
-          billingCycle: getContextBillingCycle(context),
+          plan: billingPlan,
+          billingCycle,
           status: 'trialing',
           trialStartedAt,
           trialEndsAt,
@@ -3200,18 +3570,50 @@ function createAsaasFunctions({ db, admin, logger }) {
           subscriptionReactivatedAt: now,
           subscriptionReactivatedBy: uid,
           isBillingBlocked: false,
+          billingMethodConfigured: true,
+          asaasCustomerId,
+          asaasSubscriptionId: newProviderSubscriptionId,
+          asaasSubscriptionStatus: providerSubscription?.status || null,
+          subscriptionId: newLocalSubscriptionId,
           updatedAt: now,
         }
 
         transaction.set(context.storeRef, mirrorPayload, { merge: true })
         transaction.set(context.userRef, mirrorPayload, { merge: true })
 
-        if (context.existingReference?.localSubscriptionId) {
+        if (
+          context.existingReference?.localSubscriptionId &&
+          context.existingReference.localSubscriptionId !== newLocalSubscriptionId
+        ) {
           transaction.set(
             db.collection('subscriptions').doc(context.existingReference.localSubscriptionId),
             {
+              status: 'canceled',
+              cancellationStatus: 'superseded_by_reactivation',
+              cancelAtTrialEnd: true,
+              cancelScheduledAtPeriodEnd: true,
+              supersededBySubscriptionId: newLocalSubscriptionId,
+              updatedAt: now,
+            },
+            { merge: true }
+          )
+        }
+
+        transaction.set(
+          db.collection('subscriptions').doc(newLocalSubscriptionId),
+            {
+              id: newLocalSubscriptionId,
+              uid,
+              storeId: context.storeId,
+              provider: BILLING_PROVIDER,
+              providerCustomerId: asaasCustomerId,
+              providerSubscriptionId: newProviderSubscriptionId,
               ...planState,
               status: 'trialing',
+              providerStatus: providerSubscription?.status || null,
+              amountCents: getPlanAmountCents(billingPlan, billingCycle),
+              billingType,
+              billingMethodConfigured: true,
               cancellationStatus: null,
               cancelMode: null,
               cancelAtTrialEnd: false,
@@ -3221,13 +3623,12 @@ function createAsaasFunctions({ db, admin, logger }) {
               updatedAt: now,
             },
             { merge: true }
-          )
-        }
+        )
 
         setAuditLog(transaction, db, now, {
           action: 'trial_continuity_reactivated',
           entity: 'subscription',
-          entityId: context.existingReference?.localSubscriptionId || context.storeId,
+          entityId: newLocalSubscriptionId,
           actorUid: uid,
           uid,
           storeId: context.storeId,
@@ -3236,6 +3637,9 @@ function createAsaasFunctions({ db, admin, logger }) {
             trialEndsAt: serializeDate(trialEndsAt),
             billingPlan: planState.billingPlan,
             billingCycle: planState.billingCycle,
+            previousProviderSubscriptionId: initialContext.existingReference?.providerSubscriptionId || null,
+            providerSubscriptionId: newProviderSubscriptionId,
+            providerStatus: providerSubscription?.status || null,
           },
         })
 
@@ -3243,9 +3647,33 @@ function createAsaasFunctions({ db, admin, logger }) {
           ok: true,
           status: 'reactivated',
           trialEndsAt: serializeDate(trialEndsAt),
+          asaasSubscriptionId: newProviderSubscriptionId,
           message: 'Continuidade reativada. A primeira cobranca segue programada para depois do trial.',
         }
-      })
+        })
+      } catch (error) {
+        const recoveryId = await markAsaasManagementRecovery({
+          db,
+          admin,
+          logger,
+          operation: 'reactivate_trial_continuity',
+          operationId: providerOperationId,
+          uid,
+          storeId: requestedStoreId,
+          localSubscriptionId: newLocalSubscriptionId,
+          providerSubscriptionId: newProviderSubscriptionId,
+          providerResult: providerSubscription,
+          desiredState: {
+            operation: 'reactivate_trial_continuity',
+            billingPlan: initialBillingPlan,
+            billingCycle: initialBillingCycle,
+            nextDueDate: initialTrialEndsAt ? formatDateInSaoPaulo(initialTrialEndsAt) : null,
+            cancelAtTrialEnd: false,
+          },
+          error,
+        })
+        throw toProviderUpdatedLocalPersistenceError('reactivate_trial_continuity', recoveryId, error)
+      }
     }
   )
 

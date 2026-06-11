@@ -67,6 +67,7 @@ const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
 const REGION = 'southamerica-east1'
 const CLOUDINARY_API_SECRET = defineSecret('CLOUDINARY_API_SECRET')
+const ASAAS_API_KEY = defineSecret('ASAAS_API_KEY')
 const ASAAS_ORDERS_API_KEY = defineSecret('ASAAS_ORDERS_API_KEY')
 const ASAAS_ORDERS_WEBHOOK_SECRET = defineSecret('ASAAS_ORDERS_WEBHOOK_SECRET')
 const MERCADOPAGO_ACCESS_TOKEN_TEST = defineSecret('MERCADOPAGO_ACCESS_TOKEN_TEST')
@@ -3804,6 +3805,74 @@ function getKnownTrialBillingCycle(value, fallback = 'monthly') {
   return ['monthly', 'annual'].includes(cycle) ? cycle : fallback
 }
 
+function getAsaasSchedulerSecretValue(secret, envName) {
+  try {
+    return secret.value() || process.env[envName] || ''
+  } catch {
+    return process.env[envName] || ''
+  }
+}
+
+function getAsaasBillingBaseUrlForScheduler() {
+  const configuredBaseUrl = process.env.ASAAS_BASE_URL
+  const allowSandboxFallback =
+    process.env.FUNCTIONS_EMULATOR === 'true' ||
+    process.env.ALLOW_ASAAS_SANDBOX_FALLBACK === 'true'
+
+  if (!configuredBaseUrl && !allowSandboxFallback) {
+    throw new Error('ASAAS_BASE_URL precisa ser configurada explicitamente para processar trials.')
+  }
+
+  return String(configuredBaseUrl || 'https://api-sandbox.asaas.com/v3').replace(/\/+$/, '')
+}
+
+async function getAsaasSubscriptionForTrialTransition(providerSubscriptionId) {
+  const apiKey = getAsaasSchedulerSecretValue(ASAAS_API_KEY, 'ASAAS_API_KEY')
+  if (!apiKey) throw new Error('ASAAS_API_KEY nao configurada.')
+
+  const response = await fetch(
+    `${getAsaasBillingBaseUrlForScheduler()}/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+    {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'user-agent': 'PratoBy/1.0 FirebaseFunctions',
+        access_token: apiKey,
+      },
+    }
+  )
+
+  const text = await response.text()
+  let body
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = { raw: text }
+  }
+
+  if (!response.ok) {
+    const message = body?.errors?.[0]?.description || body?.message || `Asaas retornou HTTP ${response.status}.`
+    throw new Error(message)
+  }
+
+  return body || {}
+}
+
+function normalizeAsaasProviderStatus(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function getTrialTransitionStatusFromProvider({ cancelAtTrialEnd, providerSubscriptionId, providerStatus }) {
+  if (cancelAtTrialEnd) return 'canceled'
+  if (!providerSubscriptionId) return BILLING_PENDING_PAYMENT_METHOD_STATUS
+
+  const normalizedStatus = normalizeAsaasProviderStatus(providerStatus)
+  if (normalizedStatus === 'ACTIVE') return 'active'
+  if (['INACTIVE', 'CANCELLED', 'CANCELED', 'DELETED', 'EXPIRED'].includes(normalizedStatus)) return 'canceled'
+  return BILLING_PENDING_PAYMENT_METHOD_STATUS
+}
+
 function buildTrialTransitionPlanState(storeData, nextStatus) {
   const billingPlan = getKnownTrialPlan(storeData.billingPlan || storeData.selectedPlan || storeData.plan)
   const billingCycle = getKnownTrialBillingCycle(storeData.billingCycle)
@@ -3828,11 +3897,14 @@ exports.processTrialTransitions = onSchedule(
     schedule: 'every 30 minutes',
     timeZone: 'America/Sao_Paulo',
     region: 'southamerica-east1',
+    secrets: [ASAAS_API_KEY],
   },
   async () => {
     const now = admin.firestore.Timestamp.now()
     const snapshot = await db.collection('stores')
       .where('subscriptionStatus', '==', 'trialing')
+      .where('trialEndsAt', '<=', now)
+      .orderBy('trialEndsAt')
       .limit(200)
       .get()
 
@@ -3840,6 +3912,29 @@ exports.processTrialTransitions = onSchedule(
 
     for (const storeDoc of snapshot.docs) {
       try {
+        const snapshotStoreData = storeDoc.data() || {}
+        const providerSubscriptionId = String(
+          snapshotStoreData.asaasSubscriptionId ||
+            snapshotStoreData.providerSubscriptionId ||
+            ''
+        ).trim()
+        const snapshotCancelAtTrialEnd = Boolean(
+          snapshotStoreData.cancelAtTrialEnd ||
+            snapshotStoreData.cancelScheduledAtPeriodEnd
+        )
+        let providerSubscription = null
+        let providerStatus = null
+        let providerCurrentPeriodEnd = null
+
+        if (!snapshotCancelAtTrialEnd && providerSubscriptionId) {
+          providerSubscription = await getAsaasSubscriptionForTrialTransition(providerSubscriptionId)
+          providerStatus = providerSubscription?.status || null
+          const providerDueDate = toTrialTransitionDate(providerSubscription?.nextDueDate)
+          providerCurrentPeriodEnd = providerDueDate
+            ? admin.firestore.Timestamp.fromDate(providerDueDate)
+            : null
+        }
+
         await db.runTransaction(async (transaction) => {
           const freshStoreDoc = await transaction.get(storeDoc.ref)
           if (!freshStoreDoc.exists) return
@@ -3852,23 +3947,36 @@ exports.processTrialTransitions = onSchedule(
 
           const uid = storeData.ownerUid || storeData.ownerId || storeData.createdBy || null
           const userRef = uid ? db.collection('users').doc(uid) : null
+          const currentProviderSubscriptionId = String(
+            storeData.asaasSubscriptionId ||
+              storeData.providerSubscriptionId ||
+              ''
+          ).trim()
           const localSubscriptionId = storeData.subscriptionId || (
-            storeData.asaasSubscriptionId ? `asaas_${String(storeData.asaasSubscriptionId).replace(/\//g, '_')}` : null
+            currentProviderSubscriptionId ? `asaas_${currentProviderSubscriptionId.replace(/\//g, '_')}` : null
           )
           const subscriptionRef = localSubscriptionId ? db.collection('subscriptions').doc(localSubscriptionId) : null
 
           const cancelAtTrialEnd = Boolean(storeData.cancelAtTrialEnd || storeData.cancelScheduledAtPeriodEnd)
-          const billingMethodConfigured = Boolean(storeData.billingMethodConfigured || storeData.asaasSubscriptionId)
-          const nextStatus = cancelAtTrialEnd
-            ? 'canceled'
-            : billingMethodConfigured
-            ? 'active'
-            : BILLING_PENDING_PAYMENT_METHOD_STATUS
+          const nextStatus = getTrialTransitionStatusFromProvider({
+            cancelAtTrialEnd,
+            providerSubscriptionId: currentProviderSubscriptionId,
+            providerStatus: currentProviderSubscriptionId === providerSubscriptionId ? providerStatus : null,
+          })
           const isBlocked = nextStatus !== 'active'
-          const planState = buildTrialTransitionPlanState(storeData, nextStatus)
+          const storeDataForPlanState = providerCurrentPeriodEnd && nextStatus === 'active'
+            ? {
+                ...storeData,
+                currentPeriodEnd: providerCurrentPeriodEnd,
+                nextChargeAt: providerCurrentPeriodEnd,
+              }
+            : storeData
+          const planState = buildTrialTransitionPlanState(storeDataForPlanState, nextStatus)
           const transitionPayload = {
             ...planState,
             subscriptionStatus: nextStatus,
+            billingMethodConfigured: nextStatus === 'active',
+            asaasSubscriptionStatus: providerStatus || storeData.asaasSubscriptionStatus || null,
             isBillingBlocked: isBlocked,
             isActive: !isBlocked,
             cancelAtTrialEnd,
@@ -3890,6 +3998,8 @@ exports.processTrialTransitions = onSchedule(
               {
                 ...planState,
                 status: nextStatus,
+                providerStatus: providerStatus || null,
+                lastAsaasSyncAt: now,
                 cancelAtTrialEnd,
                 cancelScheduledAtPeriodEnd: cancelAtTrialEnd,
                 cancellationStatus: cancelAtTrialEnd ? 'trial_ended_canceled' : null,
@@ -3915,6 +4025,7 @@ exports.processTrialTransitions = onSchedule(
               subscriptionStatus: nextStatus,
               isBillingBlocked: isBlocked,
               effectivePlan: planState.effectivePlan,
+              providerStatus,
             },
             createdAt: now,
           })
