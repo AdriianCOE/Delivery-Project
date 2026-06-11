@@ -233,29 +233,34 @@ function isMercadoPagoOnlineOrderData(orderData = {}) {
 async function findActiveMercadoPagoOrder({ db, storeId, storeData = {} }) {
   const storeKeys = uniqueTruthy([
     storeId,
+    storeData.storeDocId,
     storeData.id,
     storeData.docId,
-    storeData.storeDocId,
+    storeData.storeId,
     storeData.slug,
     storeData.storeSlug,
   ]).slice(0, 10)
+  const queryTargets = []
 
   for (const key of storeKeys) {
-    for (const field of ['storeDocId', 'storeId']) {
-      const snapshot = await db.collection('orders')
-        .where(field, '==', key)
-        .where('status', 'in', ACTIVE_ORDER_STATUSES)
-        .limit(10)
-        .get()
+    queryTargets.push(['storeDocId', key])
+    queryTargets.push(['storeId', key])
+  }
 
-      const blockingOrder = snapshot.docs.find((doc) => isMercadoPagoOnlineOrderData(doc.data() || {}))
-      if (blockingOrder) {
-        const data = blockingOrder.data() || {}
-        return {
-          id: blockingOrder.id,
-          status: data.status || 'pendente',
-          paymentStatus: data.paymentStatus || data.payment?.status || 'pending_payment',
-        }
+  for (const [field, key] of queryTargets) {
+    const snapshot = await db.collection('orders')
+      .where(field, '==', key)
+      .where('status', 'in', ACTIVE_ORDER_STATUSES)
+      .limit(10)
+      .get()
+
+    const blockingOrder = snapshot.docs.find((doc) => isMercadoPagoOnlineOrderData(doc.data() || {}))
+    if (blockingOrder) {
+      const data = blockingOrder.data() || {}
+      return {
+        id: blockingOrder.id,
+        status: data.status || 'pendente',
+        paymentStatus: data.paymentStatus || data.payment?.status || 'pending_payment',
       }
     }
   }
@@ -339,7 +344,11 @@ function buildTrackingUrl(orderData = {}) {
 
 function buildWebhookUrl({ storeId, orderId }) {
   const base = String(process.env.MERCADOPAGO_ORDER_WEBHOOK_URL || '').trim()
-  if (!base) return ''
+  if (!base) {
+    const error = new Error('MERCADOPAGO_ORDER_WEBHOOK_URL precisa estar configurada para pagamentos Mercado Pago.')
+    error.code = 'failed-precondition'
+    throw error
+  }
   const url = new URL(base)
   url.searchParams.set('storeId', storeId)
   url.searchParams.set('orderId', orderId)
@@ -1019,6 +1028,12 @@ function createMercadoPagoOrderFunctions({
       const orderIdFromQuery = String(request.query.orderId || '').trim()
       const storeIdFromQuery = String(request.query.storeId || '').trim()
       const webhookSecretValue = getSecretValue(webhookSecret, 'MERCADOPAGO_WEBHOOK_SECRET')
+
+      if (!webhookSecretValue && process.env.FUNCTIONS_EMULATOR !== 'true') {
+        logger?.error?.('[mercadoPagoOrders] webhook rejected: MERCADOPAGO_WEBHOOK_SECRET not configured')
+        response.status(401).json({ ok: false, error: 'webhook_not_configured' })
+        return
+      }
 
       if (webhookSecretValue) {
         try {
