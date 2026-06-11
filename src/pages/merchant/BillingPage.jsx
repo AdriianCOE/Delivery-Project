@@ -495,7 +495,7 @@ export default function BillingPage() {
   }, [store, user, userData])
 
   const subscriptionStatus = normalizeStatus(store?.subscriptionStatus || userData?.subscriptionStatus)
-  const plan = store?.plan || userData?.plan || 'essential'
+  const plan = store?.billingPlan || store?.selectedPlan || store?.plan || userData?.billingPlan || userData?.selectedPlan || userData?.plan || 'essential'
   const billingCycle = normalizeCycleId(store?.billingCycle || userData?.billingCycle || 'monthly')
   const trialEndsAt = store?.trialEndsAt || userData?.trialEndsAt
   const currentPeriodEnd = store?.currentPeriodEnd || userData?.currentPeriodEnd

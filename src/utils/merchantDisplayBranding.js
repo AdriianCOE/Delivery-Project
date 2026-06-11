@@ -27,8 +27,14 @@ export function getStoreLogoUrl(storeData) {
 
 export function getPlanId(storeData, userData) {
   const plan = String(
-    storeData?.plan ||
+    storeData?.effectivePlan ||
+      userData?.effectivePlan ||
+      storeData?.billingPlan ||
+      storeData?.selectedPlan ||
+      storeData?.plan ||
       storeData?.planId ||
+      userData?.billingPlan ||
+      userData?.selectedPlan ||
       userData?.plan ||
       userData?.planId ||
       'essential'

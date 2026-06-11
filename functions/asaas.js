@@ -25,6 +25,8 @@ const ASAAS_CHECKOUT_EXPIRATION_MINUTES = 1440
 const SUBSCRIPTION_CHANGE_REQUESTS_COLLECTION = 'subscriptionChangeRequests'
 const SUBSCRIPTION_CANCELLATION_REQUESTS_COLLECTION = 'subscriptionCancellationRequests'
 const SUBSCRIPTION_DUE_DATE_REQUESTS_COLLECTION = 'subscriptionDueDateRequests'
+const TRIAL_ENTITLEMENTS_PLAN = 'premium'
+const TRIAL_END_CANCEL_SCHEDULED_STATUS = 'trial_end_cancel_scheduled'
 
 const CHECKOUT_STATUSES = new Set([
   'checkout_pending',
@@ -248,6 +250,40 @@ function normalizeBillingCycle(value) {
 function getPlanAmountCents(plan, billingCycle) {
   const config = PLAN_CATALOG[plan]
   return billingCycle === 'annual' ? config.annualCents : config.monthlyCents
+}
+
+function buildPlanStateFields({
+  plan,
+  billingCycle,
+  status,
+  trialStartedAt = null,
+  trialEndsAt = null,
+  currentPeriodEnd = null,
+  cancelAtTrialEnd = false,
+}) {
+  const billingPlan = getKnownPlan(plan)
+  const cycle = getKnownBillingCycle(billingCycle)
+  const isTrial = status === 'trialing'
+  const isBlockedStatus = ['canceled', 'blocked', BILLING_PENDING_PAYMENT_METHOD_STATUS, 'checkout_pending'].includes(status)
+  const effectivePlan = isTrial ? TRIAL_ENTITLEMENTS_PLAN : isBlockedStatus ? null : billingPlan
+  const firstChargeAt = trialEndsAt || null
+  const nextChargeAt = isTrial ? firstChargeAt : currentPeriodEnd || firstChargeAt || null
+
+  return {
+    plan: billingPlan,
+    selectedPlan: billingPlan,
+    billingPlan,
+    trialEntitlementsPlan: TRIAL_ENTITLEMENTS_PLAN,
+    effectivePlan,
+    billingCycle: cycle,
+    amountCents: getPlanAmountCents(billingPlan, cycle),
+    trialStartedAt: trialStartedAt || null,
+    trialEndsAt: trialEndsAt || null,
+    firstChargeAt,
+    nextChargeAt,
+    currentPeriodEnd: currentPeriodEnd || null,
+    cancelAtTrialEnd: Boolean(cancelAtTrialEnd),
+  }
 }
 
 function getAsaasCycle(billingCycle) {
@@ -1326,11 +1362,52 @@ function getKnownBillingCycle(value, fallback = 'monthly') {
 
 function getContextPlan(context) {
   return getKnownPlan(
-    context.existingReference?.canonicalSubscription?.plan ||
+    context.existingReference?.canonicalSubscription?.billingPlan ||
+      context.existingReference?.canonicalSubscription?.selectedPlan ||
+      context.existingReference?.canonicalSubscription?.plan ||
+      context.storeData?.billingPlan ||
+      context.storeData?.selectedPlan ||
       context.storeData?.plan ||
+      context.userData?.billingPlan ||
+      context.userData?.selectedPlan ||
       context.userData?.plan ||
       'essential'
   )
+}
+
+function getContextEffectivePlan(context) {
+  const status = getContextSubscriptionStatus(context)
+  if (status === 'trialing') return TRIAL_ENTITLEMENTS_PLAN
+  if (['canceled', 'blocked', BILLING_PENDING_PAYMENT_METHOD_STATUS, 'checkout_pending'].includes(status)) {
+    return null
+  }
+  return getKnownPlan(
+    context.existingReference?.canonicalSubscription?.effectivePlan ||
+      context.storeData?.effectivePlan ||
+      context.userData?.effectivePlan ||
+      getContextPlan(context)
+  )
+}
+
+function getContextCancelAtTrialEnd(context) {
+  return Boolean(
+    context.existingReference?.canonicalSubscription?.cancelAtTrialEnd ||
+      context.storeData?.cancelAtTrialEnd ||
+      context.userData?.cancelAtTrialEnd
+  )
+}
+
+function getContextTrialEndsAt(context) {
+  return getPreferredDate(
+    context.existingReference?.canonicalSubscription?.trialEndsAt,
+    context.storeData?.trialEndsAt,
+    context.userData?.trialEndsAt
+  )
+}
+
+function isTrialActive(context) {
+  const trialEndsAt = toDate(getContextTrialEndsAt(context))
+  return getContextSubscriptionStatus(context) === 'trialing' && Boolean(trialEndsAt && trialEndsAt.getTime() > Date.now())
 }
 
 function getContextBillingCycle(context) {
@@ -1481,37 +1558,50 @@ async function createManagementRequestInTransaction({
 function getSubscriptionManagementActions(context) {
   const status = getContextSubscriptionStatus(context)
   const hasAsaasSubscription = Boolean(context.existingReference?.providerSubscriptionId)
+  const trialActive = isTrialActive(context)
+  const cancelAtTrialEnd = getContextCancelAtTrialEnd(context)
   const activeEnough = SUBSCRIPTION_MANAGEMENT_ACTIVE_STATUSES.has(status)
   const terminal = SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(status)
 
   return {
-    canChangePlan: hasAsaasSubscription && !terminal && status !== 'past_due' && status !== 'overdue',
-    canCancel: hasAsaasSubscription && activeEnough,
+    canChangePlan: trialActive || (hasAsaasSubscription && !terminal && status !== 'past_due' && status !== 'overdue'),
+    canCancel: trialActive ? !cancelAtTrialEnd : hasAsaasSubscription && activeEnough,
+    canCancelTrialContinuation: trialActive && !cancelAtTrialEnd,
+    canReactivateTrialContinuation: trialActive && cancelAtTrialEnd,
     canRequestDueDateChange: hasAsaasSubscription && activeEnough,
-    canUpdatePaymentMethod: hasAsaasSubscription,
+    canUpdatePaymentMethod: trialActive || hasAsaasSubscription,
     canSyncStatus: hasAsaasSubscription,
   }
 }
 
 function buildSubscriptionManagementResponse(context) {
-  const plan = getContextPlan(context)
+  const billingPlan = getContextPlan(context)
+  const effectivePlan = getContextEffectivePlan(context)
   const billingCycle = getContextBillingCycle(context)
   const status = getContextSubscriptionStatus(context)
   const subscriptionData = context.existingReference?.canonicalSubscription || {}
-  const trialEndsAt = getPreferredDate(
-    subscriptionData.trialEndsAt,
-    context.storeData?.trialEndsAt,
-    context.userData?.trialEndsAt
-  )
+  const trialEndsAt = getContextTrialEndsAt(context)
   const currentPeriodEnd = getPreferredDate(
     subscriptionData.currentPeriodEnd,
     context.storeData?.currentPeriodEnd,
     context.userData?.currentPeriodEnd
   )
-  const nextChargeAt = status === 'trialing' ? trialEndsAt : currentPeriodEnd
+  const cancelAtTrialEnd = getContextCancelAtTrialEnd(context)
+  const nextChargeAt = getPreferredDate(
+    subscriptionData.nextChargeAt,
+    context.storeData?.nextChargeAt,
+    context.userData?.nextChargeAt,
+    status === 'trialing' ? trialEndsAt : currentPeriodEnd
+  )
+  const firstChargeAt = getPreferredDate(
+    subscriptionData.firstChargeAt,
+    context.storeData?.firstChargeAt,
+    context.userData?.firstChargeAt,
+    trialEndsAt
+  )
   const amountCents = Number.isFinite(Number(subscriptionData.amountCents))
     ? Number(subscriptionData.amountCents)
-    : getPlanAmountCents(plan, billingCycle)
+    : getPlanAmountCents(billingPlan, billingCycle)
   const hasAsaasSubscription = Boolean(context.existingReference?.providerSubscriptionId)
   const billingMethodConfigured = Boolean(
     context.storeData?.billingMethodConfigured ||
@@ -1522,14 +1612,39 @@ function buildSubscriptionManagementResponse(context) {
   return {
     storeId: context.storeId,
     plan: {
-      id: plan,
-      name: PLAN_CATALOG[plan].name,
+      id: billingPlan,
+      name: PLAN_CATALOG[billingPlan].name,
       billingCycle,
       amountCents,
     },
+    selectedPlan: {
+      id: billingPlan,
+      name: PLAN_CATALOG[billingPlan].name,
+      billingCycle,
+      amountCents,
+    },
+    billingPlan: {
+      id: billingPlan,
+      name: PLAN_CATALOG[billingPlan].name,
+      billingCycle,
+      amountCents,
+    },
+    effectivePlan: effectivePlan
+      ? {
+          id: effectivePlan,
+          name: PLAN_CATALOG[effectivePlan]?.name || PLAN_CATALOG[billingPlan].name,
+        }
+      : null,
+    trialEntitlementsPlan: {
+      id: TRIAL_ENTITLEMENTS_PLAN,
+      name: PLAN_CATALOG[TRIAL_ENTITLEMENTS_PLAN].name,
+    },
     billingCycle,
     subscriptionStatus: status,
+    cancelAtTrialEnd,
+    continuationStatus: cancelAtTrialEnd ? 'canceled_after_trial' : 'active_after_trial',
     trialEndsAt: serializeDate(trialEndsAt),
+    firstChargeAt: serializeDate(firstChargeAt),
     currentPeriodEnd: serializeDate(currentPeriodEnd),
     nextChargeAt: serializeDate(nextChargeAt),
     hasAsaasSubscription,
@@ -1576,6 +1691,9 @@ function mapAsaasSubscriptionStatusToInternal(providerStatus, context) {
 
   if (['OVERDUE', 'PAST_DUE'].includes(normalizedStatus)) return 'past_due'
   if (['INACTIVE', 'CANCELLED', 'CANCELED', 'DELETED', 'EXPIRED'].includes(normalizedStatus)) {
+    if (currentStatus === 'trialing' && trialStillActive && getContextCancelAtTrialEnd(context)) {
+      return 'trialing'
+    }
     return 'canceled'
   }
 
@@ -1671,6 +1789,14 @@ function buildStorePayload({
   localSubscriptionId,
 }) {
   const storeName = userData.signup?.storeName || 'Minha Loja'
+  const planState = buildPlanStateFields({
+    plan,
+    billingCycle,
+    status: 'trialing',
+    trialStartedAt,
+    trialEndsAt,
+    currentPeriodEnd: trialEndsAt,
+  })
 
   return {
     name: storeName,
@@ -1691,11 +1817,9 @@ function buildStorePayload({
     subscriptionStatus: 'trialing',
     onboardingStatus: 'completed',
     billingProvider: BILLING_PROVIDER,
-    plan,
-    billingCycle,
-    trialStartedAt,
-    trialEndsAt,
-    currentPeriodEnd: trialEndsAt,
+    ...planState,
+    cancelScheduledAtPeriodEnd: false,
+    subscriptionCancellationStatus: null,
     asaasCustomerId,
     asaasSubscriptionId,
     subscriptionId: localSubscriptionId,
@@ -1719,6 +1843,12 @@ function buildPendingBillingStorePayload({
   now,
 }) {
   const storeName = userData.signup?.storeName || 'Minha Loja'
+  const planState = buildPlanStateFields({
+    plan,
+    billingCycle,
+    status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+    cancelAtTrialEnd: false,
+  })
 
   return {
     name: storeName,
@@ -1744,8 +1874,9 @@ function buildPendingBillingStorePayload({
     billingProvider: BILLING_PROVIDER,
     billingMethodConfigured: false,
     billingCheckoutStatus: 'pending',
-    plan,
-    billingCycle,
+    ...planState,
+    cancelScheduledAtPeriodEnd: false,
+    subscriptionCancellationStatus: null,
     asaasCustomerId: asaasCustomerId || null,
     asaasCheckoutId,
     asaasCheckoutUrl: checkoutUrl,
@@ -1770,14 +1901,22 @@ function buildMirroredBillingPayload({
   lastPaymentStatus,
   now,
 }) {
-  return {
-    subscriptionStatus: status,
-    billingProvider: BILLING_PROVIDER,
+  const planState = buildPlanStateFields({
     plan,
     billingCycle,
+    status,
     trialStartedAt,
     trialEndsAt,
     currentPeriodEnd,
+    cancelAtTrialEnd: false,
+  })
+
+  return {
+    subscriptionStatus: status,
+    billingProvider: BILLING_PROVIDER,
+    ...planState,
+    cancelScheduledAtPeriodEnd: false,
+    subscriptionCancellationStatus: null,
     asaasCustomerId,
     asaasSubscriptionId,
     subscriptionId: localSubscriptionId,
@@ -1795,12 +1934,17 @@ function isPaidPaymentStatus(status) {
 
 function mapPaymentEventToInternalStatus(event, payment, subscriptionData) {
   const currentStatus = subscriptionData.status || 'trialing'
+  if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(currentStatus)) return currentStatus
+  const trialEndsAt = toDate(subscriptionData.trialEndsAt)
+  const trialStillActive = currentStatus === 'trialing' && trialEndsAt && trialEndsAt.getTime() > Date.now()
   const currentPaymentIsPaid =
     subscriptionData.lastPaymentId === payment.id &&
     isPaidPaymentStatus(subscriptionData.lastPaymentStatus)
 
   if (event === 'PAYMENT_CREATED') return currentStatus
-  if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') return 'active'
+  if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') {
+    return trialStillActive ? 'trialing' : 'active'
+  }
 
   if (event === 'PAYMENT_OVERDUE' || event === 'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED') {
     return currentPaymentIsPaid ? currentStatus : 'past_due'
@@ -1843,14 +1987,24 @@ function buildWebhookPaymentUpdate({ event, payment, subscriptionData, nextStatu
 }
 
 function buildMirrorFromSubscription(subscriptionData, update, now) {
-  return {
-    subscriptionStatus: update.status,
-    billingProvider: BILLING_PROVIDER,
-    billingCycle: subscriptionData.billingCycle,
-    plan: subscriptionData.plan,
+  const status = update.status || subscriptionData.status || 'trialing'
+  const billingPlan = getKnownPlan(subscriptionData.billingPlan || subscriptionData.selectedPlan || subscriptionData.plan)
+  const billingCycle = getKnownBillingCycle(subscriptionData.billingCycle)
+  const currentPeriodEnd = update.currentPeriodEnd || subscriptionData.currentPeriodEnd || null
+  const planState = buildPlanStateFields({
+    plan: billingPlan,
+    billingCycle,
+    status,
     trialStartedAt: subscriptionData.trialStartedAt || null,
     trialEndsAt: subscriptionData.trialEndsAt || null,
-    currentPeriodEnd: update.currentPeriodEnd || subscriptionData.currentPeriodEnd || null,
+    currentPeriodEnd,
+    cancelAtTrialEnd: subscriptionData.cancelAtTrialEnd || false,
+  })
+
+  return {
+    subscriptionStatus: status,
+    billingProvider: BILLING_PROVIDER,
+    ...planState,
     lastPaymentId: update.lastPaymentId || null,
     lastPaymentStatus: update.lastPaymentStatus || null,
     asaasCustomerId: subscriptionData.providerCustomerId || null,
@@ -1955,12 +2109,19 @@ async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, e
     const checkoutStatus = getCheckoutStatusForEvent(event)
 
     if (!isCheckoutPaidEvent(event)) {
+      const pendingPlanState = buildPlanStateFields({
+        plan: checkoutData.billingPlan || checkoutData.selectedPlan || checkoutData.plan || 'essential',
+        billingCycle: checkoutData.billingCycle || 'monthly',
+        status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+        cancelAtTrialEnd: false,
+      })
       const pendingMirrorPayload = {
         subscriptionStatus: BILLING_PENDING_PAYMENT_METHOD_STATUS,
         onboardingStatus: 'billing_pending',
         billingProvider: BILLING_PROVIDER,
         billingMethodConfigured: false,
         billingCheckoutStatus: checkoutStatus,
+        ...pendingPlanState,
         updatedAt: now,
       }
 
@@ -2015,6 +2176,15 @@ async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, e
     const trialEndsAt =
       checkoutData.scheduledTrialEndsAt ||
       admin.firestore.Timestamp.fromDate(addDays(new Date(), TRIAL_DAYS))
+    const subscriptionPlanState = buildPlanStateFields({
+      plan: checkoutData.billingPlan || checkoutData.selectedPlan || checkoutData.plan || 'essential',
+      billingCycle: checkoutData.billingCycle || 'monthly',
+      status: 'trialing',
+      trialStartedAt,
+      trialEndsAt,
+      currentPeriodEnd: trialEndsAt,
+      cancelAtTrialEnd: false,
+    })
 
     const subscriptionData = {
       id: localSubscriptionId,
@@ -2026,14 +2196,12 @@ async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, e
       providerCheckoutId: checkoutId,
       status: 'trialing',
       providerStatus: checkout?.status || checkoutStatus,
-      plan: checkoutData.plan || 'essential',
-      billingCycle: checkoutData.billingCycle || 'monthly',
-      amountCents,
+      ...subscriptionPlanState,
+      amountCents: amountCents || subscriptionPlanState.amountCents,
       billingType: 'CREDIT_CARD',
       billingMethodConfigured: true,
-      trialStartedAt,
-      trialEndsAt,
-      currentPeriodEnd: trialEndsAt,
+      cancelScheduledAtPeriodEnd: false,
+      subscriptionCancellationStatus: null,
       createdAt: subscriptionDoc.exists ? subscriptionDoc.data().createdAt || now : now,
       updatedAt: now,
     }
@@ -2061,11 +2229,10 @@ async function processAsaasCheckoutWebhook({ db, admin, logger, body, eventId, e
       billingProvider: BILLING_PROVIDER,
       billingMethodConfigured: true,
       billingCheckoutStatus: 'paid',
-      plan: subscriptionData.plan,
-      billingCycle: subscriptionData.billingCycle,
-      trialStartedAt,
-      trialEndsAt,
-      currentPeriodEnd: trialEndsAt,
+      ...subscriptionPlanState,
+      amountCents: subscriptionData.amountCents,
+      cancelScheduledAtPeriodEnd: false,
+      subscriptionCancellationStatus: null,
       asaasCustomerId: subscriptionData.providerCustomerId,
       asaasSubscriptionId: providerSubscriptionId || null,
       asaasCheckoutId: checkoutId,
@@ -2435,6 +2602,12 @@ function createAsaasFunctions({ db, admin, logger }) {
 
           const amountCents = getPlanAmountCents(plan, billingCycle)
           const checkoutExpiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + ASAAS_CHECKOUT_EXPIRATION_MINUTES * 60 * 1000)
+          const pendingPlanState = buildPlanStateFields({
+            plan,
+            billingCycle,
+            status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
+            cancelAtTrialEnd: false,
+          })
           const checkoutData = {
             id: asaasCheckoutId,
             uid,
@@ -2445,8 +2618,7 @@ function createAsaasFunctions({ db, admin, logger }) {
             checkoutUrl,
             status: BILLING_PENDING_PAYMENT_METHOD_STATUS,
             providerStatus: asaasCheckout.status || null,
-            plan,
-            billingCycle,
+            ...pendingPlanState,
             amountCents,
             billingType: 'CREDIT_CARD',
             chargeType: 'RECURRENT',
@@ -2468,8 +2640,7 @@ function createAsaasFunctions({ db, admin, logger }) {
             billingProvider: BILLING_PROVIDER,
             billingMethodConfigured: false,
             billingCheckoutStatus: 'pending',
-            plan,
-            billingCycle,
+            ...pendingPlanState,
             asaasCustomerId,
             asaasCheckoutId,
             asaasCheckoutUrl: checkoutUrl,
@@ -2635,6 +2806,68 @@ function createAsaasFunctions({ db, admin, logger }) {
           throw new HttpsError('failed-precondition', 'Assinatura em estado invalido para alterar plano.')
         }
 
+        if (isTrialActive(context)) {
+          const trialStartedAt = getPreferredDate(
+            context.existingReference?.canonicalSubscription?.trialStartedAt,
+            context.storeData?.trialStartedAt,
+            context.userData?.trialStartedAt
+          )
+          const trialEndsAt = getContextTrialEndsAt(context)
+          const planState = buildPlanStateFields({
+            plan: targetPlan,
+            billingCycle,
+            status: 'trialing',
+            trialStartedAt,
+            trialEndsAt,
+            currentPeriodEnd: trialEndsAt,
+            cancelAtTrialEnd: getContextCancelAtTrialEnd(context),
+          })
+          const mirrorPayload = {
+            ...planState,
+            updatedAt: now,
+          }
+
+          transaction.set(context.storeRef, mirrorPayload, { merge: true })
+          transaction.set(context.userRef, mirrorPayload, { merge: true })
+
+          if (context.existingReference?.localSubscriptionId) {
+            transaction.set(
+              db.collection('subscriptions').doc(context.existingReference.localSubscriptionId),
+              {
+                ...mirrorPayload,
+                status: 'trialing',
+              },
+              { merge: true }
+            )
+          }
+
+          setAuditLog(transaction, db, now, {
+            action: 'trial_billing_plan_changed',
+            entity: 'subscription',
+            entityId: context.existingReference?.localSubscriptionId || context.storeId,
+            actorUid: uid,
+            uid,
+            storeId: context.storeId,
+            provider: BILLING_PROVIDER,
+            payload: {
+              currentPlan,
+              targetPlan,
+              currentBillingCycle,
+              billingCycle,
+              currentAmountCents,
+              amountCents,
+            },
+          })
+
+          return {
+            ok: true,
+            status: 'updated_post_trial_plan',
+            billingPlan: targetPlan,
+            effectivePlan: TRIAL_ENTITLEMENTS_PLAN,
+            message: 'Plano apos o trial atualizado. O acesso Premium gratuito continua ate o fim do teste.',
+          }
+        }
+
         if (!context.existingReference?.providerSubscriptionId) {
           setAuditLog(transaction, db, now, {
             action: 'change_plan_requested',
@@ -2716,7 +2949,8 @@ function createAsaasFunctions({ db, admin, logger }) {
 
       const cancelMode = normalizeCancelMode(data.cancelMode)
       const confirmationText = String(data.confirmationText || '').trim().toLowerCase()
-      if (confirmationText !== 'cancelar minha assinatura') {
+      const validConfirmationTexts = new Set(['cancelar minha assinatura', 'cancelar continuidade'])
+      if (!validConfirmationTexts.has(confirmationText)) {
         throw new HttpsError(
           'invalid-argument',
           'Digite a confirmacao exatamente para solicitar o cancelamento.'
@@ -2742,12 +2976,102 @@ function createAsaasFunctions({ db, admin, logger }) {
         const now = admin.firestore.Timestamp.now()
         const providerSubscriptionId = context.existingReference?.providerSubscriptionId || null
 
-        if (!providerSubscriptionId) {
-          throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para esta loja.')
-        }
-
         if (SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES.has(currentStatus)) {
           throw new HttpsError('failed-precondition', 'Assinatura ja esta bloqueada ou cancelada.')
+        }
+
+        if (isTrialActive(context)) {
+          if (confirmationText !== 'cancelar continuidade' && confirmationText !== 'cancelar minha assinatura') {
+            throw new HttpsError(
+              'invalid-argument',
+              'Digite a confirmacao exatamente para cancelar a continuidade.'
+            )
+          }
+
+          const trialStartedAt = getPreferredDate(
+            context.existingReference?.canonicalSubscription?.trialStartedAt,
+            context.storeData?.trialStartedAt,
+            context.userData?.trialStartedAt
+          )
+          const trialEndsAt = getContextTrialEndsAt(context)
+          const planState = buildPlanStateFields({
+            plan: getContextPlan(context),
+            billingCycle: getContextBillingCycle(context),
+            status: 'trialing',
+            trialStartedAt,
+            trialEndsAt,
+            currentPeriodEnd: trialEndsAt,
+            cancelAtTrialEnd: true,
+          })
+          const mirrorPayload = {
+            ...planState,
+            subscriptionStatus: 'trialing',
+            subscriptionCancellationStatus: TRIAL_END_CANCEL_SCHEDULED_STATUS,
+            cancelScheduledAtPeriodEnd: true,
+            subscriptionCancelRequestedAt: now,
+            subscriptionCancelRequestedBy: uid,
+            isBillingBlocked: false,
+            updatedAt: now,
+          }
+
+          transaction.set(context.storeRef, mirrorPayload, { merge: true })
+          transaction.set(context.userRef, mirrorPayload, { merge: true })
+
+          if (context.existingReference?.localSubscriptionId) {
+            transaction.set(
+              db.collection('subscriptions').doc(context.existingReference.localSubscriptionId),
+              {
+                ...planState,
+                status: 'trialing',
+                cancellationStatus: TRIAL_END_CANCEL_SCHEDULED_STATUS,
+                cancelMode: 'trial_end',
+                cancelAtTrialEnd: true,
+                cancelScheduledAtPeriodEnd: true,
+                cancelRequestedAt: now,
+                cancelRequestedBy: uid,
+                updatedAt: now,
+              },
+              { merge: true }
+            )
+          }
+
+          const requestResult = await createManagementRequestInTransaction({
+            db,
+            transaction,
+            now,
+            collectionName: SUBSCRIPTION_CANCELLATION_REQUESTS_COLLECTION,
+            action: 'cancel_trial_continuity',
+            type: 'trial_continuity_cancellation',
+            uid,
+            storeId: context.storeId,
+            payload: {
+              reason: sanitizeTextField(data.reason, 800),
+              currentStatus,
+              trialEndsAt: serializeDate(trialEndsAt),
+              providerSubscriptionId,
+            },
+            auditAction: 'trial_continuity_cancelled',
+          })
+
+          return {
+            ok: true,
+            status: 'trial_end_cancel_scheduled',
+            cancellationStatus: TRIAL_END_CANCEL_SCHEDULED_STATUS,
+            requestId: requestResult.requestId,
+            alreadyExists: requestResult.alreadyExists,
+            message: 'Cobranca futura cancelada. O acesso Premium gratuito continua ate o fim do trial.',
+          }
+        }
+
+        if (confirmationText !== 'cancelar minha assinatura') {
+          throw new HttpsError(
+            'invalid-argument',
+            'Digite a confirmacao exatamente para solicitar o cancelamento.'
+          )
+        }
+
+        if (!providerSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Assinatura Asaas nao encontrada para esta loja.')
         }
 
         const requestResult = await createManagementRequestInTransaction({
@@ -2808,6 +3132,118 @@ function createAsaasFunctions({ db, admin, logger }) {
           requestId: requestResult.requestId,
           alreadyExists: requestResult.alreadyExists,
           message: 'Solicitacao de cancelamento enviada. O suporte confirmara o processamento.',
+        }
+      })
+    }
+  )
+
+  const reactivateTrialContinuation = onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: '256MiB',
+    },
+    async (request) => {
+      const uid = assertCallableMerchantAuth(request)
+      const requestedStoreId = normalizeStoreId(request.data?.storeId)
+      if (!requestedStoreId) throw new HttpsError('invalid-argument', 'storeId obrigatorio.')
+
+      await enforceSubscriptionManagementRateLimit({
+        db,
+        admin,
+        uid,
+        storeId: requestedStoreId,
+        action: 'reactivateTrialContinuation',
+      })
+
+      return await db.runTransaction(async (transaction) => {
+        const context = await resolveManagementContextInTransaction({
+          db,
+          transaction,
+          uid,
+          requestedStoreId,
+        })
+        const now = admin.firestore.Timestamp.now()
+
+        if (!isTrialActive(context)) {
+          throw new HttpsError('failed-precondition', 'O trial nao esta ativo para reativar continuidade.')
+        }
+
+        if (!getContextCancelAtTrialEnd(context)) {
+          return {
+            ok: true,
+            status: 'already_active',
+            message: 'A continuidade apos o trial ja esta ativa.',
+          }
+        }
+
+        const trialStartedAt = getPreferredDate(
+          context.existingReference?.canonicalSubscription?.trialStartedAt,
+          context.storeData?.trialStartedAt,
+          context.userData?.trialStartedAt
+        )
+        const trialEndsAt = getContextTrialEndsAt(context)
+        const planState = buildPlanStateFields({
+          plan: getContextPlan(context),
+          billingCycle: getContextBillingCycle(context),
+          status: 'trialing',
+          trialStartedAt,
+          trialEndsAt,
+          currentPeriodEnd: trialEndsAt,
+          cancelAtTrialEnd: false,
+        })
+        const mirrorPayload = {
+          ...planState,
+          subscriptionStatus: 'trialing',
+          subscriptionCancellationStatus: null,
+          cancelScheduledAtPeriodEnd: false,
+          subscriptionReactivatedAt: now,
+          subscriptionReactivatedBy: uid,
+          isBillingBlocked: false,
+          updatedAt: now,
+        }
+
+        transaction.set(context.storeRef, mirrorPayload, { merge: true })
+        transaction.set(context.userRef, mirrorPayload, { merge: true })
+
+        if (context.existingReference?.localSubscriptionId) {
+          transaction.set(
+            db.collection('subscriptions').doc(context.existingReference.localSubscriptionId),
+            {
+              ...planState,
+              status: 'trialing',
+              cancellationStatus: null,
+              cancelMode: null,
+              cancelAtTrialEnd: false,
+              cancelScheduledAtPeriodEnd: false,
+              reactivatedAt: now,
+              reactivatedBy: uid,
+              updatedAt: now,
+            },
+            { merge: true }
+          )
+        }
+
+        setAuditLog(transaction, db, now, {
+          action: 'trial_continuity_reactivated',
+          entity: 'subscription',
+          entityId: context.existingReference?.localSubscriptionId || context.storeId,
+          actorUid: uid,
+          uid,
+          storeId: context.storeId,
+          provider: BILLING_PROVIDER,
+          payload: {
+            trialEndsAt: serializeDate(trialEndsAt),
+            billingPlan: planState.billingPlan,
+            billingCycle: planState.billingCycle,
+          },
+        })
+
+        return {
+          ok: true,
+          status: 'reactivated',
+          trialEndsAt: serializeDate(trialEndsAt),
+          message: 'Continuidade reativada. A primeira cobranca segue programada para depois do trial.',
         }
       })
     }
@@ -2953,6 +3389,19 @@ function createAsaasFunctions({ db, admin, logger }) {
           context.storeData?.currentPeriodEnd,
           context.userData?.currentPeriodEnd
         )
+        const syncedPlanState = buildPlanStateFields({
+          plan: getContextPlan(context),
+          billingCycle: getContextBillingCycle(context),
+          status: subscriptionUpdate.status,
+          trialStartedAt: getPreferredDate(
+            context.existingReference?.canonicalSubscription?.trialStartedAt,
+            context.storeData?.trialStartedAt,
+            context.userData?.trialStartedAt
+          ),
+          trialEndsAt: getContextTrialEndsAt(context),
+          currentPeriodEnd,
+          cancelAtTrialEnd: getContextCancelAtTrialEnd(context),
+        })
 
         transaction.set(
           db.collection('subscriptions').doc(localSubscriptionId),
@@ -2963,8 +3412,7 @@ function createAsaasFunctions({ db, admin, logger }) {
             provider: BILLING_PROVIDER,
             providerCustomerId: context.existingReference?.asaasCustomerId || null,
             providerSubscriptionId,
-            billingCycle: getContextBillingCycle(context),
-            plan: getContextPlan(context),
+            ...syncedPlanState,
             ...subscriptionUpdate,
           },
           { merge: true }
@@ -2977,7 +3425,7 @@ function createAsaasFunctions({ db, admin, logger }) {
           asaasSubscriptionStatus: subscriptionUpdate.providerStatus,
           asaasSubscriptionId: providerSubscriptionId,
           subscriptionId: localSubscriptionId,
-          currentPeriodEnd: currentPeriodEnd || null,
+          ...syncedPlanState,
           lastAsaasSyncAt: now,
           updatedAt: now,
         }
@@ -3590,6 +4038,7 @@ function createAsaasFunctions({ db, admin, logger }) {
     getSubscriptionManagementData,
     changeSubscriptionPlan,
     cancelSubscription,
+    reactivateTrialContinuation,
     requestSubscriptionDueDateChange,
     syncAsaasSubscriptionStatus,
     createPaymentMethodUpdateCheckout,

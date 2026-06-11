@@ -905,7 +905,7 @@ function SidebarUserCard({ user, userData, onOpenProfileModal, collapsed = false
   const initial = (name[0] || 'L').toUpperCase()
   const [isHovered, setIsHovered] = useState(false)
 
-  const planId = userData?.plan || 'essential'
+  const planId = userData?.effectivePlan || userData?.billingPlan || userData?.selectedPlan || userData?.plan || 'essential'
   const planBadges = {
     essential: { label: 'ESSENCIAL', classes: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' },
     professional: { label: 'PRO', classes: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400' },

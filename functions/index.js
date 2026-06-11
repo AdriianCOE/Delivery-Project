@@ -77,6 +77,8 @@ const MERCADOPAGO_WEBHOOK_SECRET = defineSecret('MERCADOPAGO_WEBHOOK_SECRET')
 const ENFORCE_APP_CHECK = String(process.env.ENFORCE_APP_CHECK || '').toLowerCase() === 'true'
 const LEGAL_CONFIG_COLLECTION = 'config'
 const LEGAL_CONFIG_DOC = 'legal'
+const TRIAL_ENTITLEMENTS_PLAN = 'premium'
+const BILLING_PENDING_PAYMENT_METHOD_STATUS = 'billing_pending_payment_method'
 const merchantOrderFunctions = createMerchantOrderFunctions({
   db,
   admin,
@@ -262,6 +264,7 @@ exports.startAsaasSubscription = asaasFunctions.startAsaasSubscription
 exports.getSubscriptionManagementData = asaasFunctions.getSubscriptionManagementData
 exports.changeSubscriptionPlan = asaasFunctions.changeSubscriptionPlan
 exports.cancelSubscription = asaasFunctions.cancelSubscription
+exports.reactivateTrialContinuation = asaasFunctions.reactivateTrialContinuation
 exports.requestSubscriptionDueDateChange = asaasFunctions.requestSubscriptionDueDateChange
 exports.syncAsaasSubscriptionStatus = asaasFunctions.syncAsaasSubscriptionStatus
 exports.createPaymentMethodUpdateCheckout = asaasFunctions.createPaymentMethodUpdateCheckout
@@ -3743,12 +3746,13 @@ exports.sendTrialEndingAlerts = onSchedule(
       if (!result.proceed) continue
 
       try {
+        const endingAlertPlan = getKnownTrialPlan(storeData.billingPlan || storeData.selectedPlan || storeData.plan)
         const params = {
           firstName: firstNameFrom(userData.displayName || userData.signup?.storeName || email),
           storeName: storeData.storeName || userData.signup?.storeName || 'sua loja',
           daysLeftText: diffDays === 1 ? '1 dia' : `${diffDays} dias`,
           trialEndsAt: formatDatePtBr(trialEndsAtDate),
-          planName: storeData.plan === 'premium' ? 'Premium' : storeData.plan === 'professional' ? 'Profissional' : 'Essencial',
+          planName: endingAlertPlan === 'premium' ? 'Premium' : endingAlertPlan === 'professional' ? 'Profissional' : 'Essencial',
           billingUrl: `${appBaseUrl}/dashboard/billing`,
           supportWhatsappUrl,
         }
@@ -3775,6 +3779,151 @@ exports.sendTrialEndingAlerts = onSchedule(
           error: error.message,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true })
+      }
+    }
+  }
+)
+
+function toTrialTransitionDate(value) {
+  if (!value) return null
+  if (typeof value.toDate === 'function') return value.toDate()
+  if (typeof value.toMillis === 'function') return new Date(value.toMillis())
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getKnownTrialPlan(value, fallback = 'essential') {
+  const plan = String(value || '').trim().toLowerCase()
+  if (plan === 'premium') return 'premium'
+  if (plan === 'professional' || plan === 'profissional' || plan === 'plus') return 'professional'
+  return fallback
+}
+
+function getKnownTrialBillingCycle(value, fallback = 'monthly') {
+  const cycle = String(value || '').trim().toLowerCase()
+  return ['monthly', 'annual'].includes(cycle) ? cycle : fallback
+}
+
+function buildTrialTransitionPlanState(storeData, nextStatus) {
+  const billingPlan = getKnownTrialPlan(storeData.billingPlan || storeData.selectedPlan || storeData.plan)
+  const billingCycle = getKnownTrialBillingCycle(storeData.billingCycle)
+  const trialEndsAt = storeData.trialEndsAt || null
+  const isActive = nextStatus === 'active'
+
+  return {
+    plan: billingPlan,
+    selectedPlan: billingPlan,
+    billingPlan,
+    trialEntitlementsPlan: TRIAL_ENTITLEMENTS_PLAN,
+    effectivePlan: isActive ? billingPlan : null,
+    billingCycle,
+    firstChargeAt: storeData.firstChargeAt || trialEndsAt,
+    nextChargeAt: isActive ? (storeData.nextChargeAt || storeData.currentPeriodEnd || trialEndsAt) : null,
+    currentPeriodEnd: isActive ? (storeData.currentPeriodEnd || trialEndsAt) : null,
+  }
+}
+
+exports.processTrialTransitions = onSchedule(
+  {
+    schedule: 'every 30 minutes',
+    timeZone: 'America/Sao_Paulo',
+    region: 'southamerica-east1',
+  },
+  async () => {
+    const now = admin.firestore.Timestamp.now()
+    const snapshot = await db.collection('stores')
+      .where('subscriptionStatus', '==', 'trialing')
+      .limit(200)
+      .get()
+
+    if (snapshot.empty) return
+
+    for (const storeDoc of snapshot.docs) {
+      try {
+        await db.runTransaction(async (transaction) => {
+          const freshStoreDoc = await transaction.get(storeDoc.ref)
+          if (!freshStoreDoc.exists) return
+
+          const storeData = freshStoreDoc.data() || {}
+          if (storeData.subscriptionStatus !== 'trialing') return
+
+          const trialEndsAtDate = toTrialTransitionDate(storeData.trialEndsAt)
+          if (!trialEndsAtDate || trialEndsAtDate.getTime() > Date.now()) return
+
+          const uid = storeData.ownerUid || storeData.ownerId || storeData.createdBy || null
+          const userRef = uid ? db.collection('users').doc(uid) : null
+          const localSubscriptionId = storeData.subscriptionId || (
+            storeData.asaasSubscriptionId ? `asaas_${String(storeData.asaasSubscriptionId).replace(/\//g, '_')}` : null
+          )
+          const subscriptionRef = localSubscriptionId ? db.collection('subscriptions').doc(localSubscriptionId) : null
+
+          const cancelAtTrialEnd = Boolean(storeData.cancelAtTrialEnd || storeData.cancelScheduledAtPeriodEnd)
+          const billingMethodConfigured = Boolean(storeData.billingMethodConfigured || storeData.asaasSubscriptionId)
+          const nextStatus = cancelAtTrialEnd
+            ? 'canceled'
+            : billingMethodConfigured
+            ? 'active'
+            : BILLING_PENDING_PAYMENT_METHOD_STATUS
+          const isBlocked = nextStatus !== 'active'
+          const planState = buildTrialTransitionPlanState(storeData, nextStatus)
+          const transitionPayload = {
+            ...planState,
+            subscriptionStatus: nextStatus,
+            isBillingBlocked: isBlocked,
+            isActive: !isBlocked,
+            cancelAtTrialEnd,
+            cancelScheduledAtPeriodEnd: cancelAtTrialEnd,
+            subscriptionCancellationStatus: cancelAtTrialEnd ? 'trial_ended_canceled' : null,
+            trialTransitionProcessedAt: now,
+            updatedAt: now,
+          }
+
+          transaction.set(storeDoc.ref, transitionPayload, { merge: true })
+
+          if (userRef) {
+            transaction.set(userRef, transitionPayload, { merge: true })
+          }
+
+          if (subscriptionRef) {
+            transaction.set(
+              subscriptionRef,
+              {
+                ...planState,
+                status: nextStatus,
+                cancelAtTrialEnd,
+                cancelScheduledAtPeriodEnd: cancelAtTrialEnd,
+                cancellationStatus: cancelAtTrialEnd ? 'trial_ended_canceled' : null,
+                trialTransitionProcessedAt: now,
+                updatedAt: now,
+              },
+              { merge: true }
+            )
+          }
+
+          transaction.set(db.collection('auditLogs').doc(), {
+            action: 'trial_transition_processed',
+            entity: 'store',
+            entityId: storeDoc.id,
+            uid,
+            storeId: storeDoc.id,
+            source: 'processTrialTransitions',
+            before: {
+              subscriptionStatus: 'trialing',
+              cancelAtTrialEnd,
+            },
+            after: {
+              subscriptionStatus: nextStatus,
+              isBillingBlocked: isBlocked,
+              effectivePlan: planState.effectivePlan,
+            },
+            createdAt: now,
+          })
+        })
+      } catch (error) {
+        logger.error('Failed to process trial transition', {
+          storeId: storeDoc.id,
+          error: error.message || String(error),
+        })
       }
     }
   }

@@ -122,6 +122,8 @@ const SUPPORT_WHATSAPP = '5579999786984'
 const DEFAULT_SUBSCRIPTION_ACTIONS = {
   canChangePlan: false,
   canCancel: false,
+  canCancelTrialContinuation: false,
+  canReactivateTrialContinuation: false,
   canRequestDueDateChange: false,
   canUpdatePaymentMethod: false,
   canSyncStatus: false,
@@ -147,8 +149,8 @@ function getInitialStoreId({ storeId, storeIds, userData, user }) {
 }
 
 function buildStoreFromManagementData(managementData, fallbackStore, selectedStoreId) {
-  const planId = managementData?.plan?.id || fallbackStore?.plan || 'essential'
-  const billingCycle = managementData?.billingCycle || managementData?.plan?.billingCycle || fallbackStore?.billingCycle || 'monthly'
+  const planId = managementData?.billingPlan?.id || managementData?.selectedPlan?.id || managementData?.plan?.id || fallbackStore?.billingPlan || fallbackStore?.selectedPlan || fallbackStore?.plan || 'essential'
+  const billingCycle = managementData?.billingCycle || managementData?.billingPlan?.billingCycle || managementData?.plan?.billingCycle || fallbackStore?.billingCycle || 'monthly'
   const storeDocId = managementData?.storeId || fallbackStore?.id || selectedStoreId
 
   return {
@@ -160,6 +162,12 @@ function buildStoreFromManagementData(managementData, fallbackStore, selectedSto
     storeName: fallbackStore?.storeName || fallbackStore?.name || userStoreName(fallbackStore) || 'Minha Loja',
     subscriptionStatus: managementData?.subscriptionStatus || fallbackStore?.subscriptionStatus || 'checkout_pending',
     plan: planId,
+    selectedPlan: planId,
+    billingPlan: planId,
+    effectivePlan: hasOwnField(managementData, 'effectivePlan')
+      ? managementData.effectivePlan?.id || null
+      : fallbackStore?.effectivePlan || (managementData?.subscriptionStatus === 'trialing' ? 'premium' : planId),
+    cancelAtTrialEnd: Boolean(managementData?.cancelAtTrialEnd ?? fallbackStore?.cancelAtTrialEnd),
     billingCycle,
     trialEndsAt: managementData?.trialEndsAt || fallbackStore?.trialEndsAt || null,
     currentPeriodEnd: managementData?.currentPeriodEnd || managementData?.nextChargeAt || fallbackStore?.currentPeriodEnd || null,
@@ -185,11 +193,17 @@ function getUnavailableActionMessage(actionKey) {
   const messages = {
     canChangePlan: 'Alteração de plano indisponível para o status atual da assinatura.',
     canCancel: 'Cancelamento indisponível para o status atual da assinatura.',
+    canCancelTrialContinuation: 'A continuidade após o trial já está cancelada.',
+    canReactivateTrialContinuation: 'Reativação disponível apenas durante o trial com cobrança futura cancelada.',
     canRequestDueDateChange: 'Alteração de vencimento indisponível para o status atual da assinatura.',
     canUpdatePaymentMethod: 'Atualização de pagamento indisponível para o status atual da assinatura.',
     canSyncStatus: 'Sincronização indisponível porque não há assinatura Asaas vinculada.',
   }
   return messages[actionKey] || 'Ação indisponível para o status atual da assinatura.'
+}
+
+function hasOwnField(object, field) {
+  return Object.prototype.hasOwnProperty.call(object || {}, field)
 }
 
 export default function SubscriptionManagementPage() {
@@ -210,6 +224,7 @@ export default function SubscriptionManagementPage() {
   const [submittingSync, setSubmittingSync] = useState(false)
   const [submittingPlanChange, setSubmittingPlanChange] = useState(false)
   const [submittingCancel, setSubmittingCancel] = useState(false)
+  const [submittingReactivate, setSubmittingReactivate] = useState(false)
   const [submittingDueDate, setSubmittingDueDate] = useState(false)
   const [submittingPaymentMethod, setSubmittingPaymentMethod] = useState(false)
 
@@ -320,11 +335,16 @@ export default function SubscriptionManagementPage() {
   // Normalization Helpers
   const subscriptionActions = managementData?.actions || DEFAULT_SUBSCRIPTION_ACTIONS
   const subscriptionStatus = managementData?.subscriptionStatus || store?.subscriptionStatus || userData?.subscriptionStatus || 'checkout_pending'
-  const currentPlan = managementData?.plan?.id || store?.plan || userData?.plan || 'essential'
-  const billingCycle = managementData?.billingCycle || managementData?.plan?.billingCycle || store?.billingCycle || userData?.billingCycle || 'monthly'
+  const currentPlan = managementData?.billingPlan?.id || managementData?.selectedPlan?.id || managementData?.plan?.id || store?.billingPlan || store?.selectedPlan || store?.plan || userData?.billingPlan || userData?.selectedPlan || userData?.plan || 'essential'
+  const effectivePlanId = hasOwnField(managementData, 'effectivePlan')
+    ? managementData.effectivePlan?.id || null
+    : store?.effectivePlan || userData?.effectivePlan || (subscriptionStatus === 'trialing' ? 'premium' : currentPlan)
+  const billingCycle = managementData?.billingCycle || managementData?.billingPlan?.billingCycle || managementData?.plan?.billingCycle || store?.billingCycle || userData?.billingCycle || 'monthly'
   const trialEndsAt = managementData?.trialEndsAt || store?.trialEndsAt || userData?.trialEndsAt
   const currentPeriodEnd = managementData?.currentPeriodEnd || store?.currentPeriodEnd || userData?.currentPeriodEnd
-  const nextChargeAt = managementData?.nextChargeAt || currentPeriodEnd || trialEndsAt
+  const firstChargeAt = managementData?.firstChargeAt || store?.firstChargeAt || userData?.firstChargeAt || trialEndsAt
+  const nextChargeAt = managementData?.nextChargeAt || store?.nextChargeAt || userData?.nextChargeAt || currentPeriodEnd || firstChargeAt
+  const cancelAtTrialEnd = Boolean(managementData?.cancelAtTrialEnd ?? store?.cancelAtTrialEnd ?? userData?.cancelAtTrialEnd)
   const billingMethodConfigured = Boolean(
     managementData?.paymentMethod?.configured ?? store?.billingMethodConfigured ?? userData?.billingMethodConfigured
   )
@@ -334,6 +354,7 @@ export default function SubscriptionManagementPage() {
   const isActive = subscriptionStatus === 'active'
   const isPastDue = subscriptionStatus === 'past_due'
   const isPending = subscriptionStatus === 'checkout_pending'
+  const isTrialContinuationCancelled = isTrial && cancelAtTrialEnd
   const billingDocument = cleanBrazilianDocument(
     store?.cnpj ||
       store?.cpf ||
@@ -346,19 +367,44 @@ export default function SubscriptionManagementPage() {
       ''
   )
   const currentPlanPresentation = getBillingPlanPresentation(currentPlan)
+  const effectivePlanPresentation = effectivePlanId
+    ? getBillingPlanPresentation(effectivePlanId)
+    : { name: 'Loja pausada', description: 'Recursos bloqueados até regularização.' }
   const currentPlanOption = PLAN_OPTIONS.find((planOption) => planOption.id === currentPlan)
-  const currentPlanDisplayAmount = Number.isFinite(Number(managementData?.plan?.amountCents))
-    ? Number(managementData.plan.amountCents) / 100
+  const currentPlanDisplayAmount = Number.isFinite(Number(managementData?.billingPlan?.amountCents ?? managementData?.plan?.amountCents))
+    ? Number(managementData?.billingPlan?.amountCents ?? managementData.plan.amountCents) / 100
     : getPlanCyclePrice(currentPlanOption || PLAN_OPTIONS[0], billingCycle)
+  const cancelConfirmationPhrase = isTrial ? 'cancelar continuidade' : 'cancelar minha assinatura'
+  const planActionTitle = isTrial ? 'Alterar plano após o trial' : 'Alterar Plano'
+  const planActionButton = isTrial ? 'Alterar plano após o trial' : 'Solicitar alteração de plano'
+  const cancelActionTitle = isTrial ? 'Cancelar cobrança futura' : 'Cancelar Assinatura'
+  const cancelActionButton = isTrial ? 'Cancelar continuidade' : 'Solicitar cancelamento'
+  const statusTitle = isTrialContinuationCancelled
+    ? 'Cobrança futura cancelada'
+    : isTrial
+    ? 'Trial Premium ativo'
+    : isActive
+    ? `Plano ${currentPlanPresentation.name} ativo`
+    : isPending
+    ? 'Sua assinatura precisa de uma forma de pagamento válida'
+    : 'Sua loja está pausada por pendência de assinatura'
+  const statusDescription = isTrialContinuationCancelled
+    ? `Seu acesso Premium gratuito continua até ${formatBillingDate(trialEndsAt)}. Depois disso, sua loja ficará pausada para novos pedidos.`
+    : isTrial
+    ? `Você está testando todos os recursos Premium até ${formatBillingDate(trialEndsAt)}. Após o trial, sua loja continuará no plano ${currentPlanPresentation.name}.`
+    : isActive
+    ? `Próxima cobrança: ${formatBillingDate(nextChargeAt)}. Forma de pagamento ${billingMethodConfigured ? 'configurada' : 'pendente'}.`
+    : 'Configure ou regularize a cobrança para manter sua loja ativa.'
 
   // Header Status Badge Object
   const headerBadge = useMemo(() => {
     if (isPending) return { label: 'Cobrança Pendente', color: 'orange', dot: true, pulse: true }
-    if (isTrial) return { label: 'Teste Grátis', color: 'blue', dot: true }
+    if (isTrialContinuationCancelled) return { label: 'Cobrança Futura Cancelada', color: 'orange', dot: true }
+    if (isTrial) return { label: 'Trial Premium', color: 'blue', dot: true }
     if (isActive) return { label: 'Assinatura Ativa', color: 'green', dot: true }
     if (isPastDue) return { label: 'Atrasada', color: 'red', dot: true, pulse: true }
     return { label: 'Bloqueada/Cancelada', color: 'red', dot: true }
-  }, [isActive, isPastDue, isPending, isTrial])
+  }, [isActive, isPastDue, isPending, isTrial, isTrialContinuationCancelled])
 
   // Support WhatsApp Helper
   function triggerSupportFallback(actionTitle, actionDesc) {
@@ -447,8 +493,10 @@ export default function SubscriptionManagementPage() {
       
       setShowPlanModal(false)
       triggerSupportFallback(
-        'Alteração de Plano',
-        `Gostaria de mudar meu plano do atual para o plano *${planName}* (${cycleName}).`
+        isTrial ? 'Alterar plano após o trial' : 'Alteração de Plano',
+        isTrial
+          ? `Gostaria de mudar o plano após o trial para *${planName}* (${cycleName}), mantendo o trial Premium até a data final.`
+          : `Gostaria de mudar meu plano do atual para o plano *${planName}* (${cycleName}).`
       )
     } finally {
       setSubmittingPlanChange(false)
@@ -496,7 +544,7 @@ export default function SubscriptionManagementPage() {
       return
     }
 
-    if (cancelConfirmationText.trim().toLowerCase() !== 'cancelar minha assinatura') {
+    if (cancelConfirmationText.trim().toLowerCase() !== cancelConfirmationPhrase) {
       setToast({
         type: 'error',
         message: 'Digite a frase de confirmação exatamente para prosseguir.',
@@ -522,7 +570,9 @@ export default function SubscriptionManagementPage() {
       const resultStatus = result?.data?.status
       const cancellationStatus = result?.data?.cancellationStatus
       const message =
-        resultStatus === 'requested'
+        resultStatus === 'trial_end_cancel_scheduled' || cancellationStatus === 'trial_end_cancel_scheduled'
+          ? 'Cobrança futura cancelada. Seu trial Premium continua até a data final.'
+          : resultStatus === 'requested'
           ? 'Cancelamento solicitado com sucesso. Nossa equipe confirmará o processamento.'
           : resultStatus === 'canceled'
           ? 'Assinatura cancelada com sucesso.'
@@ -537,11 +587,44 @@ export default function SubscriptionManagementPage() {
       console.warn('[SubscriptionManagement] cancelSubscription failed or not deployed.', error)
       setShowCancelModal(false)
       triggerSupportFallback(
-        'Cancelamento de Assinatura',
-        `Desejo solicitar o cancelamento da assinatura do PratoBy. Motivo do cancelamento: "${cancelReason || 'Não informado'}".`
+        isTrial ? 'Cancelar cobrança após o trial' : 'Cancelamento de Assinatura',
+        isTrial
+          ? `Desejo cancelar a continuidade após o trial, mantendo o acesso gratuito até ${formatBillingDate(trialEndsAt)}. Motivo: "${cancelReason || 'Não informado'}".`
+          : `Desejo solicitar o cancelamento da assinatura do PratoBy. Motivo do cancelamento: "${cancelReason || 'Não informado'}".`
       )
     } finally {
       setSubmittingCancel(false)
+    }
+  }
+
+  async function handleReactivateTrialContinuation() {
+    if (submittingReactivate) return
+    if (!subscriptionActions.canReactivateTrialContinuation) {
+      setToast({ type: 'info', message: getUnavailableActionMessage('canReactivateTrialContinuation') })
+      return
+    }
+
+    setSubmittingReactivate(true)
+    try {
+      const reactivateFn = httpsCallable(functions, 'reactivateTrialContinuation')
+      const result = await reactivateFn({ storeId: store?.id || selectedStoreId })
+
+      if (auth.refreshUserData) {
+        await auth.refreshUserData()
+      }
+      setStoreRefreshNonce((v) => v + 1)
+      setToast({
+        type: 'success',
+        message: result?.data?.message || 'Continuidade após o trial reativada.',
+      })
+    } catch (error) {
+      console.warn('[SubscriptionManagement] reactivateTrialContinuation failed or not deployed.', error)
+      triggerSupportFallback(
+        'Reativar continuidade após o trial',
+        'Desejo reativar a continuidade da assinatura após o fim do trial Premium, mantendo a data original do teste.'
+      )
+    } finally {
+      setSubmittingReactivate(false)
     }
   }
 
@@ -702,15 +785,15 @@ export default function SubscriptionManagementPage() {
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest block">Plano Atual</span>
+                  <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest block">Status da loja</span>
                   <h2 className="text-3xl font-black tracking-tight text-gray-900 dark:text-white mt-1">
-                    Plano {currentPlanPresentation.name}
+                    {statusTitle}
                   </h2>
                   <p className="mt-1.5 text-xs text-gray-600 dark:text-zinc-300 font-medium max-w-lg leading-relaxed">
-                    {currentPlanPresentation.description}
+                    {statusDescription}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-zinc-400 font-semibold mt-2">
-                    Ciclo {normalizeBillingCycle(billingCycle)} · Sem comissão por pedidos.
+                    Recursos liberados agora: {effectivePlanPresentation.name}. Plano após o trial: {currentPlanPresentation.name}.
                   </p>
                 </div>
               </div>
@@ -721,7 +804,7 @@ export default function SubscriptionManagementPage() {
                   <div className="flex justify-between items-center text-xs lg:text-sm">
                     <span className="text-gray-700 dark:text-zinc-300 font-bold flex items-center gap-2">
                       <FiClock className="text-orange-500" size={15} />
-                      Teste grátis de 14 dias ativo
+                      {isTrialContinuationCancelled ? 'Trial ativo com cobrança futura cancelada' : 'Trial Premium de 14 dias ativo'}
                     </span>
                     <span className="font-black text-[#f97316] dark:text-orange-400">
                       {trialDaysLeft !== null ? `${trialDaysLeft} dias restantes` : 'Ativo'}
@@ -735,7 +818,7 @@ export default function SubscriptionManagementPage() {
                     />
                   </div>
                   <div className="flex justify-between items-center text-[10px] text-zinc-500 font-semibold">
-                    <span>Dia 1 (Início)</span>
+                    <span>{isTrialContinuationCancelled ? 'Sem cobrança após o trial' : 'Dia 1 (Início)'}</span>
                     <span>Término em {formatBillingDate(trialEndsAt)}</span>
                   </div>
                 </div>
@@ -767,10 +850,12 @@ export default function SubscriptionManagementPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <FiLock className="text-[#f97316]" size={14} />
-                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">Mensalidade Programada</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                    {isTrial ? 'Plano após o trial' : 'Mensalidade programada'}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">Valor do Plano</p>
+                  <p className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{currentPlanPresentation.name}</p>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
                     <span className="text-2xl font-black text-gray-900 dark:text-white">
                       {formatCurrency(currentPlanDisplayAmount)}
@@ -783,7 +868,9 @@ export default function SubscriptionManagementPage() {
                   <div className="mt-3 p-3 rounded-xl bg-orange-50/20 dark:bg-zinc-950/50 border border-orange-100/50 dark:border-zinc-800">
                     <p className="text-[11px] text-gray-600 dark:text-zinc-300 font-semibold leading-relaxed">
                       {billingMethodConfigured
-                        ? `Próxima referência de cobrança: ${formatBillingDate(nextChargeAt)}.`
+                        ? isTrialContinuationCancelled
+                          ? `Cobrança após o trial cancelada. Seu acesso continua até ${formatBillingDate(trialEndsAt)}.`
+                          : `Primeira/próxima cobrança: ${formatBillingDate(nextChargeAt)}.`
                         : 'Aguardando o cadastro dos dados de faturamento para iniciar o ciclo seguro.'}
                     </p>
                   </div>
@@ -792,20 +879,32 @@ export default function SubscriptionManagementPage() {
 
               {/* Action Buttons inside HUD */}
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={handleSyncStatus}
-                  disabled={submittingSync || !subscriptionActions.canSyncStatus}
-                  title={!subscriptionActions.canSyncStatus ? getUnavailableActionMessage('canSyncStatus') : undefined}
-                  className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submittingSync ? (
-                    <FiLoader className="animate-spin" size={14} />
-                  ) : (
-                    <FiRefreshCw size={14} />
-                  )}
-                  <span>Sincronizar status</span>
-                </button>
+                {isTrialContinuationCancelled ? (
+                  <button
+                    type="button"
+                    onClick={handleReactivateTrialContinuation}
+                    disabled={submittingReactivate || !subscriptionActions.canReactivateTrialContinuation}
+                    className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submittingReactivate ? <FiLoader className="animate-spin" size={14} /> : <FiCheck size={14} />}
+                    <span>Reativar continuidade</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSyncStatus}
+                    disabled={submittingSync || !subscriptionActions.canSyncStatus}
+                    title={!subscriptionActions.canSyncStatus ? getUnavailableActionMessage('canSyncStatus') : undefined}
+                    className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submittingSync ? (
+                      <FiLoader className="animate-spin" size={14} />
+                    ) : (
+                      <FiRefreshCw size={14} />
+                    )}
+                    <span>Sincronizar status</span>
+                  </button>
+                )}
 
                 <Link
                   to="/dashboard/billing"
@@ -817,6 +916,26 @@ export default function SubscriptionManagementPage() {
               </div>
             </div>
           </div>
+        </motion.section>
+
+        <motion.section
+          variants={sectionMotion}
+          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+        >
+          {[
+            ['Recursos liberados agora', effectivePlanPresentation.name],
+            ['Plano após o trial', currentPlanPresentation.name],
+            ['Valor após o trial', `${formatCurrency(currentPlanDisplayAmount)}/${billingCycle === 'annual' ? 'ano' : 'mês'}`],
+            ['Ciclo', normalizeBillingCycle(billingCycle)],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+            >
+              <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">{label}</p>
+              <p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{value}</p>
+            </div>
+          ))}
         </motion.section>
 
         {/* Core Actions Grid */}
@@ -835,9 +954,11 @@ export default function SubscriptionManagementPage() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
                   <FiTrendingUp size={18} />
                 </span>
-                <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">Alterar Plano</h4>
+                <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">{planActionTitle}</h4>
                 <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
-                  Solicite a troca de plano com validação segura do financeiro.
+                  {isTrial
+                    ? 'Escolha qual plano será cobrado quando o trial Premium terminar.'
+                    : 'Solicite a troca de plano com validação segura do financeiro.'}
                 </p>
                 {!subscriptionActions.canChangePlan && (
                   <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
@@ -855,7 +976,7 @@ export default function SubscriptionManagementPage() {
                 disabled={!subscriptionActions.canChangePlan}
                 className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-orange-50 hover:bg-orange-100/70 text-[#f97316] text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-orange-950/20"
               >
-                Solicitar alteração de plano
+                {planActionButton}
               </button>
             </motion.div>
 
@@ -929,11 +1050,22 @@ export default function SubscriptionManagementPage() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/20 text-red-600">
                   <FiTrash2 size={18} />
                 </span>
-                <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">Cancelar Assinatura</h4>
+                <h4 className="mt-4 text-sm font-black text-gray-900 dark:text-white">
+                  {isTrialContinuationCancelled ? 'Continuar após o trial' : cancelActionTitle}
+                </h4>
                 <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed font-semibold">
-                  Solicite o cancelamento ao fim do ciclo, sem apagar dados da loja.
+                  {isTrialContinuationCancelled
+                    ? 'Reative a cobrança futura no plano escolhido sem ganhar dias extras de trial.'
+                    : isTrial
+                    ? 'Cancele apenas a cobrança após o trial. O acesso gratuito continua até a data final.'
+                    : 'Solicite o cancelamento ao fim do ciclo, sem apagar dados da loja.'}
                 </p>
-                {!subscriptionActions.canCancel && (
+                {isTrialContinuationCancelled && !subscriptionActions.canReactivateTrialContinuation && (
+                  <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
+                    {getUnavailableActionMessage('canReactivateTrialContinuation')}
+                  </p>
+                )}
+                {!isTrialContinuationCancelled && !subscriptionActions.canCancel && (
                   <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-bold text-gray-500 dark:bg-zinc-950/60 dark:text-zinc-400">
                     {getUnavailableActionMessage('canCancel')}
                   </p>
@@ -942,14 +1074,26 @@ export default function SubscriptionManagementPage() {
               <button
                 type="button"
                 onClick={() => {
+                  if (isTrialContinuationCancelled) {
+                    handleReactivateTrialContinuation()
+                    return
+                  }
                   setCancelReason('')
                   setCancelConfirmationText('')
                   setShowCancelModal(true)
                 }}
-                disabled={!subscriptionActions.canCancel}
+                disabled={
+                  isTrialContinuationCancelled
+                    ? submittingReactivate || !subscriptionActions.canReactivateTrialContinuation
+                    : !subscriptionActions.canCancel
+                }
                 className="mt-5 w-full inline-flex h-10 items-center justify-center rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/20"
               >
-                Solicitar cancelamento
+                {isTrialContinuationCancelled
+                  ? submittingReactivate
+                    ? <FiLoader className="animate-spin" />
+                    : 'Reativar continuidade'
+                  : cancelActionButton}
               </button>
             </motion.div>
 
@@ -982,6 +1126,36 @@ export default function SubscriptionManagementPage() {
           </button>
         </motion.section>
 
+        <motion.section
+          variants={sectionMotion}
+          className="rounded-[2rem] border border-red-100 bg-white p-6 shadow-sm dark:border-red-950/40 dark:bg-zinc-900"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400">
+                <FiAlertTriangle size={22} />
+              </span>
+              <div>
+                <h4 className="text-base font-black text-gray-900 dark:text-white">Zona de perigo</h4>
+                <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
+                  Excluir conta e dados é uma ação separada do cancelamento da assinatura. No MVP, a solicitação é revisada pelo suporte para evitar perda indevida de dados e cobrança.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => triggerSupportFallback(
+                'Solicitar exclusão da conta',
+                'Desejo solicitar a exclusão da conta e dos dados conforme as regras do PratoBy. Entendo que esta ação é separada do cancelamento da assinatura.'
+              )}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-5 text-xs font-black text-red-600 transition hover:bg-red-100 dark:border-red-950/40 dark:bg-red-950/20 dark:text-red-400 md:w-auto"
+            >
+              <FiTrash2 size={14} />
+              Solicitar exclusão da conta
+            </button>
+          </div>
+        </motion.section>
+
       </motion.div>
 
       {/* MODAL 1: Alterar Plano */}
@@ -994,10 +1168,12 @@ export default function SubscriptionManagementPage() {
               <div>
                 <h3 className="text-lg font-black text-[#111827] dark:text-white flex items-center gap-2">
                   <FiTrendingUp className="text-[#f97316]" />
-                  Alterar Plano da Loja
+                  {isTrial ? 'Alterar plano após o trial' : 'Alterar Plano da Loja'}
                 </h3>
                 <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 leading-normal">
-                  Escolha seu novo pacote PratoBy.
+                  {isTrial
+                    ? 'Você continua testando Premium; aqui você escolhe apenas o plano que será cobrado depois.'
+                    : 'Escolha seu novo pacote PratoBy.'}
                 </p>
               </div>
               <button
@@ -1098,11 +1274,15 @@ export default function SubscriptionManagementPage() {
               <div className="rounded-2xl border border-gray-100 bg-[#fafafa] p-4 text-xs font-semibold text-gray-500 leading-relaxed dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400 space-y-2">
                 <p className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
                   <FiCheck className="shrink-0" />
-                  A troca de plano será solicitada com o valor oficial calculado pelo PratoBy.
+                  {isTrial
+                    ? 'Durante o trial, a troca altera somente o plano após o teste.'
+                    : 'A troca de plano será solicitada com o valor oficial calculado pelo PratoBy.'}
                 </p>
                 <p className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
                   <FiInfo className="shrink-0" />
-                  Nossa equipe confirmará o melhor momento de aplicação para evitar cobranças confusas.
+                  {isTrial
+                    ? 'O acesso Premium gratuito permanece até a data final do trial.'
+                    : 'Nossa equipe confirmará o melhor momento de aplicação para evitar cobranças confusas.'}
                 </p>
               </div>
 
@@ -1124,7 +1304,7 @@ export default function SubscriptionManagementPage() {
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f97316] hover:bg-[#ea580c] px-5 text-xs font-black text-white shadow-md transition disabled:opacity-60"
               >
                 {submittingPlanChange ? <FiLoader className="animate-spin" /> : <FiCheck />}
-                Solicitar alteração de plano
+                {planActionButton}
               </button>
             </div>
 
@@ -1218,10 +1398,12 @@ export default function SubscriptionManagementPage() {
               <div>
                 <h3 className="text-lg font-black text-red-600 dark:text-red-400 flex items-center gap-2">
                   <FiAlertTriangle />
-                  Cancelar Assinatura PratoBy
+                  {isTrial ? 'Cancelar cobrança após o trial' : 'Cancelar Assinatura PratoBy'}
                 </h3>
                 <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-zinc-400">
-                  Lamentamos ver você partir. Leia atentamente as condições abaixo.
+                  {isTrial
+                    ? 'Isso não encerra seu trial Premium. Leia atentamente as condições abaixo.'
+                    : 'Lamentamos ver você partir. Leia atentamente as condições abaixo.'}
                 </p>
               </div>
               <button
@@ -1238,7 +1420,9 @@ export default function SubscriptionManagementPage() {
               <div className="rounded-xl bg-red-50/40 border border-red-100/50 p-4 text-xs font-bold text-red-700 dark:bg-red-950/20 dark:text-red-400 space-y-2 leading-relaxed">
                 <p className="flex items-start gap-2">
                   <FiAlertTriangle className="mt-0.5 shrink-0" />
-                  Sua loja online e cardápio digital serão completamente suspensos ao término do período de faturamento ativo.
+                  {isTrial
+                    ? `Nenhuma nova cobrança será programada após o trial se a continuidade for cancelada antes da primeira cobrança. Seu acesso gratuito continua até ${formatBillingDate(trialEndsAt)}.`
+                    : 'Sua loja online e cardápio digital serão suspensos ao término do período de faturamento ativo.'}
                 </p>
                 <p className="flex items-start gap-2">
                   <FiCheck className="mt-0.5 shrink-0" />
@@ -1261,13 +1445,13 @@ export default function SubscriptionManagementPage() {
 
               <div className="border-t border-gray-100 dark:border-zinc-800 pt-4 space-y-3">
                 <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                  Para confirmar, digite: <strong className="text-red-600 dark:text-red-400 lowercase italic">cancelar minha assinatura</strong>
+                  Para confirmar, digite: <strong className="text-red-600 dark:text-red-400 lowercase italic">{cancelConfirmationPhrase}</strong>
                 </label>
                 <input
                   type="text"
                   value={cancelConfirmationText}
                   onChange={(e) => setCancelConfirmationText(e.target.value)}
-                  placeholder="cancelar minha assinatura"
+                  placeholder={cancelConfirmationPhrase}
                   className="h-11 w-full rounded-xl border border-red-100 px-3 text-sm font-semibold text-red-600 dark:bg-zinc-950 dark:text-red-400 dark:border-red-950/40 outline-none focus:border-red-500 dark:focus:border-red-500 transition"
                 />
               </div>
@@ -1280,16 +1464,16 @@ export default function SubscriptionManagementPage() {
                 onClick={() => setShowCancelModal(false)}
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 px-5 text-xs font-black text-gray-700 dark:border-zinc-700 dark:text-zinc-200 hover:bg-gray-100 transition"
               >
-                Desistir do Cancelamento
+                Voltar
               </button>
               <button
                 type="button"
                 onClick={handleConfirmCancel}
-                disabled={submittingCancel || cancelConfirmationText.trim().toLowerCase() !== 'cancelar minha assinatura'}
+                disabled={submittingCancel || cancelConfirmationText.trim().toLowerCase() !== cancelConfirmationPhrase}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-5 text-xs font-black text-white shadow-md transition disabled:opacity-50"
               >
                 {submittingCancel ? <FiLoader className="animate-spin" /> : <FiTrash2 />}
-                Solicitar cancelamento
+                {cancelActionButton}
               </button>
             </div>
 

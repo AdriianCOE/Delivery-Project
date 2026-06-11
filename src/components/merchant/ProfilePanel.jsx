@@ -709,7 +709,7 @@ function PhoneCard({ userData, onSuccess }) {
 // ─── Subscription Card (read-only) ───────────────────────────
 
 function SubscriptionCard({ userData }) {
-  const plan = formatPlanName(userData?.plan || userData?.planId)
+  const plan = formatPlanName(userData?.effectivePlan || userData?.billingPlan || userData?.selectedPlan || userData?.plan || userData?.planId)
   const cycle = formatBillingCycle(userData?.billingCycle)
   const status = formatSubscriptionStatus(userData?.subscriptionStatus)
   const onboarding = userData?.onboardingStatus
