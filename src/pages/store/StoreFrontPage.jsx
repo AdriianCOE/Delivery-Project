@@ -28,6 +28,7 @@ import {
   FiShare2,
   FiShoppingCart,
   FiArrowLeft,
+  FiRefreshCw,
   FiStar,
   FiHeart,
   FiInfo,
@@ -1610,6 +1611,7 @@ export default function StoreFrontPage() {
   const [loadingStore, setLoadingStore] = useState(true)
   const [loadingMenu, setLoadingMenu] = useState(true)
   const [menuError, setMenuError] = useState('')
+  const [menuReloadKey, setMenuReloadKey] = useState(0)
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
@@ -1665,6 +1667,43 @@ export default function StoreFrontPage() {
   const isOwner = authLoading ? false : canEditStorefront(combinedUser, store, slug)
   const isAdminPreview = Boolean(hasRole?.(['admin', 'developer']))
   const canPreviewUnavailableStore = isOwner || isAdminPreview
+  const hasMenuStore = Boolean(store)
+  const menuTargetStoreId = getStoreDocId(store)
+  const menuTargetStoreSlug = getStoreSlug(store, slug)
+  const menuStoreUnavailable = Boolean(store && isStoreUnavailable(store))
+  const menuStoreContext = useMemo(() => {
+    if (!hasMenuStore) {
+      return {
+        hasStore: false,
+        isUnavailable: false,
+        loadKey: '',
+        targetStoreId: '',
+        targetStoreSlug: '',
+      }
+    }
+
+    return {
+      hasStore: true,
+      isUnavailable: menuStoreUnavailable,
+      loadKey: [
+        menuTargetStoreId,
+        menuTargetStoreSlug,
+        menuStoreUnavailable ? 'unavailable' : 'available',
+        canPreviewUnavailableStore ? 'preview' : 'public',
+        menuReloadKey,
+      ].join('|'),
+      targetStoreId: menuTargetStoreId,
+      targetStoreSlug: menuTargetStoreSlug,
+    }
+  }, [
+    canPreviewUnavailableStore,
+    hasMenuStore,
+    menuStoreUnavailable,
+    menuTargetStoreId,
+    menuTargetStoreSlug,
+    menuReloadKey,
+  ])
+  const menuLoadKey = menuStoreContext.loadKey
 
   const shouldBlockStorefront = Boolean(
     store && isStoreUnavailable(store) && !canPreviewUnavailableStore
@@ -2029,6 +2068,11 @@ const handleToggleFavorite = useCallback(() => {
     window.open(`https://wa.me/?text=${whatsappText}`, '_blank', 'noopener,noreferrer')
   }, [store?.name, storePublicUrl])
 
+  const handleRetryMenu = useCallback(() => {
+    setMenuError('')
+    setMenuReloadKey((current) => current + 1)
+  }, [])
+
   useEffect(() => {
     if (!slug) {
       queueMicrotask(() => {
@@ -2099,16 +2143,17 @@ const handleToggleFavorite = useCallback(() => {
   }, [store?.id, slug, setStoreKey])
 
   useEffect(() => {
-  if (!store || (isStoreUnavailable(store) && !canPreviewUnavailableStore)) {
+  if (!menuStoreContext.hasStore || (menuStoreContext.isUnavailable && !canPreviewUnavailableStore)) {
   queueMicrotask(() => {
     setCategories([])
     setProducts([])
+    setMenuError('')
     setLoadingMenu(false)
   })
   return undefined
   }
 
-    const targetStoreId = getStoreDocId(store)
+    const targetStoreId = menuStoreContext.targetStoreId
 
     if (!targetStoreId) {
       setCategories([])
@@ -2117,7 +2162,7 @@ const handleToggleFavorite = useCallback(() => {
       return
     }
 
-    const targetStoreSlug = getStoreSlug(store, slug)
+    const targetStoreSlug = menuStoreContext.targetStoreSlug
     const categoriesQuery = query(collection(db, 'publicStores', targetStoreId, 'categories'))
     const productsQuery = query(collection(db, 'publicStores', targetStoreId, 'products'))
 
@@ -2225,7 +2270,7 @@ const handleToggleFavorite = useCallback(() => {
     return () => {
       isMounted = false
     }
-    }, [canPreviewUnavailableStore, slug, store])
+    }, [canPreviewUnavailableStore, menuLoadKey, menuStoreContext])
 
   useEffect(() => {
     if (activeCategory === 'all') return
@@ -2357,8 +2402,17 @@ return (
 
       {menuError && (
         <section className="mx-auto mt-6 max-w-7xl px-4">
-          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-            {menuError}
+          <div className="flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:flex-row sm:items-center sm:justify-between">
+            <span>{menuError}</span>
+            <button
+              type="button"
+              onClick={handleRetryMenu}
+              disabled={loadingMenu}
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-3 text-xs font-black text-red-700 shadow-sm ring-1 ring-red-100 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FiRefreshCw className={loadingMenu ? 'animate-spin' : ''} />
+              Tentar novamente
+            </button>
           </div>
         </section>
       )}

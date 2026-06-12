@@ -12,7 +12,6 @@ import {
   FiMessageCircle,
   FiShield,
 } from 'react-icons/fi'
-import { hasPlanFeature } from '../../utils/planCatalog'
 
 const DEFAULT_THEME = '#f97316'
 const PRATOBY_URL = 'https://pratoby.com'

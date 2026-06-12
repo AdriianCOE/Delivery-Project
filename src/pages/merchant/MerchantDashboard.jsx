@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import {
   collection,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -1840,29 +1841,34 @@ subscribeOrders(query(
       return undefined
     }
 
+    let isMounted = true
     const qProducts = query(collection(db, 'products'), where('storeId', '==', orderStoreId))
-    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-      const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
-      setProducts(items)
-      setHasCatalog(!snapshot.empty)
-      setLoadingCatalog(false)
-    }, (error) => {
-      console.error('Erro ao carregar produtos:', error)
-      setHasCatalog(true) // assume has catalog on error to avoid blocking
-      setLoadingCatalog(false)
-    })
-
     const qCategories = query(collection(db, 'categories'), where('storeId', '==', orderStoreId))
-    const unsubCategories = onSnapshot(qCategories, (snapshot) => {
-      const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
-      setCategories(items)
-    }, (error) => {
-      console.error('Erro ao carregar categorias:', error)
-    })
+
+    async function loadCatalogSummary() {
+      try {
+        const [productsSnapshot, categoriesSnapshot] = await Promise.all([
+          getDocs(qProducts),
+          getDocs(qCategories),
+        ])
+
+        if (!isMounted) return
+
+        setProducts(productsSnapshot.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setCategories(categoriesSnapshot.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setHasCatalog(!productsSnapshot.empty || !categoriesSnapshot.empty)
+      } catch (error) {
+        console.error('Erro ao carregar resumo do catálogo:', error)
+        if (isMounted) setHasCatalog(true) // assume has catalog on error to avoid blocking
+      } finally {
+        if (isMounted) setLoadingCatalog(false)
+      }
+    }
+
+    loadCatalogSummary()
 
     return () => {
-      unsubProducts()
-      unsubCategories()
+      isMounted = false
     }
   }, [selectedStore])
 

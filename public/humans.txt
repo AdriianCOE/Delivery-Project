@@ -1,0 +1,22 @@
+/* TEAM */
+
+Projeto: PratoBy
+Site: https://pratoby.com
+Instagram: https://www.instagram.com/pratobybr
+Contato: contato@pratoby.com
+
+Desenvolvimento: PratoBy
+Localização: Brasil
+Idioma principal: pt-BR
+
+/* SITE */
+
+Nome: PratoBy
+Descrição: Cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias.
+URL: https://pratoby.com
+Tecnologias: React, Vite, Firebase, Firestore, Cloud Functions, Firebase Hosting
+Lançamento/Piloto: 2026
+
+/* THANKS */
+
+Obrigado aos pequenos negócios que inspiram o PratoBy.
