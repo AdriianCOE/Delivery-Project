@@ -47,6 +47,7 @@ import {
   getStoreDocId,
   getStorePublicSlug,
 } from '../../utils/storeIdentity'
+import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import { shouldShowProductInStorefront } from '../../utils/productStatus'
 import CartDrawer from './CartDrawer'
 import CustomerDrawer from './CustomerDrawer'
@@ -654,30 +655,6 @@ function firstFilled(...values) {
   return values.find((value) => typeof value === 'string' && value.trim()) || ''
 }
 
-function getCloudinaryOptimizedUrl(url, widthOrOptions = 900) {
-  if (!url || typeof url !== 'string') return ''
-
-  if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
-    return url
-  }
-
-  const options =
-    typeof widthOrOptions === 'object' && widthOrOptions !== null
-      ? widthOrOptions
-      : { width: widthOrOptions }
-
-  const width = Number(options.width || 900)
-  const height = Number(options.height || 0)
-  const crop = options.crop || (height ? 'fill' : 'limit')
-  const transforms = ['f_auto', 'q_auto', `c_${crop}`, `w_${width}`]
-
-  if (height) {
-    transforms.push(`h_${height}`)
-  }
-
-  return url.replace('/upload/', `/upload/${transforms.join(',')}/`)
-}
-
 function getStoreSlug(store, fallbackSlug) {
   return firstFilled(
     store?.storeSlug,
@@ -701,14 +678,14 @@ function normalizeStore(input, fallbackSlug = '') {
   const docId = getStoreDocId(input) || input?.id || fallbackSlug
   const storeSlug = getStorePublicSlug(input) || input?.slug || fallbackSlug || docId
 
-  const logoUrl = getCloudinaryOptimizedUrl(
+  const logoUrl = getCloudinaryImageUrl(
     firstFilled(data.logoUrl, data.logo, data.avatarUrl, data.photoUrl),
-    { width: 96, height: 96, crop: 'fill' },
+    'storeLogo',
   )
 
-  const bannerUrl = getCloudinaryOptimizedUrl(
+  const bannerUrl = getCloudinaryImageUrl(
     firstFilled(data.bannerUrl, data.coverUrl, data.bannerImageUrl, data.coverImageUrl),
-    1400,
+    'storeBanner',
   )
 
   return {
@@ -732,9 +709,9 @@ function normalizeProduct(productDoc) {
   const isSnapshot = typeof productDoc?.data === 'function'
   const data = isSnapshot ? productDoc.data() || {} : productDoc || {}
   const productId = isSnapshot ? productDoc.id : data.id || data.productId
-  const imageUrl = getCloudinaryOptimizedUrl(
+  const imageUrl = getCloudinaryImageUrl(
     firstFilled(data.imageUrl, data.image, data.photoUrl, data.coverUrl, data.thumbnailUrl),
-    700,
+    'productCard',
   )
 
   return {
@@ -900,9 +877,9 @@ function getStorePromoBanner(store) {
 
   const title = firstFilled(raw.title, raw.name, raw.headline, raw.label)
   const subtitle = firstFilled(raw.subtitle, raw.description, raw.text, raw.caption)
-  const imageUrl = getCloudinaryOptimizedUrl(
+  const imageUrl = getCloudinaryImageUrl(
     firstFilled(raw.imageUrl, raw.image, raw.bannerUrl, raw.coverUrl, raw.photoUrl),
-    900,
+    'storeBannerMobile',
   )
 
   if (!title && !subtitle && !imageUrl) return null
@@ -1086,9 +1063,9 @@ function StoreIdentityCard({
             </div>
 
             <div>
-              <p className="text-sm font-black">Loja fechada no momento</p>
+              <p className="text-sm font-black">Pedidos pausados</p>
               <p className="mt-1 text-sm leading-6">
-                O cardápio está disponível para visualização, mas a finalização do pedido está temporariamente bloqueada.
+                A loja está fechada agora, mas você pode visualizar o cardápio e voltar no próximo horário.
               </p>
             </div>
           </div>
@@ -1109,16 +1086,16 @@ function StoreQuickActions({
   themeColor,
 }) {
   return (
-    <section className="mx-auto mt-3 max-w-[1120px] px-3 sm:mt-4 sm:px-4">
-      <div className="rounded-[1.35rem] border border-white/80 bg-white/90 p-1.5 shadow-lg shadow-gray-200/60 ring-1 ring-gray-100/80 backdrop-blur-xl sm:rounded-[1.7rem]">
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:gap-2">
+    <section className="mx-auto mt-2 max-w-[1120px] px-3 sm:mt-3 sm:px-4">
+      <div className="rounded-[1.15rem] border border-white/80 bg-white/90 p-1 shadow-md shadow-orange-100/40 ring-1 ring-orange-50/80 backdrop-blur-xl sm:rounded-[1.35rem]">
+      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
         <button
           type="button"
           onClick={onToggleSearch}
-          className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] px-3 text-sm font-black transition duration-200 active:scale-[0.98] sm:min-h-[54px] sm:rounded-[1.25rem] ${
+          className={`flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] px-3 text-sm font-black transition duration-200 active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem] ${
             searchExpanded || searchTerm
               ? 'text-white shadow-lg shadow-orange-200/50'
-              : 'bg-[#f9fafb] text-[#111827] hover:bg-orange-50 hover:text-[#f97316]'
+              : 'bg-[#fff8f1] text-[#111827] hover:bg-orange-50 hover:text-[#f97316]'
           }`}
           style={{
             backgroundColor: searchExpanded || searchTerm ? themeColor : undefined,
@@ -1131,7 +1108,7 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onOpenProfile}
-          className="flex min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[54px] sm:rounded-[1.25rem]"
+          className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#fff8f1] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem]"
         >
           <FiUser />
           Meus Pedidos
@@ -1140,7 +1117,7 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onCopyLink}
-          className="hidden min-h-[54px] items-center justify-center gap-2 rounded-[1.25rem] bg-[#f9fafb] px-3 text-sm font-black text-[#6b7280] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:flex"
+          className="hidden min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#fff8f1] px-3 text-sm font-black text-[#6b7280] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:flex"
         >
           {copied ? <FiCheck /> : <FiCopy />}
           {copied ? 'Copiado!' : 'Copiar link'}
@@ -1165,7 +1142,7 @@ function StoreQuickActions({
             <input
               type="text"
               autoFocus={searchExpanded}
-              placeholder="Buscar pizza, burger, coca..."
+              placeholder="Buscar bolos, doces, kits..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="h-12 w-full rounded-[1.25rem] bg-white py-3 pl-11 pr-12 text-sm font-semibold text-[#111827] outline-none placeholder:text-gray-400 focus:ring-4 focus:ring-orange-100 sm:h-14 sm:rounded-[1.45rem] sm:pl-12"
@@ -1256,13 +1233,13 @@ function EmptyProducts({ searchTerm, onClear }) {
       </div>
 
       <h2 className="mt-5 text-2xl font-black tracking-tight text-[#111827]">
-        Nenhum produto encontrado
+        {searchTerm ? 'Nenhum produto encontrado' : 'Cardápio em montagem'}
       </h2>
 
       <p className="mx-auto mt-3 max-w-md leading-7 text-[#6b7280]">
         {searchTerm
           ? 'Tente buscar outro termo ou limpe a pesquisa para ver todo o cardápio.'
-          : 'Essa categoria ainda não possui produtos disponíveis.'}
+          : 'Estamos preparando os produtos desta loja. Em breve você poderá ver bolos, doces e kits festa por aqui.'}
       </p>
 
       {searchTerm && (
@@ -2328,7 +2305,7 @@ return (
 />
 
     <div
-  className="min-h-screen bg-[#f9fafb] text-[#111827]"
+  className="min-h-screen bg-[#fff8f1] text-[#111827]"
   style={{
     '--theme-color': themeColor,
   }}
@@ -2447,13 +2424,15 @@ return (
             >
               <FiGrid />
               Todos
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
-                  activeCategory === 'all' ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
-                }`}
-              >
-                {categoryCounts.all || 0}
-              </span>
+              {categoryCounts.all > 0 && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    activeCategory === 'all' ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
+                  }`}
+                >
+                  {categoryCounts.all}
+                </span>
+              )}
             </button>
 
             {categories.map((category) => {
@@ -2475,13 +2454,15 @@ return (
                   }}
                 >
                   {category.name}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      active ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
-                    }`}
-                  >
-                    {categoryCounts[category.id] || 0}
-                  </span>
+                  {categoryCounts[category.id] > 0 && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        active ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
+                      }`}
+                    >
+                      {categoryCounts[category.id]}
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -2544,7 +2525,7 @@ return (
 
                       {!store.isOpen && (
                         <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-red-50 px-4 py-2 text-center text-xs font-black text-red-600 shadow-sm">
-                          Loja fechada
+                          Pedidos pausados
                         </div>
                       )}
                     </div>
@@ -2603,7 +2584,7 @@ return (
 
                         {!store.isOpen && (
                           <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-red-50 px-4 py-2 text-center text-xs font-black text-red-600 shadow-sm">
-                            Loja fechada
+                            Pedidos pausados
                           </div>
                         )}
                       </div>
@@ -2706,9 +2687,12 @@ return (
           href={`https://wa.me/${onlyNumbers(store.whatsapp)}`}
           target="_blank"
           rel="noreferrer"
-          className="fixed bottom-5 right-5 z-30 hidden h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366] text-[#111827] shadow-2xl transition hover:scale-105 md:flex"
+          className="group fixed bottom-5 right-5 z-30 hidden h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366] text-[#111827] shadow-2xl transition hover:scale-105 md:flex"
           aria-label="Falar com a loja no WhatsApp"
         >
+          <span className="pointer-events-none absolute bottom-full right-0 mb-2 hidden whitespace-nowrap rounded-full bg-[#111827] px-3 py-1.5 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100 md:block">
+            Precisa de ajuda?
+          </span>
           <FiMessageCircle size={25} />
         </a>
       )}

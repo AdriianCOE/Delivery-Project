@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
+import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import { getPublicPixConfig, isPublicPaymentMethodAllowed } from '../../utils/publicPaymentMethods'
 import {
@@ -163,6 +163,27 @@ function getStoreDescription(store) {
     .trim()
 }
 
+function getStoreHeroDescription(store, description) {
+  if (!description) return ''
+
+  if (description.length <= 118) return description
+
+  const context = stripAccents(`${store?.name || ''} ${description}`)
+  const isConfectionery =
+    context.includes('confeit') ||
+    context.includes('doceria') ||
+    context.includes('bolo') ||
+    context.includes('doce') ||
+    context.includes('sobremesa') ||
+    context.includes('kit festa')
+
+  if (isConfectionery) {
+    return 'Bolos, doces, sobremesas e kits festa feitos com carinho.'
+  }
+
+  return `${description.slice(0, 132).replace(/\s+\S*$/, '').trim()}...`
+}
+
 function getStoreSlug(store) {
   return store?.storeSlug || store?.slug || store?.storeId || store?.id || ''
 }
@@ -213,7 +234,7 @@ function getRgba(color, alpha = 1) {
 }
 
 function getBannerUrl(store) {
-  return getCloudinaryOptimizedUrl(
+  return getCloudinaryImageUrl(
     store?.bannerUrl ||
       store?.bannerURL ||
       store?.coverUrl ||
@@ -222,13 +243,13 @@ function getBannerUrl(store) {
       store?.coverImageUrl ||
       store?.banner ||
       store?.settings?.bannerUrl,
-    1400
+    'storeBanner'
   )
 }
 
 function getLogoUrl(store) {
 
-  return getCloudinaryOptimizedUrl(
+  return getCloudinaryImageUrl(
     store?.logoUrl ||
       store?.logoURL ||
       store?.logo ||
@@ -236,7 +257,7 @@ function getLogoUrl(store) {
       store?.imageUrl ||
       store?.photoUrl ||
     store?.settings?.logoUrl,
-    { width: 96, height: 96, crop: 'fill' }
+    'storeLogo'
   )
 }
 
@@ -706,7 +727,8 @@ function getOperationalStatus(store, scheduleStatus = {}) {
   ) {
     return {
       label: 'Loja fechada',
-      description: 'O cardápio está disponível apenas para visualização.',
+      description:
+        'A loja está fechada agora, mas você pode visualizar o cardápio e voltar no próximo horário.',
       isOpen: false,
       tone: 'danger',
     }
@@ -943,6 +965,10 @@ function getAcceptedPaymentMethods(store) {
 
 export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const storeDescription = useMemo(() => getStoreDescription(store), [store])
+  const heroDescription = useMemo(
+    () => getStoreHeroDescription(store, storeDescription),
+    [store, storeDescription]
+  )
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(false)
   const [favorited, setFavorited] = useState(false)
@@ -1107,13 +1133,13 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   }, [store?.name, whatsappDigits])
 
   return (
-    <header className="relative w-full overflow-visible bg-[#f6f7f9]">
+    <header className="relative w-full overflow-visible bg-[#fff8f1]">
       <div className="store-banner-shell relative h-[168px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
   {bannerUrl ? (
     <img
       src={bannerUrl}
       alt=""
-      className="store-banner-bg absolute inset-0 h-full w-full object-cover"
+      className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[72%_center] sm:object-[64%_center]"
       fetchPriority="high"
       loading="eager"
       decoding="async"
@@ -1128,7 +1154,8 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     />
   )}
 
-  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/[0.03] to-[#f6f7f9]" />
+  <div className="absolute inset-0 bg-gradient-to-b from-black/[0.04] via-white/[0.03] to-[#fff8f1]" />
+  <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#fff8f1] via-[#fff8f1]/75 to-transparent" />
   <div
     className="pointer-events-none absolute inset-0 opacity-40"
     style={{
@@ -1151,8 +1178,8 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
           <div className="p-3.5 sm:p-5 lg:p-6">
             <div className="flex min-w-0 items-start gap-3 sm:gap-5 lg:items-center">
-              <div className="flex w-[72px] shrink-0 flex-col items-center gap-1.5 sm:w-24 lg:w-28">
-  <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-[1.25rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-24 sm:w-24 sm:rounded-[1.6rem] lg:h-28 lg:w-28">
+              <div className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 sm:w-28 lg:w-[120px]">
+  <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-[1.35rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
     {logoUrl ? (
       <img
         src={logoUrl}
@@ -1267,9 +1294,9 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 </div>
                 </div>
 
-                {storeDescription && (
+                {heroDescription && (
   <p className="mt-2 max-h-10 overflow-hidden text-[13px] font-medium leading-5 text-[#6b7280] sm:mt-3 sm:max-h-none sm:text-[15px] sm:leading-6 lg:max-w-2xl">
-    {storeDescription}
+    {heroDescription}
   </p>
 )}
 

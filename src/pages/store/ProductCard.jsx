@@ -14,7 +14,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
-import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
+import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import {
   shouldShowProductInStorefront,
   canAddProductToCart,
@@ -140,7 +140,7 @@ function getProductId(product) {
 }
 
 function getProductImage(product) {
-  return getCloudinaryOptimizedUrl(
+  return getCloudinaryImageUrl(
     getFirstValidValue(
       product?.imageUrl,
       product?.image,
@@ -149,7 +149,7 @@ function getProductImage(product) {
       product?.coverUrl,
       product?.pictureUrl
     ),
-    700
+    'productCard'
   )
 }
 
@@ -336,7 +336,7 @@ function ProductCard({
     Number(product.stock) <= 5
 
   const cardStatusLabel = useMemo(() => {
-    if (disabled) return 'Loja fechada'
+    if (disabled) return 'Pedidos pausados'
     if (outOfStock) return 'Esgotado'
     if (unavailable) return 'Indisponível'
     if (justAdded) return 'Adicionado'

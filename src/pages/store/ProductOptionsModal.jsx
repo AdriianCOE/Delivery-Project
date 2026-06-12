@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
-import { getCloudinaryOptimizedUrl } from '../../services/cloudinary'
+import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import { canAddProductToCart, isProductUnavailable, hasOutOfStock } from '../../utils/productStatus'
 import { getProductSchedulingBadges } from '../../utils/publicScheduling'
 
@@ -90,7 +90,7 @@ function getProductImage(product) {
     product?.coverUrl ||
     ''
 
-  return getCloudinaryOptimizedUrl(imageUrl, 900)
+  return getCloudinaryImageUrl(imageUrl, 'productDetail')
 }
 
 function getProductExtras(product) {
