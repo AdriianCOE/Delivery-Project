@@ -156,6 +156,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
       'storeName',
       'logoUrl',
       'bannerUrl',
+      'bannerMobileUrl',
       'coverUrl',
       'description',
       'theme',

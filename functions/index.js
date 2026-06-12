@@ -606,7 +606,7 @@ exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request
 
 const PUBLIC_STORE_FIELDS = [
   'name', 'storeName', 'description', 'segment', 'category',
-  'logoUrl', 'logo', 'bannerUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
+  'logoUrl', 'logo', 'bannerUrl', 'bannerMobileUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
   'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
   'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
   'isPublic', 'isVisible',
@@ -636,7 +636,7 @@ const PUBLIC_PRODUCT_FIELDS = [
 
 const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'name', 'storeName', 'description', 'segment', 'category',
-  'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+  'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'themeColor', 'whatsapp', 'whatsapp1',
   'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
@@ -1703,6 +1703,72 @@ exports.createCloudinaryUploadSignature = onCall(
       timestamp,
       signature: signCloudinaryParams(paramsToSign, apiSecret),
     }
+  }
+)
+
+exports.deleteCloudinaryAsset = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    memory: '256MiB',
+    maxInstances: 10,
+  },
+  async (request) => {
+    const uid = assertNonAnonymousDashboardUser(request)
+    const data = request.data || {}
+    const storeId = String(data.storeId || '').trim()
+    const mediaId = String(data.mediaId || '').trim()
+
+    if (!storeId || !mediaId) {
+      throw new HttpsError('invalid-argument', 'Loja e imagem sao obrigatorias.')
+    }
+
+    const userSnapshot = await db.collection('users').doc(uid).get()
+    if (!userSnapshot.exists) {
+      throw new HttpsError('permission-denied', 'Usuario nao encontrado.')
+    }
+
+    const storeSnapshot = await db.collection('stores').doc(storeId).get()
+    if (!storeSnapshot.exists) {
+      throw new HttpsError('not-found', 'Loja nao encontrada.')
+    }
+
+    assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userSnapshot.data() || {})
+
+    const mediaRef = db.collection('stores').doc(storeId).collection('media').doc(mediaId)
+    const mediaSnapshot = await mediaRef.get()
+
+    if (!mediaSnapshot.exists) {
+      throw new HttpsError('not-found', 'Imagem nao encontrada.')
+    }
+
+    const mediaData = mediaSnapshot.data() || {}
+
+    if (mediaData.deletedAt) {
+      return { ok: true, alreadyDeleted: true }
+    }
+
+    await mediaRef.update({
+      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      deletedBy: uid,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    await createAuditLog({
+      action: 'store_media_deleted',
+      entity: 'store_media',
+      entityId: mediaId,
+      storeId,
+      storeSlug: storeSnapshot.data()?.storeSlug || storeSnapshot.data()?.slug || '',
+      actorUid: uid,
+      changedFields: ['deletedAt', 'deletedBy'],
+      metadata: {
+        type: mediaData.type || 'general',
+        hasPublicId: Boolean(mediaData.publicId),
+      },
+    })
+
+    return { ok: true, softDeleted: true }
   }
 )
 

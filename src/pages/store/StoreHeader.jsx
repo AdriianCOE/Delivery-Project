@@ -233,7 +233,7 @@ function getRgba(color, alpha = 1) {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
 }
 
-function getBannerUrl(store) {
+function getBannerDesktopUrl(store) {
   return getCloudinaryImageUrl(
     store?.bannerUrl ||
       store?.bannerURL ||
@@ -244,6 +244,17 @@ function getBannerUrl(store) {
       store?.banner ||
       store?.settings?.bannerUrl,
     'storeBanner'
+  )
+}
+
+function getBannerMobileUrl(store) {
+  return getCloudinaryImageUrl(
+    store?.bannerMobileUrl ||
+      store?.mobileBannerUrl ||
+      store?.mobileBannerURL ||
+      store?.settings?.bannerMobileUrl ||
+      store?.settings?.mobileBannerUrl,
+    'storeBannerMobile'
   )
 }
 
@@ -726,11 +737,12 @@ function getOperationalStatus(store, scheduleStatus = {}) {
     status === 'fechada'
   ) {
     return {
-      label: 'Loja fechada',
+      label: 'Pedidos pausados',
       description:
-        'A loja está fechada agora, mas você pode visualizar o cardápio e voltar no próximo horário.',
+        'A loja está fechada agora, mas você pode ver o cardápio e voltar no próximo horário.',
+      mobileDescription: 'Loja fechada agora. Você ainda pode ver o cardápio.',
       isOpen: false,
-      tone: 'danger',
+      tone: 'warning',
     }
   }
 
@@ -978,7 +990,9 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const themeSoft = getRgba(themeColor, 0.1)
   const themeSofter = getRgba(themeColor, 0.06)
 
-  const bannerUrl = useMemo(() => getBannerUrl(store), [store])
+  const bannerDesktopUrl = useMemo(() => getBannerDesktopUrl(store), [store])
+  const bannerMobileUrl = useMemo(() => getBannerMobileUrl(store), [store])
+  const bannerUrl = bannerDesktopUrl || bannerMobileUrl
   const logoUrl = useMemo(() => getLogoUrl(store), [store])
   const logoInitial = String(store?.name || 'L').trim().charAt(0).toUpperCase()
   const storeSlug = getStoreSlug(store)
@@ -1134,17 +1148,22 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
   return (
     <header className="relative w-full overflow-visible bg-[#fff8f1]">
-      <div className="store-banner-shell relative h-[168px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
+      <div className="store-banner-shell relative h-[150px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
   {bannerUrl ? (
-    <img
-      src={bannerUrl}
-      alt=""
-      className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[72%_center] sm:object-[64%_center]"
-      fetchPriority="high"
-      loading="eager"
-      decoding="async"
-      aria-hidden="true"
-    />
+    <picture>
+      {bannerMobileUrl && (
+        <source media="(max-width: 640px)" srcSet={bannerMobileUrl} />
+      )}
+      <img
+        src={bannerUrl}
+        alt=""
+        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
+        fetchPriority="high"
+        loading="eager"
+        decoding="async"
+        aria-hidden="true"
+      />
+    </picture>
   ) : (
     <div
       className="store-banner-bg absolute inset-0"
@@ -1178,8 +1197,8 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
           <div className="p-3.5 sm:p-5 lg:p-6">
             <div className="flex min-w-0 items-start gap-3 sm:gap-5 lg:items-center">
-              <div className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 sm:w-28 lg:w-[120px]">
-  <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-[1.35rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
+              <div className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 sm:w-28 lg:w-[120px]">
+                <div className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[1.25rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
     {logoUrl ? (
       <img
         src={logoUrl}
@@ -1326,16 +1345,32 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
             {!operationalStatus.isOpen && (
               <div
-                className="mt-3 rounded-2xl border p-3 text-sm font-bold leading-6 sm:mt-4"
+                className="mt-3 rounded-2xl border px-3.5 py-3 text-sm font-bold leading-6 sm:mt-4 sm:px-4"
                 style={{
                   borderColor:
-                    operationalStatus.tone === 'danger' ? '#fecaca' : getRgba(themeColor, 0.18),
+                    operationalStatus.tone === 'danger'
+                      ? '#fecaca'
+                      : operationalStatus.tone === 'neutral'
+                        ? '#e5e7eb'
+                        : '#fed7aa',
                   backgroundColor:
-                    operationalStatus.tone === 'danger' ? '#fef2f2' : themeSofter,
-                  color: operationalStatus.tone === 'danger' ? '#b91c1c' : themeColor,
+                    operationalStatus.tone === 'danger'
+                      ? '#fef2f2'
+                      : operationalStatus.tone === 'neutral'
+                        ? '#f9fafb'
+                        : '#fff7ed',
+                  color:
+                    operationalStatus.tone === 'danger'
+                      ? '#b91c1c'
+                      : operationalStatus.tone === 'neutral'
+                        ? '#374151'
+                        : '#9a3412',
                 }}
               >
-                {operationalStatus.description}
+                <span className="sm:hidden">
+                  {operationalStatus.mobileDescription || operationalStatus.description}
+                </span>
+                <span className="hidden sm:inline">{operationalStatus.description}</span>
               </div>
             )}
           </div>

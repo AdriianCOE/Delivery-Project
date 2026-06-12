@@ -1,0 +1,1205 @@
+diff --git a/firestore.rules b/firestore.rules
+index 923b441a..b4eff9f3 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -584,6 +584,37 @@ function validPublicOrderCreate(orderId) {
+         || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
+       allow delete: if isAdmin();
+ 
++      match /media/{mediaId} {
++        allow get, list: if canManageStoreId(storeId);
++        allow create: if signedInNonAnonymous()
++          && canManageStoreId(storeId)
++          && request.resource.data.keys().hasOnly([
++            'storeId',
++            'url',
++            'publicId',
++            'type',
++            'filename',
++            'width',
++            'height',
++            'bytes',
++            'format',
++            'createdAt',
++            'uploadedBy',
++            'deletedAt',
++            'deletedBy'
++          ])
++          && request.resource.data.storeId == storeId
++          && request.resource.data.url is string
++          && request.resource.data.url.size() > 0
++          && request.resource.data.url.size() <= 4096
++          && request.resource.data.type in ['logo', 'banner', 'product', 'general']
++          && request.resource.data.uploadedBy == request.auth.uid
++          && request.resource.data.createdAt is timestamp
++          && request.resource.data.deletedAt == null
++          && request.resource.data.deletedBy == null;
++        allow update, delete: if false;
++      }
++
+       match /notificationTokens/{tokenId} {
+         allow get: if isAdmin()
+           || (
+diff --git a/functions/index.js b/functions/index.js
+index 74977b70..0d30f4a5 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -606,7 +606,7 @@ exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request
+ 
+ const PUBLIC_STORE_FIELDS = [
+   'name', 'storeName', 'description', 'segment', 'category',
+-  'logoUrl', 'logo', 'bannerUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
++  'logoUrl', 'logo', 'bannerUrl', 'bannerMobileUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
+   'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
+   'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
+   'isPublic', 'isVisible',
+@@ -636,7 +636,7 @@ const PUBLIC_PRODUCT_FIELDS = [
+ 
+ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
+   'name', 'storeName', 'description', 'segment', 'category',
+-  'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
++  'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+   'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
+   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
+   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+@@ -1706,6 +1706,72 @@ exports.createCloudinaryUploadSignature = onCall(
+   }
+ )
+ 
++exports.deleteCloudinaryAsset = onCall(
++  {
++    region: REGION,
++    timeoutSeconds: 15,
++    memory: '256MiB',
++    maxInstances: 10,
++  },
++  async (request) => {
++    const uid = assertNonAnonymousDashboardUser(request)
++    const data = request.data || {}
++    const storeId = String(data.storeId || '').trim()
++    const mediaId = String(data.mediaId || '').trim()
++
++    if (!storeId || !mediaId) {
++      throw new HttpsError('invalid-argument', 'Loja e imagem sao obrigatorias.')
++    }
++
++    const userSnapshot = await db.collection('users').doc(uid).get()
++    if (!userSnapshot.exists) {
++      throw new HttpsError('permission-denied', 'Usuario nao encontrado.')
++    }
++
++    const storeSnapshot = await db.collection('stores').doc(storeId).get()
++    if (!storeSnapshot.exists) {
++      throw new HttpsError('not-found', 'Loja nao encontrada.')
++    }
++
++    assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userSnapshot.data() || {})
++
++    const mediaRef = db.collection('stores').doc(storeId).collection('media').doc(mediaId)
++    const mediaSnapshot = await mediaRef.get()
++
++    if (!mediaSnapshot.exists) {
++      throw new HttpsError('not-found', 'Imagem nao encontrada.')
++    }
++
++    const mediaData = mediaSnapshot.data() || {}
++
++    if (mediaData.deletedAt) {
++      return { ok: true, alreadyDeleted: true }
++    }
++
++    await mediaRef.update({
++      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
++      deletedBy: uid,
++      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
++    })
++
++    await createAuditLog({
++      action: 'store_media_deleted',
++      entity: 'store_media',
++      entityId: mediaId,
++      storeId,
++      storeSlug: storeSnapshot.data()?.storeSlug || storeSnapshot.data()?.slug || '',
++      actorUid: uid,
++      changedFields: ['deletedAt', 'deletedBy'],
++      metadata: {
++        type: mediaData.type || 'general',
++        hasPublicId: Boolean(mediaData.publicId),
++      },
++    })
++
++    return { ok: true, softDeleted: true }
++  }
++)
++
+ exports.updateStoreSettings = onCall(
+   { region: REGION, timeoutSeconds: 30, memory: '256MiB', maxInstances: 10 },
+   async (request) => {
+diff --git a/functions/scripts/backfillPublicCatalog.js b/functions/scripts/backfillPublicCatalog.js
+index 780b9623..497a4019 100644
+--- a/functions/scripts/backfillPublicCatalog.js
++++ b/functions/scripts/backfillPublicCatalog.js
+@@ -156,6 +156,7 @@ function buildPublicStoreProfile(data = {}, storeId) {
+       'storeName',
+       'logoUrl',
+       'bannerUrl',
++      'bannerMobileUrl',
+       'coverUrl',
+       'description',
+       'theme',
+diff --git a/src/App.jsx b/src/App.jsx
+index de652468..20bd2998 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -1,4 +1,4 @@
+-import { lazy, Suspense, useEffect, useState } from 'react'
++import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+ import { useLocation } from 'react-router-dom'
+ 
+ import AppRoutes from './routes/AppRoutes'
+@@ -22,20 +22,89 @@ const AUTH_ROUTE_PREFIXES = [
+   '/dashboard',
+ ]
+ 
++const AUTH_SESSION_MARKER = 'pratoby:auth:session'
++const FIREBASE_AUTH_STORAGE_PREFIX = 'firebase:authUser:'
++
+ function matchesRoutePrefix(pathname = '', prefixes = []) {
+   return prefixes.some(
+     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+   )
+ }
+ 
++function storageHasFirebaseAuth(storage) {
++  if (!storage) return false
++
++  try {
++    for (let index = 0; index < storage.length; index += 1) {
++      const key = storage.key(index)
++
++      if (key?.startsWith(FIREBASE_AUTH_STORAGE_PREFIX)) {
++        return true
++      }
++    }
++  } catch {
++    return false
++  }
++
++  return false
++}
++
++function hasStoredAuthSession() {
++  if (typeof window === 'undefined') return false
++
++  try {
++    if (window.localStorage.getItem(AUTH_SESSION_MARKER) === '1') {
++      return true
++    }
++
++    return (
++      storageHasFirebaseAuth(window.localStorage) ||
++      storageHasFirebaseAuth(window.sessionStorage)
++    )
++  } catch {
++    return false
++  }
++}
++
+ function shouldLoadAuthProvider(pathname = '') {
+-  return matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)
++  if (matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)) {
++    return true
++  }
++
++  return hasStoredAuthSession()
+ }
+ 
+ function AuthBoundary({ children }) {
+   const { pathname } = useLocation()
++  const [hasSession, setHasSession] = useState(() => hasStoredAuthSession())
++
++  useEffect(() => {
++    setHasSession(hasStoredAuthSession())
++  }, [pathname])
++
++  useEffect(() => {
++    if (typeof window === 'undefined') return undefined
++
++    const handleStorageChange = () => {
++      setHasSession(hasStoredAuthSession())
++    }
++
++    window.addEventListener('storage', handleStorageChange)
++
++    return () => {
++      window.removeEventListener('storage', handleStorageChange)
++    }
++  }, [])
++
++  const shouldLoadAuth = useMemo(() => {
++    if (matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)) {
++      return true
++    }
++
++    return hasSession
++  }, [pathname, hasSession])
+ 
+-  if (!shouldLoadAuthProvider(pathname)) {
++  if (!shouldLoadAuth) {
+     return children
+   }
+ 
+diff --git a/src/contexts/AuthContext.jsx b/src/contexts/AuthContext.jsx
+index f8db7649..5bde6837 100644
+--- a/src/contexts/AuthContext.jsx
++++ b/src/contexts/AuthContext.jsx
+@@ -20,6 +20,22 @@ import { db } from '../services/firebase'
+ 
+ export const AuthContext = createContext(null)
+ 
++const AUTH_SESSION_MARKER = 'pratoby:auth:session'
++
++function setStoredAuthSession(enabled) {
++  if (typeof window === 'undefined') return
++
++  try {
++    if (enabled) {
++      window.localStorage.setItem(AUTH_SESSION_MARKER, '1')
++    } else {
++      window.localStorage.removeItem(AUTH_SESSION_MARKER)
++    }
++  } catch {
++    // Ignora ambientes sem localStorage.
++  }
++}
++
+ const publicAuthFallback = {
+   firebaseUser: null,
+   user: null,
+@@ -133,6 +149,7 @@ export function AuthProvider({ children }) {
+ 
+         try {
+           if (!currentFirebaseUser) {
++            setStoredAuthSession(false)
+             setFirebaseUser(null)
+             setUser(null)
+             setUserData(null)
+@@ -147,6 +164,7 @@ export function AuthProvider({ children }) {
+           }
+           
+           if (anonymousAuth) {
++            setStoredAuthSession(false)
+             setFirebaseUser(baseUser)
+             setUser(null)
+             setUserData(null)
+@@ -155,6 +173,8 @@ export function AuthProvider({ children }) {
+             return
+           }
+ 
++          setStoredAuthSession(true)
++
+           const firestoreUserData = await loadUserData(currentFirebaseUser.uid)
+           const normalizedRole = getNormalizedRole(firestoreUserData)
+ 
+@@ -188,10 +208,11 @@ export function AuthProvider({ children }) {
+ 
+           const fallbackUser = normalizeFirebaseUser(currentFirebaseUser)
+ 
+-          setFirebaseUser(fallbackUser)
+-          setUser(null)
+-          setUserData(null)
+-          setSentryUser(null)
++            setStoredAuthSession(Boolean(fallbackUser && fallbackUser.isAnonymous !== true))
++            setFirebaseUser(fallbackUser)
++            setUser(null)
++            setUserData(null)
++            setSentryUser(null)
+         } finally {
+           if (isMounted && authLoadIdRef.current === loadId) {
+             setLoading(false)
+@@ -230,17 +251,21 @@ export function AuthProvider({ children }) {
+     } catch (error) {
+       console.warn('Erro ao executar signOut do Firebase:', error)
+     } finally {
+-      setFirebaseUser(null)
+-      setUser(null)
+-      setUserData(null)
+-      setSentryUser(null)
+-    }
++        setStoredAuthSession(false)
++        setFirebaseUser(null)
++        setUser(null)
++        setUserData(null)
++        setSentryUser(null)
++      }
+   }, [])
+ 
+   const refreshUserData = useCallback(async () => {
+     const { auth } = await import('../services/firebaseAuth')
+     const currentUser = auth.currentUser || firebaseUser
+-    if (!currentUser) return null
++    if (!currentUser) {
++      setStoredAuthSession(false)
++      return null
++    }
+ 
+     try {
+       const anonymousAuth = await isAnonymousFirebaseUser(currentUser)
+@@ -250,6 +275,7 @@ export function AuthProvider({ children }) {
+       }
+ 
+       if (anonymousAuth) {
++        setStoredAuthSession(false)
+         setFirebaseUser(baseUser)
+         setUser(null)
+         setUserData(null)
+@@ -257,6 +283,8 @@ export function AuthProvider({ children }) {
+         return null
+       }
+ 
++      setStoredAuthSession(true)
++
+       const firestoreUserData = await loadUserData(currentUser.uid)
+       const normalizedRole = getNormalizedRole(firestoreUserData)
+ 
+diff --git a/src/pages/merchant/Settings.jsx b/src/pages/merchant/Settings.jsx
+index 71b2c642..869b79ca 100644
+--- a/src/pages/merchant/Settings.jsx
++++ b/src/pages/merchant/Settings.jsx
+@@ -1,5 +1,4 @@
+ import { useCallback, useEffect, useMemo, useState } from 'react'
+-import { createPortal } from 'react-dom'
+ import DashboardFooter from '../../components/layouts/DashboardFooter'
+ import { Link } from 'react-router-dom'
+ import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
+@@ -39,8 +38,10 @@ import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
+ import { db, functions } from '../../services/firebase'
+ import { useAuth } from '../../contexts/AuthContext'
+ import { uploadImageToCloudinary } from '../../services/cloudinary'
++import { registerStoreMediaAsset } from '../../services/storeMediaLibrary'
+ import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
+ import { hasPlanFeature } from '../../utils/planCatalog'
++import MediaLibraryPicker from '../../components/media/MediaLibraryPicker'
+ 
+ const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
+ const BRAND_GREEN = '#f97316'
+@@ -122,6 +123,7 @@ const DEFAULT_FORM = {
+   segment: 'Restaurante',
+   logoUrl: '',
+   bannerUrl: '',
++  bannerMobileUrl: '',
+   themeColor: DEFAULT_THEME,
+   whatsapp: '',
+   instagram: '',
+@@ -270,6 +272,12 @@ function userCanManageStore(user, store) {
+   )
+ }
+ 
++function getStoreImageMediaType(fieldName) {
++  if (fieldName === 'logoUrl') return 'logo'
++  if (fieldName === 'bannerUrl' || fieldName === 'bannerMobileUrl') return 'banner'
++  return 'general'
++}
++
+ function sanitizeTextField(value, maxLength) {
+   return String(value || '').trim().slice(0, maxLength)
+ }
+@@ -604,6 +612,12 @@ function mapStoreToForm(store) {
+       store?.coverURL ||
+       store?.bannerImageUrl ||
+       '',
++    bannerMobileUrl:
++      store?.bannerMobileUrl ||
++      store?.mobileBannerUrl ||
++      settings?.bannerMobileUrl ||
++      settings?.mobileBannerUrl ||
++      '',
+     themeColor:
+       store?.themeColor ||
+       store?.primaryColor ||
+@@ -780,8 +794,10 @@ function ImageUploadField({
+   value,
+   uploading,
+   aspect = 'square',
++  storeId,
++  mediaType = 'general',
+   onUpload,
+-  onChangeUrl,
++  onSelectFromLibrary,
+   onRemove,
+ }) {
+   const previewClass =
+@@ -789,13 +805,25 @@ function ImageUploadField({
+       ? 'h-40 w-full rounded-[1.5rem]'
+       : 'h-32 w-32 rounded-[1.5rem]'
+ 
++  const recommendation = useMemo(() => {
++    const normalizedLabel = String(label || '').toLowerCase()
++
++    if (aspect === 'banner' && normalizedLabel.includes('mobile')) {
++      return 'Recomendado para celular: 1200 x 520 px.'
++    }
++
++    if (aspect === 'banner') {
++      return 'Recomendado para desktop: 2400 x 400 px.'
++    }
++
++    return 'Recomendado: imagem quadrada.'
++  }, [aspect, label])
++
+   return (
+-    <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4">
++    <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+       <div className="mb-3 flex items-start justify-between gap-3">
+         <div>
+-          <p className="text-sm font-black text-[#111827]">
+-            {label}
+-          </p>
++          <p className="text-sm font-black text-[#111827]">{label}</p>
+ 
+           {description && (
+             <p className="mt-1 text-xs leading-5 text-[#6b7280]">
+@@ -808,51 +836,103 @@ function ImageUploadField({
+           <button
+             type="button"
+             onClick={onRemove}
+-            className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600"
++            className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
++            title="Remove a imagem deste campo, mas mantém ela na biblioteca."
+           >
+             Remover
+           </button>
+         )}
+       </div>
+ 
+-      <div className={aspect === 'banner' ? 'space-y-3' : 'flex flex-col gap-4 sm:flex-row sm:items-center'}>
+-        <div className={`${previewClass} flex shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-200 bg-white text-gray-400`}>
+-          {value ? (
+-            <img
+-              src={value}
+-              alt={label}
+-              className="h-full w-full object-cover"
+-              loading="lazy"
+-            />
+-          ) : (
+-            <FiImage size={24} />
+-          )}
+-        </div>
++      <div
++        className={
++          aspect === 'banner'
++            ? 'space-y-3'
++            : 'flex flex-col gap-4 sm:flex-row sm:items-center'
++        }
++      >
++        <MediaLibraryPicker
++          storeId={storeId}
++          type={mediaType}
++          onSelect={(item) => onSelectFromLibrary?.(item.url, item)}
++        >
++          {({ openLibrary, disabled }) => (
++            <>
++              <button
++                type="button"
++                onClick={openLibrary}
++                disabled={disabled || uploading}
++                className={`${previewClass} group relative flex shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-200 bg-white text-gray-400 transition hover:border-orange-200 hover:bg-orange-50/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-500 dark:hover:border-orange-500/50 dark:hover:bg-zinc-900`}
++                title="Clique para escolher da biblioteca"
++              >
++                {value ? (
++                  <img
++                    src={value}
++                    alt={label}
++                    className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] group-hover:opacity-80"
++                    loading="lazy"
++                  />
++                ) : (
++                  <FiImage size={24} />
++                )}
+ 
+-        <div className="min-w-0 flex-1 space-y-3">
+-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]">
+-            {uploading ? <FiLoader className="animate-spin" /> : <FiUpload />}
+-            {uploading ? 'Enviando imagem...' : value ? 'Trocar imagem' : 'Enviar imagem'}
+-            <input
+-              type="file"
+-              accept="image/png,image/jpeg,image/jpg,image/webp"
+-              disabled={uploading}
+-              onChange={(event) => {
+-                const file = event.target.files?.[0]
+-                event.target.value = ''
+-
+-                if (file) onUpload(file)
+-              }}
+-              className="hidden"
+-            />
+-          </label>
+-
+-          <Input
+-            placeholder="Ou cole uma URL de imagem"
+-            value={value || ''}
+-            onChange={(event) => onChangeUrl(event.target.value)}
+-          />
+-        </div>
++                <span className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 px-3 py-2 text-center text-[11px] font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100">
++                  Clique para escolher da biblioteca
++                </span>
++              </button>
++
++              <div className="min-w-0 flex-1 space-y-3">
++                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]">
++                  {uploading ? (
++                    <FiLoader className="animate-spin" />
++                  ) : (
++                    <FiUpload />
++                  )}
++
++                  {uploading
++                    ? 'Enviando imagem...'
++                    : value
++                      ? 'Trocar imagem'
++                      : 'Enviar imagem'}
++
++                  <input
++                    type="file"
++                    accept="image/png,image/jpeg,image/jpg,image/webp"
++                    disabled={uploading}
++                    onChange={(event) => {
++                      const file = event.target.files?.[0]
++                      event.target.value = ''
++
++                      if (file) onUpload(file)
++                    }}
++                    className="hidden"
++                  />
++                </label>
++
++                <button
++                  type="button"
++                  onClick={openLibrary}
++                  disabled={disabled || uploading}
++                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
++                >
++                  <FiImage />
++                  Escolher da biblioteca
++                </button>
++
++                <p className="text-xs leading-5 text-[#6b7280]">
++                  {recommendation}
++                </p>
++
++                {value && (
++                  <p className="text-xs leading-5 text-[#6b7280]">
++                    Remover limpa apenas este campo. A imagem
++                    continua na biblioteca.
++                  </p>
++                )}
++              </div>
++            </>
++          )}
++        </MediaLibraryPicker>
+       </div>
+     </div>
+   )
+@@ -1255,7 +1335,9 @@ const knownStoreIdsKey = useMemo(() => {
+ 
+       try {
+         const folder = `PratoBy/${getStoreSlug(selectedStore) || selectedStore.id}/branding/${fieldName}`
+-        const uploaded = await uploadImageToCloudinary(file, folder)
++        const uploaded = await uploadImageToCloudinary(file, folder, {
++          storeId: selectedStore.id,
++        })
+         const imageUrl = uploaded?.secure_url || uploaded?.url || uploaded
+ 
+         if (!imageUrl) {
+@@ -1263,6 +1345,19 @@ const knownStoreIdsKey = useMemo(() => {
+         }
+ 
+         updateField(fieldName, imageUrl)
++        try {
++          await registerStoreMediaAsset({
++            storeId: selectedStore.id,
++            uploadResult: uploaded,
++            type: getStoreImageMediaType(fieldName),
++            uploadedBy: user?.uid,
++          })
++        } catch (mediaError) {
++          console.warn(
++            'Imagem enviada, mas não foi possível registrar na biblioteca:',
++            mediaError
++          )
++        }
+         showToast('success', 'Imagem enviada. Salve para aplicar na loja.')
+       } catch (error) {
+         console.error(error)
+@@ -1298,6 +1393,7 @@ const knownStoreIdsKey = useMemo(() => {
+       const whatsapp = normalizeBrazilianPhoneForWhatsApp(form.whatsapp)
+       const logoUrl = sanitizeImageUrl(form.logoUrl)
+       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
++      const bannerMobileUrl = sanitizeImageUrl(form.bannerMobileUrl)
+       if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
+         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
+       }
+@@ -1360,6 +1456,7 @@ const knownStoreIdsKey = useMemo(() => {
+ 
+         logoUrl,
+         bannerUrl,
++        bannerMobileUrl,
+         themeColor,
+ 
+         whatsapp,
+@@ -1410,7 +1507,7 @@ const knownStoreIdsKey = useMemo(() => {
+ 
+       const ALLOWED_KEYS = [
+         'name', 'storeName', 'description', 'segment', 'category',
+-        'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
++        'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+         'phone', 'instagram', 'social', 'isActive', 'activeDays',
+         'hoursOpen', 'hoursClose', 'openingHours', 'scheduling', 'settings', 'deliveryTime',
+         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
+@@ -1737,23 +1834,40 @@ const knownStoreIdsKey = useMemo(() => {
+             )}
+             <div className="grid gap-4">
+               <ImageUploadField
+-                label="Banner da loja"
+-                description="Imagem horizontal para o topo do cardápio."
++                label="Banner principal"
++                description="Usado em telas maiores, como computador e tablet."
+                 aspect="banner"
+                 value={form.bannerUrl}
+                 uploading={uploadingImage === 'bannerUrl'}
++                storeId={selectedStore.id}
++                mediaType="banner"
+                 onUpload={(file) => handleUploadStoreImage(file, 'bannerUrl')}
+-                onChangeUrl={(value) => updateField('bannerUrl', value)}
++                onSelectFromLibrary={(url) => updateField('bannerUrl', url)}
+                 onRemove={() => updateField('bannerUrl', '')}
+               />
+ 
++              <ImageUploadField
++                label="Banner mobile"
++                description="Versão opcional para celular. Se não enviar, usaremos o banner principal."
++                aspect="banner"
++                value={form.bannerMobileUrl}
++                uploading={uploadingImage === 'bannerMobileUrl'}
++                storeId={selectedStore.id}
++                mediaType="banner"
++                onUpload={(file) => handleUploadStoreImage(file, 'bannerMobileUrl')}
++                onSelectFromLibrary={(url) => updateField('bannerMobileUrl', url)}
++                onRemove={() => updateField('bannerMobileUrl', '')}
++              />
++
+               <ImageUploadField
+                 label="Logo da loja"
+                 description="Imagem quadrada usada no perfil e nos cards."
+                 value={form.logoUrl}
+                 uploading={uploadingImage === 'logoUrl'}
++                storeId={selectedStore.id}
++                mediaType="logo"
+                 onUpload={(file) => handleUploadStoreImage(file, 'logoUrl')}
+-                onChangeUrl={(value) => updateField('logoUrl', value)}
++                onSelectFromLibrary={(url) => updateField('logoUrl', url)}
+                 onRemove={() => updateField('logoUrl', '')}
+               />
+             </div>
+diff --git a/src/pages/merchant/menu/components/ProductEditorDrawer.jsx b/src/pages/merchant/menu/components/ProductEditorDrawer.jsx
+index b29cffd0..6f2d5f85 100644
+--- a/src/pages/merchant/menu/components/ProductEditorDrawer.jsx
++++ b/src/pages/merchant/menu/components/ProductEditorDrawer.jsx
+@@ -36,8 +36,10 @@ import {
+ 
+ import { db } from '../../../../services/firebase'
+ import { uploadImageToCloudinary } from '../../../../services/cloudinary'
++import { registerStoreMediaAsset } from '../../../../services/storeMediaLibrary'
+ import { hasPlanFeature } from '../../../../utils/planCatalog'
+ import LockedFeatureCard from '../../../../components/billing/LockedFeatureCard'
++import MediaLibraryPicker from '../../../../components/media/MediaLibraryPicker'
+ import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
+ import {
+   EMPTY_PRODUCT_FORM,
+@@ -563,6 +565,17 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
+     if (imgRef.current) imgRef.current.value = ''
+   }, [imagePreview, setField])
+ 
++  const mediaStoreId = storeId || store?.id || store?.storeId || store?.storeDocId || ''
++
++  const handleSelectLibraryImage = useCallback((item) => {
++    setImageFile(null)
++    if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview)
++    setImagePreview('')
++    setField('imageUrl', item.url || '')
++    setField('imagePublicId', item.publicId || '')
++    if (imgRef.current) imgRef.current.value = ''
++  }, [imagePreview, setField])
++
+   const schedulingAllowed = hasPlanFeature(store || {}, 'scheduling')
+ 
+   const handleSave = useCallback(async () => {
+@@ -585,9 +598,23 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
+ 
+       if (imageFile) {
+         setImageUploading(true)
+-        const res = await uploadImageToCloudinary(imageFile, 'PratoBy/produtos')
++        const res = await uploadImageToCloudinary(imageFile, 'PratoBy/produtos', {
++          storeId: mediaStoreId,
++        })
+         finalImageUrl = res.secure_url || res.url || ''
+         finalImagePublicId = res.public_id || ''
++        try {
++          await registerStoreMediaAsset({
++            storeId: mediaStoreId,
++            uploadResult: res,
++            type: 'product',
++          })
++        } catch (mediaError) {
++          console.warn(
++            'Imagem enviada, mas não foi possível registrar na biblioteca:',
++            mediaError
++          )
++        }
+         setImageUploading(false)
+       }
+ 
+@@ -644,7 +671,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
+       setSaving(false)
+       setImageUploading(false)
+     }
+-  }, [form, imageFile, store, categories, editingProduct, onToast, onClose, schedulingAllowed])
++  }, [form, imageFile, store, categories, editingProduct, onToast, onClose, schedulingAllowed, mediaStoreId])
+ 
+   const visibleImage = imagePreview || form.imageUrl
+   const activeCategory = useMemo(() => categories.find((c) => c.id === form.categoryId), [categories, form.categoryId])
+@@ -959,6 +986,19 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
+                       <FiImage size={16} />
+                       {visibleImage ? 'Trocar imagem' : 'Selecionar imagem'}
+                     </button>
++
++                    <div className="mt-3">
++                      <MediaLibraryPicker
++                        storeId={mediaStoreId}
++                        type="product"
++                        onSelect={handleSelectLibraryImage}
++                        className={`flex w-full items-center justify-center gap-2 ${ui.secondaryButton}`}
++                      />
++                    </div>
++
++                    <p className={ui.hint}>
++                      Remover imagem atual limpa apenas este produto. Para excluir da biblioteca, use a ação "Excluir da biblioteca" dentro da biblioteca.
++                    </p>
+                   </SectionCard>
+                 </div>
+               )}
+diff --git a/src/pages/store/StoreFrontPage.jsx b/src/pages/store/StoreFrontPage.jsx
+index 54e62d1c..482d4315 100644
+--- a/src/pages/store/StoreFrontPage.jsx
++++ b/src/pages/store/StoreFrontPage.jsx
+@@ -687,6 +687,10 @@ function normalizeStore(input, fallbackSlug = '') {
+     firstFilled(data.bannerUrl, data.coverUrl, data.bannerImageUrl, data.coverImageUrl),
+     'storeBanner',
+   )
++  const bannerMobileUrl = getCloudinaryImageUrl(
++    firstFilled(data.bannerMobileUrl, data.mobileBannerUrl, data.mobileBannerURL),
++    'storeBannerMobile',
++  )
+ 
+   return {
+     ...data,
+@@ -698,6 +702,8 @@ function normalizeStore(input, fallbackSlug = '') {
+     logoUrl,
+     logo: logoUrl,
+     bannerUrl,
++    bannerMobileUrl,
++    mobileBannerUrl: bannerMobileUrl,
+     coverUrl: bannerUrl,
+     themeColor: firstFilled(data.themeColor, data.primaryColor, data.brandColor) || BRAND_GREEN,
+     whatsapp: firstFilled(data.whatsapp, data.phone, data.contactPhone),
+@@ -897,7 +903,7 @@ function getStorePromoBanner(store) {
+ }
+ 
+ function StoreHero({ store, themeColor }) {
+-  const bannerUrl = store?.mobileBannerUrl || store?.bannerUrl || store?.coverUrl
++  const bannerUrl = store?.bannerUrl || store?.coverUrl || store?.bannerMobileUrl || store?.mobileBannerUrl
+ 
+   return (
+     <section className="relative overflow-hidden bg-[#f9fafb]">
+@@ -1111,7 +1117,8 @@ function StoreQuickActions({
+           className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#fff8f1] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem]"
+         >
+           <FiUser />
+-          Meus Pedidos
++            <span className="sm:hidden">Pedidos</span>
++            <span className="hidden sm:inline">Meus Pedidos</span>
+         </button>
+ 
+         <button
+@@ -1227,19 +1234,19 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
+ 
+ function EmptyProducts({ searchTerm, onClear }) {
+   return (
+-    <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gray-50 text-gray-400">
+-        <FiSearch size={28} />
++    <div className="rounded-[2rem] border border-dashed border-orange-100 bg-white/95 px-6 py-12 text-center shadow-sm sm:py-16">
++      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-orange-50/60 text-gray-400 sm:h-16 sm:w-16">
++        <FiSearch size={26} />
+       </div>
+ 
+-      <h2 className="mt-5 text-2xl font-black tracking-tight text-[#111827]">
++      <h2 className="mt-5 text-xl font-black tracking-tight text-[#111827] sm:text-2xl">
+         {searchTerm ? 'Nenhum produto encontrado' : 'Cardápio em montagem'}
+       </h2>
+ 
+-      <p className="mx-auto mt-3 max-w-md leading-7 text-[#6b7280]">
++      <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#6b7280] sm:max-w-md sm:text-base sm:leading-7">
+         {searchTerm
+           ? 'Tente buscar outro termo ou limpe a pesquisa para ver todo o cardápio.'
+-          : 'Estamos preparando os produtos desta loja. Em breve você poderá ver bolos, doces e kits festa por aqui.'}
++          : 'Em breve você verá bolos, doces e kits festa por aqui.'}
+       </p>
+ 
+       {searchTerm && (
+@@ -1798,6 +1805,8 @@ export default function StoreFrontPage() {
+     return sections
+   }, [categories, productsByCategory])
+ 
++  const shouldShowCategoryNav = categories.length > 0 || availableProducts.length > 0
++
+   const storeInfoItems = useMemo(() => {
+     return [
+       {
+@@ -2394,81 +2403,83 @@ return (
+         </section>
+       )}
+ 
+-      <section
+-        className={`sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
+-          isOwner ? 'top-[44px]' : 'top-0'
+-        }`}
+-      >
+-        <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100/80 backdrop-blur-xl">
+-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-white via-white/90 to-transparent" />
+-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-9 bg-gradient-to-l from-white via-white/90 to-transparent" />
++      {shouldShowCategoryNav && (
++        <section
++          className={`sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
++            isOwner ? 'top-[44px]' : 'top-0'
++          }`}
++        >
++          <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100/80 backdrop-blur-xl">
++            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-white via-white/90 to-transparent" />
++            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-9 bg-gradient-to-l from-white via-white/90 to-transparent" />
+ 
+-          <div
+-            ref={categoryScrollRef}
+-            onWheel={handleCategoryWheel}
+-            className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+-            style={{ WebkitOverflowScrolling: 'touch' }}
+-          >
+-            <button
+-              type="button"
+-              data-active-category={activeCategory === 'all' ? 'true' : undefined}
+-              onClick={() => handleScrollToCategory('all')}
+-              className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
+-                activeCategory === 'all'
+-                  ? 'text-white shadow-lg shadow-orange-600/20'
+-                  : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
+-              }`}
+-              style={{
+-                background: activeCategory === 'all' ? themeColor : undefined,
+-              }}
++            <div
++              ref={categoryScrollRef}
++              onWheel={handleCategoryWheel}
++              className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
++              style={{ WebkitOverflowScrolling: 'touch' }}
+             >
+-              <FiGrid />
+-              Todos
+-              {categoryCounts.all > 0 && (
+-                <span
+-                  className={`rounded-full px-2 py-0.5 text-xs ${
+-                    activeCategory === 'all' ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
+-                  }`}
+-                >
+-                  {categoryCounts.all}
+-                </span>
+-              )}
+-            </button>
++              <button
++                type="button"
++                data-active-category={activeCategory === 'all' ? 'true' : undefined}
++                onClick={() => handleScrollToCategory('all')}
++                className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
++                  activeCategory === 'all'
++                    ? 'text-white shadow-lg shadow-orange-600/20'
++                    : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
++                }`}
++                style={{
++                  background: activeCategory === 'all' ? themeColor : undefined,
++                }}
++              >
++                <FiGrid />
++                Todos
++                {categoryCounts.all > 0 && (
++                  <span
++                    className={`rounded-full px-2 py-0.5 text-xs ${
++                      activeCategory === 'all' ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
++                    }`}
++                  >
++                    {categoryCounts.all}
++                  </span>
++                )}
++              </button>
+ 
+-            {categories.map((category) => {
+-              const active = activeCategory === category.id
+-
+-              return (
+-                <button
+-                  key={category.id}
+-                  type="button"
+-                  data-active-category={active ? 'true' : undefined}
+-                  onClick={() => handleScrollToCategory(category.id)}
+-                  className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
+-                    active
+-                      ? 'text-white shadow-lg shadow-orange-600/20'
+-                      : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
+-                  }`}
+-                  style={{
+-                    background: active ? themeColor : undefined,
+-                  }}
+-                >
+-                  {category.name}
+-                  {categoryCounts[category.id] > 0 && (
+-                    <span
+-                      className={`rounded-full px-2 py-0.5 text-xs ${
+-                        active ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
+-                      }`}
+-                    >
+-                      {categoryCounts[category.id]}
+-                    </span>
+-                  )}
+-                </button>
+-              )
+-            })}
++              {categories.map((category) => {
++                const active = activeCategory === category.id
++
++                return (
++                  <button
++                    key={category.id}
++                    type="button"
++                    data-active-category={active ? 'true' : undefined}
++                    onClick={() => handleScrollToCategory(category.id)}
++                    className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
++                      active
++                        ? 'text-white shadow-lg shadow-orange-600/20'
++                        : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
++                    }`}
++                    style={{
++                      background: active ? themeColor : undefined,
++                    }}
++                  >
++                    {category.name}
++                    {categoryCounts[category.id] > 0 && (
++                      <span
++                        className={`rounded-full px-2 py-0.5 text-xs ${
++                          active ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
++                        }`}
++                      >
++                        {categoryCounts[category.id]}
++                      </span>
++                    )}
++                  </button>
++                )
++              })}
++            </div>
+           </div>
+-        </div>
+-      </section>
++        </section>
++      )}
+ 
+       <main id="menu-start" className="mx-auto mt-5 max-w-[1440px] px-4 sm:mt-7 xl:px-6">
+         {loadingMenu ? (
+diff --git a/src/pages/store/StoreHeader.jsx b/src/pages/store/StoreHeader.jsx
+index fc3776f5..0185ebe3 100644
+--- a/src/pages/store/StoreHeader.jsx
++++ b/src/pages/store/StoreHeader.jsx
+@@ -233,7 +233,7 @@ function getRgba(color, alpha = 1) {
+   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+ }
+ 
+-function getBannerUrl(store) {
++function getBannerDesktopUrl(store) {
+   return getCloudinaryImageUrl(
+     store?.bannerUrl ||
+       store?.bannerURL ||
+@@ -247,6 +247,17 @@ function getBannerUrl(store) {
+   )
+ }
+ 
++function getBannerMobileUrl(store) {
++  return getCloudinaryImageUrl(
++    store?.bannerMobileUrl ||
++      store?.mobileBannerUrl ||
++      store?.mobileBannerURL ||
++      store?.settings?.bannerMobileUrl ||
++      store?.settings?.mobileBannerUrl,
++    'storeBannerMobile'
++  )
++}
++
+ function getLogoUrl(store) {
+ 
+   return getCloudinaryImageUrl(
+@@ -726,11 +737,12 @@ function getOperationalStatus(store, scheduleStatus = {}) {
+     status === 'fechada'
+   ) {
+     return {
+-      label: 'Loja fechada',
++      label: 'Pedidos pausados',
+       description:
+-        'A loja está fechada agora, mas você pode visualizar o cardápio e voltar no próximo horário.',
++        'A loja está fechada agora, mas você pode ver o cardápio e voltar no próximo horário.',
++      mobileDescription: 'Loja fechada agora. Você ainda pode ver o cardápio.',
+       isOpen: false,
+-      tone: 'danger',
++      tone: 'warning',
+     }
+   }
+ 
+@@ -978,7 +990,9 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+   const themeSoft = getRgba(themeColor, 0.1)
+   const themeSofter = getRgba(themeColor, 0.06)
+ 
+-  const bannerUrl = useMemo(() => getBannerUrl(store), [store])
++  const bannerDesktopUrl = useMemo(() => getBannerDesktopUrl(store), [store])
++  const bannerMobileUrl = useMemo(() => getBannerMobileUrl(store), [store])
++  const bannerUrl = bannerDesktopUrl || bannerMobileUrl
+   const logoUrl = useMemo(() => getLogoUrl(store), [store])
+   const logoInitial = String(store?.name || 'L').trim().charAt(0).toUpperCase()
+   const storeSlug = getStoreSlug(store)
+@@ -1134,17 +1148,22 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+ 
+   return (
+     <header className="relative w-full overflow-visible bg-[#fff8f1]">
+-      <div className="store-banner-shell relative h-[168px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
++      <div className="store-banner-shell relative h-[150px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
+   {bannerUrl ? (
+-    <img
+-      src={bannerUrl}
+-      alt=""
+-      className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[72%_center] sm:object-[64%_center]"
+-      fetchPriority="high"
+-      loading="eager"
+-      decoding="async"
+-      aria-hidden="true"
+-    />
++    <picture>
++      {bannerMobileUrl && (
++        <source media="(max-width: 640px)" srcSet={bannerMobileUrl} />
++      )}
++      <img
++        src={bannerUrl}
++        alt=""
++        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
++        fetchPriority="high"
++        loading="eager"
++        decoding="async"
++        aria-hidden="true"
++      />
++    </picture>
+   ) : (
+     <div
+       className="store-banner-bg absolute inset-0"
+@@ -1178,8 +1197,8 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+ 
+           <div className="p-3.5 sm:p-5 lg:p-6">
+             <div className="flex min-w-0 items-start gap-3 sm:gap-5 lg:items-center">
+-              <div className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 sm:w-28 lg:w-[120px]">
+-  <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-[1.35rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
++              <div className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 sm:w-28 lg:w-[120px]">
++                <div className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[1.25rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
+     {logoUrl ? (
+       <img
+         src={logoUrl}
+@@ -1326,16 +1345,32 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+ 
+             {!operationalStatus.isOpen && (
+               <div
+-                className="mt-3 rounded-2xl border p-3 text-sm font-bold leading-6 sm:mt-4"
++                className="mt-3 rounded-2xl border px-3.5 py-3 text-sm font-bold leading-6 sm:mt-4 sm:px-4"
+                 style={{
+                   borderColor:
+-                    operationalStatus.tone === 'danger' ? '#fecaca' : getRgba(themeColor, 0.18),
++                    operationalStatus.tone === 'danger'
++                      ? '#fecaca'
++                      : operationalStatus.tone === 'neutral'
++                        ? '#e5e7eb'
++                        : '#fed7aa',
+                   backgroundColor:
+-                    operationalStatus.tone === 'danger' ? '#fef2f2' : themeSofter,
+-                  color: operationalStatus.tone === 'danger' ? '#b91c1c' : themeColor,
++                    operationalStatus.tone === 'danger'
++                      ? '#fef2f2'
++                      : operationalStatus.tone === 'neutral'
++                        ? '#f9fafb'
++                        : '#fff7ed',
++                  color:
++                    operationalStatus.tone === 'danger'
++                      ? '#b91c1c'
++                      : operationalStatus.tone === 'neutral'
++                        ? '#374151'
++                        : '#9a3412',
+                 }}
+               >
+-                {operationalStatus.description}
++                <span className="sm:hidden">
++                  {operationalStatus.mobileDescription || operationalStatus.description}
++                </span>
++                <span className="hidden sm:inline">{operationalStatus.description}</span>
+               </div>
+             )}
+           </div>
+diff --git a/src/services/cloudinary.js b/src/services/cloudinary.js
+index b027bbd2..2c846d5a 100644
+--- a/src/services/cloudinary.js
++++ b/src/services/cloudinary.js
+@@ -17,9 +17,9 @@ function assertUploadableImage(file) {
+   }
+ }
+ 
+-async function getSignedUploadConfig(folder) {
++async function getSignedUploadConfig(folder, options = {}) {
+   const createSignature = httpsCallable(functions, 'createCloudinaryUploadSignature')
+-  const result = await createSignature({ folder })
++  const result = await createSignature({ folder, storeId: options.storeId || '' })
+   const data = result?.data || {}
+ 
+   if (!data.cloudName || !data.apiKey || !data.signature || !data.timestamp || !data.folder) {
+@@ -29,8 +29,8 @@ async function getSignedUploadConfig(folder) {
+   return data
+ }
+ 
+-async function uploadSignedImage(file, folder) {
+-  const signedConfig = await getSignedUploadConfig(folder)
++async function uploadSignedImage(file, folder, options = {}) {
++  const signedConfig = await getSignedUploadConfig(folder, options)
+   const formData = new FormData()
+   formData.append('file', file)
+   formData.append('api_key', signedConfig.apiKey)
+@@ -90,11 +90,11 @@ async function uploadUnsignedImage(file, folder) {
+   return data
+ }
+ 
+-export async function uploadImageToCloudinary(file, folder = 'PratoBy') {
++export async function uploadImageToCloudinary(file, folder = 'PratoBy', options = {}) {
+   assertUploadableImage(file)
+ 
+   try {
+-    return await uploadSignedImage(file, folder)
++    return await uploadSignedImage(file, folder, options)
+   } catch (error) {
+     if (!ALLOW_UNSIGNED_FALLBACK) throw error
+ 

@@ -584,6 +584,37 @@ function validPublicOrderCreate(orderId) {
         || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
       allow delete: if isAdmin();
 
+      match /media/{mediaId} {
+        allow get, list: if canManageStoreId(storeId);
+        allow create: if signedInNonAnonymous()
+          && canManageStoreId(storeId)
+          && request.resource.data.keys().hasOnly([
+            'storeId',
+            'url',
+            'publicId',
+            'type',
+            'filename',
+            'width',
+            'height',
+            'bytes',
+            'format',
+            'createdAt',
+            'uploadedBy',
+            'deletedAt',
+            'deletedBy'
+          ])
+          && request.resource.data.storeId == storeId
+          && request.resource.data.url is string
+          && request.resource.data.url.size() > 0
+          && request.resource.data.url.size() <= 4096
+          && request.resource.data.type in ['logo', 'banner', 'product', 'general']
+          && request.resource.data.uploadedBy == request.auth.uid
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.deletedAt == null
+          && request.resource.data.deletedBy == null;
+        allow update, delete: if false;
+      }
+
       match /notificationTokens/{tokenId} {
         allow get: if isAdmin()
           || (

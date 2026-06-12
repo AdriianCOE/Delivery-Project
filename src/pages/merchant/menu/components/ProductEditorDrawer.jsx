@@ -36,8 +36,10 @@ import {
 
 import { db } from '../../../../services/firebase'
 import { uploadImageToCloudinary } from '../../../../services/cloudinary'
+import { registerStoreMediaAsset } from '../../../../services/storeMediaLibrary'
 import { hasPlanFeature } from '../../../../utils/planCatalog'
 import LockedFeatureCard from '../../../../components/billing/LockedFeatureCard'
+import MediaLibraryPicker from '../../../../components/media/MediaLibraryPicker'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
 import {
   EMPTY_PRODUCT_FORM,
@@ -563,6 +565,17 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
     if (imgRef.current) imgRef.current.value = ''
   }, [imagePreview, setField])
 
+  const mediaStoreId = storeId || store?.id || store?.storeId || store?.storeDocId || ''
+
+  const handleSelectLibraryImage = useCallback((item) => {
+    setImageFile(null)
+    if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview)
+    setImagePreview('')
+    setField('imageUrl', item.url || '')
+    setField('imagePublicId', item.publicId || '')
+    if (imgRef.current) imgRef.current.value = ''
+  }, [imagePreview, setField])
+
   const schedulingAllowed = hasPlanFeature(store || {}, 'scheduling')
 
   const handleSave = useCallback(async () => {
@@ -585,9 +598,23 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
 
       if (imageFile) {
         setImageUploading(true)
-        const res = await uploadImageToCloudinary(imageFile, 'PratoBy/produtos')
+        const res = await uploadImageToCloudinary(imageFile, 'PratoBy/produtos', {
+          storeId: mediaStoreId,
+        })
         finalImageUrl = res.secure_url || res.url || ''
         finalImagePublicId = res.public_id || ''
+        try {
+          await registerStoreMediaAsset({
+            storeId: mediaStoreId,
+            uploadResult: res,
+            type: 'product',
+          })
+        } catch (mediaError) {
+          console.warn(
+            'Imagem enviada, mas não foi possível registrar na biblioteca:',
+            mediaError
+          )
+        }
         setImageUploading(false)
       }
 
@@ -644,7 +671,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
       setSaving(false)
       setImageUploading(false)
     }
-  }, [form, imageFile, store, categories, editingProduct, onToast, onClose, schedulingAllowed])
+  }, [form, imageFile, store, categories, editingProduct, onToast, onClose, schedulingAllowed, mediaStoreId])
 
   const visibleImage = imagePreview || form.imageUrl
   const activeCategory = useMemo(() => categories.find((c) => c.id === form.categoryId), [categories, form.categoryId])
@@ -959,6 +986,19 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <FiImage size={16} />
                       {visibleImage ? 'Trocar imagem' : 'Selecionar imagem'}
                     </button>
+
+                    <div className="mt-3">
+                      <MediaLibraryPicker
+                        storeId={mediaStoreId}
+                        type="product"
+                        onSelect={handleSelectLibraryImage}
+                        className={`flex w-full items-center justify-center gap-2 ${ui.secondaryButton}`}
+                      />
+                    </div>
+
+                    <p className={ui.hint}>
+                      Remover imagem atual limpa apenas este produto. Para excluir da biblioteca, use a ação "Excluir da biblioteca" dentro da biblioteca.
+                    </p>
                   </SectionCard>
                 </div>
               )}

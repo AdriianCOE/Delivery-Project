@@ -687,6 +687,10 @@ function normalizeStore(input, fallbackSlug = '') {
     firstFilled(data.bannerUrl, data.coverUrl, data.bannerImageUrl, data.coverImageUrl),
     'storeBanner',
   )
+  const bannerMobileUrl = getCloudinaryImageUrl(
+    firstFilled(data.bannerMobileUrl, data.mobileBannerUrl, data.mobileBannerURL),
+    'storeBannerMobile',
+  )
 
   return {
     ...data,
@@ -698,6 +702,8 @@ function normalizeStore(input, fallbackSlug = '') {
     logoUrl,
     logo: logoUrl,
     bannerUrl,
+    bannerMobileUrl,
+    mobileBannerUrl: bannerMobileUrl,
     coverUrl: bannerUrl,
     themeColor: firstFilled(data.themeColor, data.primaryColor, data.brandColor) || BRAND_GREEN,
     whatsapp: firstFilled(data.whatsapp, data.phone, data.contactPhone),
@@ -897,7 +903,7 @@ function getStorePromoBanner(store) {
 }
 
 function StoreHero({ store, themeColor }) {
-  const bannerUrl = store?.mobileBannerUrl || store?.bannerUrl || store?.coverUrl
+  const bannerUrl = store?.bannerUrl || store?.coverUrl || store?.bannerMobileUrl || store?.mobileBannerUrl
 
   return (
     <section className="relative overflow-hidden bg-[#f9fafb]">
@@ -1111,7 +1117,8 @@ function StoreQuickActions({
           className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#fff8f1] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem]"
         >
           <FiUser />
-          Meus Pedidos
+            <span className="sm:hidden">Pedidos</span>
+            <span className="hidden sm:inline">Meus Pedidos</span>
         </button>
 
         <button
@@ -1227,19 +1234,19 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
 
 function EmptyProducts({ searchTerm, onClear }) {
   return (
-    <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gray-50 text-gray-400">
-        <FiSearch size={28} />
+    <div className="rounded-[2rem] border border-dashed border-orange-100 bg-white/95 px-6 py-12 text-center shadow-sm sm:py-16">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-orange-50/60 text-gray-400 sm:h-16 sm:w-16">
+        <FiSearch size={26} />
       </div>
 
-      <h2 className="mt-5 text-2xl font-black tracking-tight text-[#111827]">
+      <h2 className="mt-5 text-xl font-black tracking-tight text-[#111827] sm:text-2xl">
         {searchTerm ? 'Nenhum produto encontrado' : 'Cardápio em montagem'}
       </h2>
 
-      <p className="mx-auto mt-3 max-w-md leading-7 text-[#6b7280]">
+      <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#6b7280] sm:max-w-md sm:text-base sm:leading-7">
         {searchTerm
           ? 'Tente buscar outro termo ou limpe a pesquisa para ver todo o cardápio.'
-          : 'Estamos preparando os produtos desta loja. Em breve você poderá ver bolos, doces e kits festa por aqui.'}
+          : 'Em breve você verá bolos, doces e kits festa por aqui.'}
       </p>
 
       {searchTerm && (
@@ -1797,6 +1804,8 @@ export default function StoreFrontPage() {
 
     return sections
   }, [categories, productsByCategory])
+
+  const shouldShowCategoryNav = categories.length > 0 || availableProducts.length > 0
 
   const storeInfoItems = useMemo(() => {
     return [
@@ -2394,81 +2403,83 @@ return (
         </section>
       )}
 
-      <section
-        className={`sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
-          isOwner ? 'top-[44px]' : 'top-0'
-        }`}
-      >
-        <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100/80 backdrop-blur-xl">
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-white via-white/90 to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-9 bg-gradient-to-l from-white via-white/90 to-transparent" />
+      {shouldShowCategoryNav && (
+        <section
+          className={`sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
+            isOwner ? 'top-[44px]' : 'top-0'
+          }`}
+        >
+          <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100/80 backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-white via-white/90 to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-9 bg-gradient-to-l from-white via-white/90 to-transparent" />
 
-          <div
-            ref={categoryScrollRef}
-            onWheel={handleCategoryWheel}
-            className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            <button
-              type="button"
-              data-active-category={activeCategory === 'all' ? 'true' : undefined}
-              onClick={() => handleScrollToCategory('all')}
-              className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
-                activeCategory === 'all'
-                  ? 'text-white shadow-lg shadow-orange-600/20'
-                  : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
-              }`}
-              style={{
-                background: activeCategory === 'all' ? themeColor : undefined,
-              }}
+            <div
+              ref={categoryScrollRef}
+              onWheel={handleCategoryWheel}
+              className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              <FiGrid />
-              Todos
-              {categoryCounts.all > 0 && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    activeCategory === 'all' ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
-                  }`}
-                >
-                  {categoryCounts.all}
-                </span>
-              )}
-            </button>
+              <button
+                type="button"
+                data-active-category={activeCategory === 'all' ? 'true' : undefined}
+                onClick={() => handleScrollToCategory('all')}
+                className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
+                  activeCategory === 'all'
+                    ? 'text-white shadow-lg shadow-orange-600/20'
+                    : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
+                }`}
+                style={{
+                  background: activeCategory === 'all' ? themeColor : undefined,
+                }}
+              >
+                <FiGrid />
+                Todos
+                {categoryCounts.all > 0 && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      activeCategory === 'all' ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
+                    }`}
+                  >
+                    {categoryCounts.all}
+                  </span>
+                )}
+              </button>
 
-            {categories.map((category) => {
-              const active = activeCategory === category.id
+              {categories.map((category) => {
+                const active = activeCategory === category.id
 
-              return (
-                <button
-                  key={category.id}
-                  type="button"
-                  data-active-category={active ? 'true' : undefined}
-                  onClick={() => handleScrollToCategory(category.id)}
-                  className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
-                    active
-                      ? 'text-white shadow-lg shadow-orange-600/20'
-                      : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
-                  }`}
-                  style={{
-                    background: active ? themeColor : undefined,
-                  }}
-                >
-                  {category.name}
-                  {categoryCounts[category.id] > 0 && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        active ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
-                      }`}
-                    >
-                      {categoryCounts[category.id]}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    data-active-category={active ? 'true' : undefined}
+                    onClick={() => handleScrollToCategory(category.id)}
+                    className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
+                      active
+                        ? 'text-white shadow-lg shadow-orange-600/20'
+                        : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
+                    }`}
+                    style={{
+                      background: active ? themeColor : undefined,
+                    }}
+                  >
+                    {category.name}
+                    {categoryCounts[category.id] > 0 && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          active ? 'bg-white/20 text-white' : 'bg-gray-50 text-[#6b7280]'
+                        }`}
+                      >
+                        {categoryCounts[category.id]}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <main id="menu-start" className="mx-auto mt-5 max-w-[1440px] px-4 sm:mt-7 xl:px-6">
         {loadingMenu ? (

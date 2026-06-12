@@ -17,9 +17,9 @@ function assertUploadableImage(file) {
   }
 }
 
-async function getSignedUploadConfig(folder) {
+async function getSignedUploadConfig(folder, options = {}) {
   const createSignature = httpsCallable(functions, 'createCloudinaryUploadSignature')
-  const result = await createSignature({ folder })
+  const result = await createSignature({ folder, storeId: options.storeId || '' })
   const data = result?.data || {}
 
   if (!data.cloudName || !data.apiKey || !data.signature || !data.timestamp || !data.folder) {
@@ -29,8 +29,8 @@ async function getSignedUploadConfig(folder) {
   return data
 }
 
-async function uploadSignedImage(file, folder) {
-  const signedConfig = await getSignedUploadConfig(folder)
+async function uploadSignedImage(file, folder, options = {}) {
+  const signedConfig = await getSignedUploadConfig(folder, options)
   const formData = new FormData()
   formData.append('file', file)
   formData.append('api_key', signedConfig.apiKey)
@@ -90,11 +90,11 @@ async function uploadUnsignedImage(file, folder) {
   return data
 }
 
-export async function uploadImageToCloudinary(file, folder = 'PratoBy') {
+export async function uploadImageToCloudinary(file, folder = 'PratoBy', options = {}) {
   assertUploadableImage(file)
 
   try {
-    return await uploadSignedImage(file, folder)
+    return await uploadSignedImage(file, folder, options)
   } catch (error) {
     if (!ALLOW_UNSIGNED_FALLBACK) throw error
 

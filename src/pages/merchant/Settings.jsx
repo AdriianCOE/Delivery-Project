@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
@@ -39,8 +38,10 @@ import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { uploadImageToCloudinary } from '../../services/cloudinary'
+import { registerStoreMediaAsset } from '../../services/storeMediaLibrary'
 import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
 import { hasPlanFeature } from '../../utils/planCatalog'
+import MediaLibraryPicker from '../../components/media/MediaLibraryPicker'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const BRAND_GREEN = '#f97316'
@@ -122,6 +123,7 @@ const DEFAULT_FORM = {
   segment: 'Restaurante',
   logoUrl: '',
   bannerUrl: '',
+  bannerMobileUrl: '',
   themeColor: DEFAULT_THEME,
   whatsapp: '',
   instagram: '',
@@ -268,6 +270,12 @@ function userCanManageStore(user, store) {
     (Array.isArray(store.merchantUids) && store.merchantUids.includes(user.uid)) ||
     storeKeys.some((key) => userStoreKeys.includes(key))
   )
+}
+
+function getStoreImageMediaType(fieldName) {
+  if (fieldName === 'logoUrl') return 'logo'
+  if (fieldName === 'bannerUrl' || fieldName === 'bannerMobileUrl') return 'banner'
+  return 'general'
 }
 
 function sanitizeTextField(value, maxLength) {
@@ -604,6 +612,12 @@ function mapStoreToForm(store) {
       store?.coverURL ||
       store?.bannerImageUrl ||
       '',
+    bannerMobileUrl:
+      store?.bannerMobileUrl ||
+      store?.mobileBannerUrl ||
+      settings?.bannerMobileUrl ||
+      settings?.mobileBannerUrl ||
+      '',
     themeColor:
       store?.themeColor ||
       store?.primaryColor ||
@@ -780,8 +794,10 @@ function ImageUploadField({
   value,
   uploading,
   aspect = 'square',
+  storeId,
+  mediaType = 'general',
   onUpload,
-  onChangeUrl,
+  onSelectFromLibrary,
   onRemove,
 }) {
   const previewClass =
@@ -789,13 +805,25 @@ function ImageUploadField({
       ? 'h-40 w-full rounded-[1.5rem]'
       : 'h-32 w-32 rounded-[1.5rem]'
 
+  const recommendation = useMemo(() => {
+    const normalizedLabel = String(label || '').toLowerCase()
+
+    if (aspect === 'banner' && normalizedLabel.includes('mobile')) {
+      return 'Recomendado para celular: 1200 x 520 px.'
+    }
+
+    if (aspect === 'banner') {
+      return 'Recomendado para desktop: 2400 x 400 px.'
+    }
+
+    return 'Recomendado: imagem quadrada.'
+  }, [aspect, label])
+
   return (
-    <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4">
+    <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-black text-[#111827]">
-            {label}
-          </p>
+          <p className="text-sm font-black text-[#111827]">{label}</p>
 
           {description && (
             <p className="mt-1 text-xs leading-5 text-[#6b7280]">
@@ -808,51 +836,103 @@ function ImageUploadField({
           <button
             type="button"
             onClick={onRemove}
-            className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+            className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+            title="Remove a imagem deste campo, mas mantém ela na biblioteca."
           >
             Remover
           </button>
         )}
       </div>
 
-      <div className={aspect === 'banner' ? 'space-y-3' : 'flex flex-col gap-4 sm:flex-row sm:items-center'}>
-        <div className={`${previewClass} flex shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-200 bg-white text-gray-400`}>
-          {value ? (
-            <img
-              src={value}
-              alt={label}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <FiImage size={24} />
+      <div
+        className={
+          aspect === 'banner'
+            ? 'space-y-3'
+            : 'flex flex-col gap-4 sm:flex-row sm:items-center'
+        }
+      >
+        <MediaLibraryPicker
+          storeId={storeId}
+          type={mediaType}
+          onSelect={(item) => onSelectFromLibrary?.(item.url, item)}
+        >
+          {({ openLibrary, disabled }) => (
+            <>
+              <button
+                type="button"
+                onClick={openLibrary}
+                disabled={disabled || uploading}
+                className={`${previewClass} group relative flex shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-200 bg-white text-gray-400 transition hover:border-orange-200 hover:bg-orange-50/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-500 dark:hover:border-orange-500/50 dark:hover:bg-zinc-900`}
+                title="Clique para escolher da biblioteca"
+              >
+                {value ? (
+                  <img
+                    src={value}
+                    alt={label}
+                    className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] group-hover:opacity-80"
+                    loading="lazy"
+                  />
+                ) : (
+                  <FiImage size={24} />
+                )}
+
+                <span className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 px-3 py-2 text-center text-[11px] font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+                  Clique para escolher da biblioteca
+                </span>
+              </button>
+
+              <div className="min-w-0 flex-1 space-y-3">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]">
+                  {uploading ? (
+                    <FiLoader className="animate-spin" />
+                  ) : (
+                    <FiUpload />
+                  )}
+
+                  {uploading
+                    ? 'Enviando imagem...'
+                    : value
+                      ? 'Trocar imagem'
+                      : 'Enviar imagem'}
+
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    disabled={uploading}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      event.target.value = ''
+
+                      if (file) onUpload(file)
+                    }}
+                    className="hidden"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={openLibrary}
+                  disabled={disabled || uploading}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <FiImage />
+                  Escolher da biblioteca
+                </button>
+
+                <p className="text-xs leading-5 text-[#6b7280]">
+                  {recommendation}
+                </p>
+
+                {value && (
+                  <p className="text-xs leading-5 text-[#6b7280]">
+                    Remover limpa apenas este campo. A imagem
+                    continua na biblioteca.
+                  </p>
+                )}
+              </div>
+            </>
           )}
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-3">
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]">
-            {uploading ? <FiLoader className="animate-spin" /> : <FiUpload />}
-            {uploading ? 'Enviando imagem...' : value ? 'Trocar imagem' : 'Enviar imagem'}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/jpg,image/webp"
-              disabled={uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-
-                if (file) onUpload(file)
-              }}
-              className="hidden"
-            />
-          </label>
-
-          <Input
-            placeholder="Ou cole uma URL de imagem"
-            value={value || ''}
-            onChange={(event) => onChangeUrl(event.target.value)}
-          />
-        </div>
+        </MediaLibraryPicker>
       </div>
     </div>
   )
@@ -1255,7 +1335,9 @@ const knownStoreIdsKey = useMemo(() => {
 
       try {
         const folder = `PratoBy/${getStoreSlug(selectedStore) || selectedStore.id}/branding/${fieldName}`
-        const uploaded = await uploadImageToCloudinary(file, folder)
+        const uploaded = await uploadImageToCloudinary(file, folder, {
+          storeId: selectedStore.id,
+        })
         const imageUrl = uploaded?.secure_url || uploaded?.url || uploaded
 
         if (!imageUrl) {
@@ -1263,6 +1345,19 @@ const knownStoreIdsKey = useMemo(() => {
         }
 
         updateField(fieldName, imageUrl)
+        try {
+          await registerStoreMediaAsset({
+            storeId: selectedStore.id,
+            uploadResult: uploaded,
+            type: getStoreImageMediaType(fieldName),
+            uploadedBy: user?.uid,
+          })
+        } catch (mediaError) {
+          console.warn(
+            'Imagem enviada, mas não foi possível registrar na biblioteca:',
+            mediaError
+          )
+        }
         showToast('success', 'Imagem enviada. Salve para aplicar na loja.')
       } catch (error) {
         console.error(error)
@@ -1298,6 +1393,7 @@ const knownStoreIdsKey = useMemo(() => {
       const whatsapp = normalizeBrazilianPhoneForWhatsApp(form.whatsapp)
       const logoUrl = sanitizeImageUrl(form.logoUrl)
       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
+      const bannerMobileUrl = sanitizeImageUrl(form.bannerMobileUrl)
       if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
       }
@@ -1360,6 +1456,7 @@ const knownStoreIdsKey = useMemo(() => {
 
         logoUrl,
         bannerUrl,
+        bannerMobileUrl,
         themeColor,
 
         whatsapp,
@@ -1410,7 +1507,7 @@ const knownStoreIdsKey = useMemo(() => {
 
       const ALLOWED_KEYS = [
         'name', 'storeName', 'description', 'segment', 'category',
-        'logoUrl', 'bannerUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+        'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'themeColor', 'whatsapp', 'whatsapp1',
         'phone', 'instagram', 'social', 'isActive', 'activeDays',
         'hoursOpen', 'hoursClose', 'openingHours', 'scheduling', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
@@ -1737,14 +1834,29 @@ const knownStoreIdsKey = useMemo(() => {
             )}
             <div className="grid gap-4">
               <ImageUploadField
-                label="Banner da loja"
-                description="Imagem horizontal para o topo do cardápio."
+                label="Banner principal"
+                description="Usado em telas maiores, como computador e tablet."
                 aspect="banner"
                 value={form.bannerUrl}
                 uploading={uploadingImage === 'bannerUrl'}
+                storeId={selectedStore.id}
+                mediaType="banner"
                 onUpload={(file) => handleUploadStoreImage(file, 'bannerUrl')}
-                onChangeUrl={(value) => updateField('bannerUrl', value)}
+                onSelectFromLibrary={(url) => updateField('bannerUrl', url)}
                 onRemove={() => updateField('bannerUrl', '')}
+              />
+
+              <ImageUploadField
+                label="Banner mobile"
+                description="Versão opcional para celular. Se não enviar, usaremos o banner principal."
+                aspect="banner"
+                value={form.bannerMobileUrl}
+                uploading={uploadingImage === 'bannerMobileUrl'}
+                storeId={selectedStore.id}
+                mediaType="banner"
+                onUpload={(file) => handleUploadStoreImage(file, 'bannerMobileUrl')}
+                onSelectFromLibrary={(url) => updateField('bannerMobileUrl', url)}
+                onRemove={() => updateField('bannerMobileUrl', '')}
               />
 
               <ImageUploadField
@@ -1752,8 +1864,10 @@ const knownStoreIdsKey = useMemo(() => {
                 description="Imagem quadrada usada no perfil e nos cards."
                 value={form.logoUrl}
                 uploading={uploadingImage === 'logoUrl'}
+                storeId={selectedStore.id}
+                mediaType="logo"
                 onUpload={(file) => handleUploadStoreImage(file, 'logoUrl')}
-                onChangeUrl={(value) => updateField('logoUrl', value)}
+                onSelectFromLibrary={(url) => updateField('logoUrl', url)}
                 onRemove={() => updateField('logoUrl', '')}
               />
             </div>

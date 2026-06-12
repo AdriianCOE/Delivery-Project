@@ -20,6 +20,22 @@ import { db } from '../services/firebase'
 
 export const AuthContext = createContext(null)
 
+const AUTH_SESSION_MARKER = 'pratoby:auth:session'
+
+function setStoredAuthSession(enabled) {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (enabled) {
+      window.localStorage.setItem(AUTH_SESSION_MARKER, '1')
+    } else {
+      window.localStorage.removeItem(AUTH_SESSION_MARKER)
+    }
+  } catch {
+    // Ignora ambientes sem localStorage.
+  }
+}
+
 const publicAuthFallback = {
   firebaseUser: null,
   user: null,
@@ -133,6 +149,7 @@ export function AuthProvider({ children }) {
 
         try {
           if (!currentFirebaseUser) {
+            setStoredAuthSession(false)
             setFirebaseUser(null)
             setUser(null)
             setUserData(null)
@@ -147,6 +164,7 @@ export function AuthProvider({ children }) {
           }
           
           if (anonymousAuth) {
+            setStoredAuthSession(false)
             setFirebaseUser(baseUser)
             setUser(null)
             setUserData(null)
@@ -154,6 +172,8 @@ export function AuthProvider({ children }) {
             setLoading(false)
             return
           }
+
+          setStoredAuthSession(true)
 
           const firestoreUserData = await loadUserData(currentFirebaseUser.uid)
           const normalizedRole = getNormalizedRole(firestoreUserData)
@@ -188,10 +208,11 @@ export function AuthProvider({ children }) {
 
           const fallbackUser = normalizeFirebaseUser(currentFirebaseUser)
 
-          setFirebaseUser(fallbackUser)
-          setUser(null)
-          setUserData(null)
-          setSentryUser(null)
+            setStoredAuthSession(Boolean(fallbackUser && fallbackUser.isAnonymous !== true))
+            setFirebaseUser(fallbackUser)
+            setUser(null)
+            setUserData(null)
+            setSentryUser(null)
         } finally {
           if (isMounted && authLoadIdRef.current === loadId) {
             setLoading(false)
@@ -230,17 +251,21 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.warn('Erro ao executar signOut do Firebase:', error)
     } finally {
-      setFirebaseUser(null)
-      setUser(null)
-      setUserData(null)
-      setSentryUser(null)
-    }
+        setStoredAuthSession(false)
+        setFirebaseUser(null)
+        setUser(null)
+        setUserData(null)
+        setSentryUser(null)
+      }
   }, [])
 
   const refreshUserData = useCallback(async () => {
     const { auth } = await import('../services/firebaseAuth')
     const currentUser = auth.currentUser || firebaseUser
-    if (!currentUser) return null
+    if (!currentUser) {
+      setStoredAuthSession(false)
+      return null
+    }
 
     try {
       const anonymousAuth = await isAnonymousFirebaseUser(currentUser)
@@ -250,12 +275,15 @@ export function AuthProvider({ children }) {
       }
 
       if (anonymousAuth) {
+        setStoredAuthSession(false)
         setFirebaseUser(baseUser)
         setUser(null)
         setUserData(null)
         setSentryUser(null)
         return null
       }
+
+      setStoredAuthSession(true)
 
       const firestoreUserData = await loadUserData(currentUser.uid)
       const normalizedRole = getNormalizedRole(firestoreUserData)
