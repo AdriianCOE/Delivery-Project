@@ -16,7 +16,6 @@ import {
   FiExternalLink,
   FiGrid,
   FiList,
-  FiLoader,
   FiPlus,
   FiTag,
   FiTruck,
@@ -38,6 +37,7 @@ import DeliveryAreaEditorDrawer from './components/DeliveryAreaEditorDrawer'
 import { BAIRROS_ARACAJU }   from './utils/deliveryPayloads'
 import DashboardFooter from '../../../components/layouts/DashboardFooter'
 import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl'
+import { UPGRADE_PROMPT_COPY, getStorePlanLimit, hasPlanFeature } from '../../../utils/planCatalog'
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -139,6 +139,50 @@ export default function MenuManagementPage() {
   const openDeliveryDrawer  = useCallback((area = null)    => { setEditingArea(area);        setDeliveryDrawerOpen(true) }, [])
   const closeDeliveryDrawer = useCallback(() => { setDeliveryDrawerOpen(false);       setEditingArea(null)        }, [])
 
+  const couponsAllowed = hasPlanFeature(store || {}, 'coupons')
+  const productLimit = getStorePlanLimit(store || {}, 'products')
+  const categoryLimit = getStorePlanLimit(store || {}, 'categories')
+  // Guarda de UX; enforcement transacional de quantidade exige callable/counter no backend.
+  const productLimitReached = productLimit > 0 && activeProducts.length >= productLimit
+  const categoryLimitReached = categoryLimit > 0 && sortedCategories.length >= categoryLimit
+  const showCouponsPlanGate = useCallback(() => {
+    showToast({
+      type: 'warning',
+      message: UPGRADE_PROMPT_COPY.description,
+    })
+  }, [showToast])
+
+  const openCouponDrawerIfAllowed = useCallback((coupon = null) => {
+    if (!couponsAllowed) {
+      showCouponsPlanGate()
+      return
+    }
+    openCouponDrawer(coupon)
+  }, [couponsAllowed, openCouponDrawer, showCouponsPlanGate])
+
+  const showLimitGate = useCallback((limitLabel) => {
+    showToast({
+      type: 'warning',
+      message: `${UPGRADE_PROMPT_COPY.description} Limite atual: ${limitLabel}.`,
+    })
+  }, [showToast])
+
+  const openProductDrawerIfAllowed = useCallback((product = null) => {
+    if (!product && productLimitReached) {
+      showLimitGate(`${productLimit} produtos`)
+      return
+    }
+    openProductDrawer(product)
+  }, [openProductDrawer, productLimit, productLimitReached, showLimitGate])
+
+  const openCategoryDrawerIfAllowed = useCallback((category = null) => {
+    if (!category && categoryLimitReached) {
+      showLimitGate(`${categoryLimit} categorias`)
+      return
+    }
+    openCategoryDrawer(category)
+  }, [categoryLimit, categoryLimitReached, openCategoryDrawer, showLimitGate])
+
   // ── Passthrough handlers with toast ──
   const onToggle         = useCallback((id, field, val) => handleToggleProductField(id, field, val, showToast), [handleToggleProductField, showToast])
   const onDuplicate      = useCallback((p)              => handleDuplicateProduct(p, store, showToast),         [handleDuplicateProduct, store, showToast])
@@ -148,7 +192,13 @@ export default function MenuManagementPage() {
   const onMoveUp         = useCallback((cat)            => handleMoveCategoryOrder(cat, 'up', sortedCategories, showToast),   [handleMoveCategoryOrder, sortedCategories, showToast])
   const onMoveDown       = useCallback((cat)            => handleMoveCategoryOrder(cat, 'down', sortedCategories, showToast), [handleMoveCategoryOrder, sortedCategories, showToast])
   
-  const onToggleCoupon   = useCallback((id, val)        => handleToggleCoupon(id, val, showToast),              [handleToggleCoupon, showToast])
+  const onToggleCoupon = useCallback((id, val) => {
+    if (!couponsAllowed && val === false) {
+      showCouponsPlanGate()
+      return
+    }
+    handleToggleCoupon(id, val, showToast)
+  }, [couponsAllowed, handleToggleCoupon, showCouponsPlanGate, showToast])
   const onDeleteCoupon   = useCallback((id)             => handleDeleteCoupon(id, showToast),                  [handleDeleteCoupon, showToast])
 
   const handleSaveDeliveryArea = useCallback(async (originalName, newName, fee) => {
@@ -254,13 +304,22 @@ export default function MenuManagementPage() {
               </a>
             )}
             {activeTab === 'coupons' ? (
-              <button
-                type="button"
-                onClick={() => openCouponDrawer()}
-                className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
-              >
-                <FiPlus size={15} /> Novo cupom
-              </button>
+              couponsAllowed ? (
+                <button
+                  type="button"
+                  onClick={() => openCouponDrawerIfAllowed()}
+                  className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
+                >
+                  <FiPlus size={15} /> Novo cupom
+                </button>
+              ) : (
+                <Link
+                  to="/dashboard/billing"
+                  className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
+                >
+                  {UPGRADE_PROMPT_COPY.primaryAction}
+                </Link>
+              )
             ) : activeTab === 'delivery' ? (
               <button
                 type="button"
@@ -273,7 +332,7 @@ export default function MenuManagementPage() {
               <>
                 <button
                   type="button"
-                  onClick={() => openCategoryDrawer()}
+                    onClick={() => openCategoryDrawerIfAllowed()}
                   className="inline-flex h-9 items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-4 text-xs font-black text-[#f97316] transition hover:bg-orange-100 dark:bg-orange-950/20 dark:border-orange-900/50 dark:hover:bg-orange-950/40"
                 >
                   <FiPlus size={13} /> Categoria
@@ -281,7 +340,7 @@ export default function MenuManagementPage() {
                 {sortedCategories.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => openProductDrawer()}
+                    onClick={() => openProductDrawerIfAllowed()}
                     className="inline-flex h-9 items-center gap-2 rounded-full bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c] active:scale-[0.98]"
                   >
                     <FiPlus size={15} /> Novo produto
@@ -355,12 +414,12 @@ export default function MenuManagementPage() {
                 setFilterCategoryId={setFilterCategoryId}
                 filterStatus={filterStatus}
                 setFilterStatus={setFilterStatus}
-                onEdit={openProductDrawer}
+                onEdit={openProductDrawerIfAllowed}
                 onDuplicate={onDuplicate}
                 onDelete={onDeleteProduct}
                 onToggle={onToggle}
-                onCreateProduct={() => openProductDrawer()}
-                onCreateCategory={() => openCategoryDrawer()}
+                onCreateProduct={() => openProductDrawerIfAllowed()}
+                onCreateCategory={() => openCategoryDrawerIfAllowed()}
               />
             )}
 
@@ -368,22 +427,23 @@ export default function MenuManagementPage() {
               <MenuCategoriesTab
                 categories={sortedCategories}
                 productCountByCategory={productCountByCategory}
-                onEdit={openCategoryDrawer}
+                onEdit={openCategoryDrawerIfAllowed}
                 onDelete={onDeleteCategory}
                 onToggleActive={onToggleCat}
                 onMoveUp={onMoveUp}
                 onMoveDown={onMoveDown}
-                onCreateCategory={() => openCategoryDrawer()}
+                onCreateCategory={() => openCategoryDrawerIfAllowed()}
               />
             )}
 
             {activeTab === 'coupons' && (
               <MenuCouponsTab
                 coupons={activeCoupons}
-                onEdit={openCouponDrawer}
+                couponsAllowed={couponsAllowed}
+                onEdit={openCouponDrawerIfAllowed}
                 onDelete={onDeleteCoupon}
                 onToggleActive={onToggleCoupon}
-                onCreateCoupon={() => openCouponDrawer()}
+                onCreateCoupon={() => openCouponDrawerIfAllowed()}
               />
             )}
 

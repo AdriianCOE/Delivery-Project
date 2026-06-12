@@ -26,7 +26,7 @@ function onlyNumbers(value) {
 
 function normalizeStoreSlug(store) {
   return String(
-    firstValid(store?.storeSlug, store?.slug, store?.id, '')
+    firstValid(store?.storeSlug, store?.slug, '')
   )
     .trim()
     .replace(/^\/+/, '')
@@ -71,6 +71,13 @@ function getStoreStatus(store) {
 }
 
 function getPublicStoreUrl(store) {
+  const subscriptionStatus = String(store?.subscriptionStatus || store?.subscription?.status || '').trim()
+  const isDraft =
+    store?.isBillingBlocked === true ||
+    ['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'].includes(subscriptionStatus)
+
+  if (isDraft) return ''
+
   const customUrl = firstValid(
     store?.publicUrl,
     store?.storeUrl,
@@ -81,7 +88,7 @@ function getPublicStoreUrl(store) {
 
   const slug = normalizeStoreSlug(store)
 
-  if (!slug) return PRATOBY_URL
+  if (!slug) return ''
 
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/${slug}`
@@ -250,7 +257,7 @@ export default function DashboardFooter({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            {publicStoreUrl !== PRATOBY_URL && (
+            {publicStoreUrl && publicStoreUrl !== PRATOBY_URL && (
               <>
                 <DashboardFooterAction
                   href={publicStoreUrl}

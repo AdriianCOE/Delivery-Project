@@ -19,6 +19,7 @@
  */
 
 const crypto = require('crypto')
+const { hasPlanFeature } = require('./shared/planAccess')
 
 const LABEL_MAX_LEN = 60
 const NUMBER_MAX_LEN = 20
@@ -75,6 +76,11 @@ async function assertCanManageStore(db, HttpsError, uid, storeId) {
   return storeData
 }
 
+function assertTableQrAllowed(HttpsError, storeData) {
+  if (hasPlanFeature(storeData, 'tableQrCode')) return
+  throw new HttpsError('failed-precondition', 'QR Code de mesa exige plano Profissional ou Premium.')
+}
+
 /**
  * Generate a unique table token: "t_" + 12 hex chars (6 bytes).
  * Backend-generated; never trusted from client input.
@@ -104,7 +110,8 @@ async function createStoreTableHandler({ db, HttpsError, logger }, request) {
   const label = sanitizeStr(request.data?.label, 'label', { required: true, maxLen: LABEL_MAX_LEN })
   const number = sanitizeStr(request.data?.number, 'number', { required: false, maxLen: NUMBER_MAX_LEN })
 
-  await assertCanManageStore(db, HttpsError, uid, storeId)
+  const storeData = await assertCanManageStore(db, HttpsError, uid, storeId)
+  assertTableQrAllowed(HttpsError, storeData)
 
   const token = generateTableToken()
   const now = require('firebase-admin').firestore.FieldValue.serverTimestamp()
@@ -150,13 +157,17 @@ async function updateStoreTableHandler({ db, HttpsError, logger }, request) {
   const storeId = sanitizeStr(request.data?.storeId, 'storeId', { required: true, maxLen: 120 })
   const tableId = sanitizeStr(request.data?.tableId, 'tableId', { required: true, maxLen: 120 })
 
-  await assertCanManageStore(db, HttpsError, uid, storeId)
+  const storeData = await assertCanManageStore(db, HttpsError, uid, storeId)
 
   const tableRef = db.collection('stores').doc(storeId).collection('tables').doc(tableId)
   const tableSnap = await tableRef.get()
 
   if (!tableSnap.exists) {
     throw new HttpsError('not-found', 'Mesa nao encontrada.')
+  }
+
+  if (request.data?.isActive !== false) {
+    assertTableQrAllowed(HttpsError, storeData)
   }
 
   const patch = {

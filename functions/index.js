@@ -40,6 +40,10 @@ const {
   updateStoreTableHandler,
   archiveStoreTableHandler,
 } = require('./storeTables')
+const {
+  getStorePlanLimit,
+  hasPlanFeature,
+} = require('./shared/planAccess')
 
 const {
   BREVO_API_KEY,
@@ -617,7 +621,7 @@ const PUBLIC_CATEGORY_FIELDS = [
 
 const PUBLIC_PRODUCT_FIELDS = [
   'name', 'description', 'price', 'priceCents', 'priceInCents', 'oldPrice', 'oldPriceCents',
-  'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'categoryId', 'category',
+  'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'images', 'imageUrls', 'gallery', 'categoryId', 'category',
   'categoryName', 'order', 'sortOrder', 'position', 'isActive', 'active', 'isVisible',
   'visible', 'isDeleted', 'deletedAt', 'isAvailable', 'available', 'status',
   'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
@@ -672,6 +676,10 @@ function slugifyPublicStoreName(value) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 120)
+}
+
+function normalizePublicStoreLookupParam(value) {
+  return slugifyPublicStoreName(String(value || '').trim().replace(/^\/+|\/+$/g, ''))
 }
 
 function getCanonicalStoreId(storeId, data = {}) {
@@ -890,7 +898,9 @@ function sanitizePublicStore(data) {
     enabled: pix.enabled === true || settingsPix.enabled === true || hasPixKey
   }
   profile.payments = sanitizePublicStorePayments(data)
-  profile.publicScheduling = sanitizePublicStoreScheduling(data)
+  profile.publicScheduling = hasPlanFeature(data, 'scheduling')
+    ? sanitizePublicStoreScheduling(data)
+    : null
 
   return profile
 }
@@ -899,12 +909,19 @@ function publicProductIsVisible(data) {
   return isPublicItemVisible(data)
 }
 
-function sanitizePublicProduct(data) {
+function sanitizePublicProduct(data, storeData = {}) {
   const product = pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
-  const scheduling = sanitizePublicProductScheduling(data?.scheduling)
+  const scheduling = hasPlanFeature(storeData, 'scheduling')
+    ? sanitizePublicProductScheduling(data?.scheduling)
+    : null
 
   if (scheduling) product.scheduling = scheduling
   else delete product.scheduling
+
+  const imageLimit = getStorePlanLimit(storeData, 'productImagesPerItem')
+  if (Array.isArray(product.images)) product.images = product.images.slice(0, imageLimit)
+  if (Array.isArray(product.imageUrls)) product.imageUrls = product.imageUrls.slice(0, imageLimit)
+  if (Array.isArray(product.gallery)) product.gallery = product.gallery.slice(0, imageLimit)
 
   return product
 }
@@ -928,9 +945,27 @@ async function storeRecordFromSnapshot(snapshot, collectionName) {
         return {
           id: canonicalSnapshot.id,
           collectionName,
-          data: canonicalSnapshot.data() || {},
+          data: {
+            ...(canonicalSnapshot.data() || {}),
+            id: canonicalSnapshot.id,
+            docId: canonicalSnapshot.id,
+            storeId: canonicalSnapshot.id,
+            storeDocId: canonicalSnapshot.id,
+          },
         }
       }
+    }
+
+    return {
+      id: snapshot.id,
+      collectionName,
+      data: {
+        ...data,
+        id: snapshot.id,
+        docId: snapshot.id,
+        storeId: snapshot.id,
+        storeDocId: snapshot.id,
+      },
     }
   }
 
@@ -941,50 +976,97 @@ async function storeRecordFromSnapshot(snapshot, collectionName) {
   }
 }
 
-async function findStoreForCallable(input = {}) {
-  const explicitStoreId = String(input.storeId || input.storeDocId || '').trim()
-  if (explicitStoreId) {
-    for (const collectionName of ['publicStores', 'stores']) {
-      const snapshot = await db.collection(collectionName).doc(explicitStoreId).get()
-      if (snapshot.exists) {
-        return storeRecordFromSnapshot(snapshot, collectionName)
-      }
-    }
+async function queryStoreRecord(collectionName, field, operator, value) {
+  const cleanValue = String(value || '').trim()
+  if (!cleanValue) return null
+
+  const snapshot = await db.collection(collectionName)
+    .where(field, operator, cleanValue)
+    .limit(1)
+    .get()
+
+  if (snapshot.empty) return null
+
+  return storeRecordFromSnapshot(snapshot.docs[0], collectionName)
+}
+
+async function findPublicStoreByParam(param) {
+  const originalParam = String(param || '').trim().replace(/^\/+|\/+$/g, '')
+  if (!originalParam) return null
+
+  const normalizedParam = normalizePublicStoreLookupParam(originalParam)
+
+  const directSnapshot = await db.collection('publicStores').doc(originalParam).get()
+  if (directSnapshot.exists) {
+    return storeRecordFromSnapshot(directSnapshot, 'publicStores')
   }
 
-  const keys = uniqueTruthy([
-    input.storeSlug,
-    input.slug,
+  for (const [field, value] of [
+    ['slug', normalizedParam],
+    ['storeSlug', normalizedParam],
+  ]) {
+    const record = await queryStoreRecord('publicStores', field, '==', value)
+    if (record) return record
+  }
+
+  for (const key of uniqueTruthy([originalParam, normalizedParam])) {
+    const record = await queryStoreRecord('publicStores', 'storeKeys', 'array-contains', key)
+    if (record) return record
+  }
+
+  return null
+}
+
+async function findLegacyStoreByParam(param) {
+  const originalParam = String(param || '').trim().replace(/^\/+|\/+$/g, '')
+  if (!originalParam) return null
+
+  const normalizedParam = normalizePublicStoreLookupParam(originalParam)
+
+  const directSnapshot = await db.collection('stores').doc(originalParam).get()
+  if (directSnapshot.exists) {
+    return storeRecordFromSnapshot(directSnapshot, 'stores')
+  }
+
+  for (const [field, value] of [
+    ['slug', normalizedParam],
+    ['storeSlug', normalizedParam],
+  ]) {
+    const record = await queryStoreRecord('stores', field, '==', value)
+    if (record) return record
+  }
+
+  for (const key of uniqueTruthy([originalParam, normalizedParam])) {
+    const record = await queryStoreRecord('stores', 'storeKeys', 'array-contains', key)
+    if (record) return record
+  }
+
+  return null
+}
+
+async function findStoreForCallable(input = {}) {
+  const params = uniqueTruthy([
     input.storeId,
     input.storeDocId,
+    input.storePublicId,
+    input.storeSlug,
+    input.slug,
+    input.publicId,
+    input.param,
+    input.key,
   ]).slice(0, 8)
 
-  for (const key of keys) {
-    for (const collectionName of ['publicStores', 'stores']) {
-      const snapshot = await db.collection(collectionName).doc(key).get()
-      if (snapshot.exists) {
-        return storeRecordFromSnapshot(snapshot, collectionName)
-      }
-    }
+  for (const param of params) {
+    const record = await findPublicStoreByParam(param)
+    if (record) return record
   }
 
-  for (const key of keys) {
+  for (const param of params) {
     logger.warn('[publicCallable] Falling back to slug query for store lookup.', {
-      hasStoreId: Boolean(explicitStoreId),
-      key,
+      param,
     })
-    for (const collectionName of ['publicStores', 'stores']) {
-      for (const field of ['storeSlug', 'slug']) {
-        const snapshot = await db.collection(collectionName)
-          .where(field, '==', key)
-          .limit(1)
-          .get()
-        if (!snapshot.empty) {
-          const docSnapshot = snapshot.docs[0]
-          return storeRecordFromSnapshot(docSnapshot, collectionName)
-        }
-      }
-    }
+    const record = await findLegacyStoreByParam(param)
+    if (record) return record
   }
 
   return null
@@ -1483,7 +1565,7 @@ exports.getPublicCatalog = onCall(
 
     const [categories, products] = await Promise.all([
       loadPublicSubcollection(storeRecord, 'categories', sanitizePublicCategory),
-      loadPublicSubcollection(storeRecord, 'products', sanitizePublicProduct),
+      loadPublicSubcollection(storeRecord, 'products', (product) => sanitizePublicProduct(product, storeRecord.data)),
     ])
 
     return {
@@ -1504,6 +1586,10 @@ exports.validatePublicCoupon = onCall(
     const storeRecord = await findStoreForCallable(data)
     if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
       return { valid: false, message: 'Loja indisponível.' }
+    }
+
+    if (!hasPlanFeature(storeRecord.data, 'coupons')) {
+      return { valid: false, reason: 'plan_restricted', message: 'Cupom indisponivel no plano atual da loja.' }
     }
 
     const couponDoc = await findPublicCoupon(storeRecord, data.couponCode)
@@ -1635,6 +1721,14 @@ exports.updateStoreSettings = onCall(
     const settingsPayload = data.payload !== undefined ? data.payload : data.updates
     const patch = sanitizeStoreSettingsPayload(settingsPayload || {}, storeData)
     assertPixPaymentSettingsPatch(patch)
+    if (!hasPlanFeature(storeData, 'scheduling')) {
+      const schedulingEnabled = patch.scheduling?.enabled === true
+      const preorderMode = String(patch.payments?.preorderPolicy?.mode || '').trim()
+      const requiresScheduledPayment = patch.payments?.mercadoPago?.requireForScheduled === true
+      if (schedulingEnabled || requiresScheduledPayment || (preorderMode && preorderMode !== 'manual')) {
+        throw new HttpsError('failed-precondition', 'Agendamento exige plano Profissional ou Premium.')
+      }
+    }
     if (Object.keys(patch).length === 0) {
       return { ok: true, updatedFields: [] }
     }
@@ -3264,7 +3358,7 @@ async function reconcilePublicCatalogStore(storeDoc, summary) {
       collectionName: 'products',
       sourceDocs: productDocs,
       isPublic: publicProductIsVisible,
-      sanitizePublic: sanitizePublicProduct,
+      sanitizePublic: (product) => sanitizePublicProduct(product, storeData),
       idField: 'productId',
       summaryPrefix: 'products',
       summary,
@@ -3280,6 +3374,28 @@ async function reconcilePublicCatalogStore(storeDoc, summary) {
       summary,
     }),
   ])
+}
+
+const PUBLIC_CATALOG_PLAN_FIELDS = [
+  'subscriptionStatus',
+  'subscription',
+  'isBillingBlocked',
+  'isBlocked',
+  'isDeleted',
+  'deletedAt',
+  'effectivePlan',
+  'billingPlan',
+  'selectedPlan',
+  'plan',
+  'planId',
+]
+
+function publicCatalogEntitlementsChanged(beforeData, afterData) {
+  if (!beforeData) return true
+  if (isPublicStoreVisible(beforeData) !== isPublicStoreVisible(afterData)) return true
+  return PUBLIC_CATALOG_PLAN_FIELDS.some((field) => {
+    return JSON.stringify(beforeData[field] ?? null) !== JSON.stringify(afterData[field] ?? null)
+  })
 }
 
 exports.reconcilePublicCatalog = onSchedule(
@@ -3339,6 +3455,7 @@ exports.reconcilePublicCatalog = onSchedule(
 exports.materializePublicStoreProfile = onDocumentWritten(
   { document: 'stores/{storeId}', region: REGION, maxInstances: 3 },
   async (event) => {
+    const beforeData = event.data.before.data() || null
     const afterData = event.data.after.data()
     const storeId = event.params.storeId
 
@@ -3357,6 +3474,21 @@ exports.materializePublicStoreProfile = onDocumentWritten(
         ...buildPublicStoreProfile(storeId, afterData, 'publicStores'),
         publicUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: false })
+
+      if (publicCatalogEntitlementsChanged(beforeData, afterData)) {
+        const summary = {
+          storesProcessed: 0,
+          publicStoresWritten: 0,
+          publicStoresRemoved: 0,
+          productsWritten: 0,
+          productsRemoved: 0,
+          categoriesWritten: 0,
+          categoriesRemoved: 0,
+          batchesCommitted: 0,
+        }
+        await reconcilePublicCatalogStore(event.data.after, summary)
+        logger.info('[materializePublicStoreProfile] reconciled public catalog after entitlement change', { storeId, summary })
+      }
     }
   }
 )
@@ -3388,12 +3520,23 @@ exports.materializePublicProduct = onDocumentWritten(
           .delete()
       }
     } else {
+      const storeSnapshot = await db.collection('stores').doc(newStoreId).get()
+      const storeData = storeSnapshot.exists ? storeSnapshot.data() || {} : {}
+      if (!storeSnapshot.exists || !isPublicStoreVisible(storeData)) {
+        await db.collection('publicStores')
+          .doc(newStoreId)
+          .collection('products')
+          .doc(productId)
+          .delete()
+        return
+      }
+
       await db.collection('publicStores')
         .doc(newStoreId)
         .collection('products')
         .doc(productId)
         .set({
-          ...sanitizePublicProduct(afterData),
+          ...sanitizePublicProduct(afterData, storeData),
           id: productId,
           productId,
           storeId: newStoreId

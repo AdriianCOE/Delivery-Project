@@ -126,6 +126,68 @@ function canLoadOperationalOrders({ role, selectedStore, userData }) {
   return OPERATIONAL_STATUSES.has(effectiveStatus) || !effectiveStatus
 }
 
+function isDraftStore({ selectedStore, userData }) {
+  if (!selectedStore) return false
+
+  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
+  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
+
+  return (
+    BILLING_PENDING_STATUSES.has(storeStatus) ||
+    BILLING_PENDING_STATUSES.has(userStatus) ||
+    userData?.onboardingStatus === 'billing_pending'
+  )
+}
+
+function isTrialExpired(store, userData, now = 0) {
+  const status = normalizeBillingStatus(store?.subscriptionStatus || userData?.subscriptionStatus)
+  if (status !== 'trialing') return false
+
+  const rawDate = store?.trialEndsAt || userData?.trialEndsAt
+  const date = toDate(rawDate)
+  return Boolean(date && now && date.getTime() <= now)
+}
+
+function isPausedStore({ selectedStore, userData, now }) {
+  if (!selectedStore || isDraftStore({ selectedStore, userData })) return false
+
+  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
+  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
+  const effectiveStatus = storeStatus || userStatus
+
+  return (
+    selectedStore?.isBillingBlocked === true ||
+    ['blocked', 'canceled', 'cancelled', 'past_due'].includes(effectiveStatus) ||
+    isTrialExpired(selectedStore, userData, now)
+  )
+}
+
+function hasConfiguredPaymentMethods(store) {
+  if (!store) return false
+
+  const pix = store.pix || {}
+  const settingsPix = store.paymentSettings?.pix || {}
+  const paymentMethods = store.paymentMethods || {}
+  const mercadoPago = store.payments?.mercadoPago || store.payments?.mercadopago || {}
+  const hasPixKey = Boolean(pix.key || settingsPix.key || store.pixKey)
+  const manualPixEnabled = paymentMethods.pix !== false && (paymentMethods.pix === true || pix.enabled === true || settingsPix.enabled === true || hasPixKey)
+  const cashOrCardExplicitlyEnabled =
+    paymentMethods.cash === true ||
+    paymentMethods.card === true ||
+    paymentMethods.credit === true ||
+    paymentMethods.debit === true
+  const onlinePaymentEnabled =
+    mercadoPago.enabled === true &&
+    String(mercadoPago.status || '').toLowerCase() === 'active'
+
+  return Boolean(
+    store.billingMethodConfigured ||
+      onlinePaymentEnabled ||
+      cashOrCardExplicitlyEnabled ||
+      (hasPixKey && manualPixEnabled)
+  )
+}
+
 function getTodayOpeningHoursLabel(store) {
   const today = DASHBOARD_DAYS[new Date().getDay()]
   const openingHours =
@@ -566,7 +628,7 @@ function safeSetLocalStorage(key, value) {
 }
 
 function getStoreSlug(store) {
-  return store?.storeSlug || store?.slug || store?.id || ''
+  return store?.storeSlug || store?.slug || ''
 }
 
 function getStoreKeys(store) {
@@ -591,7 +653,7 @@ function isStoreOpen(store) {
 function getStorePublicUrl(store) {
   const slug = getStoreSlug(store)
   const base = String(PUBLIC_STORE_BASE_URL || '').replace(/\/$/, '')
-  return slug ? `${base}/${slug}` : base
+  return slug ? `${base}/${slug}` : ''
 }
 
 function getStoreLogoUrl(store) {
@@ -1493,6 +1555,8 @@ const merchantName =
 
 const loading = loadingStores || loadingOrders
 const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
+const storeIsDraft = isDraftStore({ selectedStore, userData })
+const storeIsPaused = isPausedStore({ selectedStore, userData, now: slaNow })
 
 const activeUsers = usePresence(selectedStore?.id || selectedStore?.storeId, true)
 const menuPeopleCount = Number(activeUsers || 0)
@@ -1530,6 +1594,16 @@ useEffect(() => {
   const handleToggleStoreOpen = useCallback(async () => {
     if (!selectedStore || storeActionLoading) return
 
+    if (storeIsDraft) {
+      showToast('info', 'Ative o teste grátis para publicar sua loja e começar a receber pedidos.')
+      return
+    }
+
+    if (storeIsPaused) {
+      showToast('warning', 'Regularize ou reative a assinatura antes de publicar sua loja.')
+      return
+    }
+
     const storeDocId = getStoreDocId(selectedStore)
 
     if (!storeDocId) {
@@ -1555,7 +1629,7 @@ useEffect(() => {
     } finally {
       setStoreActionLoading(false)
     }
-  }, [selectedStore, showToast, storeActionLoading])
+  }, [selectedStore, showToast, storeActionLoading, storeIsDraft, storeIsPaused])
 
   useEffect(() => {
     const uid = user?.uid
@@ -1578,8 +1652,8 @@ useEffect(() => {
         id: storeDoc.id,
         storeId: data.storeId || storeDoc.id,
         storeDocId: data.storeDocId || storeDoc.id,
-        storeSlug: data.storeSlug || data.slug || storeDoc.id,
-        slug: data.slug || data.storeSlug || storeDoc.id,
+        storeSlug: data.storeSlug || data.slug || '',
+        slug: data.slug || data.storeSlug || '',
       }
     }
 
@@ -2018,6 +2092,26 @@ subscribeOrders(query(
       }
     }
 
+    if (storeIsPaused) {
+      return {
+        title: 'Regularize sua assinatura para voltar a vender',
+        description: 'Sua loja não está publicada para novos pedidos. Reative ou regularize a assinatura antes de divulgar o cardápio.',
+        cta: 'Ver assinatura',
+        href: '/dashboard/billing',
+        tone: 'red',
+      }
+    }
+
+    if (storeIsDraft) {
+      return {
+        title: 'Ative o teste grátis para publicar sua loja',
+        description: 'Sua loja está em modo rascunho. Conclua a configuração da assinatura para liberar o cardápio público e começar a receber pedidos.',
+        cta: 'Ativar teste grátis',
+        href: '/dashboard/billing',
+        tone: 'orange',
+      }
+    }
+
     if (!isStoreOpen(selectedStore)) {
       return {
         title: 'Abra sua loja',
@@ -2065,28 +2159,41 @@ subscribeOrders(query(
       href: '/dashboard/stats',
       tone: 'emerald',
     }
-  }, [products, categories, selectedStore, dashboardData])
+  }, [products, categories, selectedStore, dashboardData, storeIsDraft, storeIsPaused])
 
   const onboardingChecklist = useMemo(() => {
     const totalProducts = Array.isArray(products) ? products.length : 0
     const totalCategories = Array.isArray(categories) ? categories.length : 0
-    const hasLogo = Boolean(selectedStore?.logoUrl || selectedStore?.imageUrl)
-    const hasDeliveryFees = Object.keys(selectedStore?.deliveryFees || {}).length > 0
-    const isOpenNow = isStoreOpen(selectedStore)
+    const hasPaymentConfig = hasConfiguredPaymentMethods(selectedStore)
+    const hasFulfillmentConfig = Boolean(
+      selectedStore?.acceptPickup !== undefined ||
+      selectedStore?.acceptDelivery !== undefined ||
+      selectedStore?.deliveryFee !== undefined ||
+      Object.keys(selectedStore?.deliveryFees || {}).length > 0
+    )
+    const hasOpeningHours = Boolean(
+      selectedStore?.openingHours ||
+      selectedStore?.businessHours ||
+      selectedStore?.hours ||
+      (selectedStore?.hoursOpen && selectedStore?.hoursClose)
+    )
+    const hasPublicPreview = Boolean(storeSlug)
+    const hasTestOrder = Array.isArray(orders) && orders.length > 0
 
     const steps = [
-      { label: 'Adicionar logo da loja', done: hasLogo },
-      { label: 'Criar categoria', done: totalCategories > 0 },
-      { label: 'Cadastrar produto', done: totalProducts > 0 },
-      { label: 'Configurar entrega', done: hasDeliveryFees },
-      { label: 'Abrir loja', done: isOpenNow },
+      { label: 'Configurar formas de pagamento', done: hasPaymentConfig, to: '/dashboard/pagamentos', actionLabel: 'Configurar' },
+      { label: 'Cadastrar produtos e categorias', done: totalProducts > 0 && totalCategories > 0, to: '/dashboard/menu', actionLabel: 'Abrir cardápio' },
+      { label: 'Configurar retirada e entrega', done: hasFulfillmentConfig, to: '/dashboard/settings', actionLabel: 'Configurar' },
+      { label: 'Configurar horários de funcionamento', done: hasOpeningHours, to: '/dashboard/settings', actionLabel: 'Ajustar horários' },
+      { label: 'Revisar link público e QR Code do cardápio', done: hasPublicPreview, to: '/dashboard/qrcodes', actionLabel: 'Ver QR Code' },
+      { label: 'Fazer um pedido de teste', done: hasTestOrder, to: storeIsDraft || storeIsPaused ? '/dashboard/billing' : (storeSlug ? `/${storeSlug}` : '/dashboard/menu'), actionLabel: storeIsDraft ? 'Ativar teste' : storeIsPaused ? 'Reativar' : 'Testar loja' },
     ]
 
     const completed = steps.filter((step) => step.done).length
     const percent = Math.round((completed / steps.length) * 100)
 
     return { steps, completed, total: steps.length, percent }
-  }, [products, categories, selectedStore])
+  }, [products, categories, selectedStore, orders, storeSlug, storeIsDraft, storeIsPaused])
 
   const rawTrialEndsAt = selectedStore?.trialEndsAt || userData?.trialEndsAt
   const trialEndsAt = toDate(rawTrialEndsAt)
@@ -2122,13 +2229,17 @@ subscribeOrders(query(
 
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${
-                      isStoreOpen(selectedStore)
+                      storeIsDraft
+                        ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/50'
+                        : storeIsPaused
+                        ? 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
+                        : isStoreOpen(selectedStore)
                         ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/50'
                         : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
                     }`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full bg-current ${isStoreOpen(selectedStore) ? 'animate-pulse' : ''}`} />
-                    {isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada'}
+                    <span className={`h-1.5 w-1.5 rounded-full bg-current ${!storeIsDraft && !storeIsPaused && isStoreOpen(selectedStore) ? 'animate-pulse' : ''}`} />
+                    {storeIsDraft ? 'Loja em rascunho' : storeIsPaused ? 'Loja pausada' : isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada'}
                   </span>
 
                   <span
@@ -2221,6 +2332,24 @@ subscribeOrders(query(
                     )}
                   </button>
 
+                  {storeIsDraft ? (
+                    <Link
+                      to="/dashboard/billing"
+                      className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-[#f97316] to-[#ea580c] px-4 text-[13px] font-black text-white shadow-[0_4px_12px_-2px_rgba(249,115,22,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] ring-1 ring-inset ring-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:from-[#ea580c] hover:to-[#c2410c] active:scale-[0.98] sm:min-w-[170px]"
+                    >
+                      <FiCreditCard size={16} className="shrink-0" />
+                      <span className="truncate">Ativar teste grátis</span>
+                    </Link>
+                  ) : storeIsPaused ? (
+                    <Link
+                      to="/dashboard/billing"
+                      className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 text-[13px] font-black text-white shadow-sm transition hover:bg-red-700 active:scale-[0.98] sm:min-w-[170px]"
+                    >
+                      <FiCreditCard size={16} className="shrink-0" />
+                      <span className="truncate">Reativar assinatura</span>
+                    </Link>
+                  ) : storePublicUrl && (
+                    <>
                   <a
                     href={storePublicUrl}
                     target="_blank"
@@ -2240,6 +2369,8 @@ subscribeOrders(query(
                   >
                     <FiCopy size={16} />
                   </button>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 xl:w-full">
@@ -2291,6 +2422,31 @@ subscribeOrders(query(
       ) : null}
 
       <div className="px-4 py-4 pb-8 sm:px-6 lg:px-8">
+        {selectedStore && storeIsDraft && (
+          <div className="mb-4 rounded-3xl border border-orange-200 bg-orange-50/90 p-4 shadow-sm ring-1 ring-orange-100/70 dark:border-orange-900/40 dark:bg-orange-950/20 sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#f97316] shadow-sm dark:bg-zinc-900">
+                  <FiShield size={20} />
+                </span>
+                <div>
+                  <h2 className="text-sm font-black text-[#111827] dark:text-zinc-100">Sua loja ainda não está publicada</h2>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-[#6b7280] dark:text-zinc-400">
+                    Ative o teste grátis para liberar o link público e começar a receber pedidos.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/dashboard/billing"
+                className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] sm:w-auto"
+              >
+                <FiCreditCard size={15} />
+                Ativar teste grátis
+              </Link>
+            </div>
+          </div>
+        )}
+
         {loadingStores ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((item) => (
@@ -2314,7 +2470,9 @@ subscribeOrders(query(
                   Bem-vindo à sua nova loja!
                 </h2>
                 <p className="mt-4 max-w-xl text-lg leading-8 text-[#6b7280] dark:text-zinc-400">
-                  Sua loja foi criada com sucesso e os {isTrialActive && trialDaysRemaining !== null ? `${trialDaysRemaining} dias de teste grátis` : 'dias de teste'} já estão ativos. Agora só falta configurar seu cardápio para começar a vender.
+                  {storeIsDraft
+                    ? 'Sua loja foi criada em modo rascunho. Configure o painel agora e ative o teste grátis quando estiver pronto para publicar.'
+                    : `Sua loja foi criada com sucesso e os ${isTrialActive && trialDaysRemaining !== null ? `${trialDaysRemaining} dias de teste grátis` : 'dias de teste'} já estão ativos. Agora só falta configurar seu cardápio para começar a vender.`}
                 </p>
               </div>
 
@@ -2359,23 +2517,99 @@ subscribeOrders(query(
                 </div>
               </div>
 
+              <div id="primeiros-passos" className="border-t border-gray-100 bg-white px-8 py-6 dark:border-zinc-800 dark:bg-zinc-900 sm:px-12">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#f97316]">Primeiros passos</p>
+                    <h3 className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100">Bem-vindo à sua nova loja!</h3>
+                    <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
+                      Siga estes passos para deixar sua loja pronta para receber pedidos.
+                    </p>
+                    {storeIsDraft && (
+                      <p className="mt-2 text-xs font-bold text-[#f97316]">
+                        Sua loja ainda está em rascunho. Ative o teste grátis para publicar e começar a receber pedidos.
+                      </p>
+                    )}
+                  </div>
+                  <div className="w-full max-w-[180px]">
+                    <div className="h-2 rounded-full bg-gray-100 dark:bg-zinc-800">
+                      <div
+                        className="h-2 rounded-full bg-[#f97316] transition-all"
+                        style={{ width: `${onboardingChecklist.percent}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-sm font-black text-[#111827] dark:text-zinc-100">
+                      {onboardingChecklist.completed} de {onboardingChecklist.total} concluídos
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  {onboardingChecklist.steps.map((step) => (
+                    <div
+                      key={step.label}
+                      className="flex items-center justify-between rounded-2xl border border-gray-100 bg-[#fafafa] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950"
+                    >
+                      <span className="text-sm font-semibold text-[#111827] dark:text-zinc-200">{step.label}</span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
+                            step.done
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                          }`}
+                        >
+                          {step.done ? 'Concluído' : 'Pendente'}
+                        </span>
+                        {!step.done && step.to && (
+                          <Link
+                            to={step.to}
+                            className="inline-flex h-8 items-center justify-center rounded-xl border border-orange-200 bg-white px-3 text-xs font-black text-[#f97316] transition hover:bg-orange-50 dark:border-orange-900/50 dark:bg-zinc-950 dark:hover:bg-orange-950/20"
+                          >
+                            {step.actionLabel || 'Configurar'}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="border-t border-gray-100 bg-gray-50 px-8 py-6 dark:border-zinc-800 dark:bg-zinc-950/60 sm:px-12">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h4 className="text-sm font-black text-[#111827] dark:text-zinc-100">Abra a loja quando estiver pronta</h4>
-                    <p className="mt-1 text-sm text-[#6b7280] dark:text-zinc-400">Sua loja nasce fechada para você arrumar a casa primeiro.</p>
+                    <h4 className="text-sm font-black text-[#111827] dark:text-zinc-100">
+                      {storeIsDraft ? 'Ative o teste grátis para publicar' : storeIsPaused ? 'Regularize a assinatura para publicar' : 'Abra a loja quando estiver pronta'}
+                    </h4>
+                    <p className="mt-1 text-sm text-[#6b7280] dark:text-zinc-400">
+                      {storeIsDraft
+                        ? 'Sua loja está em rascunho. O link público só recebe pedidos depois da ativação.'
+                        : storeIsPaused
+                        ? 'Sua loja está pausada para novos pedidos. Reative ou regularize a assinatura para voltar a publicar.'
+                        : 'Sua loja nasce fechada para você arrumar a casa primeiro.'}
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleToggleStoreOpen}
-                    disabled={storeActionLoading}
-                    className="inline-flex h-11 min-w-[160px] items-center justify-center gap-2 rounded-2xl bg-[#111827] px-6 text-sm font-black text-white shadow-sm transition hover:bg-black active:scale-95 disabled:opacity-50"
-                  >
-                    <span className="flex h-4 w-4 items-center justify-center">
-                      {storeActionLoading ? <FiLoader className="animate-spin" /> : <FiPower />}
-                    </span>
-                    {storeActionLoading ? 'Atualizando...' : 'Abrir loja agora'}
-                  </button>
+                  {storeIsDraft || storeIsPaused ? (
+                    <Link
+                      to="/dashboard/billing"
+                      className={`inline-flex h-11 min-w-[160px] items-center justify-center gap-2 rounded-2xl px-6 text-sm font-black text-white shadow-sm transition active:scale-95 ${storeIsPaused ? 'bg-red-600 hover:bg-red-700' : 'bg-[#f97316] hover:bg-[#ea580c]'}`}
+                    >
+                      <FiCreditCard />
+                      {storeIsPaused ? 'Reativar assinatura' : 'Ativar teste grátis'}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleToggleStoreOpen}
+                      disabled={storeActionLoading}
+                      className="inline-flex h-11 min-w-[160px] items-center justify-center gap-2 rounded-2xl bg-[#111827] px-6 text-sm font-black text-white shadow-sm transition hover:bg-black active:scale-95 disabled:opacity-50"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {storeActionLoading ? <FiLoader className="animate-spin" /> : <FiPower />}
+                      </span>
+                      {storeActionLoading ? 'Atualizando...' : 'Abrir loja agora'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2569,8 +2803,10 @@ subscribeOrders(query(
               <div className="min-w-0 rounded-[1.7rem] border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-zinc-800">
                   <div>
-                    <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Pedidos recentes</p>
-                    <p className="mt-1 text-xs text-[#6b7280] dark:text-zinc-400">Últimos pedidos recebidos pela loja</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-black text-[#111827] dark:text-zinc-100">Gerenciamento de pedidos</p>
+                    </div>
+                    <p className="mt-1 text-xs text-[#6b7280] dark:text-zinc-400">Operação e acompanhamento em tempo real.</p>
                   </div>
                   <Link to="/dashboard/orders" className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#f97316] to-[#ea580c] px-4 text-[13px] font-black text-white shadow-[0_4px_12px_-2px_rgba(249,115,22,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] ring-1 ring-inset ring-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:from-[#ea580c] hover:to-[#c2410c] hover:shadow-[0_6px_16px_-3px_rgba(249,115,22,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.98] dark:shadow-[0_4px_16px_-2px_rgba(249,115,22,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] dark:hover:shadow-[0_6px_20px_-3px_rgba(249,115,22,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] dark:ring-white/10">
                     Ver todos <FiArrowUpRight size={14} />
@@ -2612,28 +2848,35 @@ subscribeOrders(query(
                       <span className="flex items-center gap-3"><FiBarChart2 /> Ver estatísticas</span>
                       <FiChevronRight />
                     </Link>
+                    {!storeIsDraft && !storeIsPaused && storePublicUrl && (
                     <a href={storePublicUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-gray-100 p-4 text-sm font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-800 dark:text-zinc-100 dark:hover:bg-orange-950/20">
                       <span className="flex items-center gap-3"><FiLayout /> Abrir cardápio público</span>
                       <FiExternalLink />
                     </a>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* CHECKLIST DA LOJA PRONTA */}
-            <div className="mt-5 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
+            {/* CHECKLIST INICIAL */}
+            <div id="primeiros-passos" className="mt-5 rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9ca3af] dark:text-zinc-500">
-                    Loja pronta
+                    Primeiros passos
                   </p>
                   <h3 className="mt-1 text-lg font-black text-[#111827] dark:text-zinc-100">
-                    {onboardingChecklist.completed} de {onboardingChecklist.total} etapas concluídas
+                    Bem-vindo à sua nova loja!
                   </h3>
                   <p className="mt-1 text-sm font-medium text-[#6b7280] dark:text-zinc-400">
-                    Complete os passos para deixar sua operação redonda.
+                    Siga estes passos para deixar sua loja pronta para receber pedidos.
                   </p>
+                  {storeIsDraft && (
+                    <p className="mt-2 text-xs font-bold text-[#f97316]">
+                      Sua loja ainda está em rascunho. Ative o teste grátis para publicar e começar a receber pedidos.
+                    </p>
+                  )}
                 </div>
 
                 <div className="w-full max-w-[180px]">
@@ -2656,15 +2899,25 @@ subscribeOrders(query(
                     className="flex items-center justify-between rounded-2xl border border-gray-100 dark:border-zinc-800 bg-[#fafafa] dark:bg-zinc-950 px-4 py-3"
                   >
                     <span className="text-sm font-semibold text-[#111827] dark:text-zinc-200">{step.label}</span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
-                        step.done
-                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
-                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
-                      }`}
-                    >
-                      {step.done ? 'Concluído' : 'Pendente'}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
+                          step.done
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                        }`}
+                      >
+                        {step.done ? 'Concluído' : 'Pendente'}
+                      </span>
+                      {!step.done && step.to && (
+                        <Link
+                          to={step.to}
+                          className="inline-flex h-8 items-center justify-center rounded-xl border border-orange-200 bg-white px-3 text-xs font-black text-[#f97316] transition hover:bg-orange-50 dark:border-orange-900/50 dark:bg-zinc-950 dark:hover:bg-orange-950/20"
+                        >
+                          {step.actionLabel || 'Configurar'}
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

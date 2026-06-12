@@ -115,22 +115,9 @@ export default function ProtectedRoute({
       onboardingStatus === 'billing_pending'
 
     const isDashboardRoute = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/')
-    const isBillingRoute =
-      location.pathname === '/dashboard/billing' ||
-      location.pathname === '/dashboard/assinatura'
 
     if (!hasMerchantStore && isDashboardRoute) {
       return <Navigate to="/onboarding" replace state={{ reason: 'store_required' }} />
-    }
-
-    if (isBillingPending && isDashboardRoute && !isBillingRoute) {
-      return (
-        <Navigate
-          to="/dashboard/billing?reason=billing_required"
-          replace
-          state={{ reason: 'billing_required', from: location.pathname }}
-        />
-      )
     }
 
     const isPendingMerchant =

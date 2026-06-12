@@ -36,6 +36,7 @@ import {
 
 import { db } from '../../../../services/firebase'
 import { uploadImageToCloudinary } from '../../../../services/cloudinary'
+import { UPGRADE_PROMPT_COPY, hasPlanFeature } from '../../../../utils/planCatalog'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
 import {
   EMPTY_PRODUCT_FORM,
@@ -561,6 +562,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
     if (imgRef.current) imgRef.current.value = ''
   }, [imagePreview, setField])
 
+  const schedulingAllowed = hasPlanFeature(store || {}, 'scheduling')
+
   const handleSave = useCallback(async () => {
     if (!form.name.trim()) {
       setSection('basic')
@@ -617,10 +620,12 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         preparationTime: form.preparationTime?.trim() || '',
         optionGroups: sanitizeOptionGroupsForSave(form.optionGroups),
         extras: Array.isArray(form.extras) ? form.extras : [],
-        scheduling: sanitizeProductSchedulingForSave(form.scheduling),
         isDeleted: false,
         updatedAt: serverTimestamp(),
       })
+      if (schedulingAllowed) {
+        data.scheduling = sanitizeProductSchedulingForSave(form.scheduling)
+      }
 
       if (editingProduct?.id) {
         await updateDoc(doc(db, 'products', editingProduct.id), data)
@@ -638,7 +643,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
       setSaving(false)
       setImageUploading(false)
     }
-  }, [form, imageFile, store, categories, editingProduct, onToast, onClose])
+  }, [form, imageFile, store, categories, editingProduct, onToast, onClose, schedulingAllowed])
 
   const visibleImage = imagePreview || form.imageUrl
   const activeCategory = useMemo(() => categories.find((c) => c.id === form.categoryId), [categories, form.categoryId])
@@ -992,6 +997,21 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                     Use esta seção para vender bolos, kits festa, marmitas programadas e outros produtos que precisam de data marcada.
                   </InfoCallout>
 
+                  {!schedulingAllowed && (
+                    <SectionCard title={UPGRADE_PROMPT_COPY.title} description={UPGRADE_PROMPT_COPY.description} icon={FiAlertTriangle}>
+                      <div className="flex flex-wrap gap-3">
+                        <a href="/dashboard/billing" className={ui.primaryButton}>
+                          {UPGRADE_PROMPT_COPY.primaryAction}
+                        </a>
+                        <a href="/plans" className={ui.secondaryButton}>
+                          {UPGRADE_PROMPT_COPY.secondaryAction}
+                        </a>
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {schedulingAllowed && (
+                    <>
                   <SectionCard title="Como este produto pode ser vendido?" description="Defina se o produto segue a loja, aceita pedido imediato ou exige data marcada." icon={FiCalendar}>
                     <div className="grid gap-3">
                       {[
@@ -1169,6 +1189,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       Horarios personalizados por produto e capacidade por slot ficam fora desta fase.
                     </p>
                   </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

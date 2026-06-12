@@ -671,7 +671,7 @@ function MobileMoreSheet({
                       Prato<span className="text-[#f97316]">By</span>
                     </p>
                     <span className="rounded-full bg-orange-50 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-[#f97316] dark:text-zinc-400 ring-1 ring-orange-100/50 dark:ring-zinc-700/50 shadow-sm">
-                      {import.meta.env.VITE_APP_VERSION || 'v0.0.7'}
+                      {import.meta.env.VITE_APP_VERSION || 'v0.0.8'}
                     </span>
                   </div>
                   <p className="text-[10px] font-bold text-[#6b7280] dark:text-zinc-500 uppercase tracking-wider">
@@ -1084,7 +1084,7 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
           <PratoByMark collapsed={collapsed} />
           {!collapsed && (
             <div className="absolute right-3 top-3 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-black tracking-wide text-gray-500 shadow-sm dark:bg-zinc-800 dark:text-zinc-400">
-              {import.meta.env.VITE_APP_VERSION || 'v0.0.7'}
+              {import.meta.env.VITE_APP_VERSION || 'v0.0.8'}
             </div>
           )}
         </div>
@@ -1441,9 +1441,13 @@ export default function DashboardLayout() {
   const storeSlug =
     userData?.storeSlug ||
     userData?.slug ||
-    (Array.isArray(userData?.storeKeys) ? userData.storeKeys.find(Boolean) : '') ||
     ''
-  const publicStoreHref = storeSlug ? `/${String(storeSlug).replace(/^\/+/, '')}` : ''
+  const dashboardSubscriptionStatus = String(userData?.subscriptionStatus || '').trim()
+  const publicStoreHref =
+    storeSlug &&
+    !['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'].includes(dashboardSubscriptionStatus)
+      ? `/${String(storeSlug).replace(/^\/+/, '')}`
+      : ''
 
   const COMMANDS = useMemo(() => {
   const navCommands = NAV_SECTIONS.flatMap((section) =>

@@ -2,23 +2,22 @@
 // Aba de cupons: lista com buscas, filtros, cards mobile-first e tabela desktop premium.
 
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  FiCalendar,
-  FiCheck,
+  FiAlertTriangle,
   FiEdit2,
-  FiHash,
   FiPlus,
   FiSearch,
   FiTag,
   FiTrash2,
-  FiX,
 } from 'react-icons/fi'
 
 import MenuEmptyState from './MenuEmptyState'
 import { formatMoney } from '../utils/menuFormatters'
 import { COUPON_STATUS_FILTERS } from '../utils/couponPayloads'
 import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
+import { UPGRADE_PROMPT_COPY } from '../../../../utils/planCatalog'
 
 // Formata data e hora para exibição amigável em PT-BR
 function formatDateTime(value) {
@@ -69,13 +68,14 @@ function getCouponVigencyStatus(coupon) {
 /**
  * @param {{
  *   coupons: object[],
+ *   couponsAllowed: boolean,
  *   onEdit: fn,
  *   onDelete: fn,
  *   onToggleActive: fn,
  *   onCreateCoupon: fn,
  * }} props
  */
-export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActive, onCreateCoupon }) {
+export default function MenuCouponsTab({ coupons, couponsAllowed = true, onEdit, onDelete, onToggleActive, onCreateCoupon }) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
 
@@ -97,6 +97,30 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
 
   return (
     <div className="space-y-6">
+      {!couponsAllowed && (
+        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-orange-900 shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[#f97316] shadow-sm dark:bg-slate-900">
+                <FiAlertTriangle size={18} />
+              </span>
+              <div>
+                <p className="text-sm font-black">{UPGRADE_PROMPT_COPY.title}</p>
+                <p className="mt-1 text-xs font-bold leading-5 text-orange-800/80 dark:text-orange-100/80">
+                  {UPGRADE_PROMPT_COPY.description}
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/dashboard/billing"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+            >
+              {UPGRADE_PROMPT_COPY.primaryAction}
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Top Filter and Search Bar */}
       <div className="flex flex-col gap-3 rounded-[2rem] border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm transition-all sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
@@ -131,13 +155,22 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
           </div>
 
           {/* Create Button */}
-          <button
-            type="button"
-            onClick={onCreateCoupon}
-            className="inline-flex h-11 md:h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#f97316] to-[#ea580c] px-4 text-sm md:text-xs font-black text-white shadow-md shadow-orange-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-orange-500/40 active:translate-y-0 active:scale-95 sm:w-auto shrink-0"
-          >
-            <FiPlus size={15} /> Novo cupom
-          </button>
+          {couponsAllowed ? (
+            <button
+              type="button"
+              onClick={onCreateCoupon}
+              className="inline-flex h-11 md:h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#f97316] to-[#ea580c] px-4 text-sm md:text-xs font-black text-white shadow-md shadow-orange-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-orange-500/40 active:translate-y-0 active:scale-95 sm:w-auto shrink-0"
+            >
+              <FiPlus size={15} /> Novo cupom
+            </button>
+          ) : (
+            <Link
+              to="/dashboard/billing"
+              className="inline-flex h-11 md:h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f97316] px-4 text-sm md:text-xs font-black text-white shadow-md shadow-orange-500/20 transition-all duration-200 hover:bg-[#ea580c] active:scale-95 sm:w-auto shrink-0"
+            >
+              {UPGRADE_PROMPT_COPY.primaryAction}
+            </Link>
+          )}
         </div>
       </div>
 
@@ -178,12 +211,13 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                           type="checkbox"
                           checked={Boolean(coupon.active)}
                           onChange={() => onToggleActive(coupon.id, coupon.active !== false)}
+                          disabled={!couponsAllowed && !coupon.active}
                           className="peer sr-only"
                           id={`toggle-mob-${coupon.id}`}
                         />
                         <label
                           htmlFor={`toggle-mob-${coupon.id}`}
-                          className={`block h-6 w-11 cursor-pointer rounded-full transition-colors duration-300 ${
+                          className={`block h-6 w-11 rounded-full transition-colors duration-300 ${!couponsAllowed && !coupon.active ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                             coupon.active ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-700 shadow-inner'
                           }`}
                         >
@@ -389,12 +423,13 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
                                 type="checkbox"
                                 checked={Boolean(coupon.active)}
                                 onChange={() => onToggleActive(coupon.id, coupon.active !== false)}
+                                disabled={!couponsAllowed && !coupon.active}
                                 className="sr-only"
                                 id={`toggle-dt-${coupon.id}`}
                               />
                               <label
                                 htmlFor={`toggle-dt-${coupon.id}`}
-                                className={`block h-6 w-11 cursor-pointer rounded-full transition-colors duration-300 ${
+                                className={`block h-6 w-11 rounded-full transition-colors duration-300 ${!couponsAllowed && !coupon.active ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                                   coupon.active ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-inner shadow-orange-900/20' : 'bg-gray-300 dark:bg-slate-700 shadow-inner'
                                 }`}
                               >
@@ -450,7 +485,9 @@ export default function MenuCouponsTab({ coupons, onEdit, onDelete, onToggleActi
           action={
             search || filter !== 'all'
               ? { label: 'Limpar filtros', onClick: () => { setSearch(''); setFilter('all'); } }
-              : { label: 'Criar meu primeiro cupom', onClick: onCreateCoupon }
+              : couponsAllowed
+                ? { label: 'Criar meu primeiro cupom', onClick: onCreateCoupon }
+                : { label: UPGRADE_PROMPT_COPY.primaryAction, onClick: onCreateCoupon }
           }
         />
       )}

@@ -10,15 +10,12 @@ import ScrollToTop from '../utils/ScrollToTop'
 // Públicas
 
 // Admin
-import AdminLayout from '../components/layouts/AdminLayout'
 
 // Lojista
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 
 // Layouts / Proteção
 import ProtectedRoute from '../components/auth/ProtectedRoute'
-import { GlobalOrderAlert } from '../components/merchant/GlobalOrderAlert'
-import DashboardLayout from '../components/layouts/DashboardLayout'
 
 // Ícones dos placeholders
 import {
@@ -48,6 +45,14 @@ const PlansPage = lazy(() => import('../pages/PlansPage'))
 const RestaurantExamplesPage = lazy(() => import('../pages/RestaurantExamplesPage'))
 const PrivacyPage = lazy(() => import('../pages/PrivacyPage'))
 const TermsPage = lazy(() => import('../pages/TermsPage'))
+
+const AdminLayout = lazy(() => import('../components/layouts/AdminLayout'))
+const DashboardLayout = lazy(() => import('../components/layouts/DashboardLayout'))
+const GlobalOrderAlert = lazy(() =>
+  import('../components/merchant/GlobalOrderAlert').then((module) => ({
+    default: module.GlobalOrderAlert,
+  }))
+)
 
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'))
 const CreateStorePage = lazy(() => import('../pages/admin/CreateStorePage'))

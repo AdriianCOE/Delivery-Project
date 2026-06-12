@@ -23,6 +23,7 @@ import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
+import { UPGRADE_PROMPT_COPY, hasPlanFeature } from '../../utils/planCatalog'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -919,6 +920,7 @@ export default function QRCodePage() {
     () => tables.filter((table) => table.isActive !== false).length,
     [tables]
   )
+  const tableQrAllowed = hasPlanFeature(selectedStore || {}, 'tableQrCode')
 
   // ─ Toast ─
   const [toast, setToast] = useState(null)
@@ -931,6 +933,10 @@ export default function QRCodePage() {
 
   async function handleCreateTable({ label, number }) {
     if (!storeId || addTableLoading) return
+    if (!tableQrAllowed) {
+      showToast('warning', UPGRADE_PROMPT_COPY.description)
+      return
+    }
 
     setAddTableLoading(true)
 
@@ -1166,6 +1172,7 @@ export default function QRCodePage() {
               title="QR por mesa"
               description="Cadastre as mesas e tokens agora. Download e impressão serão liberados quando o checkout por mesa estiver ativo."
               action={
+                tableQrAllowed ? (
                 <button
                   id="open-add-table-modal"
                   type="button"
@@ -1175,9 +1182,32 @@ export default function QRCodePage() {
                   <FiPlus size={14} />
                   Adicionar mesa
                 </button>
+                ) : (
+                  <a
+                    href="/dashboard/billing"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#f97316] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600 dark:shadow-orange-900/30"
+                  >
+                    {UPGRADE_PROMPT_COPY.primaryAction}
+                  </a>
+                )
               }
             >
               {/* Banner de aviso — checkout por mesa ainda não está ativo */}
+              {!tableQrAllowed && (
+                <div className="mb-5 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
+                  <FiLock size={15} className="mt-0.5 shrink-0 text-orange-600 dark:text-orange-400" />
+                  <div>
+                    <p className="text-sm font-black text-orange-900 dark:text-orange-100">
+                      {UPGRADE_PROMPT_COPY.title}
+                    </p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-orange-800 dark:text-orange-300">
+                      {UPGRADE_PROMPT_COPY.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {tableQrAllowed && (
               <div className="mb-5 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
                 <FiLock size={15} className="mt-0.5 shrink-0 text-orange-600 dark:text-orange-400" />
                 <p className="text-xs font-bold leading-5 text-orange-800 dark:text-orange-300">
@@ -1186,8 +1216,9 @@ export default function QRCodePage() {
                   Baixar e imprimir os QR Codes serão liberados quando o fluxo de pedido por mesa estiver ativo.
                 </p>
               </div>
+              )}
 
-              {tablesLoading ? (
+              {!tableQrAllowed ? null : tablesLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <FiLoader size={22} className="animate-spin text-[#f97316]" />
                 </div>
@@ -1209,7 +1240,7 @@ export default function QRCodePage() {
                 </div>
               )}
 
-              {tables.length > 0 && (
+              {tableQrAllowed && tables.length > 0 && (
                 <div className="mt-5 rounded-xl bg-[#f9fafb] px-4 py-3 dark:bg-zinc-800">
                   <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400">
                     🔒 Cada mesa usa um token seguro único (ex:{' '}

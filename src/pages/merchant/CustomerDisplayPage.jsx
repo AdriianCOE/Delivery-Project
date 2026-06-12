@@ -59,6 +59,7 @@ import {
   getDisplayStoreName,
   getMerchantDisplayLogoUrl,
 } from '../../utils/merchantDisplayBranding'
+import { UPGRADE_PROMPT_COPY, hasPlanFeature } from '../../utils/planCatalog'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -497,7 +498,7 @@ export default function CustomerDisplayPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [newIds, setNewIds] = useState(new Set())
   const [newPrepIds, setNewPrepIds] = useState(new Set())
-  const [storeData, setStoreData] = useState(null)
+  const [storeData, setStoreData] = useState(undefined)
 
   const containerRef = useRef(null)
   const isFirstLoadRef = useRef(true)
@@ -536,9 +537,21 @@ export default function CustomerDisplayPage() {
     )
   }, [storeId])
 
+  const storeLoaded = storeData !== undefined
+  const pickupDisplayAllowed = storeLoaded && storeData
+    ? hasPlanFeature(storeData, 'pickupDisplay')
+    : false
+
   // ── Firestore listener ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!storeId) { setError(new Error('Loja não identificada.')); setLoading(false); return }
+    if (!storeLoaded) { setLoading(true); return }
+    if (!pickupDisplayAllowed) {
+      setAllOrders([])
+      setError(null)
+      setLoading(false)
+      return
+    }
     setLoading(true); setError(null)
     isFirstLoadRef.current = true
 
@@ -603,8 +616,7 @@ export default function CustomerDisplayPage() {
     })
 
     return () => unsub()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, retryKey])
+  }, [storeId, retryKey, storeLoaded, pickupDisplayAllowed])
 
   // ── Auto-refresh TTL every 2 min ───────────────────────────────────────────
   const [tick, setTick] = useState(0)
@@ -614,7 +626,6 @@ export default function CustomerDisplayPage() {
   }, [])
 
   // ── Filtered orders ────────────────────────────────────────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const visibleOrders = useMemo(() => {
     return allOrders.filter((order) => {
       if (isDeliveryOrder(order)) return false       // delivery nunca aparece aqui
@@ -645,6 +656,36 @@ export default function CustomerDisplayPage() {
   const storeName = getDisplayStoreName(storeData, userData)
   const logoUrl   = getMerchantDisplayLogoUrl(storeData, userData)
   const isCSSFullscreen = isFullscreen && !document.fullscreenElement
+
+  if (storeLoaded && storeData && !pickupDisplayAllowed) {
+    return (
+      <div className={cn('flex min-h-screen items-center justify-center px-4', t('bg-zinc-950 text-zinc-100', 'bg-gray-50 text-gray-900'))}>
+        <div className={cn('max-w-md rounded-3xl border p-6 text-center shadow-sm', t('border-zinc-800 bg-zinc-900', 'border-orange-100 bg-white'))}>
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-orange-50 text-[#f97316]">
+            <FiMonitor size={24} />
+          </div>
+          <h1 className="mt-5 text-xl font-black">{UPGRADE_PROMPT_COPY.title}</h1>
+          <p className={cn('mt-2 text-sm font-semibold leading-6', t('text-zinc-300', 'text-gray-600'))}>
+            {UPGRADE_PROMPT_COPY.description}
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link
+              to="/dashboard/billing"
+              className="inline-flex items-center justify-center rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]"
+            >
+              {UPGRADE_PROMPT_COPY.primaryAction}
+            </Link>
+            <Link
+              to="/dashboard"
+              className={cn('inline-flex items-center justify-center rounded-2xl border px-5 py-3 text-sm font-black transition', t('border-zinc-700 text-zinc-200 hover:bg-zinc-800', 'border-gray-200 text-gray-700 hover:bg-gray-50'))}
+            >
+              Voltar ao painel
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div

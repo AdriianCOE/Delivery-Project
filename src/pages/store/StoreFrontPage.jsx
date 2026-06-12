@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import SEO from '../../components/seo/SEO'
 import {
   collection,
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   query,
   where,
   limit,
@@ -166,6 +165,9 @@ function isPublicStoreProjectionActive(data = {}) {
 
 async function findStoreBySlug(db, functionsInstance, slugParam) {
   const cleanSlug = String(slugParam || '').trim().replace(/^\/+|\/+$/g, '')
+  const normalizedSlug = normalizeText(cleanSlug)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
   if (!cleanSlug) return null
 
@@ -212,9 +214,37 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
   }
 
   try {
-    const byStoreSlug = query(collection(db, 'publicStores'), where('storeSlug', '==', cleanSlug), ...publicConstraints, limit(1))
-    const storeSlugSnap = await getDocs(byStoreSlug)
+    const bySlug = query(collection(db, 'publicStores'), where('slug', '==', normalizedSlug), ...publicConstraints, limit(1))
+    const slugSnap = await getDocs(bySlug)
     
+    if (import.meta.env.DEV) {
+      console.log('[StoreFront] publicStores by slug empty:', slugSnap.empty)
+    }
+
+    if (!slugSnap.empty) {
+      const storeDoc = slugSnap.docs[0]
+      const data = storeDoc.data() || {}
+      const canonicalStoreId = getCanonicalPublicStoreId(storeDoc.id, data, cleanSlug)
+      return {
+        ...data,
+        ref: storeDoc.ref,
+        id: canonicalStoreId,
+        docId: canonicalStoreId,
+        storeId: canonicalStoreId,
+        storeDocId: canonicalStoreId,
+        storeSlug: data.storeSlug || data.slug || cleanSlug,
+        slug: data.slug || data.storeSlug || cleanSlug,
+        publicDataSource: 'publicStores',
+      }
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.log('[StoreFront] publicStores slug ignorado:', error.message)
+  }
+
+  try {
+    const byStoreSlug = query(collection(db, 'publicStores'), where('storeSlug', '==', normalizedSlug), ...publicConstraints, limit(1))
+    const storeSlugSnap = await getDocs(byStoreSlug)
+
     if (import.meta.env.DEV) {
       console.log('[StoreFront] publicStores by storeSlug empty:', storeSlugSnap.empty)
     }
@@ -239,32 +269,34 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
     if (import.meta.env.DEV) console.log('[StoreFront] publicStores storeSlug ignorado:', error.message)
   }
 
-  try {
-    const bySlug = query(collection(db, 'publicStores'), where('slug', '==', cleanSlug), ...publicConstraints, limit(1))
-    const slugSnap = await getDocs(bySlug)
+  for (const lookupKey of uniqueTruthy([cleanSlug, normalizedSlug])) {
+    try {
+      const byStoreKeys = query(collection(db, 'publicStores'), where('storeKeys', 'array-contains', lookupKey), ...publicConstraints, limit(1))
+      const storeKeysSnap = await getDocs(byStoreKeys)
 
-    if (import.meta.env.DEV) {
-      console.log('[StoreFront] publicStores by slug empty:', slugSnap.empty)
-    }
-
-    if (!slugSnap.empty) {
-      const storeDoc = slugSnap.docs[0]
-      const data = storeDoc.data() || {}
-      const canonicalStoreId = getCanonicalPublicStoreId(storeDoc.id, data, cleanSlug)
-      return {
-        ...data,
-        ref: storeDoc.ref,
-        id: canonicalStoreId,
-        docId: canonicalStoreId,
-        storeId: canonicalStoreId,
-        storeDocId: canonicalStoreId,
-        storeSlug: data.storeSlug || data.slug || cleanSlug,
-        slug: data.slug || data.storeSlug || cleanSlug,
-        publicDataSource: 'publicStores',
+      if (import.meta.env.DEV) {
+        console.log('[StoreFront] publicStores by storeKeys empty:', lookupKey, storeKeysSnap.empty)
       }
+
+      if (!storeKeysSnap.empty) {
+        const storeDoc = storeKeysSnap.docs[0]
+        const data = storeDoc.data() || {}
+        const canonicalStoreId = getCanonicalPublicStoreId(storeDoc.id, data, cleanSlug)
+        return {
+          ...data,
+          ref: storeDoc.ref,
+          id: canonicalStoreId,
+          docId: canonicalStoreId,
+          storeId: canonicalStoreId,
+          storeDocId: canonicalStoreId,
+          storeSlug: data.storeSlug || data.slug || cleanSlug,
+          slug: data.slug || data.storeSlug || cleanSlug,
+          publicDataSource: 'publicStores',
+        }
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) console.log('[StoreFront] publicStores storeKeys ignorado:', error.message)
     }
-  } catch (error) {
-    if (import.meta.env.DEV) console.log('[StoreFront] publicStores slug ignorado:', error.message)
   }
 
   try {
@@ -638,6 +670,12 @@ function getStoreSlug(store, fallbackSlug) {
     fallbackSlug,
     store?.id,
   )
+}
+
+function getCanonicalPublicSlug(store) {
+  const storeId = firstFilled(store?.id, store?.docId, store?.storeId, store?.storeDocId)
+  const publicSlug = firstFilled(store?.slug, store?.storeSlug)
+  return publicSlug && publicSlug !== storeId ? publicSlug : ''
 }
 
 function normalizeStore(input, fallbackSlug = '') {
@@ -1545,6 +1583,7 @@ function HeaderIconButton({ icon: Icon, label, onClick, active = false }) {
 
 export default function StoreFrontPage() {
   const { slug } = useParams()
+  const navigate = useNavigate()
   const { user, userData, loading: authLoading, hasRole } = useAuth()
   const { cartItems, cartTotal, setStoreKey } = useCart()
 
@@ -2002,6 +2041,18 @@ const handleToggleFavorite = useCallback(() => {
         }
 
         if (foundStore) {
+          const canonicalSlug = getCanonicalPublicSlug(foundStore)
+          const currentSlug = String(slug || '').trim().replace(/^\/+|\/+$/g, '')
+          const accessedByDocId = [foundStore.id, foundStore.docId, foundStore.storeId, foundStore.storeDocId]
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+            .includes(currentSlug)
+
+          if (accessedByDocId && canonicalSlug && canonicalSlug !== currentSlug) {
+            navigate(`/${canonicalSlug}`, { replace: true })
+            return
+          }
+
           setStore(normalizeStore(foundStore, slug))
         } else {
           setStore(null)
@@ -2025,7 +2076,7 @@ const handleToggleFavorite = useCallback(() => {
       isMounted = false
       if (unsubscribe) unsubscribe()
     }
-  }, [slug])
+  }, [navigate, slug])
 
   useEffect(() => {
     if (setStoreKey) {
@@ -2057,22 +2108,16 @@ const handleToggleFavorite = useCallback(() => {
     const productsQuery = query(collection(db, 'publicStores', targetStoreId, 'products'))
 
     if (import.meta.env.DEV) {
-      console.log('[StoreFront] Iniciando buscas em publicStores:', targetStoreId)
+      console.log('[StoreFront] Carregando cardapio publico:', targetStoreId)
     }
 
     setMenuError('')
     setLoadingMenu(true)
 
-    let pendingListeners = 2
-    let latestCategories = null
-    let latestProducts = null
-    let didFallback = false
     let isMounted = true
 
     const loadCatalogFallback = async (reason) => {
-      if (didFallback || !isMounted) return
-
-      didFallback = true
+      if (!isMounted) return
 
       if (import.meta.env.DEV) {
         console.log('[StoreFront] Fallback getPublicCatalog:', reason)
@@ -2115,28 +2160,19 @@ const handleToggleFavorite = useCallback(() => {
       }
     }
 
-    const markLoaded = () => {
-      pendingListeners -= 1
-      if (pendingListeners > 0) return
+    async function loadPublicMenu() {
+      setMenuError('')
+      setLoadingMenu(true)
 
-      if (
-        !didFallback &&
-        Array.isArray(latestCategories) &&
-        Array.isArray(latestProducts) &&
-        latestCategories.length === 0 &&
-        latestProducts.length === 0
-      ) {
-        loadCatalogFallback('publicStores vazio')
-        return
-      }
+      try {
+        const [categoriesSnapshot, productsSnapshot] = await Promise.all([
+          getDocs(categoriesQuery),
+          getDocs(productsQuery),
+        ])
 
-      setLoadingMenu(false)
-    }
+        if (!isMounted) return
 
-    const unsubscribeCategories = onSnapshot(
-      categoriesQuery,
-      (snapshot) => {
-        const nextCategories = snapshot.docs
+        const nextCategories = categoriesSnapshot.docs
           .map((categoryDoc) => ({
             id: categoryDoc.id,
             ...categoryDoc.data(),
@@ -2147,44 +2183,33 @@ const handleToggleFavorite = useCallback(() => {
           .sort(sortByOrderThenName)
 
         if (import.meta.env.DEV) {
-          console.log(`[StoreFront] Categorias: ${snapshot.docs.length} docs -> ${nextCategories.length} visíveis`)
+          console.log(`[StoreFront] Cardapio: ${nextCategories.length} categorias`)
         }
 
-        latestCategories = nextCategories
-        setCategories(nextCategories)
-        markLoaded()
-      },
-      (err) => {
-        if (import.meta.env.DEV) console.error('[StoreFront] Erro nas categorias:', err)
-        loadCatalogFallback('erro categorias publicStores')
-        setMenuError('Não foi possível carregar as categorias.')
-        markLoaded()
-      }
-    )
+        const nextProducts = productsSnapshot.docs.map(normalizeProduct).filter(isProductAvailable).sort(sortByOrderThenName)
+        if (nextCategories.length === 0 && nextProducts.length === 0) {
+          await loadCatalogFallback('publicStores vazio')
+          return
+        }
 
-    const unsubscribeProducts = onSnapshot(
-      productsQuery,
-      (snapshot) => {
-        const nextProducts = snapshot.docs.map(normalizeProduct).filter(isProductAvailable).sort(sortByOrderThenName)
         if (import.meta.env.DEV) {
-          console.log(`[StoreFront] Produtos: ${snapshot.docs.length} docs -> ${nextProducts.length} mapeados`)
+          console.log(`[StoreFront] Cardapio: ${nextCategories.length} categorias, ${nextProducts.length} produtos`)
         }
-        latestProducts = nextProducts
+
+        setCategories(nextCategories)
         setProducts(nextProducts)
-        markLoaded()
-      },
-      (err) => {
-        if (import.meta.env.DEV) console.error('[StoreFront] Erro nos produtos:', err)
-        loadCatalogFallback('erro produtos publicStores')
-        setMenuError('Não foi possível carregar os produtos.')
-        markLoaded()
+        setMenuError('')
+        setLoadingMenu(false)
+      } catch (error) {
+        if (import.meta.env.DEV) console.error('[StoreFront] Erro no publicStores:', error)
+        await loadCatalogFallback('erro publicStores')
       }
-    )
+    }
+
+    loadPublicMenu()
 
     return () => {
       isMounted = false
-      unsubscribeCategories()
-      unsubscribeProducts()
     }
     }, [canPreviewUnavailableStore, slug, store])
 

@@ -47,7 +47,7 @@ const plans = [
       'Taxa por bairro',
       'Campos personalizados',
       'Relatórios avançados',
-      'WhatsApp integrado',
+      'Notificações Push',
       'Suporte prioritário',
     ],
     cta: 'Começar 14 dias grátis',

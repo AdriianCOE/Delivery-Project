@@ -108,6 +108,100 @@ function orderStoreKeys(data) {
         );
     }
 
+    function planRank(plan) {
+      return plan == 'premium' ? 3 : plan == 'professional' ? 2 : plan == 'essential' ? 1 : 0;
+    }
+
+    function featureRequiredRank(feature) {
+      return feature in ['advancedReports', 'customBranding', 'removePratoByBranding', 'automationRules', 'prioritySupport']
+        ? 3
+        : feature in ['pickupDisplay', 'tableQrCode', 'dineInOrdering', 'scheduling', 'coupons', 'deliveryZonesAdvanced', 'multiUser']
+          ? 2
+          : 1;
+    }
+
+    function storeEffectivePlan(data) {
+      return data.get('isBillingBlocked', false) == true
+        || data.get('isBlocked', false) == true
+        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method']
+          ? ''
+          : data.get('subscriptionStatus', '') == 'trialing'
+            ? 'premium'
+            : data.get('effectivePlan', data.get('billingPlan', data.get('selectedPlan', data.get('plan', 'essential'))));
+    }
+
+    function storeHasPlanFeature(storeId, feature) {
+      return exists(storePath(storeId))
+        && planRank(storeEffectivePlan(get(storePath(storeId)).data)) >= featureRequiredRank(feature);
+    }
+
+    function storeProductImagesLimit(storeId) {
+      return exists(storePath(storeId))
+        && storeEffectivePlan(get(storePath(storeId)).data) == 'premium'
+          ? 5
+          : exists(storePath(storeId)) && storeEffectivePlan(get(storePath(storeId)).data) == 'professional'
+            ? 3
+            : 1;
+    }
+
+    function productUsesScheduling(data) {
+      return data.get('orderMode', '') == 'scheduled_only'
+        || data.get('availabilityMode', '') == 'scheduled_only'
+        || data.get('scheduling', {}).get('mode', 'store_default') in ['scheduled_only', 'asap_and_scheduled']
+        || data.get('scheduling', {}).get('orderMode', '') == 'scheduled_only'
+        || data.get('scheduling', {}).get('prepaymentPolicy', '') == 'pix_required';
+    }
+
+    function productImagesWithinPlan(data) {
+      let limit = storeProductImagesLimit(data.get('storeId', ''));
+      return (!(data.get('images', []) is list) || data.get('images', []).size() <= limit)
+        && (!(data.get('imageUrls', []) is list) || data.get('imageUrls', []).size() <= limit)
+        && (!(data.get('gallery', []) is list) || data.get('gallery', []).size() <= limit);
+    }
+
+    function productSchedulingUnchanged(beforeData, afterData) {
+      return afterData.get('orderMode', '') == beforeData.get('orderMode', '')
+        && afterData.get('availabilityMode', '') == beforeData.get('availabilityMode', '')
+        && afterData.get('scheduling', {}) == beforeData.get('scheduling', {});
+    }
+
+    function productImagesUnchanged(beforeData, afterData) {
+      return afterData.get('images', []) == beforeData.get('images', [])
+        && afterData.get('imageUrls', []) == beforeData.get('imageUrls', [])
+        && afterData.get('gallery', []) == beforeData.get('gallery', []);
+    }
+
+    function productCreateAllowedByPlan(data) {
+      return (!productUsesScheduling(data) || storeHasPlanFeature(data.get('storeId', ''), 'scheduling'))
+        && productImagesWithinPlan(data);
+    }
+
+    function productUpdateAllowedByPlan(beforeData, afterData) {
+      return (
+          !productUsesScheduling(afterData)
+          || storeHasPlanFeature(afterData.get('storeId', ''), 'scheduling')
+          || productSchedulingUnchanged(beforeData, afterData)
+        )
+        && (
+          productImagesWithinPlan(afterData)
+          || productImagesUnchanged(beforeData, afterData)
+        );
+    }
+
+    function couponWriteAllowedByPlan(data) {
+      return storeHasPlanFeature(data.get('storeId', ''), 'coupons');
+    }
+
+    function couponDeactivateOrArchiveOnly() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['active', 'isDeleted', 'deletedAt', 'updatedAt'])
+        && changed.hasAny(['active', 'isDeleted', 'deletedAt'])
+        && request.resource.data.get('active', false) == false
+        && (!changed.hasAny(['isDeleted']) || request.resource.data.get('isDeleted', false) == true)
+        && (!changed.hasAny(['deletedAt']) || request.resource.data.deletedAt is timestamp)
+        && (!changed.hasAny(['updatedAt']) || request.resource.data.updatedAt is timestamp);
+    }
+
     function isStoreOwnerData(data) {
       return signedInNonAnonymous() && (
         data.get('ownerId', '') == request.auth.uid ||
@@ -541,17 +635,24 @@ function validPublicOrderCreate(orderId) {
 
     match /products/{productId} {
       allow read: if canManageStoreId(resource.data.get('storeId', ''));
-      allow create: if canManageStoreId(request.resource.data.get('storeId', ''));
+      allow create: if canManageStoreId(request.resource.data.get('storeId', ''))
+        && productCreateAllowedByPlan(request.resource.data);
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
-        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
+        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '')
+        && productUpdateAllowedByPlan(resource.data, request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /coupons/{couponId} {
       allow read: if canManageStoreId(resource.data.get('storeId', ''));
-      allow create: if canManageStoreId(request.resource.data.get('storeId', ''));
+      allow create: if canManageStoreId(request.resource.data.get('storeId', ''))
+        && couponWriteAllowedByPlan(request.resource.data);
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
-        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
+        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '')
+        && (
+          couponWriteAllowedByPlan(request.resource.data)
+          || couponDeactivateOrArchiveOnly()
+        );
       allow delete: if isAdmin();
     }
 

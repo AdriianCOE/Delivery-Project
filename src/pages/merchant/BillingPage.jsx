@@ -157,7 +157,7 @@ const BILLING_PLAN_PRESENTATION = {
     bestFor: 'Lojas que já vendem online e querem campanhas, mais controle e rotina mais ágil.',
     cta: 'Escolher Professional',
     badge: 'Mais escolhido',
-    highlights: ['Cupons e ofertas', 'WhatsApp integrado', 'Relatórios avançados'],
+    highlights: ['Cupons e ofertas', 'Notificações Push', 'Relatórios avançados'],
   },
   premium: {
     name: 'Premium',
@@ -325,6 +325,7 @@ export default function BillingPage() {
   const [lastCheckoutExpiresAt, setLastCheckoutExpiresAt] = useState('')
   const [storeRefreshNonce, setStoreRefreshNonce] = useState(0)
   const [savingTrialReminder, setSavingTrialReminder] = useState(false)
+  const [showExploreDraftModal, setShowExploreDraftModal] = useState(false)
 
   const [showBillingModal, setShowBillingModal] = useState(false)
   const [pendingPlan, setPendingPlan] = useState(null)
@@ -548,8 +549,11 @@ export default function BillingPage() {
       )
   )
 
-  const showCheckoutSuccessBanner =
+  const showCheckoutPendingBanner =
     showCheckoutReturnBanner && !hasAsaasBillingSetup
+  const showCheckoutConfirmedBanner =
+    showCheckoutReturnBanner && hasAsaasBillingSetup
+  const showCheckoutSuccessBanner = showCheckoutPendingBanner
   const trialReminderEmailOptIn = Boolean(userData?.trialReminderEmailOptIn)
   const currentPlanOption = PLAN_OPTIONS.find((planOption) => planOption.id === plan) || PLAN_OPTIONS[0]
   const currentPlanDisplayAmount = billingCycle === 'annual'
@@ -570,8 +574,10 @@ export default function BillingPage() {
   const isCanceled = subscriptionStatus === 'canceled'
   const isActive = subscriptionStatus === 'active'
   const isPending = subscriptionStatus === 'checkout_pending'
+  const isDraftBilling = isPending || !['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus)
   const showBillingRequiredBanner = searchParams.get('reason') === 'billing_required' && isPending
   const trialIsFuture = Boolean(trialEndsDate && trialEndsDate.getTime() > Date.now())
+  const firstChargeDate = trialEndsAt || currentPeriodEnd || new Date(Date.now() + 14 * 86400000)
 
   const nextBillingInfo = useMemo(() => {
     if (!hasAsaasBillingSetup) {
@@ -711,6 +717,15 @@ export default function BillingPage() {
     }
 
     navigate('/dashboard/subscription-management')
+  }
+
+  function handleExploreDashboard() {
+    if (isDraftBilling) {
+      setShowExploreDraftModal(true)
+      return
+    }
+
+    navigate('/dashboard')
   }
 
   async function handleRefreshBillingStatus() {
@@ -991,19 +1006,30 @@ export default function BillingPage() {
         icon={FiCreditCard}
         badge={headerBadge}
         actions={
-          <motion.div
-            whileHover={{ scale: 1.05, y: -1 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 450, damping: 15 }}
-          >
-            <Link
-            to="/dashboard/subscription-management"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316] border border-orange-200/50 hover:bg-orange-100/50 px-4 text-xs font-black transition-all duration-300 active:scale-95 shadow-sm"
-          >
-            <FiSettings size={13} />
-            <span>Gerenciar assinatura</span>
-          </Link>
-          </motion.div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isDraftBilling && (
+              <button
+                type="button"
+                onClick={handleExploreDashboard}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-black text-gray-700 shadow-sm transition hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+              >
+                Explorar painel
+              </button>
+            )}
+            <motion.div
+              whileHover={{ scale: 1.05, y: -1 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 15 }}
+            >
+              <Link
+              to="/dashboard/subscription-management"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-[#f97316] border border-orange-200/50 hover:bg-orange-100/50 px-4 text-xs font-black transition-all duration-300 active:scale-95 shadow-sm"
+            >
+              <FiSettings size={13} />
+              <span>Gerenciar assinatura</span>
+            </Link>
+            </motion.div>
+          </div>
         }
       />
 
@@ -1076,14 +1102,49 @@ export default function BillingPage() {
             <div className="flex items-start gap-3">
               <FiCheck className="mt-0.5 shrink-0 text-emerald-600" size={18} />
               <div>
-                <p className="font-black text-gray-900 dark:text-white">Checkout concluído no Asaas</p>
+                <p className="font-black text-gray-900 dark:text-white">Aguardando confirmação do Asaas</p>
                 <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-                  Estamos aguardando a confirmação do pagamento pelo Asaas. Use o botão de verificar status no painel abaixo se a atualização demorar.
+                  Estamos confirmando sua assinatura. Isso pode levar alguns segundos. Se a atualização demorar, use a verificação de status nesta tela.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Link
                     to="/dashboard"
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-700"
+                  >
+                    Explorar painel
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleRefreshBillingStatus}
+                    disabled={isCheckingBillingStatus || !store?.id}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 text-xs font-black text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                  >
+                    {isCheckingBillingStatus ? <FiLoader className="animate-spin" size={13} /> : <FiClock size={13} />}
+                    {isCheckingBillingStatus ? 'Sincronizando...' : 'Tentar novamente'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.section>
+        )}
+
+        {showCheckoutConfirmedBanner && (
+          <motion.section
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-2xl border border-orange-200 bg-orange-50 dark:border-orange-950/40 dark:bg-orange-950/20 p-5 text-sm font-semibold text-orange-800 dark:text-orange-300 shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <FiClock className="mt-0.5 shrink-0 text-[#f97316]" size={18} />
+              <div>
+                <p className="font-black text-gray-900 dark:text-white">Tudo certo! Seu trial está ativo</p>
+                <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
+                  Agora vamos configurar sua loja para começar a vender.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link
+                    to="/dashboard"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition-colors hover:bg-[#ea580c]"
                   >
                     Ir para o dashboard
                   </Link>
@@ -1091,7 +1152,7 @@ export default function BillingPage() {
                     to="/dashboard#primeiros-passos"
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 text-xs font-black text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
                   >
-                    Ver primeiros passos
+                    Ver checklist inicial
                   </Link>
                 </div>
               </div>
@@ -1585,6 +1646,42 @@ export default function BillingPage() {
       {/* Rodapé Premium de Faturamento */}
       <BillingFooter />
 
+      {showExploreDraftModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-[#f97316] dark:bg-orange-950/30">
+                <FiShield size={18} />
+              </span>
+              <div>
+                <h3 className="text-base font-black text-[#111827] dark:text-white">Sua loja ainda não está publicada</h3>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
+                  Você pode explorar o painel agora, mas sua loja só poderá receber pedidos depois que o teste grátis for ativado.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setShowExploreDraftModal(false)}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f97316] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c]"
+              >
+                Continuar configuração
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard')}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 transition hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+              >
+                Explorar painel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Modal - Configuração de Faturamento */}
       {showBillingModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -1615,6 +1712,19 @@ export default function BillingPage() {
 
             <form onSubmit={handleConfirmSubscription} className="min-h-0 flex-1 overflow-y-auto">
               <div className="space-y-4 px-4 py-4 sm:px-5">
+                <section className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 text-xs font-semibold leading-relaxed text-[#9a3412] dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-200">
+                  <p className="font-black text-gray-900 dark:text-white">Antes de continuar</p>
+                  <p className="mt-2">
+                    Você será redirecionado para o ambiente seguro do Asaas para cadastrar a forma de pagamento.
+                  </p>
+                  <p className="mt-1">
+                    Seu trial gratuito continua por 14 dias. A primeira cobrança está prevista para {formatBillingDate(firstChargeDate)}.
+                  </p>
+                  <p className="mt-1">
+                    Você pode cancelar a continuidade antes da primeira cobrança. O PratoBy não coleta nem armazena cartão.
+                  </p>
+                </section>
+
                 <section className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
                   <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-[#f97316]">Responsável</p>
                   <div className="grid gap-3 sm:grid-cols-2">

@@ -17,6 +17,7 @@ const {
   isMercadoPagoOnlinePaymentRequest,
   orderRequiresMercadoPagoOnline,
 } = require('./shared/mercadoPagoOrders')
+const { hasPlanFeature } = require('./shared/planAccess')
 
 class PublicOrderError extends Error {
   constructor(code, message) {
@@ -1548,6 +1549,9 @@ function createPublicOrderHandler({
           now: new Date(),
           fail,
         })
+        if (schedulingDecision?.orderTiming === 'scheduled' && !hasPlanFeature(liveStore, 'scheduling')) {
+          fail('failed-precondition', 'Agendamento exige plano Profissional ou Premium.')
+        }
         const schedulingFields = buildFirestoreSchedulingFields(admin, schedulingDecision)
 
         // 1. Check phone rate limit
@@ -1597,6 +1601,10 @@ function createPublicOrderHandler({
         let couponResult = null
 
         if (couponCode) {
+          if (!hasPlanFeature(liveStore, 'coupons')) {
+            fail('failed-precondition', 'Cupons exigem plano Profissional ou Premium.')
+          }
+
           const couponDoc = await findCouponInTransaction(db, transaction, store, couponCode)
           if (!couponDoc) fail('failed-precondition', 'Cupom invalido ou nao encontrado.')
 
