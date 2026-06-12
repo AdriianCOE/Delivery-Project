@@ -265,7 +265,7 @@ function assertStoreBillingAllowsPublicOrder(store, logger) {
     fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
   }
 
-  if (subscriptionStatus === 'blocked' || subscriptionStatus === 'canceled') {
+  if (subscriptionStatus === 'blocked' || subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled') {
     logger.warn('createPublicOrder blocked by subscription status', { storeId, subscriptionStatus })
     fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
   }

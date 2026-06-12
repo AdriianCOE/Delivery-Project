@@ -35,6 +35,8 @@ import {
 } from 'react-icons/fi'
 import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
+import { hasPlanFeature } from '../../utils/planCatalog'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BILLING_PENDING_STATUSES = new Set([
@@ -980,6 +982,7 @@ export default function Statistics() {
   const activeBairros = bairrosTab === 'orders' ? data.nbByOrders : data.nbByRevenue
   const displayedBairros = showAllBairros ? activeBairros : activeBairros.slice(0, 5)
   const storeName = selectedStore?.name || selectedStore?.storeName || null
+  const advancedReportsAllowed = hasPlanFeature(selectedStore || {}, 'advancedReports')
 
   const handleExportCsv = useCallback((type) => {
     const storeSlug = makeFileSafe(storeName || selectedStoreId || 'loja')
@@ -1122,6 +1125,16 @@ export default function Statistics() {
                 Atualizado às {lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
+          </div>
+        )}
+
+        {!loading && selectedStore && !advancedReportsAllowed && (
+          <div className="mb-4">
+            <LockedFeatureCard
+              featureKey="advancedReports"
+              featureName="Relatórios avançados"
+              description="Os relatórios básicos continuam disponíveis. Exportações e análises avançadas ficam liberadas no Premium."
+            />
           </div>
         )}
 

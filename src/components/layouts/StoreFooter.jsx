@@ -12,6 +12,7 @@ import {
   FiMessageCircle,
   FiShield,
 } from 'react-icons/fi'
+import { hasPlanFeature } from '../../utils/planCatalog'
 
 const DEFAULT_THEME = '#f97316'
 const PRATOBY_URL = 'https://pratoby.com'
@@ -51,7 +52,8 @@ function getThemeColor(store) {
 }
 
 function getLogoUrl(store) {
-  return firstValid(
+
+  const logoUrl = firstValid(
     store?.logoUrl,
     store?.logo,
     store?.logoImage,
@@ -59,8 +61,14 @@ function getLogoUrl(store) {
     store?.photoUrl,
     store?.brand?.logoUrl,
     store?.settings?.logoUrl,
-    '/icons/icon-192.png'
+    '/icons/favicon-32x32.png'
   )
+
+  if (!logoUrl.includes('res.cloudinary.com') || !logoUrl.includes('/upload/')) {
+    return logoUrl
+  }
+
+  return logoUrl.replace('/upload/', '/upload/f_auto,q_auto,c_fill,w_64,h_64/')
 }
 
 function getAddressText(store) {

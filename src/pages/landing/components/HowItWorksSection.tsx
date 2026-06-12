@@ -56,7 +56,7 @@ const steps: Step[] = [
 const highlights: Highlight[] = [
   {
     icon: Zap,
-    label: '0% comissão por pedido',
+    label: 'Sem comissão do PratoBy por pedido',
   },
   {
     icon: Clock3,
@@ -102,7 +102,7 @@ export function HowItWorksSection() {
 </p>
 
 <div className="mt-5 flex flex-wrap gap-2">
-  {['0% comissão', 'Pedidos em tempo real', 'Link próprio'].map((item) => (
+  {['Sem comissão do PratoBy', 'Pedidos em tempo real', 'Link próprio'].map((item) => (
     <span
       key={item}
       className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-black text-[#f97316]"

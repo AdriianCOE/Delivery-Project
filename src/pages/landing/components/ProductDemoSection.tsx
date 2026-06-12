@@ -20,9 +20,9 @@ import {
 } from 'lucide-react'
 
 const CAPIVARA_LOGO =
-  'https://res.cloudinary.com/dsionrn26/image/upload/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
+  'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto,w_64,h_64,c_fill/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
 
-const PRATOBY_LOGO = '/favicon.png'
+const PRATOBY_LOGO = '/icons/favicon-32x32.png'
 
 type NavItem = {
   icon: LucideIcon

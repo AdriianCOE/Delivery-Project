@@ -8,14 +8,17 @@ import {
   remove,
   serverTimestamp,
 } from 'firebase/database'
-import {
-  browserSessionPersistence,
-  setPersistence,
-  signInAnonymously,
-} from 'firebase/auth'
-import { auth, rtdb } from '../services/firebase'
+import { rtdb } from '../services/firebase'
 
 async function getPresenceUser() {
+  const [
+    { browserSessionPersistence, setPersistence, signInAnonymously },
+    { auth },
+  ] = await Promise.all([
+    import('firebase/auth'),
+    import('../services/firebaseAuth'),
+  ])
+
   // Guard: if ANY authenticated user is active (merchant or previous anon session),
   // skip setPersistence entirely. Calling it here could downgrade a merchant's
   // localStorage-based session to sessionStorage, logging them out on the next tab.
@@ -38,53 +41,61 @@ export function usePresence(storeId, isMerchant = false) {
 
     const safeStoreId = String(storeId).replace(/[.#$/[\]]/g, '_')
 
-    const connectedRef = ref(rtdb, '.info/connected')
-    const storePresenceCountRef = ref(rtdb, `presenceCounts/${safeStoreId}/activeCount`)
-
     let myUserRef = null
+    let unsubscribeConnected = null
     let unsubscribePresence = null
     let isRegisteringPresence = false
     let isCancelled = false
 
-    const unsubscribeConnected = onValue(connectedRef, async (snapshot) => {
-      if (snapshot.val() !== true) return
+    const startPresence = () => {
+      if (isCancelled) return
 
-      if (!isMerchant && !myUserRef && !isRegisteringPresence) {
-        isRegisteringPresence = true
+      const connectedRef = ref(rtdb, '.info/connected')
+      const storePresenceCountRef = ref(rtdb, `presenceCounts/${safeStoreId}/activeCount`)
 
-        try {
-          const presenceUser = await getPresenceUser()
-          if (isCancelled || !presenceUser?.uid) return
+      unsubscribeConnected = onValue(connectedRef, async (snapshot) => {
+        if (snapshot.val() !== true) return
 
-          myUserRef = ref(rtdb, `presence/${safeStoreId}/${presenceUser.uid}`)
+        if (!isMerchant && !myUserRef && !isRegisteringPresence) {
+          isRegisteringPresence = true
 
-          await onDisconnect(myUserRef).remove()
+          try {
+            const presenceUser = await getPresenceUser()
+            if (isCancelled || !presenceUser?.uid) return
 
-          await set(myUserRef, {
-            online: true,
-            connectedAt: serverTimestamp(),
-          })
-        } catch (error) {
-          console.error('Erro ao registrar presença:', error)
-        } finally {
-          isRegisteringPresence = false
+            myUserRef = ref(rtdb, `presence/${safeStoreId}/${presenceUser.uid}`)
+
+            await onDisconnect(myUserRef).remove()
+
+            await set(myUserRef, {
+              online: true,
+              connectedAt: serverTimestamp(),
+            })
+          } catch (error) {
+            console.error('Erro ao registrar presença:', error)
+          } finally {
+            isRegisteringPresence = false
+          }
         }
-      }
-    })
+      })
 
-    unsubscribePresence = onValue(storePresenceCountRef, (snapshot) => {
-      const value = Number(snapshot.val() || 0)
-      setActiveUsers(Number.isFinite(value) ? Math.max(0, value) : 0)
-    })
+      unsubscribePresence = onValue(storePresenceCountRef, (snapshot) => {
+        const value = Number(snapshot.val() || 0)
+        setActiveUsers(Number.isFinite(value) ? Math.max(0, value) : 0)
+      })
+    }
+
+    const startTimer = window.setTimeout(startPresence, isMerchant ? 0 : 2500)
 
     return () => {
       isCancelled = true
+      window.clearTimeout(startTimer)
 
       if (myUserRef) {
         remove(myUserRef).catch(() => {})
       }
 
-      unsubscribeConnected()
+      unsubscribeConnected?.()
       unsubscribePresence?.()
     }
   }, [storeId, isMerchant])

@@ -8,11 +8,11 @@ import {
 
 import {
   functions,
-  auth,
   db,
   firebaseConfig,
   getSupportedMessaging,
 } from '../services/firebase'
+import { auth } from '../services/firebaseAuth'
 import { httpsCallable } from 'firebase/functions'
 import { notificationPreferenceEnabled } from './notificationPreferences'
 

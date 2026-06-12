@@ -55,7 +55,7 @@ export function PainSection() {
 
           <p className="mx-auto mt-4 max-w-2xl text-base font-semibold leading-8 text-[#6b7280]">
             Eles resolvem parte da operação, mas cobram caro por isso. O PratoBy
-            existe para sua loja vender pelo próprio link, com sua marca e sem comissão por pedido.
+            existe para sua loja vender pelo próprio link, com sua marca e sem comissão do PratoBy por pedido.
           </p>
         </motion.div>
 

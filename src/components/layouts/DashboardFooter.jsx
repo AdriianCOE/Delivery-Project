@@ -9,6 +9,7 @@ import {
   FiMessageCircle,
   FiShield,
 } from 'react-icons/fi'
+import { hasPlanFeature } from '../../utils/planCatalog'
 
 const DEFAULT_THEME = '#f97316'
 const PRATOBY_URL = 'https://pratoby.com'
@@ -48,6 +49,7 @@ function getStoreName(store) {
 }
 
 function getStoreLogoUrl(store) {
+
   return firstValid(
     store?.logoUrl,
     store?.logo,
@@ -84,7 +86,7 @@ function getPublicStoreUrl(store) {
     store?.links?.publicUrl
   )
 
-  if (customUrl) return customUrl
+  if (customUrl && hasPlanFeature(store || {}, 'customBranding')) return customUrl
 
   const slug = normalizeStoreSlug(store)
 

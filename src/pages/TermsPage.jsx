@@ -45,11 +45,11 @@ const SECTIONS = [
     shortTitle: 'Serviço',
     icon: ShoppingBag,
     summary:
-      'O PratoBy fornece tecnologia para o lojista vender direto, com cardápio próprio, painel de pedidos e gestão sem comissão por venda.',
+      'O PratoBy fornece tecnologia para o lojista vender direto, com cardápio próprio, painel de pedidos e gestão sem comissão cobrada pelo PratoBy por pedido.',
     content: (
       <>
         <p>
-          O PratoBy é uma solução tecnológica para ajudar lojistas a venderem diretamente para seus clientes, sem depender de marketplace e sem comissão sobre cada pedido.
+          O PratoBy é uma solução tecnológica para ajudar lojistas a venderem diretamente para seus clientes, sem depender de marketplace e sem comissão cobrada pelo PratoBy por pedido.
         </p>
         <p>
           A plataforma pode incluir, conforme o plano contratado e os recursos disponíveis: página pública da loja, cardápio digital, carrinho, validação de cupom, cálculo de entrega, painel de pedidos, KDS/cozinha, painel de retirada, notificações, relatórios, gestão de assinatura e recursos administrativos.
@@ -279,7 +279,7 @@ export default function TermsPage() {
               </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-bold text-[#f97316]">
                 <Scale size={13} />
-                Sem comissão sobre pedidos
+                Sem comissão do PratoBy por pedido
               </div>
             </div>
 

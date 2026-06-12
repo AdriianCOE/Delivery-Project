@@ -2,9 +2,9 @@ import { useEffect, useMemo } from 'react'
 import { Helmet } from 'react-helmet-async'
 
 const SITE_URL = 'https://pratoby.com'
-const DEFAULT_TITLE = 'PratoBy | Cardápio digital e delivery sem comissão'
+const DEFAULT_TITLE = 'PratoBy | Cardápio digital e delivery próprio sem comissão'
 const DEFAULT_DESCRIPTION =
-  'Crie seu cardápio digital, receba pedidos online pelo próprio link e venda sem pagar comissão por pedido.'
+  'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido.'
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
 const DEFAULT_FAVICON = '/favicon.ico'
 const TWITTER_HANDLE = '@pratobybr'

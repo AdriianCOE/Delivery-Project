@@ -61,14 +61,14 @@ const PUBLIC_STORE_BASE_URL =
 const PLAN_OPTIONS = [
   {
     id: 'essential',
-    label: 'Essential',
+    label: 'Essencial',
     price: 'R$ 59,99/mês',
     badge: 'Entrada',
     description: 'Cardápio digital, carrinho e WhatsApp.',
   },
   {
     id: 'professional',
-    label: 'Professional',
+    label: 'Profissional',
     price: 'R$ 89,99/mês',
     badge: 'Mais vendido',
     description: 'Dashboard, cupons, bairros e avaliações.',
@@ -78,7 +78,7 @@ const PLAN_OPTIONS = [
     label: 'Premium',
     price: 'R$ 159,99/mês',
     badge: 'Premium',
-    description: 'Personalização, domínio próprio e suporte prioritário.',
+    description: 'Personalização avançada, limites altos e suporte prioritário.',
   },
 ]
 

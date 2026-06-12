@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { FiArrowRight, FiClock, FiShield } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
-import { formatBillingDate, getTrialDaysRemaining } from '../../utils/billingStatus'
+import { getTrialDaysRemaining } from '../../utils/billingStatus'
+import {
+  getFutureBillingCanceledMessage,
+  getTrialEndingSoonMessage,
+  getTrialPremiumActiveMessage,
+} from '../../utils/planMessages'
 
 function normalizeStatus(status) {
   return status === 'pending_checkout' ? 'checkout_pending' : status || ''
@@ -62,6 +67,12 @@ export default function DashboardTrialRibbon() {
   if (!isTrial || daysLeft === null || !theme) return null
 
   const elapsedPercent = Math.max(0, Math.min(100, ((14 - daysLeft) / 14) * 100))
+  const selectedPlan = userData?.billingPlan || userData?.selectedPlan || userData?.plan || 'essential'
+  const trialMessage = userData?.cancelAtTrialEnd
+    ? getFutureBillingCanceledMessage({ trialEndsAt })
+    : daysLeft <= 3
+      ? getTrialEndingSoonMessage({ daysRemaining: daysLeft, selectedPlan })
+      : getTrialPremiumActiveMessage({ trialEndsAt, selectedPlan })
 
   return (
     <motion.div
@@ -78,12 +89,12 @@ export default function DashboardTrialRibbon() {
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-black sm:text-sm">
-              <span>Teste grátis ativo</span>
+              <span>{trialMessage.title}</span>
               <span className="hidden text-current/35 sm:inline">·</span>
               <span>{theme.label}</span>
             </div>
-            <p className="mt-0.5 truncate text-[11px] font-semibold text-current/75 sm:text-xs">
-              Primeira cobrança prevista em {formatBillingDate(trialEndsAt)}
+            <p className="mt-0.5 line-clamp-2 text-[11px] font-semibold text-current/75 sm:text-xs">
+              {trialMessage.text}
             </p>
           </div>
         </div>

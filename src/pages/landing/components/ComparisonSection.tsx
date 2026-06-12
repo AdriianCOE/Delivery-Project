@@ -5,7 +5,7 @@ import { ArrowRight, Check, Crown, MousePointer2, X, Zap } from 'lucide-react'
 
 const features = [
   { name: 'Link próprio', importance: 'high' },
-  { name: 'Sem comissão por pedido', importance: 'high' },
+  { name: 'Sem comissão do PratoBy por pedido', importance: 'high' },
   { name: 'Cardápio organizado', importance: 'medium' },
   { name: 'Carrinho com adicionais', importance: 'medium' },
   { name: 'Painel de pedidos', importance: 'high' },

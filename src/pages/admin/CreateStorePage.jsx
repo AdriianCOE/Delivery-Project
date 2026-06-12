@@ -31,7 +31,8 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
-import { auth, functions } from '../../services/firebase'
+import { functions } from '../../services/firebase'
+import { auth } from '../../services/firebaseAuth'
 import { uploadImageToCloudinary } from '../../services/cloudinary'
 
 const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -79,7 +80,7 @@ const PLAN_OPTIONS = [
   },
   {
     id: 'professional',
-    label: 'Professional',
+    label: 'Profissional',
     price: 'R$ 89,99/mês',
     description: 'Mais controle para cupons, entrega, painel e operação.',
     features: ['Dashboard', 'Cupons', 'Taxa por bairro'],
@@ -87,10 +88,10 @@ const PLAN_OPTIONS = [
   },
   {
     id: 'premium',
-    label: 'Premium (White-label)',
+    label: 'Premium',
     price: 'R$ 159,99/mês',
-    description: 'Experiência premium para marcas maiores ou redes.',
-    features: ['Visual premium', 'Domínio próprio', 'Suporte prioritário'],
+    description: 'Limites altos, personalização avançada e suporte prioritário.',
+    features: ['Personalização avançada', 'Ocultar marca PratoBy', 'Suporte prioritário'],
   },
 ]
 

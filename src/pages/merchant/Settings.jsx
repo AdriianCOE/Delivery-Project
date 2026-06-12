@@ -39,6 +39,8 @@ import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { uploadImageToCloudinary } from '../../services/cloudinary'
+import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
+import { hasPlanFeature } from '../../utils/planCatalog'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const BRAND_GREEN = '#f97316'
@@ -989,6 +991,8 @@ const knownStoreIdsKey = useMemo(() => {
   const mercadoPagoOrderPaymentsActive =
     mercadoPagoOrderPayments.enabled === true &&
     String(mercadoPagoOrderPayments.status || '').toLowerCase() === 'active'
+  const brandingAllowed = hasPlanFeature(selectedStore || {}, 'customBranding')
+  const schedulingAllowed = hasPlanFeature(selectedStore || {}, 'scheduling')
   const schedulingLeadInput = useMemo(
     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
     [form.scheduling?.minLeadMinutes]
@@ -1722,6 +1726,15 @@ const knownStoreIdsKey = useMemo(() => {
             title="Logo e banner"
             description="Imagens usadas no cabeçalho do cardápio público."
           >
+            {!brandingAllowed && (
+              <div className="mb-4">
+                <LockedFeatureCard
+                  featureKey="customBranding"
+                  featureName="Logo e personalização avançada"
+                  description="Logo e banner ficam salvos, mas a personalização avançada só aparece publicamente no trial Premium ou no plano Premium."
+                />
+              </div>
+            )}
             <div className="grid gap-4">
               <ImageUploadField
                 label="Banner da loja"
@@ -1860,9 +1873,23 @@ const knownStoreIdsKey = useMemo(() => {
             description="Permita que seus clientes escolham uma data e horário para pedidos, encomendas, retiradas programadas e produtos sob encomenda."
           >
             <div className="space-y-5">
+              {!schedulingAllowed && (
+                <LockedFeatureCard
+                  featureKey="scheduling"
+                  featureName="Agendamento e encomendas"
+                  description="As regras de agendamento ficam salvas, mas só entram em vigor no trial Premium, Profissional ou Premium."
+                />
+              )}
+
               <Toggle
                 checked={Boolean(form.scheduling?.enabled)}
-                onChange={(value) => updateScheduling('enabled', value)}
+                onChange={(value) => {
+                  if (!schedulingAllowed && value === true) {
+                    showToast('error', 'Agendamento exige plano Profissional ou Premium.')
+                    return
+                  }
+                  updateScheduling('enabled', value)
+                }}
                 label="Aceitar pedidos agendados"
                 description="Quando ativo, o checkout público poderá oferecer datas e horários conforme estas regras."
               />

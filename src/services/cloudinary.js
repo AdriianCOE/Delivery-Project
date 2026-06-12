@@ -106,12 +106,26 @@ export async function uploadImageToCloudinary(file, folder = 'PratoBy') {
   return uploadUnsignedImage(file, folder)
 }
 
-export function getCloudinaryOptimizedUrl(url, width = 800) {
+export function getCloudinaryOptimizedUrl(url, widthOrOptions = 800) {
   if (!url || typeof url !== 'string') return ''
 
   if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
     return url
   }
 
-  return url.replace('/upload/', `/upload/f_auto,q_auto,c_limit,w_${width}/`)
+  const options =
+    typeof widthOrOptions === 'object' && widthOrOptions !== null
+      ? widthOrOptions
+      : { width: widthOrOptions }
+
+  const width = Number(options.width || 800)
+  const height = Number(options.height || 0)
+  const crop = options.crop || (height ? 'fill' : 'limit')
+  const transforms = ['f_auto', 'q_auto', `c_${crop}`, `w_${width}`]
+
+  if (height) {
+    transforms.push(`h_${height}`)
+  }
+
+  return url.replace('/upload/', `/upload/${transforms.join(',')}/`)
 }

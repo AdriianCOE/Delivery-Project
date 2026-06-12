@@ -13,7 +13,7 @@ const EXAMPLE_URL = 'https://pratoby.com/capivaras-lanches'
 const EXAMPLE_LABEL = 'pratoby.com/capivaras-lanches'
 
 const CAPIVARA_LOGO =
-  'https://res.cloudinary.com/dsionrn26/image/upload/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
+  'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto,w_64,h_64,c_fill/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
 
 const menuItems = [
   {

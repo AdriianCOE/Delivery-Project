@@ -1408,6 +1408,11 @@ function assertPixPaymentSettingsPatch(patch) {
   }
 }
 
+function settingsValueChanged(beforeValue, afterValue) {
+  return JSON.stringify(cleanCallableFirestoreValue(beforeValue) ?? null) !==
+    JSON.stringify(cleanCallableFirestoreValue(afterValue) ?? null)
+}
+
 async function assertStoreHasNoActiveOrders(storeId, storeData) {
   const storeKeys = buildPublicStoreKeys(storeId, storeData).slice(0, 10)
 
@@ -1729,10 +1734,18 @@ exports.updateStoreSettings = onCall(
     const patch = sanitizeStoreSettingsPayload(settingsPayload || {}, storeData)
     assertPixPaymentSettingsPatch(patch)
     if (!hasPlanFeature(storeData, 'scheduling')) {
+      const schedulingChanged = Object.prototype.hasOwnProperty.call(patch, 'scheduling') &&
+        settingsValueChanged(storeData.scheduling || {}, patch.scheduling || {})
+      const paymentsChanged = Object.prototype.hasOwnProperty.call(patch, 'payments') &&
+        settingsValueChanged(storeData.payments || {}, patch.payments || {})
       const schedulingEnabled = patch.scheduling?.enabled === true
       const preorderMode = String(patch.payments?.preorderPolicy?.mode || '').trim()
       const requiresScheduledPayment = patch.payments?.mercadoPago?.requireForScheduled === true
-      if (schedulingEnabled || requiresScheduledPayment || (preorderMode && preorderMode !== 'manual')) {
+      if (
+        (schedulingChanged && schedulingEnabled) ||
+        (paymentsChanged && requiresScheduledPayment) ||
+        (paymentsChanged && preorderMode && preorderMode !== 'manual')
+      ) {
         throw new HttpsError('failed-precondition', 'Agendamento exige plano Profissional ou Premium.')
       }
     }

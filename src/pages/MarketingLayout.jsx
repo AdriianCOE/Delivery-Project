@@ -6,7 +6,6 @@ import {
   FiExternalLink,
   FiInstagram,
   FiMenu,
-  FiTwitter,
   FiX,
 } from 'react-icons/fi'
 
@@ -33,20 +32,16 @@ const socialLinks = [
     icon: FiInstagram,
     hoverClass: 'hover:border-pink-200 hover:bg-pink-50 hover:text-pink-600',
   },
-  {
-    label: 'Twitter / X',
-    href: 'https://x.com/',
-    icon: FiTwitter,
-    hoverClass: 'hover:border-sky-200 hover:bg-sky-50 hover:text-sky-500',
-  },
 ]
 
 function Logo({ compact = false }) {
   return (
     <div className="flex items-center gap-3">
       <img
-        src="/icons/icon-192.png"
+        src="/icons/favicon-32x32.png"
         alt="PratoBy"
+        width="32"
+        height="32"
         className={`rounded-2xl object-cover shadow-lg shadow-orange-600/20 ${
           compact ? 'h-9 w-9' : 'h-11 w-11'
         }`}

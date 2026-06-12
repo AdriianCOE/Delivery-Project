@@ -20,7 +20,7 @@ import {
   FiShield,
 } from 'react-icons/fi'
 
-import { auth } from '../../services/firebase'
+import { auth } from '../../services/firebaseAuth'
 
 // ─────────────────────────────────────────────────────────────
 // COMPONENTES AUXILIARES

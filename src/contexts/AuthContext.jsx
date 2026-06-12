@@ -9,11 +9,6 @@ import {
 } from 'react'
 
 import {
-  onAuthStateChanged,
-  signOut,
-} from 'firebase/auth'
-
-import {
   doc,
   getDoc,
   getDocFromCache,
@@ -21,9 +16,29 @@ import {
 
 import { setSentryUser } from '../services/sentry'
 
-import { auth, db } from '../services/firebase'
+import { db } from '../services/firebase'
 
 export const AuthContext = createContext(null)
+
+const publicAuthFallback = {
+  firebaseUser: null,
+  user: null,
+  userData: null,
+  role: '',
+  loading: false,
+  authLoading: false,
+  isLoading: false,
+  authError: null,
+  isAuthenticated: false,
+  isAdmin: false,
+  isDeveloper: false,
+  isMerchant: false,
+  storeId: null,
+  storeIds: [],
+  hasRole: () => false,
+  logout: async () => {},
+  refreshUserData: async () => null,
+}
 
 function normalizeFirebaseUser(firebaseUser) {
   if (!firebaseUser) return null
@@ -97,7 +112,17 @@ export function AuthProvider({ children }) {
     let isMounted = true
     let unsubscribeAuth = null
 
-    function bootAuth() {
+    async function bootAuth() {
+      const [
+        { onAuthStateChanged },
+        { auth },
+      ] = await Promise.all([
+        import('firebase/auth'),
+        import('../services/firebaseAuth'),
+      ])
+
+      if (!isMounted) return
+
       unsubscribeAuth = onAuthStateChanged(auth, async (currentFirebaseUser) => {
         if (!isMounted) return
         const loadId = authLoadIdRef.current + 1
@@ -175,7 +200,13 @@ export function AuthProvider({ children }) {
       })
     }
 
-    bootAuth()
+    bootAuth().catch((error) => {
+      console.error('[Auth] Erro ao inicializar Firebase Auth:', error)
+      if (isMounted) {
+        setAuthError(error)
+        setLoading(false)
+      }
+    })
 
     return () => {
       isMounted = false
@@ -188,6 +219,13 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
+      const [
+        { signOut },
+        { auth },
+      ] = await Promise.all([
+        import('firebase/auth'),
+        import('../services/firebaseAuth'),
+      ])
       await signOut(auth)
     } catch (error) {
       console.warn('Erro ao executar signOut do Firebase:', error)
@@ -200,6 +238,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const refreshUserData = useCallback(async () => {
+    const { auth } = await import('../services/firebaseAuth')
     const currentUser = auth.currentUser || firebaseUser
     if (!currentUser) return null
 
@@ -304,7 +343,7 @@ export function useAuth() {
   const context = useContext(AuthContext)
 
   if (!context) {
-    throw new Error('useAuth deve ser usado dentro de AuthProvider')
+    return publicAuthFallback
   }
 
   return context

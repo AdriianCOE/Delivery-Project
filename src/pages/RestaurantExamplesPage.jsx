@@ -80,7 +80,7 @@ const benefits = [
   'Visual mobile-first',
   'Link próprio da loja',
   'Pedido organizado no WhatsApp',
-  'Sem comissão por venda',
+  'Sem comissão por pedido',
 ]
 
 const steps = [

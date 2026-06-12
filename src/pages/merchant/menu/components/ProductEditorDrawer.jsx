@@ -36,7 +36,8 @@ import {
 
 import { db } from '../../../../services/firebase'
 import { uploadImageToCloudinary } from '../../../../services/cloudinary'
-import { UPGRADE_PROMPT_COPY, hasPlanFeature } from '../../../../utils/planCatalog'
+import { hasPlanFeature } from '../../../../utils/planCatalog'
+import LockedFeatureCard from '../../../../components/billing/LockedFeatureCard'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
 import {
   EMPTY_PRODUCT_FORM,
@@ -998,16 +999,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                   </InfoCallout>
 
                   {!schedulingAllowed && (
-                    <SectionCard title={UPGRADE_PROMPT_COPY.title} description={UPGRADE_PROMPT_COPY.description} icon={FiAlertTriangle}>
-                      <div className="flex flex-wrap gap-3">
-                        <a href="/dashboard/billing" className={ui.primaryButton}>
-                          {UPGRADE_PROMPT_COPY.primaryAction}
-                        </a>
-                        <a href="/plans" className={ui.secondaryButton}>
-                          {UPGRADE_PROMPT_COPY.secondaryAction}
-                        </a>
-                      </div>
-                    </SectionCard>
+                    <LockedFeatureCard featureKey="scheduling" featureName="Agendamento e encomendas" />
                   )}
 
                   {schedulingAllowed && (

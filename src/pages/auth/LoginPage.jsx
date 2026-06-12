@@ -36,7 +36,8 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
-import { auth, db, googleProvider } from '../../services/firebase'
+import { db } from '../../services/firebase'
+import { auth, googleProvider } from '../../services/firebaseAuth'
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -48,14 +49,14 @@ const APP_ENV = import.meta.env.MODE || 'production'
 const BENEFITS = [
   'Pedidos em tempo real no painel',
   'Cardápio com link exclusivo da loja',
-  'Sem comissão por pedido',
+  'Sem comissão do PratoBy por pedido',
   'Produtos, horários, cupons e entrega em um só lugar',
 ]
 
 const METRICS = [
   { label: 'Pedidos', value: '24', helper: 'hoje' },
   { label: 'Conversão', value: '+18%', helper: 'sem app' },
-  { label: 'Comissão', value: '0%', helper: 'por pedido' },
+  { label: 'Comissão PratoBy', value: 'R$ 0', helper: 'por pedido' },
 ]
 
 // ─────────────────────────────────────────────────────────────
@@ -123,7 +124,7 @@ function getPostLoginRoute(userData) {
       return '/dashboard/billing'
     }
 
-    if (['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus)) {
+    if (['trialing', 'active', 'past_due', 'blocked', 'canceled', 'cancelled', 'trial_ended'].includes(subscriptionStatus)) {
       return '/dashboard'
     }
 
@@ -602,7 +603,7 @@ export default function LoginPage() {
               className="mt-8 max-w-xl text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl"
             >
               Seu delivery próprio,
-              <span className="block text-[#f97316]">sem comissão.</span>
+              <span className="block text-[#f97316]">sem depender de marketplace.</span>
             </motion.h1>
 
             <motion.p

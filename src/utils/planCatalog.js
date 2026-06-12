@@ -12,6 +12,17 @@ export const PLAN_ORDER = {
   [PLAN_IDS.PREMIUM]: 3,
 }
 
+export const BLOCKED_PLAN_STATUSES = [
+  'blocked',
+  'canceled',
+  'cancelled',
+  'checkout_pending',
+  'pending_checkout',
+  'billing_pending',
+  'billing_pending_payment_method',
+  'past_due',
+]
+
 // Limites de quantidade ficam centralizados aqui. O enforcement real para
 // produtos/categorias/cupons ainda exige callable/counter transacional; por
 // enquanto, parte desses limites é aplicada na UI e em validações pontuais.
@@ -69,10 +80,21 @@ export const PLAN_FEATURES = {
 }
 
 export const UPGRADE_PROMPT_COPY = {
-  title: 'Recurso não disponível no seu plano atual',
-  description: 'Esse recurso faz parte de um plano superior. Faça upgrade para liberar essa funcionalidade e continuar usando no PratoBy.',
+  title: 'Recurso disponível em outro plano',
+  description: 'Este recurso não está incluído no seu plano atual. Faça upgrade para liberar e continuar usando no PratoBy.',
   primaryAction: 'Fazer upgrade',
   secondaryAction: 'Ver planos',
+}
+
+export const FEATURE_LABELS = {
+  scheduling: 'Agendamento e encomendas',
+  coupons: 'Cupons de desconto',
+  advancedReports: 'Relatórios avançados',
+  customBranding: 'Personalização avançada',
+  removePratoByBranding: 'Remover marca PratoBy',
+  multiUser: 'Usuários extras',
+  deliveryZonesAdvanced: 'Entrega avançada',
+  onlinePayments: 'Pagamento online',
 }
 
 export const PLAN_OPTIONS = [
@@ -80,71 +102,75 @@ export const PLAN_OPTIONS = [
     id: 'essential',
     name: 'Essencial',
     subtitle: 'Para começar a vender online',
-    description: 'Para começar a vender online',
+    description: 'Cardápio público, pedidos básicos, Pix manual e pagamento online para validar a operação.',
     priceMonthly: 59.99,
     priceAnnual: 599.90,
     equivalentMonthly: 49.99,
-    commission: '+ 0% de comissão por venda',
+    commission: 'Sem comissão do PratoBy por pedido',
     icon: FiZap,
     highlight: false,
     popular: false,
     cta: 'Começar agora',
     features: [
-      '14 dias grátis inclusos',
-      'Cardápio digital ilimitado',
+      '14 dias grátis com recursos Premium',
+      'Cardápio público',
       'Pedidos em tempo real',
-      'Link próprio da loja',
-      'Sem taxas por pedido',
-      'Painel de controle',
-      'Horários automáticos',
+      'Link e QR da loja',
+      'Pix manual e pagamento online',
+      'Tracking do pedido',
+      'Impressão de comanda',
+      'Relatórios básicos',
+      'Até 50 produtos',
+      'Sem comissão do PratoBy por pedido',
     ],
   },
   {
     id: 'professional',
-    name: 'Professional',
+    name: 'Profissional',
     subtitle: 'Mais escolhido pelos lojistas',
-    description: 'Mais escolhido pelos lojistas',
+    description: 'Mais recursos para vender por encomenda, criar campanhas e operar com uma equipe pequena.',
     priceMonthly: 89.99,
     priceAnnual: 899.90,
     equivalentMonthly: 74.99,
-    commission: '+ 0% de comissão por venda',
+    commission: 'Sem comissão do PratoBy por pedido',
     icon: FiStar,
     highlight: true,
     popular: true,
     badge: 'Mais popular',
     cta: 'Começar agora',
     features: [
-      '14 dias grátis inclusos',
+      '14 dias grátis com recursos Premium',
       'Tudo do Essencial',
+      'Agendamento e encomendas',
       'Cupons de desconto',
-      'Taxa por bairro',
-      'Campos personalizados',
-      'Relatórios avançados',
-      'Notificações Push',
-      'Suporte prioritário',
+      'Taxa por bairro avançada',
+      'Até 200 produtos',
+      'Até 3 usuários',
+      'Até 20 cupons ativos',
+      'Pagamento online incluído',
     ],
   },
   {
     id: 'premium',
     name: 'Premium',
-    subtitle: 'Para quem quer vender mais',
-    description: 'Para quem quer vender mais',
+    subtitle: 'Para operações que precisam de mais controle',
+    description: 'Limites altos, personalização avançada quando disponível e suporte prioritário.',
     priceMonthly: 159.99,
     priceAnnual: 1599.90,
     equivalentMonthly: 133.33,
-    commission: '+ 0% de comissão por venda',
+    commission: 'Sem comissão do PratoBy por pedido',
     icon: FiAward,
     highlight: false,
     popular: false,
     cta: 'Começar agora',
     features: [
-      '14 dias grátis inclusos',
-      'Tudo do Professional',
-      'Multi-loja até 3 unidades',
-      'API de integração',
-      'Domínio personalizado',
-      'Marca branca',
-      'Gerente de conta dedicado',
+      '14 dias grátis com recursos Premium',
+      'Tudo do Profissional',
+      'Até 1000 produtos',
+      'Até 10 usuários',
+      'Personalização avançada',
+      'Ocultar marca PratoBy',
+      'Suporte prioritário',
     ],
   },
 ]
@@ -163,6 +189,10 @@ export function getRequiredPlanForFeature(featureKey) {
   return PLAN_FEATURES[featureKey] || null
 }
 
+export function getFeatureLabel(featureKey) {
+  return FEATURE_LABELS[featureKey] || featureKey || 'Recurso'
+}
+
 export function hasFeature(planId, featureKey) {
   const requiredPlan = getRequiredPlanForFeature(featureKey)
   if (!requiredPlan) return false
@@ -178,11 +208,13 @@ export function getEffectivePlan(storeData = {}) {
   if (
     storeData.isBillingBlocked === true ||
     storeData.isBlocked === true ||
-    ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'].includes(status)
+    storeData.isDeleted === true ||
+    Boolean(storeData.deletedAt) ||
+    BLOCKED_PLAN_STATUSES.includes(status)
   ) {
     return null
   }
-  if (status === 'trialing') return PLAN_IDS.PREMIUM
+  if (status === 'trialing') return normalizePlanId(storeData.trialEntitlementsPlan, PLAN_IDS.PREMIUM)
   return normalizePlanId(
     storeData.effectivePlan ||
       storeData.billingPlan ||

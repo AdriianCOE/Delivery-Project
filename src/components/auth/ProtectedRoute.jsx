@@ -122,7 +122,7 @@ export default function ProtectedRoute({
 
     const isPendingMerchant =
       (!hasMerchantStore &&
-       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'billing_pending_payment_method'].includes(subscriptionStatus) &&
+       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'cancelled', 'trial_ended', 'billing_pending_payment_method'].includes(subscriptionStatus) &&
        onboardingStatus !== 'completed' &&
        onboardingStatus !== 'billing_pending' &&
        !isBillingPending) ||

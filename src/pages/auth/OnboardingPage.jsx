@@ -34,7 +34,8 @@ import {
 } from 'react-icons/fi'
 
 import { useAuth } from '../../contexts/AuthContext'
-import { auth as firebaseAuth, functions } from '../../services/firebase'
+import { functions } from '../../services/firebase'
+import { auth as firebaseAuth } from '../../services/firebaseAuth'
 import {
   normalizeBrazilianPhoneE164,
   validateBrazilianMobilePhone,
@@ -540,7 +541,7 @@ export default function OnboardingPage() {
 
     const isPending =
       (!hasMerchantStore &&
-       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'checkout_pending', 'billing_pending', 'billing_pending_payment_method'].includes(normalizedSubscriptionStatus) &&
+       !['trialing', 'active', 'past_due', 'blocked', 'canceled', 'cancelled', 'trial_ended', 'checkout_pending', 'billing_pending', 'billing_pending_payment_method'].includes(normalizedSubscriptionStatus) &&
        onboardingStatus !== 'completed' &&
        onboardingStatus !== 'billing_pending') ||
       ['phone_pending', 'pending'].includes(onboardingStatus)

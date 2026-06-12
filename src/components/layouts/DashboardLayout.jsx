@@ -6,7 +6,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 
-import { auth, db, functions } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
+import { auth } from '../../services/firebaseAuth'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
 import ProfilePanel from '../merchant/ProfilePanel'
@@ -106,7 +107,7 @@ const NAV_SECTIONS = [
       },
       {
         label: 'QR Codes',
-        description: 'Cardápio impresso e mesas',
+        description: 'Link e QR da loja',
         to: '/dashboard/qrcodes',
         icon: FiGrid,
         priority: 'normal',

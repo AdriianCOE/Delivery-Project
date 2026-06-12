@@ -27,8 +27,8 @@ function formatPriceBR(val) {
 
 const planShortDescriptions = {
   essential: 'Para começar com loja própria, cardápio online e pedidos organizados.',
-  professional: 'Para lojas que querem vender mais com cupons, alertas e uma operação mais completa.',
-  premium: 'Para operações maiores que precisam de marca forte, suporte próximo e mais controle.',
+  professional: 'Para lojas que querem vender por encomenda, usar cupons e organizar uma operação mais completa.',
+  premium: 'Para operações que precisam de limites altos, personalização avançada e suporte prioritário.',
 }
 
 const plans = PLAN_OPTIONS
@@ -36,7 +36,7 @@ const plans = PLAN_OPTIONS
 const benefits = [
   {
     icon: FiShield,
-    label: '0% comissão por venda',
+    label: 'Sem comissão do PratoBy por pedido',
   },
   {
     icon: FiClock,
@@ -50,13 +50,13 @@ const benefits = [
 
 const planLabels = {
   essential: 'Essencial',
-  professional: 'Professional',
+  professional: 'Profissional',
   premium: 'Premium',
 }
 
 const planOptionsForComparison = [
   { label: 'Essencial', value: 'essential' },
-  { label: 'Professional', value: 'professional' },
+  { label: 'Profissional', value: 'professional' },
   { label: 'Premium', value: 'premium' },
 ]
 
@@ -68,15 +68,15 @@ const planFeatures = [
     items: [
       {
         name: 'Produtos e categorias',
-        essential: 'Ilimitado',
-        professional: 'Ilimitado',
-        premium: 'Ilimitado',
+        essential: '50 produtos / 10 categorias',
+        professional: '200 produtos / 30 categorias',
+        premium: '1000 produtos / 100 categorias',
       },
       {
         name: 'Fotos por produto',
         essential: '1 foto',
-        professional: 'Até 4 fotos',
-        premium: 'Até 10 fotos',
+        professional: 'Até 3 fotos',
+        premium: 'Até 5 fotos',
       },
       {
         name: 'Opções, adicionais e observações',
@@ -85,7 +85,7 @@ const planFeatures = [
         premium: true,
       },
       {
-        name: '0% comissão por pedido',
+        name: 'Sem comissão do PratoBy por pedido',
         essential: true,
         professional: true,
         premium: true,
@@ -115,7 +115,7 @@ const planFeatures = [
         premium: true,
       },
       {
-        name: 'Banners promocionais',
+        name: 'Agendamento/encomendas',
         essential: false,
         professional: true,
         premium: true,
@@ -123,14 +123,20 @@ const planFeatures = [
       {
         name: 'Relatórios de vendas',
         essential: 'Básicos',
-        professional: 'Avançados',
-        premium: 'Completos',
+        professional: 'Básicos',
+        premium: 'Avançados',
       },
       {
-        name: 'Campos personalizados',
+        name: 'Usuários da equipe',
+        essential: '1 usuário',
+        professional: 'Até 3',
+        premium: 'Até 10',
+      },
+      {
+        name: 'Cupons ativos',
         essential: false,
-        professional: true,
-        premium: true,
+        professional: 'Até 20',
+        premium: 'Limite alto',
       },
     ],
   },
@@ -142,22 +148,16 @@ const planFeatures = [
         name: 'Taxa de entrega',
         essential: 'Fixa',
         professional: 'Por bairro/raio',
-        premium: 'Avançada',
+        premium: 'Por bairro/raio',
       },
       {
-        name: 'WhatsApp para atendimento',
-        essential: 'Botão de conversa',
-        professional: 'Alertas e mensagens',
-        premium: 'Fluxos avançados',
+        name: 'Pagamento online integrado',
+        essential: true,
+        professional: true,
+        premium: true,
       },
       {
-        name: 'Multi-loja',
-        essential: false,
-        professional: false,
-        premium: 'Até 3 unidades',
-      },
-      {
-        name: 'Domínio personalizado',
+        name: 'Personalização avançada',
         essential: false,
         professional: false,
         premium: true,
@@ -165,8 +165,8 @@ const planFeatures = [
       {
         name: 'Suporte',
         essential: 'E-mail',
-        professional: 'WhatsApp prioritário',
-        premium: 'Acompanhamento próximo',
+        professional: 'Padrão',
+        premium: 'Prioritário',
       },
     ],
   },
@@ -338,7 +338,7 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
           Compare os planos PratoBy
         </h3>
         <p className="mt-4 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400 md:text-base">
-          Comece no plano certo para sua rotina. Depois, evolua quando sua operação pedir mais marketing, automação ou suporte.
+          Comece no plano certo para sua rotina. Depois, evolua quando sua operação pedir encomendas, cupons, limites maiores ou suporte prioritário.
         </p>
       </div>
 
@@ -520,7 +520,7 @@ export default function PlansPage() {
     <>
       <SEO
         title="Planos | PratoBy"
-        description="Planos do PratoBy para vender online com loja própria, pedidos em tempo real e 0% comissão por venda."
+        description="Planos do PratoBy para vender online com loja própria, pedidos em tempo real e sem comissão do PratoBy por pedido."
         path="/planos"
       />
 
@@ -539,7 +539,7 @@ export default function PlansPage() {
               >
                 <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10">
                   <FiShield size={15} />
-                  Planos simples e sem comissão
+                  Planos simples e sem comissão do PratoBy
                 </span>
 
                 <h1 className="mt-6 text-4xl font-black tracking-tight text-[#111827] dark:text-white sm:text-5xl lg:text-6xl">
@@ -547,7 +547,7 @@ export default function PlansPage() {
                 </h1>
 
                 <p className="mx-auto mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] dark:text-zinc-400 sm:text-lg">
-                  Loja própria, pedidos em tempo real e 0% comissão por venda. Comece com 14 dias grátis e evolua quando sua operação pedir mais recursos.
+                  Loja própria, pedidos em tempo real e sem comissão do PratoBy por pedido. Comece com 14 dias grátis e evolua quando sua operação pedir mais recursos.
                 </p>
 
                 <div className="mt-7 flex flex-wrap justify-center gap-2">
@@ -587,7 +587,7 @@ export default function PlansPage() {
                 </h2>
 
                 <p className="mt-4 max-w-md text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
-                  Todos os planos mantêm a proposta principal do PratoBy: vender direto, com loja própria e sem comissão por pedido.
+                  Todos os planos mantêm a proposta principal do PratoBy: vender direto, com loja própria e sem comissão do PratoBy por pedido.
                 </p>
               </div>
 

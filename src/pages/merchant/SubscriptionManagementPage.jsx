@@ -89,14 +89,14 @@ const BILLING_PLAN_PRESENTATION = {
     description: 'O básico para colocar sua loja online, receber pedidos e vender pelo próprio link.',
   },
   professional: {
-    name: 'Professional',
+    name: 'Profissional',
     tagline: 'Para vender mais.',
-    description: 'Cupons, WhatsApp e relatórios para aumentar pedidos e acompanhar melhor a operação.',
+    description: 'Cupons, encomendas e limites maiores para acompanhar melhor a operação.',
   },
   premium: {
     name: 'Premium',
-    tagline: 'Para operações maiores.',
-    description: 'Mais estrutura para marcas fortes, filiais, domínio próprio e atendimento VIP.',
+    tagline: 'Para operações com mais controle.',
+    description: 'Limites altos, personalização avançada quando disponível e suporte prioritário.',
   },
 }
 
@@ -1258,7 +1258,7 @@ export default function SubscriptionManagementPage() {
                 <div>
                   <p className="text-sm font-black text-gray-900 dark:text-white">Precisa comparar antes de solicitar?</p>
                   <p className="mt-1 text-xs font-semibold text-gray-600 dark:text-zinc-400">
-                    Veja a lista completa de recursos dos planos Essencial, Professional e Premium.
+                    Veja a lista completa de recursos dos planos Essencial, Profissional e Premium.
                   </p>
                 </div>
                 <Link

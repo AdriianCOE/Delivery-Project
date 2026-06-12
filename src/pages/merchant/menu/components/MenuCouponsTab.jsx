@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  FiAlertTriangle,
   FiEdit2,
   FiPlus,
   FiSearch,
@@ -18,6 +17,7 @@ import { formatMoney } from '../utils/menuFormatters'
 import { COUPON_STATUS_FILTERS } from '../utils/couponPayloads'
 import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
 import { UPGRADE_PROMPT_COPY } from '../../../../utils/planCatalog'
+import LockedFeatureCard from '../../../../components/billing/LockedFeatureCard'
 
 // Formata data e hora para exibição amigável em PT-BR
 function formatDateTime(value) {
@@ -98,27 +98,7 @@ export default function MenuCouponsTab({ coupons, couponsAllowed = true, onEdit,
   return (
     <div className="space-y-6">
       {!couponsAllowed && (
-        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-orange-900 shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[#f97316] shadow-sm dark:bg-slate-900">
-                <FiAlertTriangle size={18} />
-              </span>
-              <div>
-                <p className="text-sm font-black">{UPGRADE_PROMPT_COPY.title}</p>
-                <p className="mt-1 text-xs font-bold leading-5 text-orange-800/80 dark:text-orange-100/80">
-                  {UPGRADE_PROMPT_COPY.description}
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/dashboard/billing"
-              className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#f97316] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#ea580c]"
-            >
-              {UPGRADE_PROMPT_COPY.primaryAction}
-            </Link>
-          </div>
-        </div>
+        <LockedFeatureCard featureKey="coupons" featureName="Cupons de desconto" />
       )}
 
       {/* Top Filter and Search Bar */}

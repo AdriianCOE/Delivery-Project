@@ -73,6 +73,7 @@ const BLOCKED_STATUSES = new Set([
   'pending_checkout',
   'billing_pending',
   'billing_pending_payment_method',
+  'past_due',
 ])
 
 function normalizePlanId(value, fallback = PLAN_IDS.ESSENTIAL) {
@@ -95,7 +96,7 @@ function getEffectivePlan(data = {}) {
   if (isPlanAccessBlocked(data)) return null
 
   const status = getSubscriptionStatus(data)
-  if (status === 'trialing') return PLAN_IDS.PREMIUM
+  if (status === 'trialing') return normalizePlanId(data.trialEntitlementsPlan, PLAN_IDS.PREMIUM)
 
   return normalizePlanId(
     data.effectivePlan ||

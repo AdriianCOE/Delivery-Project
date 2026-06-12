@@ -97,6 +97,7 @@ function orderStoreKeys(data) {
         && !(data.get('subscriptionStatus', '') in [
           'blocked',
           'canceled',
+          'cancelled',
           'checkout_pending',
           'pending_checkout',
           'billing_pending',
@@ -123,7 +124,9 @@ function orderStoreKeys(data) {
     function storeEffectivePlan(data) {
       return data.get('isBillingBlocked', false) == true
         || data.get('isBlocked', false) == true
-        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method']
+        || data.get('isDeleted', false) == true
+        || data.keys().hasAny(['deletedAt'])
+        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method', 'past_due']
           ? ''
           : data.get('subscriptionStatus', '') == 'trialing'
             ? 'premium'
@@ -323,6 +326,7 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('isBlocked')
         && storeFieldUnchanged('isBillingBlocked')
         && storeFieldUnchanged('isDeleted')
+        && storeFieldUnchanged('deletedAt')
         && storeFieldUnchanged('subscriptionStatus')
         && storeFieldUnchanged('subscription')
         && storeFieldUnchanged('planId')
@@ -339,6 +343,7 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('billingCycle')
         && storeFieldUnchanged('trialStartedAt')
         && storeFieldUnchanged('trialEndsAt')
+        && storeFieldUnchanged('trialEndedAt')
         && storeFieldUnchanged('firstChargeAt')
         && storeFieldUnchanged('nextChargeAt')
         && storeFieldUnchanged('onboardingStatus')
@@ -364,7 +369,9 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('billingCheckoutStatus')
         && storeFieldUnchanged('cancelAtTrialEnd')
         && storeFieldUnchanged('subscriptionCancellationStatus')
+        && storeFieldUnchanged('subscriptionCancellationReason')
         && storeFieldUnchanged('cancelScheduledAtPeriodEnd')
+        && storeFieldUnchanged('cancelScheduledAtTrialEnd')
         && storeFieldUnchanged('subscriptionCancelRequestedAt')
         && storeFieldUnchanged('subscriptionCancelRequestedBy')
         && storeFieldUnchanged('subscriptionReactivatedAt')

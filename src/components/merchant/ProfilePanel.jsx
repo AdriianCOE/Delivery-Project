@@ -35,7 +35,8 @@ import {
   FiMoon,
 } from 'react-icons/fi'
 
-import app, { auth } from '../../services/firebase'
+import app from '../../services/firebase'
+import { auth } from '../../services/firebaseAuth'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
 import {
@@ -97,7 +98,7 @@ function formatSubscriptionStatus(status) {
 function formatPlanName(plan) {
   const map = {
     essential: 'Essencial',
-    professional: 'Professional',
+    professional: 'Profissional',
     premium: 'Premium',
   }
   return map[String(plan || '').toLowerCase()] || plan || '—'

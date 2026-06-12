@@ -23,33 +23,39 @@ export function formatBillingDate(value) {
 }
 
 export function formatBillingStatus(status) {
+  const normalized = String(status || '').trim().toLowerCase()
   const map = {
     checkout_pending: 'Cobrança Asaas pendente',
     pending_checkout: 'Cobrança Asaas pendente',
     billing_pending: 'Cobrança Asaas pendente',
     billing_pending_payment_method: 'Forma de pagamento pendente',
     trialing: 'Teste grátis ativo',
+    trial_ended: 'Teste encerrado',
     active: 'Assinatura ativa',
     past_due: 'Pagamento pendente',
     canceled: 'Assinatura bloqueada/cancelada',
+    cancelled: 'Assinatura bloqueada/cancelada',
     blocked: 'Assinatura bloqueada/cancelada',
   }
-  return map[status] || status || 'Pendente'
+  return map[normalized] || 'Pendente'
 }
 
 export function getBillingStatusTone(status) {
+  const normalized = String(status || '').trim().toLowerCase()
   const map = {
     checkout_pending: 'orange',
     pending_checkout: 'orange',
     billing_pending: 'orange',
     billing_pending_payment_method: 'orange',
     trialing: 'orange',
+    trial_ended: 'red',
     active: 'green',
     past_due: 'red',
     canceled: 'red',
+    cancelled: 'red',
     blocked: 'red',
   }
-  return map[status] || 'orange'
+  return map[normalized] || 'orange'
 }
 
 export function normalizeBillingCycle(cycle) {
@@ -60,9 +66,10 @@ export function normalizeBillingCycle(cycle) {
 export function formatPlanName(plan) {
   const map = {
     essential: 'Essencial',
-    professional: 'Professional',
+    professional: 'Profissional',
     premium: 'Premium',
     enterprise: 'Enterprise',
   }
-  return map[plan] || plan || 'Essencial'
+  const normalized = String(plan || '').trim().toLowerCase()
+  return map[normalized] || plan || 'Essencial'
 }

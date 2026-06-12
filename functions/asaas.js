@@ -44,6 +44,8 @@ const START_ASAAS_ALLOWED_STATUSES = new Set([
   'past_due',
   'blocked',
   'canceled',
+  'cancelled',
+  'trial_ended',
 ])
 const INTERNAL_STATUSES = new Set([
   'checkout_pending',
@@ -52,7 +54,9 @@ const INTERNAL_STATUSES = new Set([
   'active',
   'past_due',
   'canceled',
+  'cancelled',
   'blocked',
+  'trial_ended',
 ])
 const ASAAS_BILLING_TYPES = new Set(['UNDEFINED', 'BOLETO', 'PIX', 'CREDIT_CARD'])
 const PRIVILEGED_ROLES = new Set(['admin', 'developer', 'dev', 'superadmin'])
@@ -62,7 +66,7 @@ const PLAN_ORDER = {
   premium: 3,
 }
 const SUBSCRIPTION_MANAGEMENT_ACTIVE_STATUSES = new Set(['trialing', 'active', 'past_due', 'overdue'])
-const SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES = new Set(['canceled', 'blocked'])
+const SUBSCRIPTION_MANAGEMENT_TERMINAL_STATUSES = new Set(['canceled', 'cancelled', 'blocked', 'trial_ended'])
 
 // Backend source of truth for billing amounts. Frontend plan catalogs are display-only.
 const PLAN_CATALOG = {
@@ -74,7 +78,7 @@ const PLAN_CATALOG = {
   },
   professional: {
     id: 'professional',
-    name: 'Professional',
+    name: 'Profissional',
     monthlyCents: 8999,
     annualCents: 89990,
   },
@@ -1521,8 +1525,15 @@ function getContextPlan(context) {
 
 function getContextEffectivePlan(context) {
   const status = getContextSubscriptionStatus(context)
-  if (status === 'trialing') return TRIAL_ENTITLEMENTS_PLAN
-  if (['canceled', 'blocked', BILLING_PENDING_PAYMENT_METHOD_STATUS, 'checkout_pending'].includes(status)) {
+  if (status === 'trialing') {
+    return getKnownPlan(
+      context.existingReference?.canonicalSubscription?.trialEntitlementsPlan ||
+        context.storeData?.trialEntitlementsPlan ||
+        context.userData?.trialEntitlementsPlan,
+      TRIAL_ENTITLEMENTS_PLAN
+    )
+  }
+  if (['canceled', 'cancelled', 'blocked', 'past_due', BILLING_PENDING_PAYMENT_METHOD_STATUS, 'checkout_pending', 'pending_checkout', 'billing_pending', 'trial_ended'].includes(status)) {
     return null
   }
   return getKnownPlan(
@@ -1569,7 +1580,7 @@ function getContextSubscriptionStatus(context) {
       context.storeData?.subscriptionStatus ||
       context.userData?.subscriptionStatus ||
       'checkout_pending'
-  ).trim()
+  ).trim().toLowerCase()
 }
 
 function serializeDate(value) {

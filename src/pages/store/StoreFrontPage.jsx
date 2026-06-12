@@ -653,14 +653,28 @@ function firstFilled(...values) {
   return values.find((value) => typeof value === 'string' && value.trim()) || ''
 }
 
-function getCloudinaryOptimizedUrl(url, width = 900) {
+function getCloudinaryOptimizedUrl(url, widthOrOptions = 900) {
   if (!url || typeof url !== 'string') return ''
 
   if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
     return url
   }
 
-  return url.replace('/upload/', `/upload/f_auto,q_auto,c_limit,w_${width}/`)
+  const options =
+    typeof widthOrOptions === 'object' && widthOrOptions !== null
+      ? widthOrOptions
+      : { width: widthOrOptions }
+
+  const width = Number(options.width || 900)
+  const height = Number(options.height || 0)
+  const crop = options.crop || (height ? 'fill' : 'limit')
+  const transforms = ['f_auto', 'q_auto', `c_${crop}`, `w_${width}`]
+
+  if (height) {
+    transforms.push(`h_${height}`)
+  }
+
+  return url.replace('/upload/', `/upload/${transforms.join(',')}/`)
 }
 
 function getStoreSlug(store, fallbackSlug) {
@@ -688,7 +702,7 @@ function normalizeStore(input, fallbackSlug = '') {
 
   const logoUrl = getCloudinaryOptimizedUrl(
     firstFilled(data.logoUrl, data.logo, data.avatarUrl, data.photoUrl),
-    320,
+    { width: 96, height: 96, crop: 'fill' },
   )
 
   const bannerUrl = getCloudinaryOptimizedUrl(
@@ -2229,7 +2243,7 @@ const handleToggleFavorite = useCallback(() => {
     if (!store?.name) return undefined
 
     const previousTitle = document.title
-    document.title = `${store.name} | PratoBy`
+    document.title = `${store.name} | Cardápio e pedidos online`
 
     return () => {
       document.title = previousTitle
@@ -2248,8 +2262,8 @@ if (shouldBlockStorefront) {
   return (
     <>
       <SEO
-        title={`${storeName} | Loja indisponivel`}
-        description="Este cardapio esta temporariamente indisponivel para pedidos."
+        title={`${storeName} | Loja indisponível`}
+        description="Este cardápio está temporariamente indisponível para pedidos."
         path={`/${storeSlug}`}
         noIndex
       />
@@ -2261,7 +2275,7 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-  title={`${storeName} | Cardápio digital no PratoBy`}
+  title={`${storeName} | Cardápio e pedidos online`}
   description={storeDescription}
   path={`/${storeSlug}`}
   image={storeImage}

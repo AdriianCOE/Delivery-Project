@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { collection, doc, onSnapshot } from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
+import { doc, onSnapshot } from 'firebase/firestore'
 import {
   FiCopy,
   FiDownload,
@@ -10,20 +9,15 @@ import {
   FiGrid,
   FiLoader,
   FiLock,
-  FiPlus,
   FiPrinter,
   FiX,
   FiCheck,
   FiAlertCircle,
-  FiArchive,
-  FiToggleLeft,
-  FiToggleRight,
 } from 'react-icons/fi'
-import { db, functions } from '../../services/firebase'
+import { db } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
-import { UPGRADE_PROMPT_COPY, hasPlanFeature } from '../../utils/planCatalog'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -60,13 +54,6 @@ function buildPublicUrl(slug) {
   const cleanSlug = normalizeText(slug).replace(/^\/+|\/+$/g, '')
   if (!cleanSlug) return ''
   return `${getOrigin()}/${cleanSlug}`
-}
-
-function buildTableUrl(slug, token) {
-  const baseUrl = buildPublicUrl(slug)
-  const cleanToken = normalizeText(token)
-  if (!baseUrl || !cleanToken) return ''
-  return `${baseUrl}?table=${encodeURIComponent(cleanToken)}`
 }
 
 function safeGetLocalStorage(key) {
@@ -107,24 +94,6 @@ function getErrorMessage(error, fallback) {
   const raw = error?.message || error?.details?.message || error?.code || ''
   const clean = String(raw).replace(/^FirebaseError:\s*/i, '').trim()
   return clean || fallback
-}
-
-function getTableSortValue(table) {
-  const number = Number(table?.number)
-  if (Number.isFinite(number)) return number
-  return Number.MAX_SAFE_INTEGER
-}
-
-function sortTables(a, b) {
-  const activeA = a?.isActive !== false
-  const activeB = b?.isActive !== false
-
-  if (activeA !== activeB) return activeA ? -1 : 1
-
-  const numberDiff = getTableSortValue(a) - getTableSortValue(b)
-  if (numberDiff !== 0) return numberDiff
-
-  return normalizeText(a?.label).localeCompare(normalizeText(b?.label), 'pt-BR')
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -433,384 +402,6 @@ function SectionCard({ title, description, children, action }) {
   )
 }
 
-// ─── Table Card ────────────────────────────────────────────────────────────────
-
-function TableCard({ table, storeSlug, storeName, onArchive, onToggleActive, onToast }) {
-  const svgRef = useRef(null)
-  const [copied, setCopied] = useState(false)
-  const [archiving, setArchiving] = useState(false)
-  const [toggling, setToggling] = useState(false)
-
-  const url = buildTableUrl(storeSlug, table.token)
-  const filename = `qr-${toSafeFilename(storeName, 'loja')}-${toSafeFilename(table.label, 'mesa')}`
-
-  async function handleCopy() {
-    try {
-      await copyToClipboard(url)
-      setCopied(true)
-      onToast?.('success', `Link da ${table.label} copiado.`)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (error) {
-      onToast?.('error', getErrorMessage(error, 'Não foi possível copiar o link da mesa.'))
-    }
-  }
-
-  async function handleArchive() {
-    if (archiving) return
-    setArchiving(true)
-    try {
-      await onArchive(table)
-    } finally {
-      setArchiving(false)
-    }
-  }
-
-  async function handleToggleActive() {
-    if (toggling) return
-    setToggling(true)
-    try {
-      await onToggleActive(table, !table.isActive)
-    } finally {
-      setToggling(false)
-    }
-  }
-
-  const isActive = table.isActive !== false && table.isArchived !== true
-
-  return (
-    <article
-      className={cn(
-        'rounded-2xl border p-4 transition',
-        isActive
-          ? 'border-gray-100 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-          : 'border-dashed border-gray-200 bg-gray-50 opacity-70 dark:border-zinc-700 dark:bg-zinc-950'
-      )}
-    >
-      {/* Header da mesa */}
-      <div className="mb-4 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">{table.label}</p>
-          {table.number && (
-            <p className="mt-0.5 text-[11px] font-bold text-[#6b7280] dark:text-zinc-400">
-              #{table.number}
-            </p>
-          )}
-        </div>
-        <span
-          className={cn(
-            'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider',
-            isActive
-              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-              : 'bg-gray-100 text-gray-400 dark:bg-zinc-800 dark:text-zinc-500'
-          )}
-        >
-          {isActive ? 'Ativo' : 'Inativo'}
-        </span>
-      </div>
-
-      {/* QR */}
-      <div
-        ref={svgRef}
-        className="mb-4 flex items-center justify-center rounded-xl bg-white p-3 ring-1 ring-gray-100 dark:ring-zinc-700"
-      >
-        <div className="rounded-[1.75rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-white/10 dark:bg-white dark:ring-white/10">
-          <QRCodeSVG
-            value={url}
-            size={180}
-            bgColor="#ffffff"
-            fgColor="#111827"
-            level="M"
-            includeMargin
-            className="h-auto w-full max-w-[220px]"
-          />
-        </div>
-      </div>
-
-      {/* URL resumida */}
-      <p className="mb-3 truncate text-center text-[10px] font-bold text-[#6b7280] dark:text-zinc-500">
-        {url}
-      </p>
-
-      {/* Actions */}
-      <div className="flex flex-wrap justify-center gap-1">
-        <QrActionBtn
-          id={`copy-table-${table.id}`}
-          icon={copied ? FiCheck : FiCopy}
-          label={copied ? 'Copiado!' : 'Copiar link'}
-          onClick={handleCopy}
-          variant={copied ? 'primary' : 'ghost'}
-          disabled={!url}
-        />
-        {/* Download e Impressão desabilitados até o checkout por mesa (Fase 2) estar ativo.
-            Evita que lojistas distribuam QR físico antes do fluxo dine_in funcionar. */}
-        <span title="Disponível quando o pedido por mesa estiver ativo">
-          <button
-            id={`download-table-${table.id}`}
-            type="button"
-            disabled
-            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
-          >
-            <FiLock size={12} />
-            Baixar
-          </button>
-        </span>
-        <span title="Disponível quando o pedido por mesa estiver ativo">
-          <button
-            id={`print-table-${table.id}`}
-            type="button"
-            disabled
-            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-gray-300 opacity-50 dark:text-zinc-600"
-          >
-            <FiLock size={12} />
-            Imprimir
-          </button>
-        </span>
-      </div>
-
-      {/* Secondary actions */}
-      <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-zinc-800">
-        <button
-          type="button"
-          id={`toggle-table-${table.id}`}
-          onClick={handleToggleActive}
-          disabled={toggling}
-          title={isActive ? 'Desativar mesa' : 'Reativar mesa'}
-          className="flex items-center gap-1.5 text-[11px] font-bold text-[#6b7280] transition hover:text-[#111827] disabled:opacity-50 dark:text-zinc-500 dark:hover:text-zinc-200"
-        >
-          {toggling ? (
-            <FiLoader size={13} className="animate-spin" />
-          ) : isActive ? (
-            <FiToggleRight size={16} className="text-emerald-500" />
-          ) : (
-            <FiToggleLeft size={16} />
-          )}
-          {isActive ? 'Desativar' : 'Reativar'}
-        </button>
-        <button
-          type="button"
-          id={`archive-table-${table.id}`}
-          onClick={handleArchive}
-          disabled={archiving}
-          title="Arquivar mesa"
-          className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 transition hover:text-red-600 disabled:opacity-50 dark:text-red-500 dark:hover:text-red-400"
-        >
-          {archiving ? <FiLoader size={13} className="animate-spin" /> : <FiArchive size={13} />}
-          Arquivar
-        </button>
-      </div>
-    </article>
-  )
-}
-
-// ─── Add Table Modal ──────────────────────────────────────────────────────────
-
-function AddTableModal({ onClose, onConfirm, loading }) {
-  const [label, setLabel] = useState('')
-  const [number, setNumber] = useState('')
-  const [error, setError] = useState('')
-
-  function handleSubmit(e) {
-    e.preventDefault()
-    const trimmedLabel = label.trim()
-    if (!trimmedLabel) {
-      setError('O nome da mesa é obrigatório.')
-      return
-    }
-    if (trimmedLabel.length > 60) {
-      setError('Nome muito longo (máximo 60 caracteres).')
-      return
-    }
-    setError('')
-    onConfirm({ label: trimmedLabel, number: number.trim() })
-  }
-
-  if (typeof document === 'undefined') return null
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-table-modal-title"
-    >
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl dark:bg-zinc-900">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
-          <h3
-            id="add-table-modal-title"
-            className="text-base font-black text-[#111827] dark:text-zinc-100"
-          >
-            Nova mesa
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar modal"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-          >
-            <FiX size={16} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="px-5 py-5">
-          <div className="mb-4">
-            <label
-              htmlFor="table-label"
-              className="mb-1.5 block text-xs font-black uppercase tracking-wider text-[#6b7280] dark:text-zinc-400"
-            >
-              Nome / identificação <span className="text-red-400">*</span>
-            </label>
-            <input
-              id="table-label"
-              type="text"
-              maxLength={60}
-              placeholder="ex: Mesa 4, Balcão, Área externa 1"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#111827] placeholder-gray-300 focus:border-[#f97316] focus:outline-none focus:ring-2 focus:ring-orange-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-600 dark:focus:border-orange-400 dark:focus:ring-orange-900/30"
-              autoFocus
-            />
-          </div>
-
-          <div className="mb-5">
-            <label
-              htmlFor="table-number"
-              className="mb-1.5 block text-xs font-black uppercase tracking-wider text-[#6b7280] dark:text-zinc-400"
-            >
-              Número (opcional)
-            </label>
-            <input
-              id="table-number"
-              type="text"
-              maxLength={20}
-              placeholder="ex: 4"
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#111827] placeholder-gray-300 focus:border-[#f97316] focus:outline-none focus:ring-2 focus:ring-orange-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-600 dark:focus:border-orange-400 dark:focus:ring-orange-900/30"
-            />
-            <p className="mt-1.5 text-[11px] text-[#9ca3af] dark:text-zinc-500">
-              O QR usa um token seguro. O número é só para exibição.
-            </p>
-          </div>
-
-          {error && (
-            <p className="mb-4 flex items-center gap-1.5 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 dark:bg-red-900/20 dark:text-red-400">
-              <FiAlertCircle size={14} />
-              {error}
-            </p>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-bold text-[#6b7280] transition hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-            >
-              Cancelar
-            </button>
-            <button
-              id="confirm-add-table"
-              type="submit"
-              disabled={loading}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#f97316] py-2.5 text-sm font-bold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600 disabled:opacity-70 dark:shadow-orange-900/30"
-            >
-              {loading ? <FiLoader size={14} className="animate-spin" /> : <FiPlus size={14} />}
-              {loading ? 'Criando…' : 'Criar mesa'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-  )
-}
-
-// ─── Archive Confirm Modal ────────────────────────────────────────────────────
-
-function ArchiveConfirmModal({ table, onClose, onConfirm, loading }) {
-  if (!table || typeof document === 'undefined') return null
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[160] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="archive-confirm-title"
-    >
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl dark:bg-zinc-900">
-        <div className="px-6 py-6">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-900/20">
-            <FiArchive size={22} className="text-red-500" />
-          </div>
-          <h3
-            id="archive-confirm-title"
-            className="text-base font-black text-[#111827] dark:text-zinc-100"
-          >
-            Arquivar mesa?
-          </h3>
-          <p className="mt-2 text-sm text-[#6b7280] dark:text-zinc-400">
-            A mesa{' '}
-            <strong className="text-[#111827] dark:text-zinc-100">{table.label}</strong> será
-            arquivada e seu QR ficará inacessível. O link pode ser reinserido na loja
-            quando necessário.
-          </p>
-        </div>
-        <div className="flex gap-2 border-t border-gray-100 px-6 py-4 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-bold text-[#6b7280] transition hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-          >
-            Cancelar
-          </button>
-          <button
-            id="confirm-archive-table"
-            type="button"
-            disabled={loading}
-            onClick={() => onConfirm(table)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white transition hover:bg-red-600 disabled:opacity-70"
-          >
-            {loading ? <FiLoader size={14} className="animate-spin" /> : <FiArchive size={14} />}
-            {loading ? 'Arquivando…' : 'Arquivar'}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function TablesEmptyState({ onAdd }) {
-  return (
-    <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-[#f9fafb] px-6 py-10 text-center dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-400">
-        <FiGrid size={24} />
-      </div>
-      <h3 className="mt-4 text-base font-black text-[#111827] dark:text-zinc-100">
-        Nenhuma mesa cadastrada
-      </h3>
-      <p className="mt-2 max-w-xs text-sm text-[#6b7280] dark:text-zinc-400">
-        Cadastre suas mesas para preparar os tokens — o checkout por mesa será ativado em breve.
-      </p>
-      <button
-        id="add-first-table"
-        type="button"
-        onClick={onAdd}
-        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#f97316] px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600 dark:shadow-orange-900/30"
-      >
-        <FiPlus size={14} />
-        Cadastrar mesa
-      </button>
-    </div>
-  )
-}
-
-// PrintTips: ocultada até o checkout por mesa (Fase 2) estar ativo.
-// Não faz sentido sugerir impressão antes do fluxo dine_in estar funcional.
-// eslint-disable-next-line no-unused-vars
-function PrintTips() { return null }
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function QRCodePage() {
@@ -871,39 +462,6 @@ export default function QRCodePage() {
   }
 }, [storeData, storeId])
 
-  // ─ Tables snapshot ─
-  const [tables, setTables] = useState([])
-  const [tablesLoading, setTablesLoading] = useState(true)
-
-  useEffect(() => {
-    if (!storeId) {
-      setTables([])
-      setTablesLoading(false)
-      return
-    }
-
-    setTablesLoading(true)
-    const tablesRef = collection(db, 'stores', storeId, 'tables')
-
-    const unsubscribe = onSnapshot(
-      tablesRef,
-      (snapshot) => {
-        const docs = snapshot.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((table) => table.isArchived !== true)
-          .sort(sortTables)
-
-        setTables(docs)
-        setTablesLoading(false)
-      },
-      (err) => {
-        console.error('[QRCodePage] tables snapshot error:', err)
-        setTablesLoading(false)
-      }
-    )
-    return () => unsubscribe()
-  }, [storeId])
-
   // ─ Computed ─
   const storeSlug = useMemo(() => getStoreSlug(selectedStore), [selectedStore])
     const storeName = useMemo(() => getStoreName(selectedStore), [selectedStore])
@@ -916,82 +474,11 @@ export default function QRCodePage() {
       return 'pratoby.com'
     }
   }, [publicUrl])
-  const activeTablesCount = useMemo(
-    () => tables.filter((table) => table.isActive !== false).length,
-    [tables]
-  )
-  const tableQrAllowed = hasPlanFeature(selectedStore || {}, 'tableQrCode')
 
   // ─ Toast ─
   const [toast, setToast] = useState(null)
   const showToast = useCallback((type, message) => setToast({ type, message }), [])
   const handleCloseToast = useCallback(() => setToast(null), [])
-
-  // ─ Add table modal ─
-  const [addTableOpen, setAddTableOpen] = useState(false)
-  const [addTableLoading, setAddTableLoading] = useState(false)
-
-  async function handleCreateTable({ label, number }) {
-    if (!storeId || addTableLoading) return
-    if (!tableQrAllowed) {
-      showToast('warning', UPGRADE_PROMPT_COPY.description)
-      return
-    }
-
-    setAddTableLoading(true)
-
-    try {
-      const fn = httpsCallable(functions, 'createStoreTable')
-      await fn({ storeId, label, number })
-      setAddTableOpen(false)
-      showToast('success', `"${label}" criada com sucesso.`)
-    } catch (err) {
-      console.error('[QRCodePage] createStoreTable error:', err)
-      showToast('error', getErrorMessage(err, 'Erro ao criar mesa. Tente novamente.'))
-    } finally {
-      setAddTableLoading(false)
-    }
-  }
-
-  // ─ Archive modal ─
-  const [archiveTarget, setArchiveTarget] = useState(null)
-  const [archiveLoading, setArchiveLoading] = useState(false)
-
-  async function handleArchive(table) {
-    setArchiveTarget(table)
-  }
-
-  async function confirmArchive(table) {
-    if (!storeId || !table?.id || archiveLoading) return
-
-    setArchiveLoading(true)
-
-    try {
-      const fn = httpsCallable(functions, 'archiveStoreTable')
-      await fn({ storeId, tableId: table.id })
-      setArchiveTarget(null)
-      showToast('success', `"${table.label}" arquivada.`)
-    } catch (err) {
-      console.error('[QRCodePage] archiveStoreTable error:', err)
-      showToast('error', getErrorMessage(err, 'Erro ao arquivar mesa. Tente novamente.'))
-    } finally {
-      setArchiveLoading(false)
-    }
-  }
-
-  // ─ Toggle active ─
-  async function handleToggleActive(table, newActive) {
-    if (!storeId || !table?.id) return
-
-    try {
-      const fn = httpsCallable(functions, 'updateStoreTable')
-      await fn({ storeId, tableId: table.id, isActive: newActive })
-      showToast('success', `Mesa ${newActive ? 'reativada' : 'desativada'}.`)
-    } catch (err) {
-      console.error('[QRCodePage] updateStoreTable error:', err)
-      showToast('error', getErrorMessage(err, 'Erro ao atualizar mesa.'))
-    }
-  }
 
   // ─ Render ─
   const pageLoading = storeLoading
@@ -1001,30 +488,11 @@ export default function QRCodePage() {
       {/* Toast */}
       <FloatingToast toast={toast} onClose={handleCloseToast} />
 
-      {/* Add table modal */}
-      {addTableOpen && (
-        <AddTableModal
-          onClose={() => setAddTableOpen(false)}
-          onConfirm={handleCreateTable}
-          loading={addTableLoading}
-        />
-      )}
-
-      {/* Archive confirm modal */}
-      {archiveTarget && (
-        <ArchiveConfirmModal
-          table={archiveTarget}
-          onClose={() => setArchiveTarget(null)}
-          onConfirm={confirmArchive}
-          loading={archiveLoading}
-        />
-      )}
-
       {/* Page header */}
       <DashboardPageHeader
         icon={FiGrid}
         title="QR Codes"
-        description="Gere QR Codes para o cardápio da loja, mesas e atendimento presencial."
+        description="Gere o QR Code do cardápio público da loja."
       />
 
       <div className="mx-auto max-w-6xl space-y-6 px-4 sm:px-6">
@@ -1071,10 +539,10 @@ export default function QRCodePage() {
                   Mesas cadastradas
                 </p>
                 <p className="mt-2 text-lg font-black text-[#111827] dark:text-zinc-100">
-                  {tables.length}
+                  Em breve
                 </p>
                 <p className="mt-1 text-xs font-bold text-[#6b7280] dark:text-zinc-400">
-                  {activeTablesCount} ativas para uso.
+                  QR por mesa não está liberado para uso no piloto.
                 </p>
               </div>
 
@@ -1086,7 +554,7 @@ export default function QRCodePage() {
                   Checkout por mesa
                 </p>
                 <p className="mt-1 text-xs font-bold leading-5 text-orange-700 dark:text-orange-300">
-                  Tokens já são gerados com segurança. Download e impressão serão liberados quando o fluxo estiver ativo.
+                  O fluxo de pedido por mesa ainda não está disponível para operação real.
                 </p>
               </div>
             </section>
@@ -1170,87 +638,15 @@ export default function QRCodePage() {
             {/* ── Seção 2: QR por mesa ── */}
             <SectionCard
               title="QR por mesa"
-              description="Cadastre as mesas e tokens agora. Download e impressão serão liberados quando o checkout por mesa estiver ativo."
-              action={
-                tableQrAllowed ? (
-                <button
-                  id="open-add-table-modal"
-                  type="button"
-                  onClick={() => setAddTableOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#f97316] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600 dark:shadow-orange-900/30"
-                >
-                  <FiPlus size={14} />
-                  Adicionar mesa
-                </button>
-                ) : (
-                  <a
-                    href="/dashboard/billing"
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#f97316] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600 dark:shadow-orange-900/30"
-                  >
-                    {UPGRADE_PROMPT_COPY.primaryAction}
-                  </a>
-                )
-              }
+              description="Em breve. O checkout por mesa ainda não está disponível para uso real."
             >
-              {/* Banner de aviso — checkout por mesa ainda não está ativo */}
-              {!tableQrAllowed && (
-                <div className="mb-5 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
-                  <FiLock size={15} className="mt-0.5 shrink-0 text-orange-600 dark:text-orange-400" />
-                  <div>
-                    <p className="text-sm font-black text-orange-900 dark:text-orange-100">
-                      {UPGRADE_PROMPT_COPY.title}
-                    </p>
-                    <p className="mt-1 text-xs font-bold leading-5 text-orange-800 dark:text-orange-300">
-                      {UPGRADE_PROMPT_COPY.description}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {tableQrAllowed && (
-              <div className="mb-5 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
+              <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
                 <FiLock size={15} className="mt-0.5 shrink-0 text-orange-600 dark:text-orange-400" />
                 <p className="text-xs font-bold leading-5 text-orange-800 dark:text-orange-300">
-                  <span className="font-black">Checkout por mesa em preparação.</span>{' '}
-                  Você pode cadastrar e organizar as mesas agora — os tokens já são gerados com segurança.
-                  Baixar e imprimir os QR Codes serão liberados quando o fluxo de pedido por mesa estiver ativo.
+                  <span className="font-black">QR por mesa está em breve.</span>{' '}
+                  Use o QR do cardápio público para o piloto. Mesas, download e impressão por mesa serão liberados quando o fluxo de pedido presencial estiver pronto.
                 </p>
               </div>
-              )}
-
-              {!tableQrAllowed ? null : tablesLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <FiLoader size={22} className="animate-spin text-[#f97316]" />
-                </div>
-              ) : tables.length === 0 ? (
-                <TablesEmptyState onAdd={() => setAddTableOpen(true)} />
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {tables.map((table) => (
-                    <TableCard
-                      key={table.id}
-                      table={table}
-                      storeSlug={storeSlug}
-                      storeName={storeName}
-                      onArchive={handleArchive}
-                      onToggleActive={handleToggleActive}
-                      onToast={showToast}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {tableQrAllowed && tables.length > 0 && (
-                <div className="mt-5 rounded-xl bg-[#f9fafb] px-4 py-3 dark:bg-zinc-800">
-                  <p className="text-xs font-bold text-[#6b7280] dark:text-zinc-400">
-                    🔒 Cada mesa usa um token seguro único (ex:{' '}
-                    <code className="rounded bg-gray-100 px-1 font-mono text-[11px] dark:bg-zinc-700">
-                      t_3f8ac1b2
-                    </code>
-                    ). Ao ativar o checkout por mesa, cada QR abrirá o cardápio já identificado.
-                  </p>
-                </div>
-              )}
             </SectionCard>
 
             {/* PrintTips ocultado até checkout por mesa (Fase 2) — ver função PrintTips */}

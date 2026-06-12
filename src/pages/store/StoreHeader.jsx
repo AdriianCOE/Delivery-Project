@@ -227,6 +227,7 @@ function getBannerUrl(store) {
 }
 
 function getLogoUrl(store) {
+
   return getCloudinaryOptimizedUrl(
     store?.logoUrl ||
       store?.logoURL ||
@@ -234,8 +235,8 @@ function getLogoUrl(store) {
       store?.avatarUrl ||
       store?.imageUrl ||
       store?.photoUrl ||
-      store?.settings?.logoUrl,
-    320
+    store?.settings?.logoUrl,
+    { width: 96, height: 96, crop: 'fill' }
   )
 }
 
@@ -1108,14 +1109,24 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   return (
     <header className="relative w-full overflow-visible bg-[#f6f7f9]">
       <div className="store-banner-shell relative h-[168px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
-  <div
-    className="store-banner-bg absolute inset-0"
-    style={{
-      background: bannerUrl
-        ? `url(${bannerUrl}) center/cover no-repeat`
-        : `linear-gradient(135deg, ${themeColor} 0%, #111827 135%)`,
-    }}
-  />
+  {bannerUrl ? (
+    <img
+      src={bannerUrl}
+      alt=""
+      className="store-banner-bg absolute inset-0 h-full w-full object-cover"
+      fetchPriority="high"
+      loading="eager"
+      decoding="async"
+      aria-hidden="true"
+    />
+  ) : (
+    <div
+      className="store-banner-bg absolute inset-0"
+      style={{
+        background: `linear-gradient(135deg, ${themeColor} 0%, #111827 135%)`,
+      }}
+    />
+  )}
 
   <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/[0.03] to-[#f6f7f9]" />
   <div

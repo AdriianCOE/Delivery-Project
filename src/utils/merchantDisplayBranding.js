@@ -1,4 +1,6 @@
-const PRATOBY_LOGO = '/icons/icon-192.png'
+import { getEffectivePlan, hasPlanFeature } from './planCatalog'
+
+const PRATOBY_LOGO = '/icons/favicon-32x32.png'
 
 export function getDisplayStoreName(storeData, userData, fallback = 'PratoBy') {
   return String(
@@ -26,31 +28,13 @@ export function getStoreLogoUrl(storeData) {
 }
 
 export function getPlanId(storeData, userData) {
-  const plan = String(
-    storeData?.effectivePlan ||
-      userData?.effectivePlan ||
-      storeData?.billingPlan ||
-      storeData?.selectedPlan ||
-      storeData?.plan ||
-      storeData?.planId ||
-      userData?.billingPlan ||
-      userData?.selectedPlan ||
-      userData?.plan ||
-      userData?.planId ||
-      'essential'
-  ).toLowerCase().trim()
-
-  if (plan === 'premium') return 'premium'
-  if (plan === 'professional' || plan === 'profissional' || plan === 'plus') {
-    return 'professional'
-  }
-  return 'essential'
+  return getEffectivePlan({ ...(userData || {}), ...(storeData || {}) }) || 'essential'
 }
 
 export function getMerchantDisplayLogoUrl(storeData, userData) {
   const storeLogoUrl = getStoreLogoUrl(storeData)
-  const plan = getPlanId(storeData, userData)
+  const brandingData = { ...(userData || {}), ...(storeData || {}) }
 
-  if (plan === 'premium' && storeLogoUrl) return storeLogoUrl
+  if (storeLogoUrl && hasPlanFeature(brandingData, 'customBranding')) return storeLogoUrl
   return PRATOBY_LOGO
 }

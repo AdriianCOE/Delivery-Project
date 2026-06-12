@@ -51,7 +51,7 @@ const contactBlocks = [
 const faqs = [
   {
     q: 'O PratoBy cobra comissão por pedido?',
-    a: 'Não. Nossa plataforma possui 0% de comissão por pedido. Você vende direto e recebe o valor integral (descontadas apenas as taxas da sua maquininha ou gateway de pagamento, se houver).',
+    a: 'Não cobramos comissão do PratoBy por pedido. Você vende direto e recebe o valor descontadas apenas as taxas da sua maquininha ou gateway de pagamento, se houver.',
   },
   {
     q: 'Preciso ter site próprio?',
@@ -196,7 +196,7 @@ export default function ContactPage() {
     <>
       <SEO
         title="Contato | PratoBy"
-        description="Fale com o PratoBy, tire dúvidas ou comece sua loja online com 0% de comissão por pedido."
+        description="Fale com o PratoBy, tire dúvidas ou comece sua loja online sem comissão do PratoBy por pedido."
         path="/contato"
       />
 
@@ -225,7 +225,7 @@ export default function ContactPage() {
                 </h1>
 
                 <p className="mx-auto mt-6 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg">
-                  Tire dúvidas, fale com o suporte ou comece sua loja online com 0% de comissão por pedido.
+                  Tire dúvidas, fale com o suporte ou comece sua loja online sem comissão do PratoBy por pedido.
                 </p>
 
                 <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">

@@ -11,7 +11,8 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { auth, db, functions, googleProvider } from '../../services/firebase'
+import { db, functions } from '../../services/firebase'
+import { auth, googleProvider } from '../../services/firebaseAuth'
 import { useAuth } from '../../contexts/AuthContext'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import { AnimatePresence, motion } from 'motion/react'
@@ -549,7 +550,7 @@ function SummaryCard({ plan, cycle }) {
             <div className="mt-4 space-y-2 border-t border-orange-100 pt-4">
               {[
                 { icon: FiCheckCircle, text: '14 dias grátis inclusos' },
-                { icon: FiCheckCircle, text: '0% de comissão por pedido' },
+                { icon: FiCheckCircle, text: 'Sem comissão do PratoBy por pedido' },
                 { icon: FiCheckCircle, text: 'Pagamento seguro via Asaas' },
               ].map(({ icon: Icon, text }, index) => (
                 <motion.div
@@ -1079,7 +1080,7 @@ export default function SignupPage() {
               className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur"
             >
               <FiShield className="text-[#f97316]" />
-              Comece em minutos, sem comissão por pedido
+              Comece em minutos, sem comissão do PratoBy por pedido
             </motion.span>
 
             <motion.h1
@@ -1087,7 +1088,7 @@ export default function SignupPage() {
               className="mt-8 text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl"
             >
               Sua loja online,
-              <span className="block text-[#f97316]">sem comissão.</span>
+              <span className="block text-[#f97316]">sem depender de marketplace.</span>
             </motion.h1>
 
             <motion.p
@@ -1095,7 +1096,7 @@ export default function SignupPage() {
               className="mt-6 max-w-sm text-lg font-medium leading-8 text-gray-300"
             >
               Cardápio digital, pedidos em tempo real e link exclusivo para divulgar onde quiser.
-              Sem marketplace, sem comissão por venda.
+              Sem depender de marketplace e sem comissão do PratoBy por pedido.
             </motion.p>
 
             <motion.div
@@ -1104,7 +1105,7 @@ export default function SignupPage() {
             >
               {[
                 '14 dias grátis',
-                '0% de comissão por pedido',
+                'Sem comissão do PratoBy por pedido',
                 'Link próprio da loja',
                 'Suporte no WhatsApp',
               ].map((item) => (
@@ -1159,10 +1160,10 @@ export default function SignupPage() {
               {/* Hero mobile compacto */}
               <div className="mb-6 rounded-2xl bg-orange-50/50 p-4 border border-orange-100 sm:hidden">
                 <h2 className="text-xl font-black text-[#111827] leading-tight">Crie sua loja em minutos</h2>
-                <p className="mt-1 text-xs font-bold text-[#6b7280]">Teste grátis por 14 dias. Sem comissão por pedido.</p>
+                <p className="mt-1 text-xs font-bold text-[#6b7280]">Teste grátis por 14 dias. Sem comissão do PratoBy por pedido.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1 rounded-md bg-[#f97316] px-2 py-1 text-[10px] font-black text-white">14 dias grátis</span>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-[10px] font-black text-[#111827]">Sem comissão</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-[10px] font-black text-[#111827]">Sem comissão do PratoBy</span>
                   <span className="inline-flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-[10px] font-black text-[#111827]">Link próprio</span>
                 </div>
               </div>

@@ -2,7 +2,7 @@ import { FiUser } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 
-import { auth } from '../../services/firebase'
+import { auth } from '../../services/firebaseAuth'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import ProfilePanel from '../../components/merchant/ProfilePanel'

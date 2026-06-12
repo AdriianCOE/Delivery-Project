@@ -14,9 +14,6 @@ import ScrollToTop from '../utils/ScrollToTop'
 // Lojista
 import { ComingSoon } from '../pages/merchant/ComingSoon'
 
-// Layouts / Proteção
-import ProtectedRoute from '../components/auth/ProtectedRoute'
-
 // Ícones dos placeholders
 import {
   FiCreditCard,
@@ -34,6 +31,7 @@ const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const SignupPage = lazy(() => import('../pages/auth/SignupPage'))
 const OnboardingPage = lazy(() => import('../pages/auth/OnboardingPage'))
 const AuthActionPage = lazy(() => import('../pages/auth/AuthActionPage'))
+const ProtectedRoute = lazy(() => import('../components/auth/ProtectedRoute'))
 
 const AboutPage = lazy(() => import('../pages/AboutPage'))
 const ContactPage = lazy(() => import('../pages/ContactPage'))

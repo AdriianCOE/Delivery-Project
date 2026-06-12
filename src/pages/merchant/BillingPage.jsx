@@ -151,22 +151,22 @@ const BILLING_PLAN_PRESENTATION = {
     highlights: ['Cardápio digital ilimitado', 'Pedidos em tempo real', 'Link próprio da loja'],
   },
   professional: {
-    name: 'Professional',
+    name: 'Profissional',
     tagline: 'Para vender mais.',
-    description: 'Cupons, WhatsApp e relatórios para aumentar pedidos e acompanhar melhor a operação.',
-    bestFor: 'Lojas que já vendem online e querem campanhas, mais controle e rotina mais ágil.',
-    cta: 'Escolher Professional',
+    description: 'Cupons, encomendas e limites maiores para acompanhar melhor a operação.',
+    bestFor: 'Lojas que querem campanhas, agendamento e rotina mais ágil.',
+    cta: 'Escolher Profissional',
     badge: 'Mais escolhido',
-    highlights: ['Cupons e ofertas', 'Notificações Push', 'Relatórios avançados'],
+    highlights: ['Agendamento e encomendas', 'Cupons e ofertas', 'Até 3 usuários'],
   },
   premium: {
     name: 'Premium',
-    tagline: 'Para operações maiores.',
-    description: 'Mais estrutura para marcas fortes, filiais, domínio próprio e atendimento VIP.',
-    bestFor: 'Operações com mais de uma loja ou que precisam de marca própria e suporte próximo.',
+    tagline: 'Para operações com mais controle.',
+    description: 'Limites altos, personalização avançada quando disponível e suporte prioritário.',
+    bestFor: 'Operações que precisam de limites maiores, marca mais forte e suporte prioritário.',
     cta: 'Escolher Premium',
     badge: 'Mais completo',
-    highlights: ['Até 3 filiais', 'Domínio personalizado', 'Suporte VIP'],
+    highlights: ['Até 1000 produtos', 'Personalização avançada', 'Suporte prioritário'],
   },
 }
 
@@ -182,17 +182,17 @@ const PLAN_COMPARISON_SECTIONS = [
   {
     category: 'Vendas',
     rows: [
-      { feature: 'Cupons e ofertas', essential: 'Não incluído', professional: 'Ilimitados', premium: 'Ilimitados' },
-      { feature: 'Avisos por WhatsApp', essential: 'Não incluído', professional: 'Status automático', premium: 'Status automático' },
-      { feature: 'Relatórios', essential: 'Básicos', professional: 'Avançados', premium: 'Avançados' },
+      { feature: 'Cupons e ofertas', essential: 'Não incluído', professional: 'Até 20', premium: 'Limite alto' },
+      { feature: 'Agendamento/encomendas', essential: 'Não incluído', professional: 'Incluído', premium: 'Incluído' },
+      { feature: 'Relatórios', essential: 'Básicos', professional: 'Básicos', premium: 'Avançados' },
     ],
   },
   {
     category: 'Marca e suporte',
     rows: [
-      { feature: 'Domínio próprio', essential: 'Não incluído', professional: 'Não incluído', premium: 'Incluído' },
-      { feature: 'Marca própria', essential: 'Não incluído', professional: 'Não incluído', premium: 'Incluído' },
-      { feature: 'Atendimento', essential: 'E-mail', professional: 'Prioritário', premium: 'VIP' },
+      { feature: 'Personalização avançada', essential: 'Não incluído', professional: 'Não incluído', premium: 'Incluído' },
+      { feature: 'Ocultar marca PratoBy', essential: 'Não incluído', professional: 'Não incluído', premium: 'Incluído' },
+      { feature: 'Atendimento', essential: 'Padrão', professional: 'Padrão', premium: 'Prioritário' },
     ],
   },
 ]
@@ -1567,7 +1567,7 @@ export default function BillingPage() {
           <div>
             <p className="text-sm font-black text-gray-900 dark:text-white">Quer ver todos os recursos lado a lado?</p>
             <p className="mt-1 text-xs font-semibold text-gray-600 dark:text-zinc-400">
-              Abra a lista de comparação completa para decidir entre Essencial, Professional e Premium.
+              Abra a lista de comparação completa para decidir entre Essencial, Profissional e Premium.
             </p>
           </div>
           <Link
@@ -1596,9 +1596,9 @@ export default function BillingPage() {
             </div>
 
             <div className="space-y-1.5">
-              <h4 className="font-black text-gray-900 dark:text-white">Qual plano escolher: Professional ou Premium?</h4>
+              <h4 className="font-black text-gray-900 dark:text-white">Qual plano escolher: Profissional ou Premium?</h4>
               <p className="text-gray-500 dark:text-zinc-400">
-                O plano <strong>Professional</strong> atende a maioria das lojas que querem vender mais com cupons, WhatsApp e relatórios. Escolha o <strong>Premium</strong> se sua operação tem filiais, marca própria ou precisa de suporte VIP.
+                O plano <strong>Profissional</strong> atende a maioria das lojas que querem vender mais com encomendas, cupons e limites maiores. Escolha o <strong>Premium</strong> se sua operação precisa de personalização avançada, limites altos ou suporte prioritário.
               </p>
             </div>
 

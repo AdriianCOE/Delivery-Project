@@ -142,7 +142,7 @@ export default function AboutPage() {
     <>
       <SEO
         title="Sobre | PratoBy"
-        description="Conheça o PratoBy: cardápio digital e delivery próprio para lojistas venderem direto, sem comissão por pedido."
+        description="Conheça o PratoBy: cardápio digital e delivery próprio para lojistas venderem direto, sem comissão do PratoBy por pedido."
         path="/sobre"
       />
 
@@ -169,11 +169,11 @@ export default function AboutPage() {
 
                   <p className="mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg">
                     O PratoBy ajuda lojas locais a criarem uma experiência de pedido
-                    online simples, bonita e sem comissão por venda.
+                    online simples, bonita e sem comissão do PratoBy por pedido.
                   </p>
 
                   <div className="mt-6 flex flex-wrap gap-2">
-                    <Badge>0% comissão</Badge>
+                    <Badge>Sem comissão do PratoBy</Badge>
                     <Badge>Link próprio</Badge>
                     <Badge>Pedidos em tempo real</Badge>
                   </div>

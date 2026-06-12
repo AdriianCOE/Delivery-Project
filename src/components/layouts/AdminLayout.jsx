@@ -36,7 +36,7 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
-import { auth } from '../../services/firebase'
+import { auth } from '../../services/firebaseAuth'
 
 const BRAND_ORANGE = '#f97316'
 const APP_ENV = import.meta.env.MODE || 'development'
@@ -195,7 +195,7 @@ const FUTURE_SECTIONS = [
     items: [
       {
         label: 'White-label avançado',
-        description: 'Domínio próprio e tema',
+        description: 'Marca e tema avançados',
         icon: FiLayers,
         feature: 'white-label-avancado',
       },
