@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import { Link } from 'react-router-dom'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
@@ -800,6 +800,8 @@ function ImageUploadField({
   onSelectFromLibrary,
   onRemove,
 }) {
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+
   const previewClass =
     aspect === 'banner'
       ? 'h-40 w-full rounded-[1.5rem]'
@@ -819,14 +821,52 @@ function ImageUploadField({
     return 'Recomendado: imagem quadrada.'
   }, [aspect, label])
 
+  const handleDroppedFile = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDraggingFile(false)
+
+    if (uploading) return
+
+    const file = event.dataTransfer?.files?.[0]
+
+    if (!file) return
+
+    const isImage = file.type?.startsWith('image/')
+
+    if (!isImage) {
+      window.alert('Envie apenas imagens nos formatos PNG, JPG, JPEG ou WEBP.')
+      return
+    }
+
+    onUpload(file)
+  }
+
+  const handleDragOver = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!uploading) {
+      setIsDraggingFile(true)
+    }
+  }
+
+  const handleDragLeave = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDraggingFile(false)
+  }
+
   return (
     <div className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-black text-[#111827]">{label}</p>
+          <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
+            {label}
+          </p>
 
           {description && (
-            <p className="mt-1 text-xs leading-5 text-[#6b7280]">
+            <p className="mt-1 text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
               {description}
             </p>
           )}
@@ -836,10 +876,10 @@ function ImageUploadField({
           <button
             type="button"
             onClick={onRemove}
-            className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+            className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 dark:bg-red-950/35 dark:text-red-300 dark:hover:bg-red-950/60"
             title="Remove a imagem deste campo, mas mantém ela na biblioteca."
           >
-            Remover
+            Remover desta seção
           </button>
         )}
       </div>
@@ -862,8 +902,16 @@ function ImageUploadField({
                 type="button"
                 onClick={openLibrary}
                 disabled={disabled || uploading}
-                className={`${previewClass} group relative flex shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-200 bg-white text-gray-400 transition hover:border-orange-200 hover:bg-orange-50/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-500 dark:hover:border-orange-500/50 dark:hover:bg-zinc-900`}
-                title="Clique para escolher da biblioteca"
+                onDragEnter={handleDragOver}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDroppedFile}
+                className={`${previewClass} group relative flex shrink-0 items-center justify-center overflow-hidden border border-dashed bg-white text-gray-400 transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-950 dark:text-zinc-500 ${
+                  isDraggingFile
+                    ? 'border-orange-400 bg-orange-50 ring-4 ring-orange-100 dark:border-orange-500 dark:bg-zinc-900 dark:ring-orange-500/20'
+                    : 'border-gray-200 hover:border-orange-200 hover:bg-orange-50/40 dark:border-zinc-700 dark:hover:border-orange-500/50 dark:hover:bg-zinc-900'
+                }`}
+                title="Clique para escolher da biblioteca ou arraste uma imagem aqui"
               >
                 {value ? (
                   <img
@@ -873,12 +921,36 @@ function ImageUploadField({
                     loading="lazy"
                   />
                 ) : (
-                  <FiImage size={24} />
+                  <div className="flex flex-col items-center gap-2 px-4 text-center">
+                    <FiImage size={24} />
+                    <span className="text-xs font-black text-gray-400 dark:text-zinc-500">
+                      Clique ou arraste uma imagem
+                    </span>
+                  </div>
                 )}
 
-                <span className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 px-3 py-2 text-center text-[11px] font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100">
-                  Clique para escolher da biblioteca
-                </span>
+                {uploading && (
+                  <div className="absolute inset-0 grid place-items-center bg-black/45 text-white">
+                    <div className="flex items-center gap-2 rounded-2xl bg-black/50 px-4 py-2 text-xs font-black">
+                      <FiLoader className="animate-spin" />
+                      Enviando...
+                    </div>
+                  </div>
+                )}
+
+                {!uploading && isDraggingFile && (
+                  <div className="absolute inset-0 grid place-items-center bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-200">
+                    <div className="rounded-2xl bg-white/90 px-4 py-2 text-xs font-black shadow-lg dark:bg-zinc-950/90">
+                      Solte a imagem para enviar
+                    </div>
+                  </div>
+                )}
+
+                {!uploading && value && !isDraggingFile && (
+                  <span className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 px-3 py-2 text-center text-[11px] font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+                    Clique para escolher ou arraste uma imagem
+                  </span>
+                )}
               </button>
 
               <div className="min-w-0 flex-1 space-y-3">
@@ -913,19 +985,24 @@ function ImageUploadField({
                   type="button"
                   onClick={openLibrary}
                   disabled={disabled || uploading}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
                 >
                   <FiImage />
                   Escolher da biblioteca
                 </button>
 
-                <p className="text-xs leading-5 text-[#6b7280]">
+                <p className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
                   {recommendation}
                 </p>
 
+                <p className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
+                  Você pode clicar no preview, escolher da biblioteca, enviar
+                  pelo botão ou arrastar uma imagem diretamente aqui.
+                </p>
+
                 {value && (
-                  <p className="text-xs leading-5 text-[#6b7280]">
-                    Remover limpa apenas este campo. A imagem
+                  <p className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
+                    Remover desta seção limpa apenas este campo. A imagem
                     continua na biblioteca.
                   </p>
                 )}
