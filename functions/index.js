@@ -344,6 +344,10 @@ const PUBLIC_CALLABLE_OPTIONS = {
   maxInstances: 10,
   enforceAppCheck: ENFORCE_APP_CHECK,
 }
+const PUBLIC_STORE_PROFILE_CALLABLE_OPTIONS = {
+  ...PUBLIC_CALLABLE_OPTIONS,
+  invoker: 'public',
+}
 const PUBLIC_READ_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const PUBLIC_READ_RATE_LIMITS = {
   getPublicStoreProfile: 120,
@@ -1535,7 +1539,7 @@ function validateCouponForPublicResponse(coupon, items, subtotalCents) {
 }
 
 exports.getPublicStoreProfile = onCall(
-  PUBLIC_CALLABLE_OPTIONS,
+  PUBLIC_STORE_PROFILE_CALLABLE_OPTIONS,
   async (request) => {
     const data = request.data || {}
     await assertPublicCallableRateLimit('getPublicStoreProfile', request)
@@ -1547,11 +1551,14 @@ exports.getPublicStoreProfile = onCall(
 
     return {
       ok: true,
-      store: normalizeStorePayload(storeRecord.id, storeRecord.data, storeRecord.collectionName),
+      store: normalizeStorePayload(
+        storeRecord.id,
+        storeRecord.data,
+        storeRecord.collectionName
+      ),
     }
   }
 )
-
 exports.getPublicCatalog = onCall(
   { ...PUBLIC_CALLABLE_OPTIONS, memory: '512MiB' },
   async (request) => {
