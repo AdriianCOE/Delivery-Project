@@ -15,7 +15,7 @@ import {
   signOut,
 } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
-import { AnimatePresence, motion } from 'motion/react'   // ← CORRIGIDO: era 'framer-motion'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   FiAlertCircle,
   FiArrowLeft,
@@ -44,6 +44,7 @@ import { auth, googleProvider } from '../../services/firebaseAuth'
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0'
 const APP_ENV = import.meta.env.MODE || 'production'
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const BENEFITS = [
   'Pedidos em tempo real no painel',
@@ -370,7 +371,7 @@ export default function LoginPage() {
   const [isResettingPassword, setIsResettingPassword] = useState(false)
 
   const cleanEmail = useMemo(() => email.trim().toLowerCase(), [email])
-  const canSubmit  = Boolean(cleanEmail && password && !isLoading && !isResettingPassword)
+  const canSubmit  = Boolean(EMAIL_PATTERN.test(cleanEmail) && password && !isLoading && !isResettingPassword)
 
   // ── handleLogin (preservado integralmente) ─────────────────
   async function handleLogin(event) {
@@ -486,7 +487,7 @@ export default function LoginPage() {
   // ── Render ─────────────────────────────────────────────────
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f9fafb]">
+      <main className="flex min-h-screen items-center justify-center bg-[#fff7ed]">
         <div className="flex flex-col items-center justify-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-[#f97316]"></div>
           <p className="text-sm font-bold text-gray-500">Verificando sessão...</p>
@@ -496,11 +497,11 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-[#f8fafc] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
+    <main className="relative min-h-dvh overflow-hidden bg-[#fff7ed] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
       <LoginMobileHeader />
 
       {/* GRID PRINCIPAL */}
-      <div className="relative z-10 grid min-h-dvh lg:grid-cols-[minmax(0,0.95fr)_minmax(430px,0.72fr)]">
+      <div className="relative z-10 grid min-h-dvh lg:grid-cols-[minmax(0,0.92fr)_minmax(430px,0.72fr)]">
 
         {/* ── LADO ESQUERDO — painel de apresentação ─── */}
         <section className="relative hidden overflow-hidden bg-[#111827] px-8 py-8 text-white lg:flex lg:flex-col lg:justify-between xl:px-12">
@@ -544,18 +545,17 @@ export default function LoginPage() {
 
             <motion.h1
               variants={fadeUp}
-              className="mt-7 max-w-xl text-5xl font-black leading-[1.03] tracking-tight xl:text-6xl"
+              className="mt-7 max-w-2xl text-5xl font-black leading-[1.03] tracking-tight xl:text-6xl"
             >
-              Acesse sua operação
-              <span className="block text-[#f97316]">sem perder tempo.</span>
+              Volte para sua operação
+              <span className="block text-[#f97316]">em poucos segundos.</span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="mt-6 max-w-xl text-lg font-medium leading-8 text-gray-300"
             >
-              Login direto para acompanhar pedidos, atualizar cardápio, ajustar horários e
-              cuidar do atendimento pelo painel do PratoBy.
+              Acesse pedidos, cardápio, horários, clientes e atendimento em um painel feito para operação real.
             </motion.p>
 
             <motion.div
@@ -627,7 +627,7 @@ export default function LoginPage() {
         </section>
 
         {/* ── LADO DIREITO — formulário de login ─── */}
-        <section className="flex min-h-dvh items-center justify-center border-l border-gray-200/70 bg-white px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        <section className="flex min-h-dvh items-center justify-center border-l border-orange-100/70 bg-white/85 px-4 py-6 backdrop-blur sm:px-6 lg:px-10 lg:py-10">
           <div className="w-full max-w-[30rem]">
 
             {/* CARD PRINCIPAL */}
@@ -635,7 +635,7 @@ export default function LoginPage() {
               initial={{ opacity: 0, y: 28, scale: 0.96, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-              className="rounded-[1.75rem] border border-gray-200 bg-white p-5 shadow-2xl shadow-gray-900/10 sm:p-8"
+              className="rounded-[2rem] border border-orange-100/80 bg-white/95 p-5 shadow-2xl shadow-orange-950/10 backdrop-blur sm:p-8"
             >
               <motion.div
                 variants={staggerContainer}
@@ -645,10 +645,10 @@ export default function LoginPage() {
                 {/* barra logo — só desktop (dentro do card) */}
                 <motion.div
                   variants={fadeUp}
-                  className="mb-7 hidden rounded-[1.25rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:flex lg:items-center lg:justify-between lg:gap-4"
+                  className="mb-7 hidden rounded-[1.25rem] border border-orange-100/80 bg-orange-50/45 p-3 shadow-sm lg:flex lg:items-center lg:justify-between lg:gap-4"
                 >
                   <PratoByLogo compact />
-                  <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-[#9ca3af] ring-1 ring-gray-100">
+                  <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-[#9ca3af] ring-1 ring-orange-100">
                     v{APP_VERSION}
                   </span>
                 </motion.div>
@@ -660,7 +660,7 @@ export default function LoginPage() {
                     Acesso seguro
                   </div>
                   <h2 className="mt-4 text-3xl font-black tracking-tight text-[#111827] sm:text-[2.45rem]">
-                    Entrar no painel
+                    Bem-vindo de volta
                   </h2>
                   <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
                     Continue para o painel da sua loja com e-mail, senha ou Google.
@@ -686,14 +686,14 @@ export default function LoginPage() {
                   <motion.button
                     type="button"
                     onClick={handleGoogleLogin}
-                    disabled={isLoading}
+                    disabled={isLoading || isResettingPassword}
                     whileHover={{ y: -2, scale: 1.005, borderColor: '#d1d5db' }}
                     whileTap={{ scale: 0.985 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <GoogleIcon size={18} />
-                    Entrar com Google
+                    Continuar com Google
                   </motion.button>
 
                   <div className="mt-5 flex items-center gap-3">
@@ -836,7 +836,7 @@ export default function LoginPage() {
                         Ainda não tem conta?
                       </p>
                       <p className="mt-0.5 text-xs font-semibold text-[#6b7280]">
-                      Crie sua loja e comece seu teste grátis.
+                      Crie sua loja e comece seu teste grátis com recursos Premium.
                       </p>
                     </div>
                     <Link

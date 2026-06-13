@@ -313,6 +313,134 @@ function StepItem({ step, index, isLast }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// COMPONENTES DE APOIO VISUAL
+// ─────────────────────────────────────────────────────────────
+
+function OnboardingSidebar({ displayName, email, emailVerified, phoneVerified, phoneDisplay }) {
+  const firstName = String(displayName || '').trim().split(' ')[0]
+
+  return (
+    <motion.aside
+      initial={{ opacity: 0, x: -24, filter: 'blur(8px)' }}
+      animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+      className="relative hidden min-h-[680px] overflow-hidden rounded-[2.25rem] bg-[#111113] p-8 text-white shadow-2xl shadow-orange-950/20 lg:flex lg:flex-col xl:p-10"
+    >
+      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-amber-400/15 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.16),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_42%)]" />
+
+      <div className="relative z-10 flex h-full flex-col">
+        <Link to="/" className="group inline-flex w-fit items-center gap-3" aria-label="Ir para início">
+          <img
+            src="/icons/icon-192.png"
+            alt="PratoBy"
+            className="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-orange-600/25 ring-1 ring-white/10 transition duration-300 group-hover:scale-105"
+          />
+          <div className="leading-none">
+            <p className="text-2xl font-black tracking-tighter">
+              Prato<span className="text-[#fb923c]">By</span>
+            </p>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+              Ativação da loja
+            </p>
+          </div>
+        </Link>
+
+        <div className="mt-12">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-orange-100 ring-1 ring-white/10">
+            <FiZap size={13} className="text-[#fb923c]" />
+            Próximos minutos
+          </span>
+
+          <h2 className="mt-5 max-w-sm text-4xl font-black leading-[1.02] tracking-tight xl:text-5xl">
+            {firstName ? `${firstName}, falta pouco.` : 'Falta pouco para ativar sua loja.'}
+          </h2>
+
+          <p className="mt-4 max-w-md text-sm font-semibold leading-7 text-white/62">
+            Confirme o telefone, avance para a cobrança e libere o painel para configurar cardápio, pedidos, retirada, entrega e pagamentos.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-3">
+          {STEPS.map((step, index) => {
+            let status = step.status
+            if (step.id === 'whatsapp') status = phoneVerified ? 'completed' : 'current'
+            if (step.id === 'trial') status = phoneVerified ? 'current' : 'upcoming'
+
+            const Icon = step.icon
+            const completed = status === 'completed'
+            const current = status === 'current'
+
+            return (
+              <div
+                key={step.id}
+                className={`flex items-center gap-3 rounded-[1.35rem] border px-4 py-3 transition ${
+                  completed
+                    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                    : current
+                      ? 'border-orange-300/25 bg-orange-400/15 text-orange-50 shadow-lg shadow-orange-950/10'
+                      : 'border-white/10 bg-white/[0.045] text-white/45'
+                }`}
+              >
+                <div
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
+                    completed
+                      ? 'bg-emerald-400 text-white'
+                      : current
+                        ? 'bg-[#f97316] text-white'
+                        : 'bg-white/10 text-white/45'
+                  }`}
+                >
+                  {completed ? <FiCheckCircle size={18} /> : <Icon size={18} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-black">{step.label}</p>
+                    {current && (
+                      <span className="rounded-full bg-orange-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-orange-100">
+                        Atual
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-xs font-semibold opacity-70">{step.description}</p>
+                </div>
+                <span className="text-xs font-black opacity-40">0{index + 1}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="mt-auto rounded-[1.65rem] border border-white/10 bg-white/[0.06] p-5 backdrop-blur">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-white/40">
+            Conta em ativação
+          </p>
+          <div className="mt-4 space-y-3 text-sm font-semibold text-white/72">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-white/45">E-mail</span>
+              <span className="truncate text-right">{email || 'Conta criada'}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-white/45">Telefone</span>
+              <span className={phoneVerified ? 'text-emerald-200' : 'text-orange-100'}>
+                {phoneVerified ? phoneDisplay || 'Verificado' : 'Pendente'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-white/45">E-mail seguro</span>
+              <span className={emailVerified ? 'text-emerald-200' : 'text-white/65'}>
+                {emailVerified ? 'Confirmado' : 'Aguardando'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.aside>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────
@@ -560,8 +688,10 @@ export default function OnboardingPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[#f9fafb] px-6">
-        <div className="text-center">
+      <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#f9fafb] px-6">
+        <div className="pointer-events-none absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 bottom-16 h-80 w-80 rounded-full bg-amber-100 blur-3xl" />
+        <div className="relative text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-[#f97316] text-white shadow-xl shadow-orange-600/20">
             <FiShield size={28} />
           </div>
@@ -569,9 +699,9 @@ export default function OnboardingPage() {
             PratoBy
           </p>
           <p className="mt-1 text-sm font-medium text-[#6b7280]">
-            Carregando sua conta...
+            Preparando sua ativação...
           </p>
-          <div className="mx-auto mt-5 h-2 w-40 overflow-hidden rounded-full bg-orange-100">
+          <div className="mx-auto mt-5 h-2 w-44 overflow-hidden rounded-full bg-orange-100">
             <div className="h-full w-1/2 animate-pulse rounded-full bg-[#f97316]" />
           </div>
         </div>
@@ -928,22 +1058,31 @@ export default function OnboardingPage() {
       </div>
 
       {/* conteúdo central */}
-      <div className="relative z-10 flex min-h-dvh items-center justify-center px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-        <div className="w-full max-w-md">
+      <div className="relative z-10 min-h-dvh px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        <div className="mx-auto grid min-h-[calc(100dvh-5rem)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[0.95fr_minmax(420px,520px)] xl:grid-cols-[1fr_minmax(440px,540px)]">
+          <OnboardingSidebar
+            displayName={displayName}
+            email={email}
+            emailVerified={emailVerified}
+            phoneVerified={userPhoneVerified}
+            phoneDisplay={userPhoneE164 ? formatBrazilianPhone(userPhoneE164) : currentPhoneDisplay}
+          />
+
+          <div className="w-full">
 
           {/* card principal */}
           <motion.div
             initial={{ opacity: 0, y: 28, scale: 0.96, filter: 'blur(8px)' }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
             transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            className="rounded-[2rem] border border-orange-100/80 bg-white/95 p-5 shadow-2xl shadow-orange-900/10 backdrop-blur sm:p-8"
+            className="overflow-hidden rounded-[2rem] border border-orange-100/80 bg-white/95 p-5 shadow-2xl shadow-orange-900/10 backdrop-blur sm:p-7 lg:p-8"
           >
             <motion.div variants={staggerContainer} initial="hidden" animate="visible">
 
               {/* logo bar — desktop */}
               <motion.div
                 variants={fadeUp}
-                className="mb-8 hidden rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:flex lg:items-center lg:justify-between lg:gap-4"
+                className="mb-6 flex rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:hidden lg:items-center lg:justify-between lg:gap-4"
               >
                 <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
                   <img
@@ -969,7 +1108,7 @@ export default function OnboardingPage() {
               <motion.div variants={fadeUp} className="mb-6">
                 <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-emerald-600 ring-1 ring-emerald-100">
                   <FiCheckCircle size={12} />
-                  Conta criada com sucesso
+                  Ativação em andamento
                 </div>
 
                 <h1 className="mt-4 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
@@ -981,14 +1120,14 @@ export default function OnboardingPage() {
                 </h1>
 
                 <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
-                  Agora falta confirmar seu telefone e finalizar a ativação da sua loja.
+                  Confirme o telefone para proteger sua conta e liberar a criação da loja com 14 dias grátis.
                 </p>
               </motion.div>
 
               {/* etapas visuais */}
               <motion.div
                 variants={fadeUp}
-                className="mb-6 rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-5"
+                className="mb-6 rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-5 lg:hidden"
               >
                 <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
                   <FiClock size={12} className="text-gray-400" />
@@ -1012,83 +1151,6 @@ export default function OnboardingPage() {
                     />
                   )
                 })}
-              </motion.div>
-
-              {/* segurança da conta / e-mail */}
-              <motion.div
-                variants={fadeUp}
-                className="mb-6 rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm"
-              >
-                <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                  <FiShield size={12} className="text-gray-400" />
-                  Segurança da conta
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-                    emailVerified
-                      ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100'
-                      : 'bg-gray-50 text-gray-400 ring-1 ring-gray-100'
-                  }`}>
-                    <FiMail size={18} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black text-[#111827]">
-                      {emailVerified ? 'E-mail confirmado' : 'Confirmação de e-mail'}
-                    </p>
-
-                    {isGoogleProvider ? (
-                      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-                        Seu e-mail <strong className="text-[#111827]">{email}</strong> foi validado pelo Google.
-                      </p>
-                    ) : emailVerified ? (
-                      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-                        Seu e-mail <strong className="text-[#111827]">{email}</strong> já foi confirmado.
-                      </p>
-                    ) : (
-                      <>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-                          Enviamos um link de verificação para{' '}
-                          <strong className="text-[#111827]">{email}</strong>.{' '}
-                          Confirme seu e-mail para manter sua conta segura.
-                        </p>
-
-                        {resendStatus.message && (
-                          <div className={`mt-3 flex items-start gap-2 rounded-xl p-3 text-xs font-bold leading-5 ${
-                            resendStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                          }`}>
-                            {resendStatus.type === 'success'
-                              ? <FiCheckCircle size={15} className="mt-0.5 shrink-0" />
-                              : <FiAlertCircle size={15} className="mt-0.5 shrink-0" />}
-                            <span>{resendStatus.message}</span>
-                          </div>
-                        )}
-
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={handleRefreshEmailStatus}
-                            disabled={isRefreshing}
-                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#f97316] transition hover:bg-gray-100 disabled:opacity-50 sm:text-xs sm:normal-case sm:tracking-normal"
-                          >
-                            <FiRefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
-                            Verificar novamente
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleResendVerificationEmail}
-                            disabled={isResending}
-                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:opacity-50 sm:text-xs sm:normal-case sm:tracking-normal"
-                          >
-                            <FiSend size={12} />
-                            Reenviar e-mail
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
               </motion.div>
 
               {/* ═══════════════════════════════════════════════════════
@@ -1370,6 +1432,84 @@ export default function OnboardingPage() {
                 )}
               </motion.div>
 
+
+              {/* segurança da conta / e-mail */}
+              <motion.div
+                variants={fadeUp}
+                className="mb-6 rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm"
+              >
+                <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                  <FiShield size={12} className="text-gray-400" />
+                  Segurança da conta
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                    emailVerified
+                      ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100'
+                      : 'bg-gray-50 text-gray-400 ring-1 ring-gray-100'
+                  }`}>
+                    <FiMail size={18} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black text-[#111827]">
+                      {emailVerified ? 'E-mail confirmado' : 'Confirmação de e-mail'}
+                    </p>
+
+                    {isGoogleProvider ? (
+                      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
+                        Seu e-mail <strong className="text-[#111827]">{email}</strong> foi validado pelo Google.
+                      </p>
+                    ) : emailVerified ? (
+                      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
+                        Seu e-mail <strong className="text-[#111827]">{email}</strong> já foi confirmado.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
+                          Enviamos um link de verificação para{' '}
+                          <strong className="text-[#111827]">{email}</strong>.{' '}
+                          Confirme seu e-mail para manter sua conta segura.
+                        </p>
+
+                        {resendStatus.message && (
+                          <div className={`mt-3 flex items-start gap-2 rounded-xl p-3 text-xs font-bold leading-5 ${
+                            resendStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                          }`}>
+                            {resendStatus.type === 'success'
+                              ? <FiCheckCircle size={15} className="mt-0.5 shrink-0" />
+                              : <FiAlertCircle size={15} className="mt-0.5 shrink-0" />}
+                            <span>{resendStatus.message}</span>
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRefreshEmailStatus}
+                            disabled={isRefreshing}
+                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#f97316] transition hover:bg-gray-100 disabled:opacity-50 sm:text-xs sm:normal-case sm:tracking-normal"
+                          >
+                            <FiRefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                            Verificar novamente
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleResendVerificationEmail}
+                            disabled={isResending}
+                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#6b7280] transition hover:bg-gray-50 hover:text-[#111827] disabled:opacity-50 sm:text-xs sm:normal-case sm:tracking-normal"
+                          >
+                            <FiSend size={12} />
+                            Reenviar e-mail
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+
               {/* ── botões de ação ── */}
               <motion.div variants={fadeUp} className="space-y-3">
                 {trialStatus.message && (
@@ -1388,7 +1528,7 @@ export default function OnboardingPage() {
                   <>
                     <div className="px-2 pb-1 text-center">
                       <p className="text-[13px] font-semibold leading-relaxed text-[#6b7280]">
-                        Você não será cobrado agora. Configure a cobrança no próximo passo para ativar os 14 dias grátis.
+                        Você não será cobrado agora. No próximo passo você confirma o plano e ativa o teste grátis.
                       </p>
                     </div>
 
@@ -1475,6 +1615,7 @@ export default function OnboardingPage() {
             </Link>
           </motion.div>
 
+          </div>
         </div>
       </div>
 
@@ -1494,11 +1635,11 @@ export default function OnboardingPage() {
             </div>
 
             <h2 id="account-created-title" className="mt-5 text-2xl font-black tracking-tight text-[#111827]">
-              Conta criada com sucesso
+              Bem-vindo ao PratoBy
             </h2>
 
             <p className="mt-3 text-sm font-semibold leading-6 text-[#6b7280]">
-              Bem-vindo{accountCreatedName ? `, ${accountCreatedName.split(' ')[0]}` : ''}. Vamos confirmar seu telefone e preparar sua loja.
+              {accountCreatedName ? `${accountCreatedName.split(' ')[0]}, ` : ''}sua conta já foi criada. Agora vamos confirmar seu telefone e preparar sua loja.
             </p>
 
             <button
