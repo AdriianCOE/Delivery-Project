@@ -23,7 +23,7 @@ export function getTrialPremiumActiveMessage({ trialEndsAt, selectedPlan, amount
 
   return {
     title: 'Trial Premium ativo',
-    text: `Seu trial Premium está ativo até ${formatBillingDate(trialEndsAt)}. Após o trial, sua loja continuará no plano ${planName} por ${formatCurrencyBR(price)}/mês.`,
+    text: `Trial ativo até ${formatBillingDate(trialEndsAt)}. Após a data, continuará no plano ${planName} por ${formatCurrencyBR(price)}/mês.`,
   }
 }
 
