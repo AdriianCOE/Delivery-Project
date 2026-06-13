@@ -39,9 +39,15 @@ function initializeOptionalAppCheck(firebaseApp) {
   }
 
   try {
-    if (debugToken) {
-      window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === 'true' ? true : debugToken
+      if (!import.meta.env.PROD && debugToken) {
+    window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === 'true' ? true : debugToken
+  } else if (typeof window !== 'undefined' && 'FIREBASE_APPCHECK_DEBUG_TOKEN' in window) {
+    try {
+      delete window.FIREBASE_APPCHECK_DEBUG_TOKEN
+    } catch {
+      window.FIREBASE_APPCHECK_DEBUG_TOKEN = undefined
     }
+  }
 
     const provider = providerType === 'v3'
       ? new ReCaptchaV3Provider(siteKey)
