@@ -301,6 +301,15 @@ const ORDER_ITEM_VARIANTS = {
 }
 
 const STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
+const OPERATIONAL_STATUS_FLOW = STATUS_FLOW.filter((status) => status !== 'cancelado')
+const CANCELLATION_REASON_OPTIONS = [
+  'Produto indisponível',
+  'Loja não consegue atender no prazo',
+  'Endereço fora da área de entrega',
+  'Pagamento não confirmado',
+  'Pedido duplicado ou feito por engano',
+  'Outro motivo',
+]
 const ACTIVE_STATUSES = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota']
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ALL_ORDERS = 250
@@ -1944,7 +1953,7 @@ function getOperationalPaymentNotice(order) {
   return String(getPaymentStatus(order) || getPaymentMethod(order) || 'PAGAMENTO').toUpperCase()
 }
 
-function printEtiqueta(order, store) {
+function _printEtiqueta(order, store) {
   if (!order) return
 
   const orderNumber = getOrderDisplayNumber(order)
@@ -2323,39 +2332,33 @@ function OrderContactTimeline({ order, now = new Date() }) {
   ]
 
   return (
-    <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
-      <div className="grid gap-2 sm:grid-cols-4">
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
-          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Status</p>
-          <p className="mt-0.5 truncate text-xs font-black text-gray-900 dark:text-zinc-100">{currentMeta.label}</p>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
-          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Cliente</p>
-          <p className={`mt-0.5 truncate text-xs font-black ${
-            whatsappSent
-              ? 'text-emerald-700 dark:text-emerald-300'
-              : 'text-amber-700 dark:text-amber-300'
-          }`}>
-            {whatsappSent ? 'Avisado' : 'WhatsApp pendente'}
-          </p>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
-          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Etapa</p>
-          <p className="mt-0.5 truncate text-xs font-black text-gray-900 dark:text-zinc-100">{operationText}</p>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
-          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Próximo passo</p>
-          <p className="mt-0.5 truncate text-xs font-black text-gray-900 dark:text-zinc-100">
-            {nextStatus ? getNextStatusLabel(status, order) : 'Sem ação'}
-          </p>
-        </div>
+    <div className="mt-2 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-black">
+        <span className="inline-flex items-center gap-1.5 text-gray-900 dark:text-zinc-100">
+          <span className={`h-2 w-2 rounded-full ${currentMeta.dotClass}`} />
+          {currentMeta.label}
+        </span>
+        <span className="text-gray-300 dark:text-zinc-700">•</span>
+        <span className={whatsappSent ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}>
+          {whatsappSent ? 'Cliente avisado' : 'WhatsApp pendente'}
+        </span>
+        <span className="text-gray-300 dark:text-zinc-700">•</span>
+        <span className="max-w-full truncate text-gray-600 dark:text-zinc-300">
+          {operationText}
+        </span>
+        {nextStatus && (
+          <>
+            <span className="text-gray-300 dark:text-zinc-700">•</span>
+            <span className="text-[#f97316]">{getNextStatusLabel(status, order)}</span>
+          </>
+        )}
       </div>
 
-      <div className="pratoby-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="pratoby-scrollbar mt-2 flex gap-1.5 overflow-x-auto pb-1">
         {steps.map((step, index) => (
           <div
             key={step.key}
-            className={`flex min-w-[92px] items-center gap-2 rounded-xl border px-2.5 py-2 ${
+            className={`flex min-w-max items-center gap-1.5 rounded-full border px-2.5 py-1.5 ${
               step.current
                 ? 'border-orange-200 bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10'
                 : step.done
@@ -2363,7 +2366,7 @@ function OrderContactTimeline({ order, now = new Date() }) {
                   : 'border-gray-100 bg-gray-50 dark:border-zinc-800 dark:bg-white/[0.04]'
             }`}
           >
-            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black ring-1 ${
+            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-black ring-1 ${
                 step.done
                   ? status === 'cancelado' && step.key === 'cancelado'
                     ? 'bg-red-500 text-white ring-red-500'
@@ -2372,7 +2375,7 @@ function OrderContactTimeline({ order, now = new Date() }) {
                     ? 'bg-orange-500 text-white ring-orange-500'
                     : 'bg-gray-100 text-gray-400 ring-gray-200 dark:bg-zinc-800 dark:text-zinc-500 dark:ring-zinc-700'
               }`}>
-              {step.done ? <FiCheckCircle size={11} /> : index + 1}
+              {step.done ? <FiCheckCircle size={9} /> : index + 1}
             </span>
             <p className={`truncate text-[10px] font-black ${
               step.current
@@ -2927,122 +2930,155 @@ const scheduledNoticeTone =
 function OrderItemsList({ items }) {
   if (!items.length) {
     return (
-      <p className="mt-3 text-sm leading-6 text-[#6b7280] dark:text-zinc-400">
-        Itens não disponíveis.
-      </p>
+      <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center dark:border-white/10 dark:bg-white/[0.04]">
+        <p className="text-sm font-bold text-gray-600 dark:text-zinc-300">
+          Itens do pedido não disponíveis.
+        </p>
+        <p className="mt-1 text-xs font-semibold text-gray-400 dark:text-zinc-500">
+          O pedido foi carregado sem detalhes de produtos.
+        </p>
+      </div>
     )
   }
 
   return (
-    <div className="mt-4 divide-y divide-gray-100 dark:divide-zinc-800">
+    <div className="space-y-3">
       {items.map((item, index) => {
-        const optionGroups = getItemDisplayOptionGroups(item)
+        const optionGroups = getItemOptionGroups(item)
         const additionals = getItemAdditionals(item)
         const promo = getPromotionInfo(item)
+        const itemNotes = item?.observation || item?.itemObservation || item?.notes || ''
+        const unitPrice = getItemUnitPrice(item)
+        const itemTotal = getItemTotal(item)
 
         return (
           <div
             key={`${item.cartItemId || item.id || getItemName(item)}-${index}`}
-            className="flex gap-3 py-3"
+            className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-white/[0.04] dark:ring-white/[0.03] sm:p-4"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-sm font-black text-[#f97316] dark:bg-orange-500/10">
-              {getItemQty(item)}x
-            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-sm font-black text-[#f97316] ring-1 ring-orange-100 dark:bg-orange-500/10 dark:ring-orange-500/20">
+                {getItemQty(item)}x
+              </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="font-bold text-[#111827] dark:text-zinc-100">
-                {getItemName(item)}
-              </p>
-
-              {promo.active && (
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-600 dark:bg-red-500/10 dark:text-red-300">
-                    Promoção
-                  </span>
-
-                  {promo.oldPrice > promo.currentPrice && (
-                    <>
-                      <span className="text-xs font-bold text-gray-400 line-through dark:text-zinc-500">
-                        {formatMoney(promo.oldPrice)}
-                      </span>
-
-                      <span className="text-xs font-black text-[#f97316]">
-                        {formatMoney(promo.currentPrice)}
-                      </span>
-
-                      {promo.percent > 0 && (
-                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
-                          -{promo.percent}%
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {optionGroups.length > 0 && (
-                <div className="mt-3 rounded-2xl bg-gray-50 p-3 dark:bg-zinc-950/60">
-                  {optionGroups.map((group) => (
-                    <div key={group.id} className="mb-3 last:mb-0">
-                      <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-zinc-400">
-                        {group.name}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-black leading-5 text-[#111827] dark:text-zinc-100">
+                      {getItemName(item)}
+                    </p>
+                    {unitPrice > 0 && (
+                      <p className="mt-0.5 text-xs font-semibold text-gray-500 dark:text-zinc-400">
+                        Unitário {formatMoney(unitPrice)}
                       </p>
+                    )}
+                  </div>
 
-                      <div className="mt-2 space-y-1">
-                        {group.options.map((option) => (
+                  <p className="shrink-0 text-left text-base font-black text-[#111827] dark:text-zinc-100 sm:text-right">
+                    {formatMoney(itemTotal)}
+                  </p>
+                </div>
+
+                {promo.active && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                      Promoção
+                    </span>
+
+                    {promo.oldPrice > promo.currentPrice && (
+                      <>
+                        <span className="text-xs font-bold text-gray-400 line-through dark:text-zinc-500">
+                          {formatMoney(promo.oldPrice)}
+                        </span>
+
+                        <span className="text-xs font-black text-[#f97316]">
+                          {formatMoney(promo.currentPrice)}
+                        </span>
+
+                        {promo.percent > 0 && (
+                          <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
+                            -{promo.percent}%
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {optionGroups.length > 0 && (
+                  <div className="mt-3 space-y-2 rounded-2xl bg-gray-50 p-3 dark:bg-black/20">
+                    {optionGroups.map((group) => (
+                      <div key={group.groupId || group.groupTitle}>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-zinc-400">
+                          {group.groupTitle}
+                        </p>
+
+                        <div className="mt-1 space-y-1">
+                          {group.options.map((option, optionIndex) => {
+                            const optionTotal = getOptionTotal(option)
+
+                            return (
+                              <div
+                                key={`${group.groupId || group.groupTitle}-${option.id || option.name}-${optionIndex}`}
+                                className="flex items-start justify-between gap-3 text-sm text-gray-600 dark:text-zinc-300"
+                              >
+                                <span className="min-w-0">
+                                  {option.quantity > 1 ? `${option.quantity}x ` : ''}
+                                  {option.name}
+                                </span>
+
+                                {optionTotal > 0 && (
+                                  <span className="shrink-0 font-bold text-gray-900 dark:text-zinc-100">
+                                    + {formatMoney(optionTotal)}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {additionals.length > 0 && (
+                  <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-black/20">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-zinc-400">
+                      Adicionais
+                    </p>
+                    <div className="mt-1 space-y-1">
+                      {additionals.map((extra, extraIndex) => {
+                        const quantity = getOptionQuantity(extra)
+                        const totalExtraPrice = getOptionTotal(extra)
+
+                        return (
                           <div
-                            key={`${group.id}-${option.id}`}
-                            className="flex items-center justify-between gap-3 text-sm text-gray-600 dark:text-zinc-300"
+                            key={`${getOptionName(extra)}-${extraIndex}`}
+                            className="flex items-start justify-between gap-3 text-sm text-gray-600 dark:text-zinc-300"
                           >
                             <span>
-                              {option.quantity > 1 ? `${option.quantity}x ` : ''}
-                              {option.name}
+                              {quantity > 1 ? `${quantity}x ` : ''}
+                              {getOptionName(extra)}
                             </span>
-
-                            {option.totalCents > 0 && (
-                              <span className="font-bold text-gray-900 dark:text-zinc-100">
-                                + {formatMoney(option.totalCents / 100)}
+                            {totalExtraPrice > 0 && (
+                              <span className="shrink-0 font-bold text-gray-900 dark:text-zinc-100">
+                                + {formatMoney(totalExtraPrice)}
                               </span>
                             )}
                           </div>
-                        ))}
-                      </div>
+                        )
+                      })}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                )}
 
-              {additionals.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {additionals.map((extra, extraIndex) => {
-                    const quantity = getOptionQuantity(extra)
-                    const totalExtraPrice = getOptionTotal(extra)
-
-                    return (
-                      <p
-                        key={`${getOptionName(extra)}-${extraIndex}`}
-                        className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400"
-                      >
-                        <strong>Adicional:</strong>{' '}
-                        {quantity > 1 ? `${quantity}x ` : ''}
-                        {getOptionName(extra)}
-                        {totalExtraPrice > 0 ? ` · + ${formatMoney(totalExtraPrice)}` : ''}
-                      </p>
-                    )
-                  })}
-                </div>
-              )}
-
-              {(item?.observation || item?.itemObservation || item?.notes) && (
-                <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-                  Obs: {item.observation || item.itemObservation || item.notes}
-                </p>
-              )}
+                {itemNotes && (
+                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
+                    Observação do item: {itemNotes}
+                  </p>
+                )}
+              </div>
             </div>
-
-            <p className="text-sm font-black text-[#111827] dark:text-zinc-100">
-              {formatMoney(getItemTotal(item))}
-            </p>
           </div>
         )
       })}
@@ -3151,6 +3187,13 @@ function OrderModal({
   const items = getOrderItems(order)
   const nextStatus = getNextStatus(status, order)
   const changeForLabel = getChangeForLabel(order)
+  const customerName = getCustomerName(order)
+  const customerPhoneLabel = formatDisplayPhone(getCustomerPhone(order)) || 'Telefone não informado'
+  const orderObservation = order?.orderObservation || order?.customerObservation || order?.observation || ''
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelReasonPreset, setCancelReasonPreset] = useState(CANCELLATION_REASON_OPTIONS[0])
+  const [cancelReasonDetails, setCancelReasonDetails] = useState('')
+  const [cancelNotifyCustomer, setCancelNotifyCustomer] = useState(false)
 
   const paymentBlocked = shouldBlockPreparationUntilPayment(order)
   const pixPending = isPixPaymentPending(order)
@@ -3262,37 +3305,34 @@ function OrderModal({
               tone: 'border-gray-100 bg-white text-gray-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-300',
             }
   const NextActionIcon = nextAction.icon
-  const timingSummary = scheduled
-    ? scheduledDateLabel || scheduledOperationalLabel || scheduledTypeLabel
-    : 'Pedido imediato'
   const fulfillmentSummary = scheduled
     ? scheduledTypeLabel
     : address.isPickup
       ? 'Retirada'
       : 'Entrega'
-  const operatorSnapshot = [
-    {
-      label: 'Pedido',
-      value: orderNumberLabel,
-      icon: FiShoppingBag,
-    },
-    {
-      label: scheduled ? 'Agendado' : 'Entrada',
-      value: timingSummary,
-      icon: scheduled ? FiCalendar : FiClock,
-    },
-    {
-      label: 'Tipo',
-      value: fulfillmentSummary,
-      icon: address.isPickup ? FiShoppingBag : FiTruck,
-    },
-    {
-      label: 'Pagamento',
-      value: paymentSummary,
-      icon: FiCreditCard,
-      className: paymentSummaryClass,
-    },
-  ]
+  const cancellationReasonText = (
+    cancelReasonPreset === 'Outro motivo'
+      ? cancelReasonDetails
+      : [cancelReasonPreset, cancelReasonDetails].filter(Boolean).join(' - ')
+  ).trim()
+  const canConfirmCancellation =
+    !updatingStatus && !isFinalStatus && cancellationReasonText.length >= 5
+  const openCancelDialog = () => {
+    setCancelReasonPreset(CANCELLATION_REASON_OPTIONS[0])
+    setCancelReasonDetails('')
+    setCancelNotifyCustomer(false)
+    setCancelDialogOpen(true)
+  }
+  const confirmCancellation = async () => {
+    if (!canConfirmCancellation) return
+
+    await onUpdateStatus(order, 'cancelado', {
+      cancellationReason: cancellationReasonText,
+      notifyCustomer: cancelNotifyCustomer,
+      skipCancellationPrompt: true,
+    })
+    setCancelDialogOpen(false)
+  }
   const modalAlerts = [
     sla.overdue && {
       label: `Atrasado ${sla.overdueMinutes || sla.elapsedMinutes}min`,
@@ -3385,10 +3425,10 @@ function OrderModal({
         animate={variants.animate}
         exit={variants.exit}
         transition={variants.transition}
-        className="flex h-[96dvh] max-h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl border border-gray-100 bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5 dark:border-white/10 dark:bg-[#0f0f11] dark:shadow-black/60 dark:ring-white/[0.03] sm:h-auto sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
+        className="flex h-[100dvh] max-h-[100dvh] w-full max-w-7xl flex-col overflow-hidden bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5 dark:bg-[#0f0f11] dark:shadow-black/60 dark:ring-white/[0.03] sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl sm:border sm:border-gray-100 sm:dark:border-white/10"
       >
-        <header className="animate-fade-in shrink-0 border-b border-gray-100 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#111114]">
-          <div className="flex items-start justify-between gap-4">
+        <header className="animate-fade-in shrink-0 border-b border-gray-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#111114] sm:px-5">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 dark:bg-white/10 dark:text-zinc-300">
@@ -3398,19 +3438,23 @@ function OrderModal({
                 <PricingValidationBadge order={order} />
               </div>
 
-              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <div className="mt-2 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="min-w-0">
-                  <h2 className="truncate text-2xl font-black tracking-tight text-gray-900 dark:text-zinc-50">
-                    {getCustomerName(order)}
+                  <h2 className="truncate text-xl font-black tracking-tight text-gray-900 dark:text-zinc-50 sm:text-2xl">
+                    {customerName}
                   </h2>
-                  <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
-                    {formatDate(order)} · {scheduled ? scheduledTypeLabel : address.isPickup ? 'Retirada' : 'Entrega'} · {items.length} item{items.length === 1 ? '' : 's'}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
+                    <span>{formatDate(order)}</span>
+                    <span className="hidden text-gray-300 dark:text-zinc-600 sm:inline">•</span>
+                    <span>{fulfillmentSummary}</span>
+                    <span className="hidden text-gray-300 dark:text-zinc-600 sm:inline">•</span>
+                    <span>{items.length} item{items.length === 1 ? '' : 's'}</span>
                   </p>
                 </div>
 
-                <div className="text-left lg:text-right">
+                <div className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-left dark:border-orange-500/20 dark:bg-orange-500/10 lg:text-right">
                   <p className="text-xs font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Total</p>
-                  <p className="text-2xl font-black text-gray-900 dark:text-zinc-50">
+                  <p className="text-xl font-black text-[#f97316] sm:text-2xl">
                     {formatMoney(getOrderTotal(order))}
                   </p>
                 </div>
@@ -3432,29 +3476,6 @@ function OrderModal({
                   })}
                 </div>
               )}
-
-              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                {operatorSnapshot.map((item) => {
-                  const SnapshotIcon = item.icon
-                  return (
-                    <div
-                      key={item.label}
-                      className={`min-w-0 rounded-2xl border px-3 py-2.5 ${
-                        item.className ||
-                        'border-gray-100 bg-gray-50 text-gray-800 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200'
-                      }`}
-                    >
-                      <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide opacity-70">
-                        <SnapshotIcon size={11} />
-                        {item.label}
-                      </p>
-                      <p className="mt-1 truncate text-xs font-black">
-                        {item.value}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
             </div>
 
             <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
@@ -3463,29 +3484,29 @@ function OrderModal({
           </div>
         </header>
 
-        <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-5 py-3 dark:border-white/10 dark:bg-[#151518]">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <section className={`rounded-2xl border p-3 ${nextAction.tone}`}>
+        <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-4 py-2.5 dark:border-white/10 dark:bg-[#151518] sm:px-5">
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(300px,auto)] lg:items-center">
+            <section className={`rounded-xl border px-3 py-2 ${nextAction.tone}`}>
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/70 shadow-sm dark:bg-black/10">
-                  <NextActionIcon size={18} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 shadow-sm dark:bg-black/10">
+                  <NextActionIcon size={15} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-black uppercase tracking-wide opacity-70">Próxima ação</p>
                   <p className="mt-0.5 text-sm font-black">{nextAction.title}</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 opacity-85">{nextAction.description}</p>
+                  <p className="mt-0.5 text-xs font-semibold leading-5 opacity-85 sm:line-clamp-1">{nextAction.description}</p>
                 </div>
               </div>
             </section>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-                <span className={`inline-flex min-h-10 items-center rounded-xl border px-3 py-2 text-xs font-black ${paymentSummaryClass}`}>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end">
+                <span className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-3 py-2 text-center text-xs font-black sm:col-span-2 lg:col-span-1 ${paymentSummaryClass}`}>
                   {paymentSummary}
                 </span>
                 {canOpenWhatsApp && (
                   <button
                     onClick={() => onOpenWhatsApp(order)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <FiMessageCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
                     WhatsApp
@@ -3496,7 +3517,7 @@ function OrderModal({
                   <button
                     onClick={() => onConfirmPixPayment(order)}
                     disabled={Boolean(updatingStatus)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} />
                     {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
@@ -3506,7 +3527,7 @@ function OrderModal({
                     href={asaasPaymentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
                     <FiCreditCard size={18} />
                     Abrir pagamento
@@ -3516,13 +3537,13 @@ function OrderModal({
                     href={mercadoPagoPaymentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
                     <FiCreditCard size={18} />
                     Abrir pagamento
                   </a>
                 ) : isWaitingScheduledFuture ? (
-                  <div className="inline-flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+                  <div className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
                     <FiClock size={18} />
                     <span>Agendamento confirmado</span>
                   </div>
@@ -3530,7 +3551,7 @@ function OrderModal({
                   <button
                     onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null}
                     disabled={Boolean(updatingStatus) || !canRunPrimaryStatusAction}
-                    className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
                   >
                     <FiZap size={18}/>
                     {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
@@ -3539,21 +3560,14 @@ function OrderModal({
 
                 <button
                   onClick={() => printComanda(order, store)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-900 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-900 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
                 >
                   <FiPrinter size={18}/> Imprimir comanda
                 </button>
 
                 <button
-                  onClick={() => printEtiqueta(order, store)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
-                >
-                  <FiPackage size={18}/> Imprimir etiqueta
-                </button>
-
-                <button
                   onClick={() => onCopyOrder(order)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                 >
                   <FiCopy size={18}/> Copiar resumo
                 </button>
@@ -3586,27 +3600,27 @@ function OrderModal({
         </div>
 
         <main className="pratoby-scrollbar flex-1 overflow-y-auto bg-gray-50 p-4 dark:bg-[#0b0b0d] sm:p-5">
-          <div className="grid min-h-0 gap-4 xl:grid-cols-[320px_1fr_280px]">
+          <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)] xl:grid-cols-[320px_minmax(0,1fr)_300px]">
             {/* Left Column: Customer & Delivery & Payment */}
             <div className="min-h-0 space-y-4">
               {/* Customer card */}
-              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
                       <FiUser className="text-orange-500" /> Cliente
                     </p>
                     <p className="mt-3 truncate text-base font-black text-gray-900 dark:text-zinc-100">
-                      {getCustomerName(order)}
+                      {customerName}
                     </p>
                     <p className="mt-1 truncate text-sm font-semibold text-gray-500 dark:text-zinc-400">
-                      {formatDisplayPhone(getCustomerPhone(order)) || 'Telefone não informado'}
+                      {customerPhoneLabel}
                     </p>
                   </div>
                   {canOpenWhatsApp && (
                     <button
                       onClick={() => onOpenWhatsApp(order)}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-green-50 text-green-600 transition hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:hover:bg-green-900"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600 transition hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:hover:bg-green-900"
                       title="Chamar cliente no WhatsApp"
                       aria-label="Chamar cliente no WhatsApp"
                     >
@@ -3617,16 +3631,16 @@ function OrderModal({
               </section>
 
               {/* Delivery card */}
-              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-center justify-between gap-3">
                   <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
                     {address.isPickup ? (
                       <>
-                        <FiShoppingBag size={14} className="text-orange-500" /> Retirada
+                        <FiShoppingBag size={14} className="text-orange-500" /> Retirada no balcão
                       </>
                     ) : (
                       <>
-                        <FiTruck size={14} className="text-orange-500" /> Entrega
+                        <FiTruck size={14} className="text-orange-500" /> Endereço de entrega
                       </>
                     )}
                   </p>
@@ -3641,7 +3655,7 @@ function OrderModal({
                   )}
                 </div>
 
-                <p className="mt-3 text-sm font-bold leading-6 text-gray-800 dark:text-zinc-200">
+                <p className="mt-3 break-words text-sm font-bold leading-6 text-gray-800 dark:text-zinc-200">
                   {address.full}
                 </p>
 
@@ -3659,7 +3673,7 @@ function OrderModal({
               </section>
 
               {/* Order timing card */}
-                <section className={`rounded-[1.35rem] border p-4 shadow-sm ring-1 ring-black/[0.02] ${
+                <section className={`rounded-xl border p-4 shadow-sm ring-1 ring-black/[0.02] ${
                   scheduled
                     ? scheduledPanelClass
                     : 'border-gray-100 bg-white dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]'
@@ -3753,13 +3767,13 @@ function OrderModal({
                 </section>
 
               {/* Observation card */}
-              {(order?.orderObservation || order?.customerObservation || order?.observation) && (
-                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900 dark:bg-amber-950/40">
+              {orderObservation && (
+                <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900 dark:bg-amber-950/40">
                   <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
                     <FiAlertTriangle className="text-amber-600" /> Observação
                   </p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-amber-800 dark:text-amber-300">
-                    {order.orderObservation || order.customerObservation || order.observation}
+                    {orderObservation}
                   </p>
                 </section>
               )}
@@ -3767,7 +3781,7 @@ function OrderModal({
 
 
               {/* Payment details card */}
-              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
@@ -3806,9 +3820,29 @@ function OrderModal({
                 )}
               </section>
 
+              {!isFinalStatus && (
+                <section className="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm dark:border-red-500/25 dark:bg-red-500/10">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700 dark:text-red-300">
+                    <FiAlertTriangle /> Área de perigo
+                  </p>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-red-700/85 dark:text-red-200/85">
+                    Cancele apenas quando a loja não puder atender este pedido. O motivo ficará registrado e pode ser exibido para o cliente.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openCancelDialog}
+                    disabled={Boolean(updatingStatus) || isFinalStatus}
+                    className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-black text-red-700 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
+                  >
+                    <FiXCircle size={17} />
+                    Cancelar pedido
+                  </button>
+                </section>
+              )}
+
               {/* Pix Manual card */}
               {isPixManualOrder(order) && (
-                <section className={`rounded-2xl border p-4 shadow-sm ${ pixPaid ? 'border-green-100 bg-green-50 dark:border-green-900 dark:bg-green-950/20' : 'border-orange-100 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20' }`}>
+                <section className={`rounded-xl border p-4 shadow-sm ${ pixPaid ? 'border-green-100 bg-green-50 dark:border-green-900 dark:bg-green-950/20' : 'border-orange-100 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20' }`}>
                   <div className="flex items-center justify-between gap-3">
                     <p className={`text-xs font-black uppercase tracking-wider ${pixPaid ? 'text-green-800 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
                       Pix com comprovante
@@ -3836,10 +3870,10 @@ function OrderModal({
             </div>
 
             {/* Middle Column: Items List */}
-            <section className="flex min-h-[360px] flex-col rounded-[1.35rem] border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03] xl:min-h-0">
+            <section className="flex min-h-[320px] flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03] xl:min-h-0">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 p-4 dark:border-white/10">
                 <p className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-zinc-100">
-                  <FiShoppingBag className="text-orange-500" /> Itens do Pedido
+                  <FiShoppingBag className="text-orange-500" /> Itens do pedido
                 </p>
                 <span className="rounded-full bg-gray-50 px-2.5 py-1 text-xs font-black text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400">
                   {items.length} item{items.length === 1 ? '' : 's'}
@@ -3853,7 +3887,7 @@ function OrderModal({
             {/* Right Column: Status & Resumo Financeiro & Forçar Alteração */}
             <aside className="min-h-0 space-y-4">
               {/* Status card */}
-              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div className="flex items-center gap-2">
                   <div className={`h-2.5 w-2.5 rounded-full ${meta.dotClass}`} />
                   <p className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-500">
@@ -3869,7 +3903,7 @@ function OrderModal({
               </section>
 
               {/* Resumo Financeiro */}
-              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <p className="mb-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                   Resumo financeiro
                 </p>
@@ -3877,7 +3911,7 @@ function OrderModal({
               </section>
 
               {/* Forçar alteração */}
-              <section className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                     Forçar alteração
@@ -3897,7 +3931,7 @@ function OrderModal({
                   </div>
                 )}
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  {STATUS_FLOW.map((statusOption) => {
+                  {OPERATIONAL_STATUS_FLOW.map((statusOption) => {
                     const optionMeta = STATUS_META[statusOption]
                     const Icon = optionMeta.icon
                     const active = status === statusOption
@@ -3920,7 +3954,7 @@ function OrderModal({
                           (statusOption === 'preparando' && paymentBlocked)
                         }
                         title={blockedScheduledPrepare ? 'Aguarde a janela de preparo' : undefined}
-                        className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                        className={`flex min-h-11 items-center justify-center gap-2 rounded-xl border px-2 py-2 text-center text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
                           active
                             ? optionMeta.buttonClass
                             : blockedScheduledPrepare
@@ -3932,7 +3966,7 @@ function OrderModal({
                                   : 'border-gray-100 bg-white text-[#6b7280] hover:bg-gray-50 hover:text-[#111827] dark:border-zinc-800 dark:bg-white/[0.06] dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
                         }`}
                       >
-                        <Icon size={14} />
+                        <Icon size={13} />
                         <span>{optionMeta.label}</span>
                         {blockedScheduledPrepare && (
                           <span className="text-[9px] font-black uppercase tracking-wide">Aguarde</span>
@@ -3951,6 +3985,100 @@ function OrderModal({
             </aside>
           </div>
         </main>
+
+        {cancelDialogOpen && (
+          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
+            <div className="w-full max-w-lg rounded-t-2xl border border-red-100 bg-white p-4 shadow-2xl dark:border-red-500/25 dark:bg-[#151518] sm:rounded-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-600 dark:text-red-300">
+                    <FiAlertTriangle />
+                    Cancelar pedido
+                  </p>
+                  <h3 className="mt-2 text-lg font-black text-gray-900 dark:text-zinc-50">
+                    Informe o motivo do cancelamento
+                  </h3>
+                  <p className="mt-1 text-sm font-semibold leading-5 text-gray-500 dark:text-zinc-400">
+                    Esse motivo fica salvo no pedido e pode aparecer no acompanhamento do cliente.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCancelDialogOpen(false)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+                  aria-label="Fechar cancelamento"
+                >
+                  <FiX size={17} />
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-2">
+                {CANCELLATION_REASON_OPTIONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setCancelReasonPreset(reason)}
+                    className={`rounded-xl border px-3 py-2 text-left text-sm font-bold transition ${
+                      cancelReasonPreset === reason
+                        ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200'
+                        : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-red-200 hover:text-red-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:border-red-500/30 dark:hover:text-red-200'
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+
+              <label className="mt-4 block">
+                <span className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                  Complemento ou motivo livre
+                </span>
+                <textarea
+                  value={cancelReasonDetails}
+                  onChange={(event) => setCancelReasonDetails(event.target.value)}
+                  rows={3}
+                  placeholder={
+                    cancelReasonPreset === 'Outro motivo'
+                      ? 'Descreva o motivo do cancelamento'
+                      : 'Opcional: detalhe o motivo para a equipe ou cliente'
+                  }
+                  className="mt-2 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 outline-none transition focus:border-red-300 focus:ring-2 focus:ring-red-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:focus:border-red-500/40 dark:focus:ring-red-500/10"
+                />
+              </label>
+
+              {canOpenWhatsApp && (
+                <label className="mt-3 flex items-start gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm font-semibold text-gray-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={cancelNotifyCustomer}
+                    onChange={(event) => setCancelNotifyCustomer(event.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span>Abrir WhatsApp com mensagem de cancelamento após confirmar.</span>
+                </label>
+              )}
+
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setCancelDialogOpen(false)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:bg-white/[0.08]"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmCancellation}
+                  disabled={!canConfirmCancellation}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FiXCircle size={17} />
+                  Confirmar cancelamento
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     </motion.div>,
     document.body
@@ -4089,7 +4217,7 @@ export default function OrdersPage() {
   }, [selectedStore, showToast, storeActionLoading])
 
   const handleUpdateStatus = useCallback(
-  async (order, status) => {
+  async (order, status, options = {}) => {
     if (!order?.id || updatingStatus) return
 
     const nextStatus = normalizeStatus(status)
@@ -4130,17 +4258,23 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     let cancellationPatch = {}
 
     if (nextStatus === 'cancelado') {
-      const confirmed = window.confirm(
-        'Tem certeza que deseja cancelar este pedido? O motivo será exibido para o cliente.'
-      )
+      let normalizedReason = String(options?.cancellationReason || '').trim()
 
-      if (!confirmed) return
+      if (!normalizedReason) {
+        const confirmed = options?.skipCancellationPrompt
+          ? true
+          : window.confirm(
+              'Tem certeza que deseja cancelar este pedido? O motivo será exibido para o cliente.'
+            )
 
-      const reason = window.prompt(
-        'Informe o motivo do cancelamento. Ex: Produto indisponível, endereço fora da área, loja fechando, pagamento não confirmado...'
-      )
+        if (!confirmed) return
 
-      const normalizedReason = String(reason || '').trim()
+        const reason = window.prompt(
+          'Informe o motivo do cancelamento. Ex: Produto indisponível, endereço fora da área, loja fechando, pagamento não confirmado...'
+        )
+
+        normalizedReason = String(reason || '').trim()
+      }
 
       if (normalizedReason.length < 5) {
         showToast('error', 'Informe um motivo de cancelamento com pelo menos 5 caracteres.')
@@ -4168,28 +4302,36 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     if (['preparando', 'em_rota', 'entregue', 'cancelado'].includes(nextStatus)) {
       const phone = normalizeBrazilianPhoneForWhatsApp(getCustomerPhone(order))
 
-      if (!phone) {
-        showToast('error', 'Cliente sem WhatsApp válido para receber aviso.')
-      } else {
-        const shouldNotify = window.confirm(
-          nextStatus === 'preparando'
-            ? 'Deseja enviar a confirmação completa do pedido para o cliente?'
-            : nextStatus === 'cancelado'
-              ? 'Deseja avisar o cliente no WhatsApp com o motivo do cancelamento?'
-              : 'Deseja enviar uma atualização rápida no WhatsApp?'
-        )
+      const explicitNotifyChoice =
+        typeof options?.notifyCustomer === 'boolean' ? options.notifyCustomer : null
+      let shouldNotify = explicitNotifyChoice
 
-        if (shouldNotify) {
-          shouldNotifyCustomer = true
-          const orderWithNewStatus = {
-            ...order,
-            status: nextStatus,
-            ...cancellationPatch,
-          }
-
-          const message = buildWhatsAppMessage(orderWithNewStatus, selectedStore)
-          whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      if (shouldNotify === null) {
+        if (!phone) {
+          showToast('error', 'Cliente sem WhatsApp válido para receber aviso.')
+        } else {
+          shouldNotify = window.confirm(
+            nextStatus === 'preparando'
+              ? 'Deseja enviar a confirmação completa do pedido para o cliente?'
+              : nextStatus === 'cancelado'
+                ? 'Deseja avisar o cliente no WhatsApp com o motivo do cancelamento?'
+                : 'Deseja enviar uma atualização rápida no WhatsApp?'
+          )
         }
+      }
+
+      if (shouldNotify && !phone) {
+        showToast('error', 'Cliente sem WhatsApp válido para receber aviso.')
+      } else if (shouldNotify) {
+        shouldNotifyCustomer = true
+        const orderWithNewStatus = {
+          ...order,
+          status: nextStatus,
+          ...cancellationPatch,
+        }
+
+        const message = buildWhatsAppMessage(orderWithNewStatus, selectedStore)
+        whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       }
     }
 

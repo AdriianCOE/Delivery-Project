@@ -167,6 +167,20 @@ function normalizeMercadoPagoPublicConfig(store = {}) {
   })
 }
 
+function isMercadoPagoSimulatorPayload(request, body = {}) {
+  const paymentId = getWebhookPaymentId(request, body)
+
+  return (
+    body?.live_mode === false &&
+    body?.type === 'payment' &&
+    body?.action === 'payment.updated' &&
+    String(paymentId) === '123456' &&
+    String(body?.id || '') === '123456' &&
+    !request.query?.orderId &&
+    !request.query?.storeId
+  )
+}
+
 function normalizePreorderPolicy(store = {}) {
   const raw = store.payments?.preorderPolicy
   const source = raw && typeof raw === 'object' && !Array.isArray(raw)
@@ -344,14 +358,18 @@ function buildTrackingUrl(orderData = {}) {
 
 function buildWebhookUrl({ storeId, orderId }) {
   const base = String(process.env.MERCADOPAGO_ORDER_WEBHOOK_URL || '').trim()
+
   if (!base) {
     const error = new Error('MERCADOPAGO_ORDER_WEBHOOK_URL precisa estar configurada para pagamentos Mercado Pago.')
     error.code = 'failed-precondition'
     throw error
   }
+
   const url = new URL(base)
   url.searchParams.set('storeId', storeId)
   url.searchParams.set('orderId', orderId)
+  url.searchParams.set('source_news', 'webhooks')
+
   return url.toString()
 }
 
@@ -1027,6 +1045,21 @@ function createMercadoPagoOrderFunctions({
       const paymentId = getWebhookPaymentId(request, body)
       const orderIdFromQuery = String(request.query.orderId || '').trim()
       const storeIdFromQuery = String(request.query.storeId || '').trim()
+        if (isMercadoPagoSimulatorPayload(request, body)) {
+          logger?.info?.('[mercadoPagoOrders] webhook simulator ping accepted', {
+            paymentId,
+            action: body.action || null,
+            type: body.type || null,
+          })
+
+          response.status(200).json({
+            ok: true,
+            simulator: true,
+            ignored: true,
+            reason: 'mercadopago_simulator_payload',
+          })
+          return
+        }
       const webhookSecretValue = getSecretValue(webhookSecret, 'MERCADOPAGO_WEBHOOK_SECRET')
 
       if (!webhookSecretValue && process.env.FUNCTIONS_EMULATOR !== 'true') {

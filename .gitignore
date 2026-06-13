@@ -2,6 +2,12 @@
 .env.local
 .env.production
 .env.*.local
+.env.*
+!.env.example
+
+functions/.env
+functions/.env.*
+!functions/.env.example
 
 .firebase/
 firebase-debug.log
@@ -15,3 +21,7 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+.secret.local
+functions/.secret.local
+/dist/

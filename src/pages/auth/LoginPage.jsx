@@ -31,7 +31,6 @@ import {
   FiMail,
   FiMessageCircle,
   FiShield,
-  FiSmartphone,
   FiTrendingUp,
   FiZap,
 } from 'react-icons/fi'
@@ -174,33 +173,6 @@ const staggerContainer = {
   hidden: {},
   visible: {
     transition: { staggerChildren: 0.08, delayChildren: 0.12 },
-  },
-}
-
-const floatAnimation1 = {
-  animate: {
-    y: [0, -22, 0],
-    x: [0, 10, 0],
-    scale: [1, 1.04, 1],
-    transition: { duration: 8, repeat: Infinity, ease: 'easeInOut' },
-  },
-}
-
-const floatAnimation2 = {
-  animate: {
-    y: [0, 20, 0],
-    x: [0, -15, 0],
-    scale: [1, 1.06, 1],
-    transition: { duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 0.5 },
-  },
-}
-
-const floatAnimation3 = {
-  animate: {
-    y: [0, -15, 0],
-    x: [0, -10, 0],
-    scale: [1, 1.03, 1],
-    transition: { duration: 9, repeat: Infinity, ease: 'easeInOut', delay: 1 },
   },
 }
 
@@ -524,47 +496,19 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-[#f9fafb] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
+    <main className="relative min-h-dvh overflow-hidden bg-[#f8fafc] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
       <LoginMobileHeader />
 
-      {/* BLOBS FLUTUANTES */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <motion.div
-          variants={floatAnimation1}
-          animate="animate"
-          className="absolute -left-40 top-20 h-[28rem] w-[28rem] rounded-full bg-orange-100/80 blur-3xl"
-        />
-        <motion.div
-          variants={floatAnimation2}
-          animate="animate"
-          className="absolute -right-40 top-1/3 h-[32rem] w-[32rem] rounded-full bg-orange-200/50 blur-3xl"
-        />
-        <motion.div
-          variants={floatAnimation3}
-          animate="animate"
-          className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-100/70 blur-3xl"
-        />
-      </div>
-
       {/* GRID PRINCIPAL */}
-      <div className="relative z-10 grid min-h-dvh lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="relative z-10 grid min-h-dvh lg:grid-cols-[minmax(0,0.95fr)_minmax(430px,0.72fr)]">
 
         {/* ── LADO ESQUERDO — painel de apresentação ─── */}
         <section className="relative hidden overflow-hidden bg-[#111827] px-8 py-8 text-white lg:flex lg:flex-col lg:justify-between xl:px-12">
-          {/* gradientes internos do painel escuro */}
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute -left-28 -top-28 h-80 w-80 rounded-full bg-[#f97316]/25 blur-3xl" />
-            <div className="absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-[#fb923c]/20 blur-3xl" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.18),transparent_32rem)]" />
-            {/* grade sutil para textura */}
-            <div
-              className="absolute inset-0 opacity-[0.03]"
-              style={{
-                backgroundImage:
-                  'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-                backgroundSize: '40px 40px',
-              }}
-            />
+            <div className="absolute inset-x-0 top-0 h-1 bg-[#f97316]" />
+            <div className="absolute -right-40 top-16 h-96 w-96 rounded-full bg-[#f97316]/20 blur-3xl" />
+            <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-white/5 blur-3xl" />
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_34rem)]" />
           </div>
 
           {/* topo: logo + link "Voltar ao site" */}
@@ -588,11 +532,11 @@ export default function LoginPage() {
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="relative z-10 max-w-2xl py-14"
+            className="relative z-10 max-w-2xl py-12"
           >
             <motion.span
               variants={fadeUp}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-black text-orange-100 backdrop-blur"
+              className="inline-flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-100"
             >
               <FiShield className="text-[#f97316]" />
               Painel exclusivo para lojistas e administradores
@@ -600,18 +544,18 @@ export default function LoginPage() {
 
             <motion.h1
               variants={fadeUp}
-              className="mt-8 max-w-xl text-5xl font-black leading-[1.05] tracking-tight xl:text-6xl"
+              className="mt-7 max-w-xl text-5xl font-black leading-[1.03] tracking-tight xl:text-6xl"
             >
-              Seu delivery próprio,
-              <span className="block text-[#f97316]">sem depender de marketplace.</span>
+              Acesse sua operação
+              <span className="block text-[#f97316]">sem perder tempo.</span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="mt-6 max-w-xl text-lg font-medium leading-8 text-gray-300"
             >
-              Entre para gerenciar pedidos, cardápio, horários, entrega e atendimento em
-              uma experiência rápida, segura e feita para vender pelo link da sua loja.
+              Login direto para acompanhar pedidos, atualizar cardápio, ajustar horários e
+              cuidar do atendimento pelo painel do PratoBy.
             </motion.p>
 
             <motion.div
@@ -621,7 +565,7 @@ export default function LoginPage() {
               {BENEFITS.map((benefit) => (
                 <div
                   key={benefit}
-                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur transition duration-200 hover:border-orange-500/30 hover:bg-white/8"
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3"
                 >
                   <FiCheckCircle className="shrink-0 text-[#f97316]" />
                   {benefit}
@@ -635,10 +579,10 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.35, ease: 'easeOut' }}
-            className="relative z-10 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]"
+            className="relative z-10 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]"
           >
             {/* card PratoBy Cloud */}
-            <div className="rounded-[1.8rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/20">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#f97316] shadow-lg shadow-orange-950/20">
                   <FiZap size={22} />
@@ -646,26 +590,29 @@ export default function LoginPage() {
                 <div>
                   <p className="font-black">PratoBy Cloud</p>
                   <p className="mt-1 text-sm font-medium leading-6 text-gray-300">
-                    Cardápio digital e delivery white-label para negócios locais venderem
-                    direto, sem depender de marketplace.
+                    Cardápio digital e delivery para negócios locais venderem direto, sem
+                    depender de marketplace.
                   </p>
                 </div>
               </div>
             </div>
 
             {/* card métricas */}
-            <div className="rounded-[1.8rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur">
-              <div className="flex items-center gap-2 text-sm font-black text-white">
-                <FiTrendingUp className="text-[#f97316]" />
-                Visão rápida da operação
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/20">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <FiTrendingUp className="text-[#f97316]" />
+                  Visão rápida da operação
+                </div>
+                <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-black text-emerald-200">
+                  Online
+                </span>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2">
-                {METRICS.map((metric, i) => (
+                {METRICS.map((metric) => (
                   <div
                     key={metric.label}
-                    className={`rounded-2xl bg-white/10 p-3 ${
-                      i < METRICS.length - 1 ? 'border-r border-white/5' : ''
-                    }`}
+                    className="rounded-2xl bg-black/20 p-3 ring-1 ring-white/5"
                   >
                     <p className="text-[10px] font-black uppercase tracking-widest text-white/45">
                       {metric.label}
@@ -680,16 +627,15 @@ export default function LoginPage() {
         </section>
 
         {/* ── LADO DIREITO — formulário de login ─── */}
-        <section className="flex min-h-dvh items-center justify-center px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-          <div className="w-full max-w-md">
+        <section className="flex min-h-dvh items-center justify-center border-l border-gray-200/70 bg-white px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+          <div className="w-full max-w-[30rem]">
 
             {/* CARD PRINCIPAL */}
             <motion.div
               initial={{ opacity: 0, y: 28, scale: 0.96, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ y: -3 }}
-              className="rounded-[2rem] border border-orange-100/80 bg-white/95 p-5 shadow-2xl shadow-orange-900/10 backdrop-blur sm:p-8"
+              className="rounded-[1.75rem] border border-gray-200 bg-white p-5 shadow-2xl shadow-gray-900/10 sm:p-8"
             >
               <motion.div
                 variants={staggerContainer}
@@ -699,7 +645,7 @@ export default function LoginPage() {
                 {/* barra logo — só desktop (dentro do card) */}
                 <motion.div
                   variants={fadeUp}
-                  className="mb-8 hidden rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:flex lg:items-center lg:justify-between lg:gap-4"
+                  className="mb-7 hidden rounded-[1.25rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:flex lg:items-center lg:justify-between lg:gap-4"
                 >
                   <PratoByLogo compact />
                   <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-[#9ca3af] ring-1 ring-gray-100">
@@ -713,12 +659,11 @@ export default function LoginPage() {
                     <FiShield size={12} />
                     Acesso seguro
                   </div>
-                  <h2 className="mt-4 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                  <h2 className="mt-4 text-3xl font-black tracking-tight text-[#111827] sm:text-[2.45rem]">
                     Entrar no painel
                   </h2>
                   <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
-                    Acesse sua conta para gerenciar pedidos, loja, cardápio, horários e
-                    configurações.
+                    Continue para o painel da sua loja com e-mail, senha ou Google.
                   </p>
                 </motion.div>
 
@@ -745,7 +690,7 @@ export default function LoginPage() {
                     whileHover={{ y: -2, scale: 1.005, borderColor: '#d1d5db' }}
                     whileTap={{ scale: 0.985 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <GoogleIcon size={18} />
                     Entrar com Google
@@ -867,7 +812,7 @@ export default function LoginPage() {
                 {/* bloco "Ainda não tem conta?" — visual mais premium */}
                 <motion.div
                   variants={fadeUp}
-                  className="mt-6 overflow-hidden rounded-3xl border border-orange-100/70 bg-orange-50/40"
+                  className="mt-6 overflow-hidden rounded-[1.35rem] border border-orange-100/80 bg-orange-50/50"
                 >
                   {/* linha superior: info da plataforma */}
                   <div className="flex gap-3 border-b border-orange-100/60 p-4">
@@ -884,7 +829,7 @@ export default function LoginPage() {
                   </div>
 
                   {/* linha inferior: CTA de cadastro */}
-                  <div className="flex items-center gap-3 p-4">
+                  <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                     <FiHelpCircle className="shrink-0 text-[#f97316]" size={16} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-black text-[#111827]">
@@ -896,7 +841,7 @@ export default function LoginPage() {
                     </div>
                     <Link
                       to="/cadastro"
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl bg-[#f97316] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-orange-600/15 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-lg hover:shadow-orange-600/20 active:scale-[0.98]"
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-[#f97316] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-orange-600/15 transition hover:-translate-y-0.5 hover:bg-[#ea580c] hover:shadow-lg hover:shadow-orange-600/20 active:scale-[0.98]"
                     >
                       Criar minha loja
                       <FiArrowRight size={13} />
@@ -907,7 +852,7 @@ export default function LoginPage() {
                 {/* rodapé do card */}
                 <motion.div
                   variants={fadeUp}
-                  className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-orange-100 pt-5 text-xs font-bold text-[#6b7280]"
+                  className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-5 text-xs font-bold text-[#6b7280]"
                 >
                   <span>PratoBy Cloud · {APP_ENV}</span>
                   <span className="inline-flex items-center gap-1">
@@ -937,11 +882,6 @@ export default function LoginPage() {
                 <FiMessageCircle size={12} />
                 Contato
               </Link>
-              <span className="hidden sm:inline">·</span>
-              <span className="inline-flex items-center gap-1">
-                <FiSmartphone size={12} />
-                Mobile-first
-              </span>
             </motion.div>
           </div>
         </section>
