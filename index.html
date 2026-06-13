@@ -147,11 +147,31 @@
             "@type": "Organization",
             "@id": "https://pratoby.com/#organization",
             "name": "PratoBy",
+            "legalName": "PratoBy",
             "url": "https://pratoby.com/",
-            "logo": "https://pratoby.com/og/pratoby-mark.png",
-            "areaServed": "BR",
+            "logo": {
+              "@type": "ImageObject",
+              "@id": "https://pratoby.com/#logo",
+              "url": "https://pratoby.com/og/pratoby-mark.png"
+            },
+            "image": "https://pratoby.com/og/pratoby-cover.png",
+            "description": "O PratoBy é uma plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, entrega, retirada e encomendas.",
+            "areaServed": {
+              "@type": "Country",
+              "name": "Brasil"
+            },
             "sameAs": [
               "https://www.instagram.com/pratobybr"
+            ],
+            "contactPoint": [
+              {
+                "@type": "ContactPoint",
+                "contactType": "customer support",
+                "availableLanguage": [
+                  "pt-BR"
+                ],
+                "url": "https://pratoby.com/contato"
+              }
             ]
           },
           {
@@ -159,41 +179,138 @@
             "@id": "https://pratoby.com/#website",
             "url": "https://pratoby.com/",
             "name": "PratoBy",
-            "description": "Plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, retirada, entrega e encomendas — sem comissão do PratoBy por pedido.",
+            "alternateName": "PratoBy Cardápio Digital",
+            "description": "Cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online — sem comissão do PratoBy por pedido.",
+            "inLanguage": "pt-BR",
             "publisher": {
               "@id": "https://pratoby.com/#organization"
+            }
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://pratoby.com/#webpage",
+            "url": "https://pratoby.com/",
+            "name": "PratoBy | Cardápio digital e delivery próprio sem comissão",
+            "description": "Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido.",
+            "isPartOf": {
+              "@id": "https://pratoby.com/#website"
+            },
+            "about": {
+              "@id": "https://pratoby.com/#app"
+            },
+            "primaryImageOfPage": {
+              "@type": "ImageObject",
+              "url": "https://pratoby.com/og/pratoby-cover.png",
+              "width": 1200,
+              "height": 630
             },
             "inLanguage": "pt-BR"
           },
           {
-            "@type": "WebApplication",
+            "@type": "SoftwareApplication",
             "@id": "https://pratoby.com/#app",
             "name": "PratoBy",
-            "alternateName": "PratoBy Cardápio Digital",
+            "alternateName": [
+              "PratoBy Cardápio Digital",
+              "PratoBy Delivery Próprio"
+            ],
             "url": "https://pratoby.com/",
             "applicationCategory": "BusinessApplication",
+            "applicationSubCategory": "Cardápio digital e sistema de pedidos online",
             "operatingSystem": "Web",
             "browserRequirements": "Requires JavaScript",
+            "softwareVersion": "1.0",
             "image": "https://pratoby.com/og/pratoby-cover.png",
-            "logo": "https://pratoby.com/og/pratoby-mark.png",
-            "description": "Plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, retirada, entrega e encomendas — sem comissão do PratoBy por pedido.",
+            "screenshot": "https://pratoby.com/og/pratoby-cover.png",
+            "logo": {
+              "@id": "https://pratoby.com/#logo"
+            },
+            "description": "Plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, retirada, entrega, cupons e encomendas — sem comissão do PratoBy por pedido.",
             "inLanguage": "pt-BR",
-            "areaServed": "BR",
+            "areaServed": {
+              "@type": "Country",
+              "name": "Brasil"
+            },
             "brand": {
               "@id": "https://pratoby.com/#organization"
             },
-            "featureList": [
-              "Cardápio digital online",
-              "Pedidos pelo próprio link",
-              "Gestão de produtos e categorias",
-              "Cupons de desconto",
-              "Pedidos em tempo real",
-              "Sem comissão do PratoBy por pedido"
-            ],
+            "provider": {
+              "@id": "https://pratoby.com/#organization"
+            },
             "audience": {
               "@type": "Audience",
-              "audienceType": "Restaurantes, lanchonetes, pizzarias e negócios de alimentação"
+              "audienceType": "Restaurantes, lanchonetes, pizzarias, confeitarias e negócios de alimentação"
+            },
+            "featureList": [
+              "Cardápio digital online",
+              "Link próprio para receber pedidos",
+              "Gestão de produtos e categorias",
+              "Pedidos em tempo real",
+              "Entrega e retirada",
+              "Pagamento online",
+              "Pix manual",
+              "Cupons de desconto",
+              "Agendamento de encomendas",
+              "Painel de pedidos",
+              "Relatórios básicos",
+              "Sem comissão do PratoBy por pedido"
+            ],
+            "offers": {
+              "@type": "AggregateOffer",
+              "url": "https://pratoby.com/planos",
+              "priceCurrency": "BRL",
+              "lowPrice": "59.99",
+              "highPrice": "159.99",
+              "offerCount": "3",
+              "availability": "https://schema.org/InStock",
+              "offers": [
+                {
+                  "@type": "Offer",
+                  "name": "Plano Essencial",
+                  "url": "https://pratoby.com/planos",
+                  "price": "59.99",
+                  "priceCurrency": "BRL",
+                  "availability": "https://schema.org/InStock",
+                  "category": "Assinatura mensal"
+                },
+                {
+                  "@type": "Offer",
+                  "name": "Plano Profissional",
+                  "url": "https://pratoby.com/planos",
+                  "price": "89.99",
+                  "priceCurrency": "BRL",
+                  "availability": "https://schema.org/InStock",
+                  "category": "Assinatura mensal"
+                },
+                {
+                  "@type": "Offer",
+                  "name": "Plano Premium",
+                  "url": "https://pratoby.com/planos",
+                  "price": "159.99",
+                  "priceCurrency": "BRL",
+                  "availability": "https://schema.org/InStock",
+                  "category": "Assinatura mensal"
+                }
+              ]
             }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://pratoby.com/#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Início",
+                "item": "https://pratoby.com/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Planos",
+                "item": "https://pratoby.com/planos"
+              }
+            ]
           }
         ]
       }

@@ -70,6 +70,8 @@ admin.initializeApp()
 const db = admin.firestore()
 const asaasFunctions = createAsaasFunctions({ db, admin, logger })
 const REGION = 'southamerica-east1'
+const CLOUDINARY_CLOUD_NAME = defineSecret('CLOUDINARY_CLOUD_NAME')
+const CLOUDINARY_API_KEY = defineSecret('CLOUDINARY_API_KEY')
 const CLOUDINARY_API_SECRET = defineSecret('CLOUDINARY_API_SECRET')
 const ASAAS_API_KEY = defineSecret('ASAAS_API_KEY')
 const ASAAS_ORDERS_API_KEY = defineSecret('ASAAS_ORDERS_API_KEY')
@@ -1172,15 +1174,19 @@ function assertNonAnonymousDashboardUser(request) {
   return uid
 }
 
-function getCloudinaryEnvValue(name, viteName = '') {
-  return String(process.env[name] || (viteName ? process.env[viteName] : '') || '').trim()
+function getSecretValue(secret, envName = '') {
+  try {
+    return String(secret.value() || '').trim()
+  } catch (_error) {
+    return String((envName ? process.env[envName] : '') || '').trim()
+  }
 }
 
-function getCloudinaryApiSecret() {
-  try {
-    return CLOUDINARY_API_SECRET.value() || process.env.CLOUDINARY_API_SECRET || ''
-  } catch (_error) {
-    return process.env.CLOUDINARY_API_SECRET || ''
+function getCloudinaryConfig() {
+  return {
+    cloudName: getSecretValue(CLOUDINARY_CLOUD_NAME, 'CLOUDINARY_CLOUD_NAME'),
+    apiKey: getSecretValue(CLOUDINARY_API_KEY, 'CLOUDINARY_API_KEY'),
+    apiSecret: getSecretValue(CLOUDINARY_API_SECRET, 'CLOUDINARY_API_SECRET'),
   }
 }
 
@@ -1654,7 +1660,11 @@ exports.createCloudinaryUploadSignature = onCall(
     timeoutSeconds: 15,
     memory: '256MiB',
     maxInstances: 10,
-    secrets: [CLOUDINARY_API_SECRET],
+    secrets: [
+      CLOUDINARY_CLOUD_NAME,
+      CLOUDINARY_API_KEY,
+      CLOUDINARY_API_SECRET,
+    ],
   },
   async (request) => {
     const uid = assertNonAnonymousDashboardUser(request)
@@ -1666,6 +1676,7 @@ exports.createCloudinaryUploadSignature = onCall(
 
     const userData = userSnapshot.data() || {}
     const role = String(userData.role || '').toLowerCase()
+
     if (!['merchant', 'lojista', 'admin', 'developer', 'dev'].includes(role)) {
       throw new HttpsError('permission-denied', 'Permissao negada para upload.')
     }
@@ -1675,16 +1686,23 @@ exports.createCloudinaryUploadSignature = onCall(
 
     if (storeId) {
       const storeSnapshot = await db.collection('stores').doc(storeId).get()
-      if (!storeSnapshot.exists) throw new HttpsError('not-found', 'Loja nao encontrada.')
+
+      if (!storeSnapshot.exists) {
+        throw new HttpsError('not-found', 'Loja nao encontrada.')
+      }
+
       assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userData)
     }
 
-    const cloudName = getCloudinaryEnvValue('CLOUDINARY_CLOUD_NAME', 'VITE_CLOUDINARY_CLOUD_NAME')
-    const apiKey = getCloudinaryEnvValue('CLOUDINARY_API_KEY', 'VITE_CLOUDINARY_API_KEY')
-    const apiSecret = getCloudinaryApiSecret()
+    const { cloudName, apiKey, apiSecret } = getCloudinaryConfig()
 
     if (!cloudName || !apiKey || !apiSecret) {
-      logger.error('[cloudinary] Missing signed upload configuration.')
+      logger.error('[cloudinary] Missing signed upload configuration.', {
+        hasCloudName: Boolean(cloudName),
+        hasApiKey: Boolean(apiKey),
+        hasApiSecret: Boolean(apiSecret),
+      })
+
       throw new HttpsError('failed-precondition', 'Upload seguro nao configurado.')
     }
 
