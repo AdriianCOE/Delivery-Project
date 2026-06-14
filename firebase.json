@@ -149,6 +149,139 @@
     ],
     "rewrites": [
       {
+        "source": "/",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/login",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/cadastro",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/onboarding",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/auth/action",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/dashboard/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/admin/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/store/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/pedido/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/tracking/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/order/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/orders",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/menu",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/Statistics",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/statistics",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/settings",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/reviews",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/Reviews",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/qrcodes",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/users",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/out-screen",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/motoboy",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/planos",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/sobre",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/contato",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/exemplos",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/privacidade",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/privacy",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/termos",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/terms",
+        "destination": "/index.html"
+      },
+      { "source": "/dashboard", 
+        "destination": "/index.html" 
+      },
+      { "source": "/admin", 
+        "destination": "/index.html" 
+      },
+      {
+        "regex": "^/([A-Za-z0-9][A-Za-z0-9-]{1,120})/?$",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

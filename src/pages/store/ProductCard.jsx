@@ -32,6 +32,15 @@ function formatMoney(value) {
   })
 }
 
+function productShowsCouponBadge(product) {
+  const couponEnabled =
+    product?.acceptsCoupons !== false &&
+    product?.acceptsCoupon !== false &&
+    product?.couponEligible !== false
+
+  return couponEnabled && product?.showCouponBadge !== false
+}
+
 function centsToMoney(value) {
   if (value === null || value === undefined || value === '') return null
   return Number(value) / 100
@@ -266,8 +275,62 @@ function getPreparationTime(product) {
   )
 }
 
-function getServes(product) {
-  return getFirstValidValue(product?.serves, product?.serving, product?.portion)
+const VISUAL_BADGE_LABELS = {
+  artesanal: 'Artesanal',
+  caseiro: 'Caseiro',
+  feito_na_hora: 'Feito na hora',
+  especial_da_casa: 'Especial da casa',
+  cremoso: 'Cremoso',
+  saboroso: 'Saboroso',
+  para_compartilhar: 'Para compartilhar',
+  acompanhamento: 'Acompanhamento',
+  novidade: 'Novidade',
+  edicao_limitada: 'Edição limitada',
+  premium: 'Premium',
+}
+
+function normalizeServingLabel(product) {
+  const serving = product?.serving
+
+  if (serving && typeof serving === 'object' && !Array.isArray(serving)) {
+    if (serving.enabled === false) return ''
+    const label = String(serving.label || '').trim()
+    const count = Number(serving.count)
+    if (label) return label.slice(0, 40)
+    if (Number.isFinite(count) && count > 0) {
+      const rounded = Math.floor(count)
+      return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+    }
+    return ''
+  }
+
+  const legacy = getFirstValidValue(product?.serves, product?.portion)
+  if (legacy === undefined || legacy === null || legacy === '') return ''
+
+  const numeric = Number(legacy)
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const rounded = Math.floor(numeric)
+    return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+  }
+
+  return String(legacy).trim().slice(0, 40)
+}
+
+function normalizeVisualBadges(product, limit = 2) {
+  const raw = Array.isArray(product?.visualBadges) ? product.visualBadges : []
+
+  return raw
+    .map((badge) => {
+      const id = String(badge?.id || badge || '').trim()
+      const label = String(badge?.label || VISUAL_BADGE_LABELS[id] || '').trim()
+      return label ? { id: id || label, label: label.slice(0, 28) } : null
+    })
+    .filter(Boolean)
+    .slice(0, limit)
+}
+
+function makeCardBadge({ id, label, icon: Icon = null, className = '', style = undefined }) {
+  return { id, label, Icon, className, style }
 }
 
 function ProductCard({
@@ -309,22 +372,15 @@ function ProductCard({
   const hasDiscount = discountPercent > 0
   const hasPromotionBadge = Boolean(product?.isPromotion || product?.isPromotional || product?.promotion)
   const schedulingBadges = useMemo(() => getProductSchedulingBadges(product, store), [product, store])
-  const hasExplicitCouponEligibility =
-    product?.acceptsCoupons === true ||
-    product?.acceptsCoupon === true ||
-    product?.couponEligible === true
-  const acceptsCoupons =
-    hasExplicitCouponEligibility &&
-    product?.acceptsCoupons !== false &&
-    product?.acceptsCoupon !== false &&
-    product?.couponEligible !== false
+  const acceptsCoupons = productShowsCouponBadge(product)
 
   const productName = product?.name || 'Produto'
   const productDescription =
     product?.description || product?.shortDescription || 'Produto disponível no cardápio.'
 
   const preparationTime = getPreparationTime(product)
-  const serves = getServes(product)
+  const servingLabel = normalizeServingLabel(product)
+  const visualBadges = useMemo(() => normalizeVisualBadges(product, 2), [product])
   const rawImageUrl = getProductImageSource(product)
   const imageUrl = getCloudinaryImageUrl(rawImageUrl, compact ? 'productCardSmall' : 'productCard')
   const imageSrcSet = getCloudinaryImageSrcSet(
@@ -339,6 +395,146 @@ function ProductCard({
     Number(product.stock) > 0 &&
     Number(product.stock) <= 5
 
+  const topBadges = (() => {
+    const badges = []
+
+    if (disabled) {
+      badges.push(makeCardBadge({
+        id: 'paused',
+        label: 'Pedidos pausados',
+        icon: FiInfo,
+        className: 'bg-gray-100 text-gray-600 ring-gray-200',
+      }))
+    } else if (outOfStock) {
+      badges.push(makeCardBadge({
+        id: 'out-of-stock',
+        label: 'Esgotado',
+        icon: FiInfo,
+        className: 'bg-gray-100 text-gray-600 ring-gray-200',
+      }))
+    } else if (unavailable) {
+      badges.push(makeCardBadge({
+        id: 'unavailable',
+        label: 'Indisponível',
+        icon: FiInfo,
+        className: 'bg-orange-50 text-orange-700 ring-orange-200',
+      }))
+    }
+
+    if (hasDiscount && canAdd) {
+      badges.push(makeCardBadge({
+        id: 'discount',
+        label: `-${discountPercent}%`,
+        icon: FiTag,
+        className: 'bg-red-50 text-red-600 ring-red-100',
+      }))
+    } else if (hasPromotionBadge && canAdd) {
+      badges.push(makeCardBadge({
+        id: 'promotion',
+        label: 'Promoção',
+        icon: FiTag,
+        className: 'bg-red-50 text-red-600 ring-red-100',
+      }))
+    }
+
+    schedulingBadges.forEach((badge) => {
+      badges.push(makeCardBadge({
+        id: `schedule-${badge.id}`,
+        label: badge.label,
+        icon: badge.tone === 'orange' ? FiTag : FiClock,
+        className: badge.tone === 'amber'
+          ? 'bg-amber-50 text-amber-700 ring-amber-100'
+          : badge.tone === 'green'
+            ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+            : badge.tone === 'orange'
+              ? 'bg-orange-50 text-orange-700 ring-orange-100'
+              : 'bg-gray-50 text-gray-600 ring-gray-100',
+      }))
+    })
+
+    if (product?.isFeatured && canAdd) {
+      badges.push(makeCardBadge({
+        id: 'featured',
+        label: 'Destaque',
+        icon: FiAward,
+        className: 'ring-1',
+        style: {
+          color: themeColor,
+          backgroundColor: `${themeColor}12`,
+          borderColor: `${themeColor}20`,
+        },
+      }))
+    }
+
+    if (product?.isPopular && canAdd) {
+      badges.push(makeCardBadge({
+        id: 'popular',
+        label: 'Mais pedido',
+        icon: FiTrendingUp,
+        className: 'bg-amber-50 text-amber-700 ring-amber-100',
+      }))
+    }
+
+    visualBadges.forEach((badge) => {
+      badges.push(makeCardBadge({
+        id: `visual-${badge.id}`,
+        label: badge.label,
+        className: 'bg-orange-50 text-orange-700 ring-orange-100',
+      }))
+    })
+
+    if (acceptsCoupons && canAdd) {
+      badges.push(makeCardBadge({
+        id: 'coupon',
+        label: 'Aceita cupom',
+        icon: FiTag,
+        className: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+      }))
+    }
+
+    if (lowStock && canAdd) {
+      badges.push(makeCardBadge({
+        id: 'low-stock',
+        label: 'Últimas unidades',
+        className: 'bg-orange-50 text-orange-600 ring-orange-100',
+      }))
+    }
+
+    return badges.slice(0, 2)
+    })()
+
+    const infoChips = (() => {
+    const chips = []
+
+    // No card compacto, "Com opções" é a informação mais importante.
+    if (hasOptions) {
+      chips.push(makeCardBadge({
+        id: 'options',
+        label: 'Com opções',
+        className: 'bg-gray-50 text-gray-600 ring-gray-100',
+      }))
+    }
+
+    if (servingLabel) {
+      chips.push(makeCardBadge({
+        id: 'serving',
+        label: servingLabel,
+        className: 'bg-gray-50 text-gray-600 ring-gray-100',
+      }))
+    }
+
+    if (preparationTime) {
+      chips.push(makeCardBadge({
+        id: 'prep-time',
+        label: preparationTime,
+        icon: FiClock,
+        className: 'bg-gray-50 text-gray-600 ring-gray-100',
+      }))
+    }
+
+    // Máximo 2 para não invadir preço/botão.
+    return chips.slice(0, 2)
+  })()
   const cardStatusLabel = useMemo(() => {
     if (disabled) return 'Pedidos pausados'
     if (outOfStock) return 'Esgotado'
@@ -431,84 +627,20 @@ function ProductCard({
           {/* BLOCO DO TOPO (Tags, Título e Descrição) */}
           <div className="min-h-[148px] sm:min-h-[166px]">
             <div className="flex min-h-[2rem] max-h-[4.75rem] flex-wrap items-center gap-1.5 overflow-hidden">
-              {product?.isPopular && canAdd && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 ring-1 ring-amber-100">
-                  <FiTrendingUp size={12} />
-                  Mais pedido
-                </span>
-              )}
+              {topBadges.map((badge) => {
+                const Icon = badge.Icon
 
-              {product?.isFeatured && canAdd && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1"
-                  style={{
-                    color: themeColor,
-                    backgroundColor: `${themeColor}12`,
-                    borderColor: `${themeColor}20`,
-                  }}
-                >
-                  <FiAward size={12} />
-                  Destaque
-                </span>
-              )}
-
-              {hasDiscount && canAdd && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
-                  <FiTag size={12} />-{discountPercent}%
-                </span>
-              )}
-
-              {hasPromotionBadge && !hasDiscount && canAdd && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-600 ring-1 ring-red-100">
-                  <FiTag size={12} />
-                  Promoção
-                </span>
-              )}
-
-              {acceptsCoupons && canAdd && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100">
-                  <FiTag size={12} />
-                  Aceita cupom
-                </span>
-              )}
-
-              {lowStock && canAdd && (
-                <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-600 ring-1 ring-orange-100">
-                  Últimas unidades
-                </span>
-              )}
-
-              {schedulingBadges.map((badge) => (
-                <span
-                  key={badge.id}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${
-                    badge.tone === 'amber'
-                      ? 'bg-amber-50 text-amber-700 ring-amber-100'
-                      : badge.tone === 'green'
-                        ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
-                        : badge.tone === 'orange'
-                          ? 'bg-orange-50 text-orange-700 ring-orange-100'
-                          : 'bg-gray-50 text-gray-600 ring-gray-100'
-                  }`}
-                >
-                  {badge.tone === 'orange' ? <FiTag size={12} /> : <FiClock size={12} />}
-                  {badge.label}
-                </span>
-              ))}
-
-              {outOfStock && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-black text-gray-600 ring-1 ring-gray-200">
-                  <FiInfo size={12} />
-                  Esgotado
-                </span>
-              )}
-
-              {unavailable && !outOfStock && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-700 ring-1 ring-orange-200">
-                  <FiInfo size={12} />
-                  Indisponível
-                </span>
-              )}
+                return (
+                  <span
+                    key={badge.id}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${badge.className}`}
+                    style={badge.style}
+                  >
+                    {Icon && <Icon size={12} />}
+                    {badge.label}
+                  </span>
+                )
+              })}
             </div>
 
             <h3 className="mt-2 line-clamp-2 text-[1.02rem] font-black leading-tight text-[#111827] sm:text-lg">
@@ -519,29 +651,21 @@ function ProductCard({
               {productDescription}
             </p>
 
-            {(preparationTime || serves || hasOptions) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-gray-500">
+            <div className="mt-3 flex min-h-[1.65rem] max-w-full flex-wrap items-start gap-2 overflow-hidden">
+              {infoChips.map((chip) => {
+                const Icon = chip.Icon
 
-                {preparationTime && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 ring-1 ring-gray-100">
-                    <FiClock size={12} />
-                    {preparationTime}
+                return (
+                  <span
+                    key={chip.id}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold ${chip.className}`}
+                  >
+                    {Icon && <Icon size={12} />}
+                    {chip.label}
                   </span>
-                )}
-
-                {serves && (
-                  <span className="rounded-full bg-gray-50 px-2 py-1 ring-1 ring-gray-100">
-                    Serve {serves}
-                  </span>
-                )}
-
-                {hasOptions && (
-                  <span className="rounded-full bg-gray-50 px-2 py-1 ring-1 ring-gray-100">
-                    Com opções
-                  </span>
-                )}
-              </div>
-            )}
+                )
+              })}
+            </div>
           </div>
 
           {/* 👈 3. BLOCO INFERIOR (Preço e Botão). O mt-auto joga eles para o fim do card */}
@@ -626,8 +750,8 @@ function ProductCard({
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
               className={`
-                h-full w-full object-cover transition duration-500
-                ${imgLoaded ? 'scale-100 opacity-100 group-hover:scale-110' : 'scale-95 opacity-0'}
+                h-full w-full object-contain object-center p-2 transition duration-500
+                ${imgLoaded ? 'scale-100 opacity-100 group-hover:scale-[1.03]' : 'scale-95 opacity-0'}
               `}
             />
           ) : (

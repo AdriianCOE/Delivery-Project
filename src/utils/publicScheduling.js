@@ -26,6 +26,7 @@ const PRODUCT_PREPAYMENT_POLICIES = new Set([
 ])
 
 const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
+const SCHEDULING_CONFLICT_MESSAGE = 'Este carrinho possui itens com regras diferentes de agendamento. Separe os itens em pedidos diferentes.'
 
 function normalizeSlotInterval(value, fallback = null) {
   const parsed = Number(value)
@@ -471,11 +472,11 @@ export function getCartSchedulingState({ store, items, fulfillmentType, orderTim
 
   let blockingMessage = ''
   if (hasConflictingModes) {
-    blockingMessage = 'Seu carrinho tem itens com regras diferentes. Finalize em pedidos separados.'
+    blockingMessage = SCHEDULING_CONFLICT_MESSAGE
   } else if (hasScheduledOnly && !storeScheduling.enabled) {
     blockingMessage = 'Este produto precisa de agendamento, mas a loja ainda não ativou pedidos agendados.'
   } else if (orderTiming === 'scheduled' && hasAsapOnly) {
-    blockingMessage = 'Seu carrinho tem itens com regras diferentes. Finalize em pedidos separados.'
+    blockingMessage = SCHEDULING_CONFLICT_MESSAGE
   } else if (orderTiming === 'scheduled' && !storeScheduling.enabled) {
     blockingMessage = 'A loja ainda não ativou pedidos agendados.'
   } else if (orderTiming === 'scheduled' && !fulfillmentAllowed) {

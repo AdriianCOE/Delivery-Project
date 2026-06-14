@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FiAlertCircle,
   FiCheck,
@@ -102,6 +102,88 @@ function getProductImageSource(product) {
     product?.thumbnailUrl ||
     ''
   )
+}
+
+const VISUAL_BADGE_LABELS = {
+  artesanal: 'Artesanal',
+  caseiro: 'Caseiro',
+  feito_na_hora: 'Feito na hora',
+  especial_da_casa: 'Especial da casa',
+  cremoso: 'Cremoso',
+  saboroso: 'Saboroso',
+  para_compartilhar: 'Para compartilhar',
+  acompanhamento: 'Acompanhamento',
+  novidade: 'Novidade',
+  edicao_limitada: 'Edição limitada',
+  premium: 'Premium',
+}
+
+function getFirstValidValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim()) || ''
+}
+
+function getPreparationTime(product) {
+  return getFirstValidValue(
+    product?.preparationTime,
+    product?.prepTime,
+    product?.timeToPrepare,
+    product?.estimatedTime
+  )
+}
+
+function productShowsCouponBadge(product) {
+  const couponEnabled =
+    product?.acceptsCoupons !== false &&
+    product?.acceptsCoupon !== false &&
+    product?.couponEligible !== false
+
+  return couponEnabled && product?.showCouponBadge !== false
+}
+
+function normalizeServingLabel(product) {
+  const serving = product?.serving
+
+  if (serving && typeof serving === 'object' && !Array.isArray(serving)) {
+    if (serving.enabled === false) return ''
+
+    const label = String(serving.label || '').trim()
+    const count = Number(serving.count)
+
+    if (label) return label.slice(0, 40)
+
+    if (Number.isFinite(count) && count > 0) {
+      const rounded = Math.floor(count)
+      return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+    }
+
+    return ''
+  }
+
+  const legacy = product?.serves ?? product?.portion
+
+  if (legacy === undefined || legacy === null || legacy === '') return ''
+
+  const numeric = Number(legacy)
+
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const rounded = Math.floor(numeric)
+    return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+  }
+
+  return String(legacy).trim().slice(0, 40)
+}
+
+function normalizeVisualBadges(product, limit = 3) {
+  const raw = Array.isArray(product?.visualBadges) ? product.visualBadges : []
+
+  return raw
+    .map((badge) => {
+      const id = String(badge?.id || badge || '').trim()
+      const label = String(badge?.label || VISUAL_BADGE_LABELS[id] || '').trim()
+      return label ? { id: id || label, label: label.slice(0, 28) } : null
+    })
+    .filter(Boolean)
+    .slice(0, limit)
 }
 
 function getProductExtras(product) {
@@ -275,6 +357,10 @@ export default function ProductOptionsModal({
   const [selectedExtras, setSelectedExtras] = useState([])
   const [selectedOptions, setSelectedOptions] = useState({})
   const [error, setError] = useState('')
+  const [errorGroupId, setErrorGroupId] = useState('')
+  const [isClosing, setIsClosing] = useState(false)
+  const optionGroupRefs = useRef({})
+  const closeTimerRef = useRef(null)
 
   const themeColor =
     store?.themeColor ||
@@ -299,15 +385,101 @@ export default function ProductOptionsModal({
   () => product ? getProductSchedulingBadges(product, store) : [],
   [product, store]
   )
+  const servingLabel = useMemo(() => normalizeServingLabel(product), [product])
+  const preparationTime = useMemo(() => getPreparationTime(product), [product])
+  const visualBadges = useMemo(() => normalizeVisualBadges(product, 3), [product])
+  const acceptsCoupons = useMemo(() => productShowsCouponBadge(product), [product])
+
+const modalInfoBadges = useMemo(() => {
+  const badges = []
+
+  if (servingLabel) {
+    badges.push({
+      id: 'serving',
+      label: servingLabel,
+      className: 'bg-gray-50 text-gray-700 ring-gray-100',
+    })
+  }
+
+  if (preparationTime) {
+    badges.push({
+      id: 'prep-time',
+      label: `Preparo: ${preparationTime}`,
+      className: 'bg-gray-50 text-gray-700 ring-gray-100',
+    })
+  }
+
+  if (optionGroups.length > 0) {
+    badges.push({
+      id: 'options',
+      label: 'Possui opções',
+      className: 'bg-gray-50 text-gray-700 ring-gray-100',
+    })
+  }
+
+  schedulingBadges.forEach((badge) => {
+    badges.push({
+      id: `schedule-${badge.id}`,
+      label: badge.label,
+      className:
+        badge.tone === 'amber'
+          ? 'bg-amber-50 text-amber-700 ring-amber-100'
+          : badge.tone === 'green'
+            ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+            : badge.tone === 'orange'
+              ? 'bg-orange-50 text-orange-700 ring-orange-100'
+              : 'bg-gray-50 text-gray-700 ring-gray-100',
+    })
+  })
+
+  if (acceptsCoupons) {
+    badges.push({
+      id: 'coupon',
+      label: 'Aceita cupom',
+      className: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    })
+  }
+
+  visualBadges.forEach((badge) => {
+    badges.push({
+      id: `visual-${badge.id}`,
+      label: badge.label,
+      className: 'bg-orange-50 text-orange-700 ring-orange-100',
+    })
+  })
+
+  return badges.slice(0, 5)
+}, [
+  servingLabel,
+  preparationTime,
+  optionGroups.length,
+  schedulingBadges,
+  acceptsCoupons,
+  visualBadges,
+])
 
   useEffect(() => {
     if (!isOpen) return
 
+    setIsClosing(false)
     setQuantity(1)
     setObservation('')
     setSelectedExtras([])
     setSelectedOptions({})
     setError('')
+    setErrorGroupId('')
+    optionGroupRefs.current = {}
+  }, [isOpen, product?.id])
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+        closeTimerRef.current = null
+      }
+    }
   }, [isOpen, product?.id])
 
   const normalizedSelectedOptionGroups = useMemo(() => {
@@ -368,6 +540,17 @@ export default function ProductOptionsModal({
   const unitPriceCents = basePriceCents + additionsCents + optionsCents
   const totalCents = unitPriceCents * quantity
 
+  const requestClose = useCallback(() => {
+    if (closeTimerRef.current) return
+
+    setIsClosing(true)
+
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null
+      onClose()
+    }, 180)
+  }, [onClose])
+
   if (!isOpen || !product) return null
 
   const productCanAdd = canAddProductToCart(product)
@@ -386,6 +569,7 @@ export default function ProductOptionsModal({
 
   function toggleExtra(extra) {
     setError('')
+    setErrorGroupId('')
 
     setSelectedExtras((current) => {
       const extraKey = getOptionKey(extra, extra.name)
@@ -401,6 +585,7 @@ export default function ProductOptionsModal({
 
   function updateOptionQuantity(group, option, nextQuantity) {
     setError('')
+    setErrorGroupId('')
 
     if (!option.available) return
 
@@ -462,15 +647,22 @@ export default function ProductOptionsModal({
       const selectedQuantity = getGroupSelectedQuantity(selected)
 
       if (group.min > 0 && selectedQuantity < group.min) {
-        return `Escolha pelo menos ${group.min} item em "${group.title}".`
+        return {
+          groupId: group.id,
+          message: `Escolha pelo menos ${group.min} item em "${group.title}".`,
+        }
       }
 
       if (group.max > 0 && selectedQuantity > group.max) {
-        return `Escolha no máximo ${group.max} item em "${group.title}".`
+        return {
+          groupId: group.id,
+          message: `Escolha no máximo ${group.max} item em "${group.title}".`,
+        }
       }
+
     }
 
-    return ''
+    return null
   }
 
   function handleAddToCart() {
@@ -479,7 +671,23 @@ export default function ProductOptionsModal({
     const validationError = validateOptions()
 
     if (validationError) {
-      setError(validationError)
+      const nextMessage = typeof validationError === 'string'
+        ? validationError
+        : validationError.message
+      const nextGroupId = typeof validationError === 'string'
+        ? ''
+        : validationError.groupId
+
+      setError(nextMessage)
+      setErrorGroupId(nextGroupId)
+      if (nextGroupId) {
+        requestAnimationFrame(() => {
+          optionGroupRefs.current[nextGroupId]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          })
+        })
+      }
       return
     }
 
@@ -525,19 +733,27 @@ export default function ProductOptionsModal({
     }
 
     addToCart(cartItem)
-    onClose()
+    requestClose()
   }
 
   return (
     <div className="fixed inset-0 z-[95] flex items-end justify-center md:items-center">
       <button
         type="button"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={requestClose}
+        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+          isClosing ? 'opacity-0' : 'opacity-100'
+        }`}
         aria-label="Fechar detalhes do produto"
       />
 
-      <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 md:rounded-[2rem]">
+      <div
+        className={`relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 transition duration-200 ease-out md:rounded-[2rem] ${
+          isClosing
+            ? 'translate-y-6 scale-[0.98] opacity-0 md:translate-y-2'
+            : 'translate-y-0 scale-100 opacity-100'
+        }`}
+      >
         <div className="relative flex h-[230px] shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3 sm:h-[300px] sm:p-5 md:h-[330px]">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,146,60,.14),transparent_62%)]" />
 
@@ -573,7 +789,7 @@ export default function ProductOptionsModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 text-[#111827] shadow-lg backdrop-blur transition hover:bg-white"
             aria-label="Fechar"
           >
@@ -587,31 +803,29 @@ export default function ProductOptionsModal({
               {product.name}
             </h2>
 
-            {schedulingBadges.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {schedulingBadges.map((badge) => (
-                  <span
-                    key={badge.id}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${
-                      badge.tone === 'amber'
-                        ? 'bg-amber-50 text-amber-700 ring-amber-100'
-                        : badge.tone === 'green'
-                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
-                          : badge.tone === 'orange'
-                            ? 'bg-orange-50 text-orange-700 ring-orange-100'
-                            : 'bg-gray-50 text-gray-600 ring-gray-100'
-                    }`}
-                  >
-                    {badge.label}
-                  </span>
-                ))}
-              </div>
-            )}
-
             {product.description && (
               <p className="mt-2 text-sm leading-6 text-[#6b7280]">
                 {product.description}
               </p>
+            )}
+
+            {modalInfoBadges.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-gray-100 bg-[#f9fafb] p-3">
+                <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+                  Informações do item
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {modalInfoBadges.map((badge) => (
+                    <span
+                      key={badge.id}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${badge.className}`}
+                    >
+                      {badge.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
 
             <p className="mt-4 text-2xl font-black text-[#111827]">
@@ -628,7 +842,14 @@ export default function ProductOptionsModal({
                 return (
                   <section
                     key={group.id}
-                    className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm"
+                    ref={(node) => {
+                      if (node) optionGroupRefs.current[group.id] = node
+                    }}
+                    className={`rounded-[1.5rem] border bg-white p-4 shadow-sm transition ${
+                      errorGroupId === group.id
+                        ? 'border-red-200 ring-4 ring-red-50'
+                        : 'border-gray-100'
+                    }`}
                   >
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div>
@@ -654,6 +875,12 @@ export default function ProductOptionsModal({
                             </span>
                           )}
                         </p>
+
+                        {errorGroupId === group.id && error && (
+                          <p className="mt-2 text-xs font-black text-red-600">
+                            {error}
+                          </p>
+                        )}
                       </div>
 
                       <span
@@ -873,6 +1100,13 @@ export default function ProductOptionsModal({
         </div>
 
         <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-18px_40px_rgba(15,23,42,0.08)]">
+          {error && (
+            <div className="mb-3 flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600">
+              <FiAlertCircle className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-2xl border border-gray-100 bg-[#f9fafb] p-1">
               <button
@@ -922,5 +1156,3 @@ export default function ProductOptionsModal({
     </div>
   )
 }
-
-

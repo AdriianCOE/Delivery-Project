@@ -487,34 +487,54 @@ export default function OnboardingPage() {
   }
 
   function resetRecaptchaVerifier() {
-    try {
-      recaptchaVerifierRef.current?.clear?.()
-    } catch (error) {
-      console.warn('[Onboarding] failed to clear reCAPTCHA verifier:', error)
-    }
-    recaptchaVerifierRef.current = null
+  try {
+    recaptchaVerifierRef.current?.clear?.()
+  } catch (error) {
+    console.warn('[Onboarding] failed to clear reCAPTCHA verifier:', error)
   }
 
-  async function getRecaptchaVerifier() {
-    if (recaptchaVerifierRef.current) {
-      return recaptchaVerifierRef.current
-    }
+  recaptchaVerifierRef.current = null
 
-    if (!document.getElementById('recaptcha-container')) {
-      throw new Error('recaptcha-container-not-found')
-    }
+  try {
+    const container = document.getElementById('recaptcha-container')
+    if (container) container.innerHTML = ''
+  } catch (error) {
+    console.warn('[Onboarding] failed to reset reCAPTCHA container:', error)
+  }
+}
 
-    const verifier = new RecaptchaVerifier(firebaseAuth, 'recaptcha-container', {
-      size: 'invisible',
-      'expired-callback': () => {
-        resetRecaptchaVerifier()
-      },
-    })
+async function getRecaptchaVerifier() {
+  if (recaptchaVerifierRef.current) {
+    return recaptchaVerifierRef.current
+  }
 
-    recaptchaVerifierRef.current = verifier
+  const container = document.getElementById('recaptcha-container')
+  if (!container) {
+    throw new Error('recaptcha-container-not-found')
+  }
+
+  // Evita "reCAPTCHA has already been rendered in this element"
+  // quando React remonta, usuário clica duas vezes ou StrictMode dispara efeitos.
+  container.innerHTML = ''
+
+  const verifier = new RecaptchaVerifier(firebaseAuth, container, {
+    size: 'invisible',
+    'expired-callback': () => {
+      resetRecaptchaVerifier()
+    },
+  })
+
+  recaptchaVerifierRef.current = verifier
+
+  try {
     await verifier.render()
-    return verifier
+  } catch (error) {
+    resetRecaptchaVerifier()
+    throw error
   }
+
+  return verifier
+}
 
   // ── effects ──────────────────────────────────────────────
 
@@ -1242,7 +1262,7 @@ export default function OnboardingPage() {
                 {!userPhoneVerified && (
                   <div className="px-5 pb-5">
                     {/* recaptcha invisível — sempre presente */}
-                    <div id="recaptcha-container" />
+                    <div id="recaptcha-container" key="recaptcha-container" />
 
                     {/* alerta de status */}
                     {phoneStatus.message && (

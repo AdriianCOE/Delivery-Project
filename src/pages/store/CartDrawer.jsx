@@ -22,6 +22,9 @@ import {
   FiTruck,
   FiUser,
   FiX,
+  FiDollarSign,
+  FiSmartphone,
+  FiZap,
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
@@ -937,6 +940,79 @@ function PromoPriceLine({ item, compact = false }) {
   )
 }
 
+function ClearCartConfirmModal({ isOpen, itemCount, onCancel, onConfirm }) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="fixed inset-0 z-[120] flex items-end justify-center p-4 sm:items-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <button
+            type="button"
+            aria-label="Cancelar esvaziamento do carrinho"
+            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            onClick={onCancel}
+          />
+
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-cart-title"
+            className="relative w-full max-w-sm overflow-hidden rounded-[2rem] border border-white/70 bg-white p-5 shadow-2xl"
+            initial={{ opacity: 0, y: 22, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-400 via-orange-400 to-amber-300" />
+
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
+                <FiTrash2 size={22} />
+              </div>
+
+              <div className="min-w-0">
+                <h3
+                  id="clear-cart-title"
+                  className="text-lg font-black text-[#111827]"
+                >
+                  Esvaziar carrinho?
+                </h3>
+
+                <p className="mt-1 text-sm leading-6 text-[#6b7280]">
+                  Você vai remover {itemCount} item{itemCount !== 1 ? 's' : ''} do pedido.
+                  Essa ação não pode ser desfeita.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-black text-[#374151] shadow-sm transition hover:bg-gray-50 active:scale-[0.98]"
+              >
+                Voltar
+              </button>
+
+              <button
+                type="button"
+                onClick={onConfirm}
+                className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-red-200 transition hover:bg-red-700 active:scale-[0.98]"
+              >
+                Esvaziar
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function CartItemDetailsModal({
   item,
   onClose,
@@ -1439,6 +1515,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const [checkoutError, setCheckoutError] = useState(null)
 
   const [selectedCartItem, setSelectedCartItem] = useState(null)
+  const [isClearCartConfirmOpen, setIsClearCartConfirmOpen] = useState(false)
 
   const [couponCode, setCouponCode] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState(null)
@@ -1493,7 +1570,8 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'mercadopago_online',
         legacyLabel: 'Online',
         label: 'Pagamento online',
-        icon: 'MP',
+        Icon: FiShield,
+        iconLabel: 'Online',
         description: mercadoPagoConfig.maxInstallmentCount > 1
           ? `Pix, crédito ou débito em ambiente seguro. Crédito em até ${mercadoPagoConfig.maxInstallmentCount}x.`
           : 'Pix, crédito ou débito em ambiente seguro.',
@@ -1504,7 +1582,8 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'pix_manual',
         legacyLabel: 'Pix',
         label: 'Pix com comprovante',
-        icon: 'PIX',
+        Icon: FiZap,
+        iconLabel: 'Pix',
         description: 'Copie o Pix na próxima tela, envie o comprovante pelo WhatsApp e aguarde a confirmação da loja.',
         paymentStatus: 'pending',
       },
@@ -1512,7 +1591,8 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'card_on_delivery',
         legacyLabel: 'Cartão',
         label: 'Cartão na entrega',
-        icon: 'CR',
+        Icon: FiCreditCard,
+        iconLabel: 'Cartão',
         description: 'Débito ou crédito na maquininha.',
         paymentStatus: 'pay_on_delivery',
       },
@@ -1520,7 +1600,8 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'cash',
         legacyLabel: 'Dinheiro',
         label: 'Dinheiro na entrega',
-        icon: 'R$',
+        Icon: FiDollarSign,
+        iconLabel: 'Dinheiro',
         description: 'Informe se precisa de troco.',
         paymentStatus: 'pay_on_delivery',
       },
@@ -1794,6 +1875,17 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     },
     [removeFromCart]
   )
+
+  const handleConfirmClearCart = useCallback(() => {
+    clearCart()
+    setAppliedCoupon(null)
+    setCouponCode('')
+    setCouponError('')
+    setChangeFor('')
+    setPaymentMethod('')
+    setIsClearCartConfirmOpen(false)
+    setStep('cart')
+  }, [clearCart])
 
   const handleApplyCoupon = useCallback(async () => {
     const code = couponCode.trim().toUpperCase()
@@ -2515,12 +2607,8 @@ if (orderType === 'delivery') {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        const confirmed = window.confirm('Deseja esvaziar o carrinho?')
-                        if (!confirmed) return
-                        clearCart()
-                      }}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-600 transition hover:bg-red-100"
+                      onClick={() => setIsClearCartConfirmOpen(true)}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-600 transition hover:bg-red-100 active:scale-[0.98]"
                     >
                       <FiTrash2 />
                       Esvaziar carrinho
@@ -2948,6 +3036,8 @@ if (orderType === 'delivery') {
                             ? !['pix_manual', 'mercadopago_online'].includes(option.value)
                             : pixOnlyRequiredForSchedule && option.value !== 'pix_manual'
 
+                        const PaymentIcon = option.Icon
+
                         return (
                           <button
                             key={option.value}
@@ -2964,7 +3054,13 @@ if (orderType === 'delivery') {
                                 : 'border-gray-100 bg-[#F9FAFB] hover:bg-white'
                             } disabled:cursor-not-allowed disabled:opacity-45`}
                           >
-                            <span className="text-2xl">{option.icon}</span>
+                            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 transition ${
+                              paymentMethod === option.value
+                                ? 'bg-orange-100 text-[#f97316] ring-orange-200'
+                                : 'bg-white text-[#6b7280] ring-gray-100'
+                            }`}>
+                              {PaymentIcon ? <PaymentIcon size={21} /> : <FiCreditCard size={21} />}
+                            </span>
 
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-black text-[#111827]">
@@ -3363,6 +3459,13 @@ if (orderType === 'delivery') {
         onQuantityChange={handleQuantity}
         onRemove={handleRemoveCartItem}
         onUpdateObservation={handleUpdateItemObservation}
+      />
+
+      <ClearCartConfirmModal
+        isOpen={isClearCartConfirmOpen}
+        itemCount={itemCount}
+        onCancel={() => setIsClearCartConfirmOpen(false)}
+        onConfirm={handleConfirmClearCart}
       />
     </motion.div>
       )}

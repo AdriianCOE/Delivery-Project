@@ -5,7 +5,7 @@ const {
   } = require('firebase-functions/v2/firestore')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onValueWritten } = require('firebase-functions/v2/database')
-const { onCall, HttpsError } = require('firebase-functions/v2/https')
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https')
 const { logger } = require('firebase-functions')
 const { defineSecret } = require('firebase-functions/params')
 const admin = require('firebase-admin')
@@ -607,7 +607,7 @@ exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request
 })
 
 const PUBLIC_STORE_FIELDS = [
-  'name', 'storeName', 'description', 'segment', 'category',
+  'name', 'storeName', 'description', 'publicDescription', 'segment', 'category',
   'logoUrl', 'logo', 'bannerUrl', 'bannerMobileUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
   'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
   'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
@@ -630,10 +630,11 @@ const PUBLIC_PRODUCT_FIELDS = [
   'imageUrl', 'image', 'photoUrl', 'coverUrl', 'thumbnailUrl', 'images', 'imageUrls', 'gallery', 'categoryId', 'category',
   'categoryName', 'order', 'sortOrder', 'position', 'isActive', 'active', 'isVisible',
   'visible', 'isDeleted', 'deletedAt', 'isAvailable', 'available', 'status',
-  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'isFeatured',
+  'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'showCouponBadge', 'isFeatured',
   'isPopular', 'isPromotion', 'isPromotional',
   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
-  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime', 'scheduling',
+  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime', 'serving',
+  'visualBadges', 'scheduling',
 ]
 
 const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
@@ -915,6 +916,59 @@ function publicProductIsVisible(data) {
   return isPublicItemVisible(data)
 }
 
+const PUBLIC_VISUAL_BADGE_LABELS = {
+  artesanal: 'Artesanal',
+  caseiro: 'Caseiro',
+  feito_na_hora: 'Feito na hora',
+  especial_da_casa: 'Especial da casa',
+  cremoso: 'Cremoso',
+  saboroso: 'Saboroso',
+  para_compartilhar: 'Para compartilhar',
+  acompanhamento: 'Acompanhamento',
+  novidade: 'Novidade',
+  edicao_limitada: 'Edição limitada',
+  premium: 'Premium',
+}
+
+function normalizePublicVisualBadgeId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function sanitizePublicProductServing(value, data = {}) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {}
+  const legacy = data.serves ?? data.portion
+  const countNumber = Number(raw.count ?? (Number.isFinite(Number(legacy)) ? legacy : null))
+  const count = Number.isFinite(countNumber) && countNumber > 0
+    ? Math.min(999, Math.floor(countNumber))
+    : null
+  const label = String(raw.label || (!count && legacy ? legacy : '') || '').trim().slice(0, 40)
+  const enabled = raw.enabled === true || Boolean(label || count)
+
+  return {
+    enabled,
+    label: enabled ? label : '',
+    count: enabled ? count : null,
+  }
+}
+
+function sanitizePublicProductVisualBadges(value) {
+  const raw = Array.isArray(value) ? value : []
+  return [...new Set(raw.map((badge) => normalizePublicVisualBadgeId(badge?.id || badge)))]
+    .filter((id) => PUBLIC_VISUAL_BADGE_LABELS[id])
+    .slice(0, 5)
+    .map((id) => ({
+      id,
+      label: PUBLIC_VISUAL_BADGE_LABELS[id],
+    }))
+}
+
 function sanitizePublicProduct(data, storeData = {}) {
   const product = pickPublicFields(data, PUBLIC_PRODUCT_FIELDS)
   const scheduling = hasPlanFeature(storeData, 'scheduling')
@@ -928,6 +982,8 @@ function sanitizePublicProduct(data, storeData = {}) {
   if (Array.isArray(product.images)) product.images = product.images.slice(0, imageLimit)
   if (Array.isArray(product.imageUrls)) product.imageUrls = product.imageUrls.slice(0, imageLimit)
   if (Array.isArray(product.gallery)) product.gallery = product.gallery.slice(0, imageLimit)
+  product.serving = sanitizePublicProductServing(data?.serving, data)
+  product.visualBadges = sanitizePublicProductVisualBadges(data?.visualBadges)
 
   return product
 }
@@ -3501,6 +3557,248 @@ function publicCatalogEntitlementsChanged(beforeData, afterData) {
     return JSON.stringify(beforeData[field] ?? null) !== JSON.stringify(afterData[field] ?? null)
   })
 }
+
+const PUBLIC_APP_ORIGIN = 'https://pratoby.com'
+const DEFAULT_OG_IMAGE = `${PUBLIC_APP_ORIGIN}/og/pratoby-cover.png`
+const SEO_INDEX_CACHE_MS = 60 * 1000
+let cachedSeoIndexHtml = ''
+let cachedSeoIndexLoadedAt = 0
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+const ALLOWED_PUBLIC_IMAGE_HOSTS = new Set([
+  'pratoby.com',
+  'www.pratoby.com',
+  'res.cloudinary.com',
+])
+
+function absolutePublicUrl(value) {
+  const rawUrl = String(value || '').trim()
+  if (!rawUrl) return ''
+
+  if (rawUrl.startsWith('/')) {
+    return `${PUBLIC_APP_ORIGIN}${rawUrl}`
+  }
+
+  try {
+    const parsed = new URL(rawUrl)
+
+    if (parsed.protocol !== 'https:') return ''
+    if (!ALLOWED_PUBLIC_IMAGE_HOSTS.has(parsed.hostname)) return ''
+
+    return parsed.toString()
+  } catch (_error) {
+    return ''
+  }
+}
+
+function replaceOrInsertHeadTag(html, matcher, tag) {
+  if (matcher.test(html)) return html.replace(matcher, tag)
+  return html.replace(/<\/head>/i, `  ${tag}\n</head>`)
+}
+
+function injectStorefrontSeo(html, meta) {
+  let nextHtml = html
+
+  const safeTitle = escapeHtml(meta.title)
+  const safeDescription = escapeHtml(meta.description)
+  const safeImage = escapeHtml(meta.image)
+  const safeCanonical = escapeHtml(meta.canonical)
+
+  const tags = [
+    [
+      /<title\b[^>]*>[\s\S]*?<\/title>/i,
+      `<title>${safeTitle}</title>`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']description["'])[^>]*>/i,
+      `<meta name="description" content="${safeDescription}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:title["'])[^>]*>/i,
+      `<meta property="og:title" content="${safeTitle}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:description["'])[^>]*>/i,
+      `<meta property="og:description" content="${safeDescription}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image["'])[^>]*>/i,
+      `<meta property="og:image" content="${safeImage}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:url["'])[^>]*>/i,
+      `<meta property="og:url" content="${safeCanonical}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:type["'])[^>]*>/i,
+      '<meta property="og:type" content="website">',
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:card["'])[^>]*>/i,
+      '<meta name="twitter:card" content="summary_large_image">',
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:title["'])[^>]*>/i,
+      `<meta name="twitter:title" content="${safeTitle}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:description["'])[^>]*>/i,
+      `<meta name="twitter:description" content="${safeDescription}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:image["'])[^>]*>/i,
+      `<meta name="twitter:image" content="${safeImage}">`,
+    ],
+    [
+      /<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i,
+      `<link rel="canonical" href="${safeCanonical}">`,
+    ],
+  ]
+
+  for (const [matcher, tag] of tags) {
+    nextHtml = replaceOrInsertHeadTag(nextHtml, matcher, tag)
+  }
+
+  return nextHtml
+}
+
+function buildStorefrontSeoMeta(store) {
+  const storeName = String(store?.name || store?.storeName || 'PratoBy').trim()
+  const slug = getPublicStoreSlug(store?.storeId || store?.id || '', store)
+  const canonical = `${PUBLIC_APP_ORIGIN}/${slug}`
+  const description = String(
+    store?.publicDescription ||
+      store?.description ||
+      `Veja o cardápio digital de ${storeName} no PratoBy.`
+  ).trim().slice(0, 180)
+  const image = absolutePublicUrl(
+    store?.bannerUrl ||
+      store?.coverUrl ||
+      store?.bannerMobileUrl ||
+      store?.mobileBannerUrl ||
+      store?.logoUrl ||
+      store?.logo
+  ) || DEFAULT_OG_IMAGE
+
+  return {
+    title: `${storeName} | Cardápio Digital`,
+    description,
+    image,
+    canonical,
+  }
+}
+
+async function loadStaticIndexHtml() {
+  const now = Date.now()
+  if (cachedSeoIndexHtml && now - cachedSeoIndexLoadedAt < SEO_INDEX_CACHE_MS) {
+    return cachedSeoIndexHtml
+  }
+
+  const response = await fetch(`${PUBLIC_APP_ORIGIN}/index.html`, {
+    headers: { accept: 'text/html' },
+  })
+  if (!response.ok) throw new Error(`index.html fetch failed with ${response.status}`)
+  const html = await response.text()
+  cachedSeoIndexHtml = html
+  cachedSeoIndexLoadedAt = now
+  return html
+}
+
+function buildMinimalSeoHtml(meta = {}) {
+  const safeMeta = {
+    title: meta.title || 'PratoBy | Cardápio digital',
+    description: meta.description || 'Cardápio digital PratoBy.',
+    image: absolutePublicUrl(meta.image) || DEFAULT_OG_IMAGE,
+    canonical: absolutePublicUrl(meta.canonical) || PUBLIC_APP_ORIGIN,
+  }
+
+  return [
+    '<!doctype html>',
+    '<html lang="pt-BR">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+    `<title>${escapeHtml(safeMeta.title)}</title>`,
+    `<meta name="description" content="${escapeHtml(safeMeta.description)}">`,
+    `<link rel="canonical" href="${escapeHtml(safeMeta.canonical)}">`,
+    '<meta property="og:type" content="website">',
+    `<meta property="og:title" content="${escapeHtml(safeMeta.title)}">`,
+    `<meta property="og:description" content="${escapeHtml(safeMeta.description)}">`,
+    `<meta property="og:image" content="${escapeHtml(safeMeta.image)}">`,
+    `<meta property="og:url" content="${escapeHtml(safeMeta.canonical)}">`,
+    '<meta name="twitter:card" content="summary_large_image">',
+    `<meta name="twitter:title" content="${escapeHtml(safeMeta.title)}">`,
+    `<meta name="twitter:description" content="${escapeHtml(safeMeta.description)}">`,
+    `<meta name="twitter:image" content="${escapeHtml(safeMeta.image)}">`,
+    '</head>',
+    '<body>',
+    '<main>PratoBy</main>',
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+exports.storefrontSeoPreview = onRequest(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    memory: '256MiB',
+    minInstances: 0,
+    maxInstances: 5,
+    invoker: 'public',
+  },
+  async (request, response) => {
+    const slug = normalizePublicStoreLookupParam(request.path || request.url || '')
+    response.set('Content-Type', 'text/html; charset=utf-8')
+    response.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
+
+    let html
+    try {
+      html = await loadStaticIndexHtml()
+    } catch (error) {
+      logger.error('[storefrontSeoPreview] index html unavailable', {
+        slug,
+        message: error?.message || String(error),
+      })
+      response.status(200).send(buildMinimalSeoHtml({
+        canonical: slug ? `${PUBLIC_APP_ORIGIN}/${slug}` : PUBLIC_APP_ORIGIN,
+      }))
+      return
+    }
+
+    try {
+      if (!slug) {
+        response.status(200).send(html)
+        return
+      }
+
+      const storeRecord = await findPublicStoreByParam(slug)
+      if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
+        response.status(200).send(html)
+        return
+      }
+
+      const publicStore = buildPublicStoreProfile(storeRecord.id, storeRecord.data, storeRecord.collectionName)
+      response.status(200).send(injectStorefrontSeo(html, buildStorefrontSeoMeta(publicStore)))
+    } catch (error) {
+      logger.warn('[storefrontSeoPreview] seo injection failed, returning static index', {
+        slug,
+        message: error?.message || String(error),
+      })
+      response.status(200).send(html || buildMinimalSeoHtml({
+        canonical: slug ? `${PUBLIC_APP_ORIGIN}/${slug}` : PUBLIC_APP_ORIGIN,
+      }))
+    }
+  }
+)
 
 exports.reconcilePublicCatalog = onSchedule(
   {

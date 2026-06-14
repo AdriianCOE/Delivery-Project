@@ -274,6 +274,63 @@ function buildPublicCategory(data = {}, categoryId, storeId) {
   })
 }
 
+const PUBLIC_VISUAL_BADGE_LABELS = {
+  artesanal: 'Artesanal',
+  caseiro: 'Caseiro',
+  feito_na_hora: 'Feito na hora',
+  especial_da_casa: 'Especial da casa',
+  cremoso: 'Cremoso',
+  saboroso: 'Saboroso',
+  para_compartilhar: 'Para compartilhar',
+  acompanhamento: 'Acompanhamento',
+  novidade: 'Novidade',
+  edicao_limitada: 'Edição limitada',
+  premium: 'Premium',
+}
+
+function normalizePublicVisualBadgeId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function sanitizePublicProductServing(value, data = {}) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {}
+
+  const legacy = data.serves ?? data.portion
+  const countNumber = Number(raw.count ?? (Number.isFinite(Number(legacy)) ? legacy : null))
+
+  const count = Number.isFinite(countNumber) && countNumber > 0
+    ? Math.min(999, Math.floor(countNumber))
+    : null
+
+  const label = String(raw.label || (!count && legacy ? legacy : '') || '').trim().slice(0, 40)
+  const enabled = raw.enabled === true || Boolean(label || count)
+
+  return {
+    enabled,
+    label: enabled ? label : '',
+    count: enabled ? count : null,
+  }
+}
+
+function sanitizePublicProductVisualBadges(value) {
+  const raw = Array.isArray(value) ? value : []
+
+  return [...new Set(raw.map((badge) => normalizePublicVisualBadgeId(badge?.id || badge)))]
+    .filter((id) => PUBLIC_VISUAL_BADGE_LABELS[id])
+    .slice(0, 5)
+    .map((id) => ({
+      id,
+      label: PUBLIC_VISUAL_BADGE_LABELS[id],
+    }))
+}
+
 function buildPublicProduct(data = {}, productId, storeId) {
   const product = stripUndefinedDeep({
     ...pickFields(data, [
@@ -301,6 +358,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
       'isPromotional',
       'promotion',
       'acceptsCoupons',
+      'showCouponBadge',
       'acceptsCoupon',
       'couponEligible',
       'order',
@@ -332,6 +390,20 @@ function buildPublicProduct(data = {}, productId, storeId) {
 
   const scheduling = sanitizePublicProductScheduling(data.scheduling)
   if (scheduling) product.scheduling = scheduling
+
+  const serving = sanitizePublicProductServing(data.serving, data)
+  if (serving.enabled) {
+    product.serving = serving
+  } else {
+    delete product.serving
+  }
+
+  const visualBadges = sanitizePublicProductVisualBadges(data.visualBadges)
+  if (visualBadges.length > 0) {
+    product.visualBadges = visualBadges
+  } else {
+    delete product.visualBadges
+  }
 
   return product
 }

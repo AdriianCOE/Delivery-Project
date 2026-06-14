@@ -658,6 +658,16 @@ function formatMoney(value) {
   })
 }
 
+function formatItemCount(count) {
+  const total = Number(count || 0)
+  return `${total} ${total === 1 ? 'item' : 'itens'}`
+}
+
+function formatAvailableItems(count) {
+  const total = Number(count || 0)
+  return `${formatItemCount(total)} ${total === 1 ? 'disponível' : 'disponíveis'}`
+}
+
 function onlyNumbers(value) {
   return String(value || '').replace(/\D/g, '')
 }
@@ -2191,7 +2201,7 @@ const handleToggleFavorite = useCallback(() => {
 }, [showCopyMessage])
 
   const handleShareStore = useCallback(async () => {
-    const text = `Peça pelo cardápio online da ${store?.name || 'loja'} no PratoBy.`
+    const text = `Peça pelo cardápio digital da ${store?.name || 'loja'} no PratoBy.`
 
     if (navigator.share) {
       try {
@@ -2408,7 +2418,7 @@ const handleToggleFavorite = useCallback(() => {
           .sort(sortByOrderThenName)
 
         if (import.meta.env.DEV) {
-          console.log(`[StoreFront] Cardapio: ${nextCategories.length} categorias`)
+          console.log(`[StoreFront] Cardápio: ${nextCategories.length} categorias`)
         }
 
         const nextProducts = productsSnapshot.docs.map(normalizeProduct).filter(isProductAvailable).sort(sortByOrderThenName)
@@ -2418,7 +2428,7 @@ const handleToggleFavorite = useCallback(() => {
         }
 
         if (import.meta.env.DEV) {
-          console.log(`[StoreFront] Cardapio: ${nextCategories.length} categorias, ${nextProducts.length} produtos`)
+          console.log(`[StoreFront] Cardápio: ${nextCategories.length} categorias, ${nextProducts.length} produtos`)
         }
 
         setCategories(nextCategories)
@@ -2749,15 +2759,12 @@ return (
                       </h2>
 
                       <p className="mt-1 text-sm text-[#6b7280]">
-                        {section.description ||
-                          `${section.products.length} item${
-                            section.products.length > 1 ? 's' : ''
-                          } disponível${section.products.length > 1 ? 'is' : ''}`}
+                        {section.description || formatAvailableItems(section.products.length)}
                       </p>
                     </div>
 
                     <div className="hidden items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-[#6b7280] shadow-sm sm:flex">
-                      {section.products.length} item{section.products.length > 1 ? 's' : ''}
+                      {formatItemCount(section.products.length)}
                       <FiChevronRight />
                     </div>
                   </div>

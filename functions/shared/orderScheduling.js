@@ -31,6 +31,7 @@ const PIX_MANUAL_METHODS = new Set([
   'pix_manual_store',
 ])
 const ALLOWED_SLOT_INTERVALS = new Set([10, 15, 30, 60])
+const SCHEDULING_CONFLICT_MESSAGE = 'Este carrinho possui itens com regras diferentes de agendamento. Separe os itens em pedidos diferentes.'
 const MINUTE_MS = 60 * 1000
 const DAY_MS = 24 * 60 * MINUTE_MS
 
@@ -456,7 +457,7 @@ function getEffectiveSlotInterval(storeScheduling, products, fail) {
       failWith(
         fail,
         'failed-precondition',
-        'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.'
+        SCHEDULING_CONFLICT_MESSAGE
       )
     }
     return nextInterval
@@ -483,7 +484,7 @@ function assertScheduledRules({
     product.fulfillmentTypes && product.fulfillmentTypes[deliveryType] !== true
   ))
   if (productRejectsFulfillment) {
-    failWith(fail, 'failed-precondition', 'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.')
+    failWith(fail, 'failed-precondition', SCHEDULING_CONFLICT_MESSAGE)
   }
 
   const productLeadMinutes = products
@@ -593,7 +594,7 @@ function buildOrderSchedulingDecision({
     failWith(
       fail,
       'failed-precondition',
-      'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.'
+      SCHEDULING_CONFLICT_MESSAGE
     )
   }
 
@@ -604,7 +605,7 @@ function buildOrderSchedulingDecision({
     failWith(
       fail,
       'failed-precondition',
-      'Este carrinho contém itens com regras diferentes. Finalize em pedidos separados.'
+      SCHEDULING_CONFLICT_MESSAGE
     )
   }
 

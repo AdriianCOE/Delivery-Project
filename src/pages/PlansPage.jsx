@@ -26,7 +26,7 @@ function formatPriceBR(val) {
 }
 
 const planShortDescriptions = {
-  essential: 'Para começar com loja própria, cardápio online e pedidos organizados.',
+  essential: 'Para começar com loja própria, cardápio digital e pedidos organizados.',
   professional: 'Para lojas que querem vender por encomenda, usar cupons e organizar uma operação mais completa.',
   premium: 'Para operações que precisam de limites altos, personalização avançada e suporte prioritário.',
 }

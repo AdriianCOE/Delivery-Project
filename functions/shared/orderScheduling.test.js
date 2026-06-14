@@ -142,7 +142,21 @@ test('rejects asap_only mixed with scheduled_only', () => {
         product('custom', { mode: 'scheduled_only' }),
       ],
     }),
-    /Finalize em pedidos separados/
+    /Separe os itens em pedidos diferentes/
+  )
+})
+
+test('rejects scheduled checkout when cart has asap_only products', () => {
+  assert.throws(
+    () => decide({
+      products: [product('asap', { mode: 'asap_only' })],
+      input: {
+        orderTiming: 'scheduled',
+        scheduledDate: '2026-06-05',
+        scheduledTime: '14:00',
+      },
+    }),
+    /Separe os itens em pedidos diferentes/
   )
 })
 
@@ -282,7 +296,7 @@ test('applies the smallest max day limit and product fulfillment restrictions', 
         scheduledTime: '14:00',
       },
     }),
-    /Finalize em pedidos separados/
+    /Separe os itens em pedidos diferentes/
   )
 })
 

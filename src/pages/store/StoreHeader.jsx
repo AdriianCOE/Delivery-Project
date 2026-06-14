@@ -759,7 +759,7 @@ function getOperationalStatus(store, scheduleStatus = {}) {
   if (scheduleStatus.hasSchedule && !scheduleStatus.isWithinSchedule) {
     return {
       label: 'Fora do horário',
-      description: 'Você pode navegar pelo cardápio. Os pedidos voltam no próximo horário de atendimento.',
+      description: 'Pedidos liberados no horário de atendimento.',
       isOpen: false,
       tone: 'warning',
     }
@@ -1353,38 +1353,38 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         <FiUser size={18} />
       </HeaderActionButton>
     )}
+    </div>
   </div>
 </div>
-                </div>
 
                 {heroDescription && (
-  <p className="mt-2 max-h-10 overflow-hidden text-[13px] font-medium leading-5 text-[#6b7280] sm:mt-3 sm:max-h-none sm:text-[15px] sm:leading-6 lg:max-w-2xl">
-    {heroDescription}
-  </p>
-)}
-
-                <div className="mt-3 flex w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-4 sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
-                  <InfoPill icon={FiClock} themeColor={themeColor}>
-                    {todayHoursLabel}
-                  </InfoPill>
-
-                  <InfoPill icon={FiClock} themeColor={themeColor}>
-                    {deliveryTime}
-                  </InfoPill>
-
-                  {address?.city && (
-                    <InfoPill icon={FiMapPin} themeColor={themeColor}>
-                      {address.city}
-                    </InfoPill>
-                  )}
-
-                  {minOrder > 0 && (
-                    <InfoPill icon={FiDollarSign} themeColor={themeColor}>
-                      Mínimo {formatMoney(minOrder)}
-                    </InfoPill>
-                  )}
-                </div>
+                  <p className="mt-2 max-h-10 overflow-hidden text-[13px] font-medium leading-5 text-[#6b7280] sm:mt-3 sm:max-h-none sm:text-[15px] sm:leading-6 lg:max-w-2xl">
+                    {heroDescription}
+                  </p>
+                )}
               </div>
+            </div>
+
+            <div className="mt-3 flex w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-4 sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+              <InfoPill icon={FiClock} themeColor={themeColor}>
+                {todayHoursLabel}
+              </InfoPill>
+
+              <InfoPill icon={FiClock} themeColor={themeColor}>
+                {deliveryTime}
+              </InfoPill>
+
+              {address?.city && (
+                <InfoPill icon={FiMapPin} themeColor={themeColor}>
+                  {address.city}
+                </InfoPill>
+              )}
+
+              {minOrder > 0 && (
+                <InfoPill icon={FiDollarSign} themeColor={themeColor}>
+                  Mínimo {formatMoney(minOrder)}
+                </InfoPill>
+              )}
             </div>
 
             {!operationalStatus.isOpen && (

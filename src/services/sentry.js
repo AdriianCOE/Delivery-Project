@@ -28,11 +28,51 @@ export function initSentry() {
       'No Listener: tabs:outgoing.message.ready',
       'ResizeObserver loop completed with undelivered notifications',
       'ResizeObserver loop limit exceeded',
+      'No Listener: tabs:outgoing.message.ready',
+      'ResizeObserver loop completed with undelivered notifications',
+      'ResizeObserver loop limit exceeded',
+
+      // Android/WebView/keyboard/third-party noise
+      'Error invoking enableDidUserTypeOnKeyboardLogging: Java object is gone',
+
+      // Google reCAPTCHA/third-party cleanup noise after iframe/container removal.
+      // Só mantenha se o stack não apontar para código nosso.
+      "Cannot read properties of null (reading 'removeChild')",
     ],
+
 
     beforeSend(event) {
       if (event?.request?.cookies) {
         delete event.request.cookies
+      }
+
+      const message = String(
+        event?.exception?.values?.[0]?.value ||
+        event?.message ||
+        ''
+      )
+
+      const stackFrames = event?.exception?.values?.[0]?.stacktrace?.frames || []
+      const stackText = stackFrames
+        .map((frame) => `${frame.filename || ''} ${frame.function || ''}`)
+        .join('\n')
+        .toLowerCase()
+
+      if (message.includes('enableDidUserTypeOnKeyboardLogging')) {
+        return null
+      }
+
+      if (
+        message.includes("Cannot read properties of null (reading 'removeChild')") &&
+        (
+          stackText.includes('recaptcha') ||
+          stackText.includes('google.com') ||
+          stackText.includes('gstatic') ||
+          stackText.includes('chrome-extension') ||
+          stackText.includes('moz-extension')
+        )
+      ) {
+        return null
       }
 
       return event

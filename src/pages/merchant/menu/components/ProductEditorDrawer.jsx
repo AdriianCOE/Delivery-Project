@@ -43,10 +43,15 @@ import MediaLibraryPicker from '../../../../components/media/MediaLibraryPicker'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
 import {
   EMPTY_PRODUCT_FORM,
+  VISUAL_BADGE_OPTIONS,
   createEmptyOption,
   createEmptyOptionGroup,
+  normalizeProductServingForForm,
+  normalizeVisualBadgesForForm,
   normalizeProductOptionGroupsForForm,
   normalizeProductSchedulingForForm,
+  sanitizeProductServingForSave,
+  sanitizeVisualBadgesForSave,
   sanitizeOptionGroupsForSave,
   sanitizeProductSchedulingForSave,
   cleanObject,
@@ -123,7 +128,33 @@ const statusItems = [
     label: 'Aceita cupons',
     desc: 'Se desligado, este item não entra em descontos de cupom.',
   },
+  {
+  key: 'showCouponBadge',
+  icon: FiTag,
+  label: 'Mostrar selo de cupom',
+  desc: 'Mostra o selo “Aceita cupom” no card. O cupom continua funcionando se “Aceita cupons” estiver ligado.',
+  },
 ]
+
+const statusGroups = [
+  {
+    title: 'Estado do item',
+    description: 'Define se o produto existe, aparece e pode ser vendido.',
+    keys: ['isActive', 'isAvailable', 'isVisible'],
+  },
+  {
+    title: 'Funcionamento do pedido',
+    description: 'Controla descontos e o que aparece para o cliente.',
+    keys: ['acceptsCoupons', 'showCouponBadge'],
+  },
+  {
+    title: 'Aparência no card',
+    description: 'Selos visuais para destacar produtos sem mudar regra de compra.',
+    keys: ['isFeatured', 'isPopular', 'isPromotion'],
+  },
+]
+
+const statusItemByKey = new Map(statusItems.map((item) => [item.key, item]))
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
@@ -205,19 +236,21 @@ function ToggleSwitch({ checked }) {
   )
 }
 
-function StatusToggleCard({ item, checked, onChange }) {
+function StatusToggleCard({ item, checked, onChange, disabled }) {
   const Icon = item.icon
 
   return (
     <label
       className={`group flex cursor-pointer items-center justify-between gap-4 rounded-3xl border p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${
-        checked
+        disabled
+          ? 'border-slate-100 bg-slate-50/50 cursor-not-allowed opacity-60 dark:border-white/5 dark:bg-white/5'
+          : checked
           ? 'border-orange-200 bg-orange-50/80 shadow-orange-950/5 dark:border-orange-500/30 dark:bg-orange-500/10'
           : 'border-orange-100/70 bg-white/90 hover:border-orange-200 hover:bg-white dark:border-white/10 dark:bg-[#151922]/80 dark:hover:border-white/20 dark:hover:bg-[#1A1F2B]'
       }`}
     >
       <div className="flex min-w-0 items-start gap-3">
-        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition-colors ${checked ? 'bg-gradient-to-br from-[#f97316] to-[#ea580c] text-white shadow-lg shadow-orange-500/20' : 'bg-slate-100 text-slate-500 group-hover:text-[#f97316] dark:bg-white/10 dark:text-slate-400'}`}>
+        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition-colors ${disabled ? 'bg-slate-100 text-slate-300 dark:bg-white/10 dark:text-slate-600' : checked ? 'bg-gradient-to-br from-[#f97316] to-[#ea580c] text-white shadow-lg shadow-orange-500/20' : 'bg-slate-100 text-slate-500 group-hover:text-[#f97316] dark:bg-white/10 dark:text-slate-400'}`}>
           <Icon size={17} />
         </div>
         <div>
@@ -226,7 +259,7 @@ function StatusToggleCard({ item, checked, onChange }) {
         </div>
       </div>
       <div className="relative shrink-0">
-        <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
+        <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="sr-only" />
         <ToggleSwitch checked={checked} />
       </div>
     </label>
@@ -501,6 +534,9 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
               : (editingProduct.couponEligible !== undefined
                   ? Boolean(editingProduct.couponEligible)
                   : true)),
+        showCouponBadge: editingProduct.showCouponBadge !== false,
+        serving: normalizeProductServingForForm(editingProduct),
+        visualBadges: normalizeVisualBadgesForForm(editingProduct),
         order: editingProduct.order || 0,
         optionGroups: normalizeProductOptionGroupsForForm(editingProduct),
         extras: editingProduct.extras || [],
@@ -511,6 +547,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         ...EMPTY_PRODUCT_FORM,
         optionGroups: [],
         extras: [],
+        serving: normalizeProductServingForForm(),
+        visualBadges: [],
         scheduling: normalizeProductSchedulingForForm(),
       })
     }
@@ -538,6 +576,25 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         [field]: value,
       },
     }))
+  }, [])
+  const setServingField = useCallback((field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      serving: {
+        ...normalizeProductServingForForm({ serving: prev.serving }),
+        [field]: value,
+      },
+    }))
+  }, [])
+  const toggleVisualBadge = useCallback((badgeId) => {
+    setForm((prev) => {
+      const current = normalizeVisualBadgesForForm({ visualBadges: prev.visualBadges })
+      const next = current.includes(badgeId)
+        ? current.filter((id) => id !== badgeId)
+        : [...current, badgeId].slice(0, 5)
+
+      return { ...prev, visualBadges: next }
+    })
   }, [])
 
   const handleImageSelect = useCallback((e) => {
@@ -643,6 +700,9 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         isPopular: Boolean(form.isPopular),
         isPromotion: Boolean(form.isPromotion),
         acceptsCoupons: Boolean(form.acceptsCoupons),
+        showCouponBadge: Boolean(form.showCouponBadge),
+        serving: sanitizeProductServingForSave(form.serving),
+        visualBadges: sanitizeVisualBadgesForSave(form.visualBadges),
         order: Number(form.order) || 0,
         position: Number(form.order) || 0,
         preparationTime: form.preparationTime?.trim() || '',
@@ -1008,16 +1068,118 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                   <InfoCallout>
                     Controle o que aparece para o cliente sem apagar o produto. Para pausar venda temporária, desligue “Disponível agora”.
                   </InfoCallout>
-                  <div className="grid grid-cols-1 gap-3">
-                    {statusItems.map((item) => (
-                      <StatusToggleCard
-                        key={item.key}
-                        item={item}
-                        checked={Boolean(form[item.key])}
-                        onChange={(e) => setField(item.key, e.target.checked)}
-                      />
-                    ))}
-                  </div>
+                  {statusGroups.map((group) => (
+                    <SectionCard
+                      key={group.title}
+                      title={group.title}
+                      description={group.description}
+                      icon={group.title === 'Aparência no card' ? FiStar : group.title === 'Funcionamento do pedido' ? FiPercent : FiPackage}
+                    >
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {group.keys.map((key) => {
+                          const item = statusItemByKey.get(key)
+                          if (!item) return null
+
+                          const isShowCouponBadge = key === 'showCouponBadge'
+                          const isCouponBadgeDisabled = isShowCouponBadge && !form.acceptsCoupons
+
+                          return (
+                            <StatusToggleCard
+                              key={item.key}
+                              item={item}
+                              checked={Boolean(form[item.key])}
+                              onChange={(e) => setField(item.key, e.target.checked)}
+                              disabled={isCouponBadgeDisabled}
+                            />
+                          )
+                        })}
+                      </div>
+                    </SectionCard>
+                  ))}
+
+                  <SectionCard title="Porção e selos visuais" description="Informações curtas que aparecem no card e no modal, sem alterar preço ou estoque." icon={FiTag}>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+                      <div className={`rounded-2xl border p-4 transition ${
+                        form.serving?.enabled
+                          ? 'border-orange-200 bg-orange-50/70 shadow-sm dark:border-orange-500/30 dark:bg-orange-500/10'
+                          : 'border-orange-100 bg-white dark:border-white/10 dark:bg-[#1A1F2B]'
+                      }`}>
+                        <button
+                          type="button"
+                          onClick={() => setServingField('enabled', !form.serving?.enabled)}
+                          className="flex w-full items-center justify-between gap-4 text-left"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black text-slate-900 dark:text-slate-50">Mostrar porção</span>
+                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">Ex: Serve 8 pessoas ou Fatia individual.</span>
+                          </span>
+                          <span className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition ${
+                            form.serving?.enabled ? 'bg-orange-500' : 'bg-slate-200 dark:bg-white/10'
+                          }`}>
+                            <span className={`h-5 w-5 rounded-full bg-white shadow transition ${
+                              form.serving?.enabled ? 'translate-x-5' : 'translate-x-0'
+                            }`} />
+                          </span>
+                        </button>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <FieldLabel>Qtd. pessoas</FieldLabel>
+                            <input
+                              type="number"
+                              min="1"
+                              max="999"
+                              value={form.serving?.count || ''}
+                              onChange={(event) => setServingField('count', event.target.value)}
+                              placeholder="Ex: 8"
+                              disabled={!form.serving?.enabled}
+                              className={ui.input}
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel>Texto opcional</FieldLabel>
+                            <input
+                              value={form.serving?.label || ''}
+                              onChange={(event) => setServingField('label', event.target.value)}
+                              placeholder="Ex: Fatia individual"
+                              disabled={!form.serving?.enabled}
+                              maxLength={40}
+                              className={ui.input}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-orange-100 bg-white p-4 dark:border-white/10 dark:bg-[#1A1F2B]">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <FieldLabel>Selos visuais</FieldLabel>
+                          <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-700 ring-1 ring-orange-100 dark:bg-white/5 dark:text-orange-200 dark:ring-white/10">
+                            {normalizeVisualBadgesForForm({ visualBadges: form.visualBadges }).length}/5
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {VISUAL_BADGE_OPTIONS.map((badge) => {
+                            const active = normalizeVisualBadgesForForm({ visualBadges: form.visualBadges }).includes(badge.id)
+                            return (
+                              <button
+                                key={badge.id}
+                                type="button"
+                                onClick={() => toggleVisualBadge(badge.id)}
+                                className={`max-w-full rounded-full px-3 py-2 text-xs font-black ring-1 transition ${
+                                  active
+                                    ? 'bg-orange-500 text-white ring-orange-500'
+                                    : 'bg-orange-50 text-orange-700 ring-orange-100 hover:bg-orange-100 dark:bg-white/5 dark:text-orange-200 dark:ring-white/10'
+                                }`}
+                              >
+                                <span className="block truncate">{badge.label}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className={ui.hint}>Você pode salvar até 5 selos. A loja pública mostra no máximo 2 no card e até 3 no modal.</p>
+                      </div>
+                    </div>
+                  </SectionCard>
                 </div>
               )}
 

@@ -571,7 +571,7 @@ export default function QRCodePage() {
                     <QrCard
                       url={publicUrl}
                       title={storeName}
-                      subtitle="Cardápio online"
+                      subtitle="Cardápio Digital"
                       filename={`qr-cardapio-${storeSlug}`}
                       onToast={showToast}
                     />

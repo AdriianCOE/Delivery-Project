@@ -19,6 +19,13 @@ export const EMPTY_PRODUCT_FORM = {
   isPromotion: false,
   isPopular: false,
   acceptsCoupons: true,
+  showCouponBadge: true,
+  serving: {
+    enabled: false,
+    label: '',
+    count: '',
+  },
+  visualBadges: [],
   order: 0,
   optionGroups: [],
   extras: [],
@@ -43,6 +50,115 @@ export const STATUS_FILTERS = [
   { id: 'promo',       label: 'Promoção' },
   { id: 'no-image',    label: 'Sem imagem' },
 ]
+
+export const VISUAL_BADGE_OPTIONS = [
+  { id: 'artesanal', label: 'Artesanal' },
+  { id: 'caseiro', label: 'Caseiro' },
+  { id: 'feito_na_hora', label: 'Feito na hora' },
+  { id: 'especial_da_casa', label: 'Especial da casa' },
+  { id: 'cremoso', label: 'Cremoso' },
+  { id: 'saboroso', label: 'Saboroso' },
+  { id: 'para_compartilhar', label: 'Para compartilhar' },
+  { id: 'acompanhamento', label: 'Acompanhamento' },
+  { id: 'novidade', label: 'Novidade' },
+  { id: 'edicao_limitada', label: 'Edição limitada' },
+  { id: 'premium', label: 'Premium' },
+]
+
+const VISUAL_BADGE_LABELS = new Map(VISUAL_BADGE_OPTIONS.map((badge) => [badge.id, badge.label]))
+
+function normalizeBadgeId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+export function normalizeProductServingForForm(product) {
+  const raw = product?.serving
+
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const count = Number(raw.count)
+    return {
+      enabled: raw.enabled === true || Boolean(raw.label) || (Number.isFinite(count) && count > 0),
+      label: String(raw.label || '').trim().slice(0, 40),
+      count: Number.isFinite(count) && count > 0 ? String(Math.floor(count)) : '',
+    }
+  }
+
+  const legacy = product?.serves ?? product?.portion
+  if (legacy === undefined || legacy === null || legacy === '') {
+    return { enabled: false, label: '', count: '' }
+  }
+
+  const numeric = Number(legacy)
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return { enabled: true, label: '', count: String(Math.floor(numeric)) }
+  }
+
+  return {
+    enabled: true,
+    label: String(legacy).trim().slice(0, 40),
+    count: '',
+  }
+}
+
+export function sanitizeProductServingForSave(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+
+  const countNumber = Number(raw.count)
+  const count = Number.isFinite(countNumber) && countNumber > 0
+    ? Math.min(999, Math.floor(countNumber))
+    : null
+
+  const label = String(raw.label || '').trim().slice(0, 40)
+  const enabled = raw.enabled === true || Boolean(label || count)
+
+  if (!enabled || (!label && !count)) {
+    return {
+      enabled: false,
+      label: '',
+      count: null,
+    }
+  }
+
+  return {
+    enabled: true,
+    label,
+    count,
+  }
+}
+
+export function normalizeVisualBadgesForForm(product) {
+    const raw = Array.isArray(product?.visualBadges) ? product.visualBadges : []
+
+  return [
+    ...new Set(
+      raw
+        .map((badge) => normalizeBadgeId(badge?.id || badge?.value || badge))
+        .filter((id) => VISUAL_BADGE_LABELS.has(id))
+    ),
+  ].slice(0, 5)
+}
+
+export function sanitizeVisualBadgesForSave(value) {
+  const raw = Array.isArray(value) ? value : []
+
+  return [
+    ...new Set(
+      raw
+        .map((badge) => normalizeBadgeId(badge?.id || badge?.value || badge))
+        .filter((id) => VISUAL_BADGE_LABELS.has(id))
+    ),
+  ]
+    .slice(0, 5)
+    .map((id) => ({
+      id,
+      label: VISUAL_BADGE_LABELS.get(id),
+    }))
+}
 
 export function createEmptyOption() {
   return { id: createLocalId('option'), name: '', description: '', price: '', available: true }
