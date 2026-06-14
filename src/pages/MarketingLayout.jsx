@@ -58,7 +58,6 @@ const socialLinks = [
 const trustHighlights = [
   { icon: FiShield, label: 'Sem comissão do PratoBy' },
   { icon: FiZap, label: 'Pedidos em tempo real' },
-  { icon: FiCheckCircle, label: '14 dias grátis' },
 ]
 
 const easeOut = [0.16, 1, 0.3, 1]
@@ -80,7 +79,7 @@ function Logo({ compact = false, inverted = false, mobile = false }) {
   const titleSize = compact
     ? 'text-2xl'
     : mobile
-      ? 'text-[1.6rem] min-[390px]:text-[1.8rem] sm:text-[1.95rem]'
+      ? 'text-[1.55rem] min-[390px]:text-[1.78rem] sm:text-[1.95rem]'
       : 'text-[1.95rem]'
 
   return (
@@ -111,7 +110,7 @@ function Logo({ compact = false, inverted = false, mobile = false }) {
       <div className="min-w-0 leading-none">
         <p
           className={[
-            'truncate font-black tracking-tighter',
+            'whitespace-nowrap font-black tracking-tighter',
             titleSize,
             inverted ? 'text-white' : 'text-[#111827]',
           ].join(' ')}
@@ -120,8 +119,7 @@ function Logo({ compact = false, inverted = false, mobile = false }) {
         </p>
         <p
           className={[
-            'mt-1.5 truncate text-[9px] font-black uppercase tracking-[0.2em] min-[390px]:text-[10px]',
-            mobile ? 'hidden min-[370px]:block' : 'block',
+            'mt-1.5 block max-w-[155px] whitespace-normal text-[8px] font-black uppercase leading-[1.15] tracking-[0.18em] min-[390px]:max-w-none min-[390px]:whitespace-nowrap min-[390px]:text-[9px] sm:text-[10px]',
             inverted ? 'text-white/45' : 'text-gray-400',
           ].join(' ')}
         >
@@ -340,7 +338,7 @@ function FooterLink({ item, isActivePath }) {
       to={item.to}
       aria-current={active ? 'page' : undefined}
       className={[
-        'inline-flex w-fit rounded-full px-0 py-1 text-sm font-bold transition-colors',
+        'block truncate rounded-full px-0 py-1 text-[13px] font-bold transition-colors sm:text-sm',
         active ? 'text-orange-300' : 'text-white/60 hover:text-white',
       ].join(' ')}
     >
@@ -389,7 +387,7 @@ export default function MarketingLayout({ children }) {
   const currentYear = useMemo(() => new Date().getFullYear(), [])
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,237,213,.82),transparent_31rem),linear-gradient(180deg,#fff_0%,#fffaf5_54%,#fff_100%)] pt-[5.65rem] text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] min-[390px]:pt-[6.05rem] sm:pt-[6.4rem]">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,237,213,.82),transparent_31rem),linear-gradient(180deg,#fff_0%,#fffaf5_54%,#fff_100%)] pt-[6rem] text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] min-[390px]:pt-[6.35rem] sm:pt-[6.6rem]">
       <a
         href="#conteudo"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-full focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-black focus:text-[#f97316] focus:shadow-xl"
@@ -403,7 +401,7 @@ export default function MarketingLayout({ children }) {
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-orange-200 to-transparent sm:inset-x-6" />
             <div className="pointer-events-none absolute -bottom-9 left-8 hidden h-16 w-48 rounded-full bg-orange-100/50 blur-3xl sm:block" />
 
-            <div className="flex h-[4.05rem] items-center justify-between gap-2 px-2.5 min-[390px]:h-[4.55rem] min-[390px]:px-3 sm:h-[4.85rem] sm:gap-3 sm:px-4 lg:px-5">
+            <div className="flex min-h-[4.35rem] items-center justify-between gap-2 px-2.5 py-2 min-[390px]:min-h-[4.75rem] min-[390px]:px-3 sm:min-h-[4.95rem] sm:gap-3 sm:px-4 lg:px-5">
               <Link
                 to="/"
                 className="min-w-0 flex-1 rounded-2xl transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 lg:flex-none"
@@ -506,10 +504,10 @@ export default function MarketingLayout({ children }) {
               </div>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-3 sm:gap-6">
               {footerGroups.map((group) => (
-                <div key={group.title}>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-300">
+                <div key={group.title} className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300 sm:text-xs">
                     {group.title}
                   </p>
                   <nav className="mt-3 grid gap-1.5">
@@ -522,10 +520,18 @@ export default function MarketingLayout({ children }) {
             </div>
           </div>
 
-          <div className="mt-9 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3 text-xs font-semibold text-white/40">
-              <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden="true" />
-              <span>© {currentYear} PratoBy. Todos os direitos reservados.</span>
+          <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1.5 text-xs font-semibold text-white/40 sm:flex-row sm:items-center sm:gap-3">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden="true" />
+                © {currentYear} PratoBy. Todos os direitos reservados.
+              </span>
+
+              <span className="hidden h-1 w-1 rounded-full bg-white/20 sm:block" aria-hidden="true" />
+
+              <span className="inline-flex items-center gap-1.5 text-white/50">
+                Feito no Brasil com <span className="text-orange-300">♥</span> para pequenos negócios.
+              </span>
             </div>
 
             <div className="flex items-center gap-2">
