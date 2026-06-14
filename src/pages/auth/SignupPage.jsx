@@ -18,6 +18,7 @@ import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import { AnimatePresence, motion } from 'motion/react'
 import { FiAlertCircle, FiCheck, FiArrowLeft, FiStar, FiCheckCircle, FiChevronDown, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield, FiLoader, FiEye, FiEyeOff } from 'react-icons/fi'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
+import SEO from '../../components/seo/SEO'
 
 // ─────────────────────────────────────────────────────────────
 // DADOS DOS PLANOS
@@ -1152,6 +1153,11 @@ export default function SignupPage() {
 
   return (
     <main className="relative min-h-dvh bg-[#f9fafb] pt-16 sm:pt-[68px] text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0 overflow-x-hidden">
+      <SEO
+        title="Criar conta no PratoBy | Cardápio digital para restaurantes"
+        description="Crie sua conta no PratoBy e comece a vender com cardápio digital, pedidos online, Pix, QR Code e painel do lojista sem comissão por pedido."
+        path="/cadastro"
+      />
       <SignupMobileHeader />
 
       {/* Blobs flutuantes — idêntico ao LoginPage */}

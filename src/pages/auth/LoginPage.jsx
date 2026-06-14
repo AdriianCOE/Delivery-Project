@@ -37,6 +37,7 @@ import {
 
 import { db } from '../../services/firebase'
 import { auth, googleProvider } from '../../services/firebaseAuth'
+import SEO from '../../components/seo/SEO'
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -352,13 +353,14 @@ function AlertBox({ type = 'error', children }) {
 export default function LoginPage() {
   const navigate  = useNavigate()
   const { user, userData, loading } = useContext(AuthContext)
+  const [postLoginRedirectPath, setPostLoginRedirectPath] = useState('')
 
   useEffect(() => {
     if (!loading && user && userData) {
-      const redirectPath = getPostLoginRoute(userData)
+      const redirectPath = postLoginRedirectPath || getPostLoginRoute(userData)
       navigate(redirectPath, { replace: true })
     }
-  }, [loading, user, userData, navigate])
+  }, [loading, navigate, postLoginRedirectPath, user, userData])
 
   // ── Estado (preservado integralmente) ──────────────────────
   const [email,               setEmail]               = useState('')
@@ -384,6 +386,7 @@ export default function LoginPage() {
     if (!cleanEmail) { setError('Digite seu e-mail para continuar.'); return }
     if (!password)   { setError('Digite sua senha para continuar.');  return }
 
+    setPostLoginRedirectPath('')
     setIsLoading(true)
     try {
       await setPersistence(
@@ -402,8 +405,9 @@ export default function LoginPage() {
 
       const userData     = userDoc.data() || {}
       const redirectPath = getPostLoginRoute(userData)
-      navigate(redirectPath, { replace: true })
+      setPostLoginRedirectPath(redirectPath)
     } catch (err) {
+      setPostLoginRedirectPath('')
       setError(getFriendlyAuthError(err?.code))
     } finally {
       setIsLoading(false)
@@ -414,6 +418,7 @@ export default function LoginPage() {
     if (isLoading) return
     setError('')
     setSuccess('')
+    setPostLoginRedirectPath('')
     setIsLoading(true)
 
     try {
@@ -437,8 +442,9 @@ export default function LoginPage() {
 
       const userData = userDoc.data() || {}
       const redirectPath = getPostLoginRoute(userData)
-      navigate(redirectPath, { replace: true })
+      setPostLoginRedirectPath(redirectPath)
     } catch (err) {
+      setPostLoginRedirectPath('')
       console.error('[LoginPage] Erro no login com Google:', err)
       const code = err?.code
       if (code === 'auth/unauthorized-domain') {
@@ -485,9 +491,14 @@ export default function LoginPage() {
   }
 
   // ── Render ─────────────────────────────────────────────────
-  if (loading) {
+  if (loading || postLoginRedirectPath) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#fff7ed]">
+        <SEO
+          title="Entrar no PratoBy | Painel do lojista"
+          description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos, pagamentos, entregas e configurações da sua loja."
+          path="/login"
+        />
         <div className="flex flex-col items-center justify-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-[#f97316]"></div>
           <p className="text-sm font-bold text-gray-500">Verificando sessão...</p>
@@ -498,6 +509,11 @@ export default function LoginPage() {
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[#fff7ed] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
+      <SEO
+        title="Entrar no PratoBy | Painel do lojista"
+        description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos, pagamentos, entregas e configurações da sua loja."
+        path="/login"
+      />
       <LoginMobileHeader />
 
       {/* GRID PRINCIPAL */}

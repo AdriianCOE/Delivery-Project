@@ -23,6 +23,7 @@ import {
 } from 'react-icons/fi'
 
 import { auth } from '../../services/firebaseAuth'
+import SEO from '../../components/seo/SEO'
 
 const ACTION_COPY = {
   verifyEmail: {
@@ -480,6 +481,13 @@ export default function AuthActionPage() {
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[#fff7ed] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
+      <SEO
+        title={`${copy.badge} | PratoBy`}
+        description="Página segura do PratoBy para confirmar e-mail, recuperar conta ou redefinir senha."
+        path="/auth/action"
+        noIndex
+        noFollow
+      />
       <motion.header
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}

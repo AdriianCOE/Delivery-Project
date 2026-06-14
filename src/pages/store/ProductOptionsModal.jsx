@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
-import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
+import { getCloudinaryImageSrcSet, getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import { canAddProductToCart, isProductUnavailable, hasOutOfStock } from '../../utils/productStatus'
 import { getProductSchedulingBadges } from '../../utils/publicScheduling'
 
@@ -86,11 +86,22 @@ function getProductImage(product) {
     product?.imageUrl ||
     product?.image ||
     product?.photoUrl ||
-    product?.thumbnailUrl ||
     product?.coverUrl ||
+    product?.thumbnailUrl ||
     ''
 
-  return getCloudinaryImageUrl(imageUrl, 'productDetail')
+  return getCloudinaryImageUrl(imageUrl, 'productDetail', { replaceExistingTransform: true })
+}
+
+function getProductImageSource(product) {
+  return (
+    product?.imageUrl ||
+    product?.image ||
+    product?.photoUrl ||
+    product?.coverUrl ||
+    product?.thumbnailUrl ||
+    ''
+  )
 }
 
 function getProductExtras(product) {
@@ -274,6 +285,14 @@ export default function ProductOptionsModal({
 
   const basePriceCents = useMemo(() => getProductPriceCents(product), [product])
   const imageUrl = useMemo(() => getProductImage(product), [product])
+  const imageSrcSet = useMemo(
+    () => getCloudinaryImageSrcSet(
+      getProductImageSource(product),
+      ['productCardLarge', 'productDetail'],
+      { replaceExistingTransform: true }
+    ),
+    [product]
+  )
   const extras = useMemo(() => getProductExtras(product), [product])
   const optionGroups = useMemo(() => getOptionGroups(product), [product])
   const schedulingBadges = useMemo(
@@ -519,20 +538,31 @@ export default function ProductOptionsModal({
       />
 
       <div className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 md:rounded-[2rem]">
-        <div className="relative h-60 shrink-0 bg-gray-100 sm:h-64">
+        <div className="relative flex h-[230px] shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3 sm:h-[300px] sm:p-5 md:h-[330px]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,146,60,.14),transparent_62%)]" />
+
           {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={product.name}
-              className="h-full w-full object-cover"
-            />
+            <div className="relative flex h-full w-full items-center justify-center rounded-[1.6rem] bg-white/45 p-1 ring-1 ring-white/70">
+              <img
+                src={imageUrl}
+                srcSet={imageSrcSet || undefined}
+                sizes="(max-width: 640px) 100vw, 576px"
+                alt={product.name}
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                width={900}
+                height={900}
+                className="max-h-full max-w-full object-contain object-center drop-shadow-[0_18px_34px_rgba(15,23,42,0.12)]"
+              />
+            </div>
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[#f9fafb] text-gray-300">
+            <div className="relative flex h-full w-full items-center justify-center rounded-[1.6rem] bg-[#f9fafb] text-gray-300 ring-1 ring-gray-100">
               <FiShoppingBag size={52} />
             </div>
           )}
 
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-black/10" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-white/10" />
 
           <div className="absolute bottom-4 left-4 right-4">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#111827] shadow-lg backdrop-blur">

@@ -40,6 +40,7 @@ import {
   normalizeBrazilianPhoneE164,
   validateBrazilianMobilePhone,
 } from '../../utils/phone'
+import SEO from '../../components/seo/SEO'
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -689,6 +690,13 @@ export default function OnboardingPage() {
   if (isLoading) {
     return (
       <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#f9fafb] px-6">
+        <SEO
+          title="Ativação da loja | PratoBy"
+          description="Finalize a ativação da sua loja no PratoBy com validação de conta, telefone, trial e configuração inicial."
+          path="/onboarding"
+          noIndex
+          noFollow
+        />
         <div className="pointer-events-none absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100 blur-3xl" />
         <div className="pointer-events-none absolute -right-24 bottom-16 h-80 w-80 rounded-full bg-amber-100 blur-3xl" />
         <div className="relative text-center">
@@ -1034,6 +1042,13 @@ export default function OnboardingPage() {
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[#f9fafb] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
+      <SEO
+        title="Ativação da loja | PratoBy"
+        description="Finalize a ativação da sua loja no PratoBy com validação de conta, telefone, trial e configuração inicial."
+        path="/onboarding"
+        noIndex
+        noFollow
+      />
       <OnboardingMobileHeader />
 
       {/* blobs flutuantes */}

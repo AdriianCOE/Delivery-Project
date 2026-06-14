@@ -1363,7 +1363,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   </p>
 )}
 
-                <div className="mt-3 -ml-20 flex w-[calc(100%+5rem)] gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:ml-0 sm:mt-4 sm:w-auto sm:flex-wrap [&::-webkit-scrollbar]:hidden">
+                <div className="mt-3 flex w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-4 sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
                   <InfoPill icon={FiClock} themeColor={themeColor}>
                     {todayHoursLabel}
                   </InfoPill>

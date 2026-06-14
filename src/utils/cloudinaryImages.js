@@ -1,9 +1,9 @@
 const CLOUDINARY_UPLOAD_MARKER = '/upload/'
 
 export const CLOUDINARY_IMAGE_VARIANTS = {
-  productCardSmall: 'f_auto,q_auto,c_fill,g_auto,w_128,h_128',
-  productCard: 'f_auto,q_auto,c_fill,g_auto,w_196,h_196',
-  productCardLarge: 'f_auto,q_auto,c_fill,g_auto,w_320,h_320',
+  productCardSmall: 'f_auto,q_auto,c_fit,w_128,h_128',
+  productCard: 'f_auto,q_auto,c_fit,w_196,h_196',
+  productCardLarge: 'f_auto,q_auto,c_fit,w_320,h_320',
   productDetail: 'f_auto,q_auto,c_fit,w_900,h_900',
   storeLogoTiny: 'f_auto,q_auto,c_fit,w_64,h_64',
   storeLogoSmall: 'f_auto,q_auto,c_fit,w_96,h_96',
@@ -42,7 +42,7 @@ export function isCloudinaryUrl(url) {
   return typeof url === 'string' && url.includes('res.cloudinary.com')
 }
 
-export function getCloudinaryImageUrl(url, variant = 'productCard') {
+export function getCloudinaryImageUrl(url, variant = 'productCard', options = {}) {
   if (!url || typeof url !== 'string') return ''
   if (!isCloudinaryUrl(url)) return url
   if (!url.includes(CLOUDINARY_UPLOAD_MARKER)) return url
@@ -63,7 +63,14 @@ export function getCloudinaryImageUrl(url, variant = 'productCard') {
     firstSegment.includes('c_fit') ||
     firstSegment.includes('c_limit')
 
-  if (alreadyHasTransform) return url
+  if (alreadyHasTransform) {
+    if (!options.replaceExistingTransform) return url
+
+    const beforeTransform = url.slice(0, uploadIndex + CLOUDINARY_UPLOAD_MARKER.length)
+    const afterTransform = afterUpload.slice(firstSegment.length).replace(/^\/+/, '')
+
+    return `${beforeTransform}${transform}/${afterTransform}`
+  }
 
   return url.replace(
     CLOUDINARY_UPLOAD_MARKER,
@@ -71,13 +78,13 @@ export function getCloudinaryImageUrl(url, variant = 'productCard') {
   )
 }
 
-export function getCloudinaryImageSrcSet(url, variants = []) {
+export function getCloudinaryImageSrcSet(url, variants = [], options = {}) {
   if (!url || typeof url !== 'string' || !isCloudinaryUrl(url)) return ''
 
   return variants
     .map((variant) => {
       const width = CLOUDINARY_IMAGE_VARIANT_WIDTHS[variant]
-      const imageUrl = getCloudinaryImageUrl(url, variant)
+      const imageUrl = getCloudinaryImageUrl(url, variant, options)
 
       return width && imageUrl ? `${imageUrl} ${width}w` : ''
     })

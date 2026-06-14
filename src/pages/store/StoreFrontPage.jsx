@@ -1017,6 +1017,21 @@ function getStorePromoBanner(store) {
   }
 }
 
+
+function getProductPromoImageUrl(product) {
+  return getCloudinaryImageUrl(
+    firstFilled(
+      product?.thumbnailUrl,
+      product?.imageUrl,
+      product?.image,
+      product?.photoUrl,
+      product?.coverUrl,
+      product?.pictureUrl
+    ),
+    'productCardLarge'
+  )
+}
+
 function StoreHero({ store, themeColor }) {
   const bannerUrl = store?.bannerUrl || store?.coverUrl || store?.bannerMobileUrl || store?.mobileBannerUrl
 
@@ -1028,9 +1043,16 @@ function StoreHero({ store, themeColor }) {
             <img
               src={bannerUrl}
               alt={store?.name ? `Banner da ${store.name}` : 'Banner da loja'}
-              className="h-full w-full object-fill sm:object-cover"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              width={1200}
+              height={480}
+              className="h-full w-full"
               style={{
+                objectFit: store?.bannerFit === 'contain' || store?.coverFit === 'contain' ? 'contain' : 'cover',
                 objectPosition: store?.bannerPosition || 'center center',
+                backgroundColor: '#fff7ed',
               }}
             />
           ) : (
@@ -1074,7 +1096,11 @@ function StoreIdentityCard({
               <img
                 src={store.logoUrl}
                 alt={store?.name || 'Logo da loja'}
-                className="h-full w-full object-cover"
+                loading="eager"
+                decoding="async"
+                width={112}
+                height={112}
+                className="h-full w-full object-contain p-1.5"
               />
             ) : (
               <span className="text-2xl font-black sm:text-4xl" style={{ color: themeColor }}>
@@ -1295,7 +1321,7 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
       <button
         type="button"
         onClick={() => onClick?.(banner)}
-        className="group relative flex w-full items-center overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-100/50 sm:rounded-[1.7rem] lg:min-h-[118px]"
+        className="group relative flex w-full min-w-0 items-center overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-100/50 sm:rounded-[1.7rem] lg:min-h-[118px]"
       >
         <div
           className="absolute inset-0 opacity-[0.07]"
@@ -1304,14 +1330,17 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
           }}
         />
 
-        <div className="relative flex min-w-0 flex-1 items-center gap-3 p-3 sm:gap-4 sm:p-5">
+        <div className="relative flex w-full min-w-0 flex-1 items-center gap-3 p-3 sm:gap-5 sm:p-4 lg:p-5">
           {banner.imageUrl ? (
-            <div className="h-[62px] w-[72px] shrink-0 overflow-hidden rounded-2xl bg-orange-50 sm:h-24 sm:w-32">
+            <div className="aspect-[4/3] w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-50 via-white to-amber-50 p-1.5 ring-1 ring-orange-100/70 sm:w-32 lg:w-36">
               <img
                 src={banner.imageUrl}
                 alt={banner.title}
                 loading="lazy"
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                decoding="async"
+                width={360}
+                height={270}
+                className="h-full w-full object-contain object-center transition duration-500 group-hover:scale-[1.03]"
               />
             </div>
           ) : (
@@ -1320,16 +1349,16 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
             </div>
           )}
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#f97316] sm:px-2.5 sm:py-1 sm:text-[10px]">
               Oferta da loja
             </span>
 
-            <h2 className="mt-1 truncate text-[15px] font-black tracking-tight text-[#111827] sm:mt-2 sm:text-2xl">
+            <h2 className="mt-1 line-clamp-2 text-[15px] font-black leading-tight tracking-tight text-[#111827] sm:mt-2 sm:text-2xl">
               {banner.title}
             </h2>
 
-            <p className="mt-0.5 max-h-8 overflow-hidden text-[11px] font-semibold leading-4 text-[#6b7280] sm:mt-1 sm:max-h-none sm:text-sm sm:leading-5">
+            <p className="mt-0.5 line-clamp-2 overflow-hidden text-[11px] font-semibold leading-4 text-[#6b7280] sm:mt-1 sm:text-sm sm:leading-5 lg:max-w-[34rem]">
               {banner.subtitle}
             </p>
           </div>
@@ -1859,7 +1888,7 @@ export default function StoreFrontPage() {
       id: `featured-${product.id}`,
       title: product.name || 'Mais pedidos da casa',
       subtitle: 'Confira os destaques da loja e peça em poucos toques.',
-      imageUrl: product.imageUrl || '',
+      imageUrl: getProductPromoImageUrl(product),
       ctaLabel: 'Ver destaques',
       target: 'featured',
     }
