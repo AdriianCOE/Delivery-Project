@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'motion/react'
 import { FiArrowRight, FiClock, FiShield } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTrialDaysRemaining } from '../../utils/billingStatus'
@@ -14,11 +13,15 @@ function normalizeStatus(status) {
   return status === 'pending_checkout' ? 'checkout_pending' : status || ''
 }
 
-export default function DashboardTrialRibbon() {
+export default function DashboardTrialRibbon({ storeData = null }) {
   const { userData } = useAuth()
 
-  const subscriptionStatus = normalizeStatus(userData?.subscriptionStatus)
-  const trialEndsAt = userData?.trialEndsAt
+  const subscriptionStatus = normalizeStatus(
+    userData?.subscriptionStatus ||
+      storeData?.subscriptionStatus ||
+      storeData?.subscription?.status
+  )
+  const trialEndsAt = userData?.trialEndsAt || storeData?.trialEndsAt || storeData?.subscription?.trialEndsAt
   const isTrial = subscriptionStatus === 'trialing'
 
   const daysLeft = useMemo(() => {
@@ -67,7 +70,14 @@ export default function DashboardTrialRibbon() {
   if (!isTrial || daysLeft === null || !theme) return null
 
   const elapsedPercent = Math.max(0, Math.min(100, ((14 - daysLeft) / 14) * 100))
-  const selectedPlan = userData?.billingPlan || userData?.selectedPlan || userData?.plan || 'essential'
+  const selectedPlan =
+    userData?.billingPlan ||
+    userData?.selectedPlan ||
+    userData?.plan ||
+    storeData?.billingPlan ||
+    storeData?.selectedPlan ||
+    storeData?.plan ||
+    'essential'
   const trialMessage = userData?.cancelAtTrialEnd
     ? getFutureBillingCanceledMessage({ trialEndsAt })
     : daysLeft <= 3
@@ -75,12 +85,7 @@ export default function DashboardTrialRibbon() {
       : getTrialPremiumActiveMessage({ trialEndsAt, selectedPlan })
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18 }}
-      className={`border-b px-4 py-2.5 transition-colors sm:px-6 lg:px-8 ${theme.wrap}`}
-    >
+    <div className={`border-b px-4 py-2.5 transition-colors sm:px-6 lg:px-8 ${theme.wrap}`}>
       <div className="mx-auto flex max-w-7xl flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl ${theme.icon}`}>
@@ -116,6 +121,6 @@ export default function DashboardTrialRibbon() {
           </Link>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }

@@ -1775,7 +1775,7 @@ export default function DashboardLayout() {
 
           <div className="pratoby-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
             {/* Trial Banner Global */}
-            <DashboardTrialRibbon />
+            <DashboardTrialRibbon storeData={storeData} />
             <NotificationsOnboardingBanner />
 
             <AnimatePresence mode="wait" initial={false}>
