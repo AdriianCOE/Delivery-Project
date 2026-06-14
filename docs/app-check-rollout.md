@@ -39,7 +39,7 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
 VITE_FIREBASE_APPCHECK_ENABLED=true
 VITE_FIREBASE_APPCHECK_PROVIDER=enterprise
 VITE_FIREBASE_APPCHECK_SITE_KEY=site_key_web_app
-ENFORCE_APP_CHECK=true
+ENFORCE_APP_CHECK=false
 ```
 
 Para desenvolvimento local, prefira debug token em vez de reCAPTCHA real:

@@ -140,6 +140,13 @@
         ]
       }
     ],
+    "redirects": [
+      {
+        "regex": "^/planos(?:\\]|%5[Dd])/?$",
+        "destination": "/planos",
+        "type": 301
+      }
+    ],
     "rewrites": [
       {
         "source": "**",

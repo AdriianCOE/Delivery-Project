@@ -102,7 +102,7 @@ Integrações:
 
 - Asaas para billing, assinatura, checkout e webhooks.
 - Brevo para e-mails transacionais.
-- Cloudinary para upload de imagens via unsigned upload.
+- Cloudinary para upload de imagens assinado via Function, com fallback unsigned apenas por opt-in temporário.
 - Sentry para observabilidade frontend.
 - WhatsApp Cloud API ficou como plano futuro; MVP usa fallback com som, notificações, wa.me e painel.
 

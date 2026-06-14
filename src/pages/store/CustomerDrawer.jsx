@@ -247,7 +247,7 @@ function getOrderTotal(order) {
 }
 
 function getOrderStoreId(order, fallbackSlug) {
-  return order?.storeSlug || order?.storeId || order?.storeDocId || fallbackSlug
+  return order?.storeDocId || order?.storeId || order?.storeSlug || fallbackSlug
 }
 
 function getOrderStoreKeys(order) {
@@ -571,7 +571,9 @@ const greeting = useMemo(() => {
       const getPublicCatalog = httpsCallable(functions, 'getPublicCatalog')
       const result = await getPublicCatalog({
         storeId: orderStoreId,
+        storeDocId: order?.storeDocId || order?.storeId || '',
         storeSlug: order?.storeSlug || slug,
+        slug: order?.storeSlug || slug,
       })
 
       return Array.isArray(result?.data?.products) ? result.data.products : []

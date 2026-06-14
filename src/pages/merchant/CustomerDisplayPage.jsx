@@ -116,6 +116,25 @@ function orderTypeLabel(order) {
   return 'Retirada'
 }
 
+function sanitizeDisplayOrder(id, data = {}) {
+  return {
+    id,
+    orderNumber: data.orderNumber || data.ticketNumber || data.number || '',
+    ticketNumber: data.ticketNumber || '',
+    number: data.number || '',
+    status: data.status || '',
+    displayStatus: data.displayStatus || '',
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+    confirmedAt: data.confirmedAt || data.acceptedAt || null,
+    acceptedAt: data.acceptedAt || null,
+    deliveryType: data.deliveryType || data.orderType || data.type || '',
+    orderType: data.orderType || data.deliveryType || data.type || '',
+    type: data.type || data.orderType || data.deliveryType || '',
+    isDelivery: data.isDelivery === true,
+  }
+}
+
 function getSortTimestamp(order) {
   const val = order.confirmedAt || order.acceptedAt || order.updatedAt || order.createdAt
   if (!val) return 0
@@ -564,7 +583,7 @@ export default function CustomerDisplayPage() {
     )
 
     const unsub = onSnapshot(q, (snap) => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const docs = snap.docs.map(d => sanitizeDisplayOrder(d.id, d.data() || {}))
 
       // IDs de prontos não-delivery
       const incomingReadyIds = docs

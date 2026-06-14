@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
@@ -497,6 +497,28 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
 export default function PlansPage() {
   const [billingCycle, setBillingCycle] = useState('monthly')
   const [selectedMobilePlan, setSelectedMobilePlan] = useState('professional')
+  const plansJsonLd = useMemo(() => ({
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'PratoBy',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    url: 'https://pratoby.com/planos',
+    description: 'Cardápio digital e delivery próprio para restaurantes, lanchonetes e confeitarias sem comissão por pedido.',
+    offers: {
+      '@type': 'OfferCatalog',
+      name: 'Planos do PratoBy',
+      itemListElement: PLAN_OPTIONS.map((plan) => ({
+        '@type': 'Offer',
+        name: `Plano ${plan.name}`,
+        description: plan.description || plan.subtitle,
+        price: Number(plan.priceMonthly || 0).toFixed(2),
+        priceCurrency: 'BRL',
+        url: `https://pratoby.com/cadastro?plan=${plan.id}&cycle=monthly`,
+        availability: 'https://schema.org/InStock',
+      })),
+    },
+  }), [])
 
   useEffect(() => {
     if (window.location.hash !== '#comparacao') return
@@ -522,6 +544,7 @@ export default function PlansPage() {
         title="Planos do PratoBy | Preços do cardápio digital e delivery próprio"
         description="Compare os planos do PratoBy para vender online com cardápio digital, pedidos, Pix, QR Code, agendamento e painel de pedidos sem comissão por pedido."
         path="/planos"
+        jsonLd={plansJsonLd}
       />
 
       <MarketingLayout>
@@ -619,7 +642,7 @@ export default function PlansPage() {
 
             <div className="grid gap-5 lg:grid-cols-3">
               {plans.map((plan, index) => (
-                <PlanCard key={plan.name} plan={plan} index={index} cycle={billingCycle} />
+                <PlanCard key={plan.id} plan={plan} index={index} cycle={billingCycle} />
               ))}
             </div>
 

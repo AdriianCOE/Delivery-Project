@@ -14,7 +14,7 @@ import {
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
-import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
+import { getCloudinaryImageSrcSet, getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import {
   shouldShowProductInStorefront,
   canAddProductToCart,
@@ -139,17 +139,14 @@ function getProductId(product) {
   )
 }
 
-function getProductImage(product) {
-  return getCloudinaryImageUrl(
-    getFirstValidValue(
-      product?.imageUrl,
-      product?.image,
-      product?.photoUrl,
-      product?.thumbnailUrl,
-      product?.coverUrl,
-      product?.pictureUrl
-    ),
-    'productCard'
+function getProductImageSource(product) {
+  return getFirstValidValue(
+    product?.thumbnailUrl,
+    product?.imageUrl,
+    product?.image,
+    product?.photoUrl,
+    product?.coverUrl,
+    product?.pictureUrl
   )
 }
 
@@ -328,7 +325,14 @@ function ProductCard({
 
   const preparationTime = getPreparationTime(product)
   const serves = getServes(product)
-  const imageUrl = getProductImage(product)
+  const rawImageUrl = getProductImageSource(product)
+  const imageUrl = getCloudinaryImageUrl(rawImageUrl, compact ? 'productCardSmall' : 'productCard')
+  const imageSrcSet = getCloudinaryImageSrcSet(
+    rawImageUrl,
+    compact
+      ? ['productCardSmall', 'productCard']
+      : ['productCardSmall', 'productCard', 'productCardLarge']
+  )
 
   const lowStock =
     product?.stock !== undefined &&
@@ -612,8 +616,13 @@ function ProductCard({
           {imageUrl && !imgError ? (
             <img
               src={imageUrl}
+              srcSet={imageSrcSet || undefined}
+              sizes={compact ? '112px' : '(max-width: 640px) 128px, 160px'}
               alt={`Foto de ${productName}`}
               loading="lazy"
+              decoding="async"
+              width={compact ? 112 : 160}
+              height={compact ? 112 : 160}
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
               className={`

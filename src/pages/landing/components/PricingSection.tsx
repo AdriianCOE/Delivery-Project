@@ -3,6 +3,7 @@ import { Check, Pizza, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl';
+import { PLAN_OPTIONS } from '../../../utils/planCatalog';
 
 const formatPriceBR = (val: number | string) => {
   const parts = Number(val || 0).toFixed(2).split('.');
@@ -10,70 +11,19 @@ const formatPriceBR = (val: number | string) => {
   return parts.join(',');
 };
 
-const plans = [
-  {
-    id: 'essential',
-    name: 'Essencial',
-    description: 'Para começar a vender online',
-    price: 59.99,
-    priceAnnual: 599.90,
-    equivalentMonthly: 49.99,
-    period: '/mês',
-    features: [
-      '14 dias grátis inclusos',
-      'Cardápio digital ilimitado',
-      'Pedidos em tempo real',
-      'Link próprio da loja',
-      'Sem taxa por pedido',
-      'Painel de controle',
-      'Horários automáticos',
-    ],
-    cta: 'Começar 14 dias grátis',
-    highlighted: false,
-  },
-  {
-    id: 'professional',
-    name: 'Profissional',
-    description: 'Mais escolhido pelos lojistas',
-    price: 89.99,
-    priceAnnual: 899.90,
-    equivalentMonthly: 74.99,
-    period: '/mês',
-    badge: 'Mais popular',
-    features: [
-      '14 dias grátis inclusos',
-      'Tudo do Essencial',
-      'Cupons de desconto',
-      'Taxa por bairro',
-      'Campos personalizados',
-      'Relatórios avançados',
-      'Notificações Push',
-      'Suporte prioritário',
-    ],
-    cta: 'Começar 14 dias grátis',
-    highlighted: true,
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    description: 'Para quem quer vender mais',
-    price: 159.99,
-    priceAnnual: 1599.90,
-    equivalentMonthly: 133.33,
-    period: '/mês',
-    features: [
-      '14 dias grátis inclusos',
-      'Tudo do Profissional',
-      'Multi-loja (até 3)',
-      'API de integração',
-      'Domínio personalizado',
-      'Marca branca',
-      'Gerente de conta dedicado',
-    ],
-    cta: 'Começar 14 dias grátis',
-    highlighted: false,
-  },
-];
+const plans = PLAN_OPTIONS.map((plan) => ({
+  id: plan.id,
+  name: plan.name,
+  description: plan.subtitle || plan.description,
+  price: plan.priceMonthly,
+  priceAnnual: plan.priceAnnual,
+  equivalentMonthly: plan.equivalentMonthly,
+  period: '/mês',
+  badge: plan.badge,
+  features: plan.features,
+  cta: 'Começar 14 dias grátis',
+  highlighted: plan.highlight === true || plan.popular === true,
+}));
 
 export function PricingSection() {
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);

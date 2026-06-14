@@ -5,8 +5,8 @@ import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedContr
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
-  onSnapshot,
   orderBy,
   query,
   Timestamp,
@@ -613,7 +613,7 @@ export default function Statistics() {
 
   const canRead = canLoadOperationalOrders({ role, selectedStore, userData })
 
-  // ── Store listeners (one per known storeId)
+  // ── Store load: stats do not need realtime store listeners.
   useEffect(() => {
     let cancelled = false
     const scheduleState = (callback) => {
@@ -628,27 +628,39 @@ export default function Statistics() {
     }
 
     scheduleState(() => setLoading(true))
-    const map = new Map()
-    const unsubs = []
-    function publish() {
-      const s = Array.from(map.values()).sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')))
-      setStores(s)
-      if (!s.length) { setOrders([]); setLoading(false) }
+
+    async function loadStores() {
+      try {
+        const snapshots = await Promise.all(
+          knownStoreIds.map((id) => getDoc(doc(db, 'stores', id)))
+        )
+
+        if (cancelled) return
+
+        const nextStores = snapshots
+          .filter((snap) => snap.exists())
+          .map(normalizeStoreDoc)
+          .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')))
+
+        setStores(nextStores)
+        if (!nextStores.length) {
+          setOrders([])
+          setLoading(false)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[Stats] store load err', error)
+          setStores([])
+          setOrders([])
+          setLoading(false)
+        }
+      }
     }
-    knownStoreIds.forEach(id => {
-      if (!id) return
-      const u = onSnapshot(doc(db, 'stores', id), snap => {
-        snap.exists() ? map.set(snap.id, normalizeStoreDoc(snap)) : map.delete(id)
-        publish()
-      }, err => { console.error('[Stats] store err', err); publish() })
-      unsubs.push(u)
-    })
-    if (!unsubs.length) {
-      scheduleState(() => { setStores([]); setOrders([]); setLoading(false) })
-    }
+
+    void loadStores()
+
     return () => {
       cancelled = true
-      unsubs.forEach(u => u())
     }
   }, [user?.uid, knownStoreIds])
 

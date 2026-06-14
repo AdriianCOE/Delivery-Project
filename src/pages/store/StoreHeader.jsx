@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
+import { getCloudinaryImageSrcSet, getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import { getPublicPixConfig, isPublicPaymentMethodAllowed } from '../../utils/publicPaymentMethods'
 import {
@@ -233,43 +233,53 @@ function getRgba(color, alpha = 1) {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
 }
 
-function getBannerDesktopUrl(store) {
-  return getCloudinaryImageUrl(
+function getBannerDesktopSource(store) {
+  return (
     store?.bannerUrl ||
       store?.bannerURL ||
       store?.coverUrl ||
       store?.coverURL ||
       store?.bannerImageUrl ||
       store?.coverImageUrl ||
-      store?.banner ||
-      store?.settings?.bannerUrl,
-    'storeBanner'
+      store?.settings?.bannerUrl ||
+      ''
   )
 }
 
-function getBannerMobileUrl(store) {
-  return getCloudinaryImageUrl(
+function getBannerMobileSource(store) {
+  return (
     store?.bannerMobileUrl ||
       store?.mobileBannerUrl ||
       store?.mobileBannerURL ||
       store?.settings?.bannerMobileUrl ||
-      store?.settings?.mobileBannerUrl,
-    'storeBannerMobile'
+      store?.settings?.mobileBannerUrl ||
+      ''
   )
 }
 
-function getLogoUrl(store) {
-
-  return getCloudinaryImageUrl(
+function getLogoSource(store) {
+  return (
     store?.logoUrl ||
       store?.logoURL ||
       store?.logo ||
       store?.avatarUrl ||
       store?.imageUrl ||
       store?.photoUrl ||
-    store?.settings?.logoUrl,
-    'storeLogo'
+      store?.settings?.logoUrl ||
+      ''
   )
+}
+
+function getBannerDesktopUrl(store) {
+  return getCloudinaryImageUrl(getBannerDesktopSource(store), 'storeBanner')
+}
+
+function getBannerMobileUrl(store) {
+  return getCloudinaryImageUrl(getBannerMobileSource(store), 'storeBannerMobile')
+}
+
+function getLogoUrl(store) {
+  return getCloudinaryImageUrl(getLogoSource(store), 'storeLogo')
 }
 
 
@@ -993,7 +1003,28 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const bannerDesktopUrl = useMemo(() => getBannerDesktopUrl(store), [store])
   const bannerMobileUrl = useMemo(() => getBannerMobileUrl(store), [store])
   const bannerUrl = bannerDesktopUrl || bannerMobileUrl
+  const bannerDesktopSrcSet = useMemo(
+    () => getCloudinaryImageSrcSet(
+      getBannerDesktopSource(store),
+      ['storeBannerSmall', 'storeBannerMedium', 'storeBanner', 'storeBannerLarge']
+    ),
+    [store]
+  )
+  const bannerMobileSrcSet = useMemo(
+    () => getCloudinaryImageSrcSet(
+      getBannerMobileSource(store),
+      ['storeBannerMobileSmall', 'storeBannerMobile', 'storeBannerMobileLarge']
+    ),
+    [store]
+  )
   const logoUrl = useMemo(() => getLogoUrl(store), [store])
+  const logoSrcSet = useMemo(
+    () => getCloudinaryImageSrcSet(
+      getLogoSource(store),
+      ['storeLogoSmall', 'storeLogo', 'storeLogoLarge']
+    ),
+    [store]
+  )
   const logoInitial = String(store?.name || 'L').trim().charAt(0).toUpperCase()
   const storeSlug = getStoreSlug(store)
   const storeKeys = useMemo(() => getStoreKeys(store), [store])
@@ -1152,15 +1183,23 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   {bannerUrl ? (
     <picture>
       {bannerMobileUrl && (
-        <source media="(max-width: 640px)" srcSet={bannerMobileUrl} />
+        <source
+          media="(max-width: 640px)"
+          srcSet={bannerMobileSrcSet || bannerMobileUrl}
+          sizes="100vw"
+        />
       )}
       <img
         src={bannerUrl}
+        srcSet={bannerDesktopSrcSet || undefined}
+        sizes="100vw"
         alt=""
         className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
         fetchPriority="high"
         loading="eager"
         decoding="async"
+        width={1200}
+        height={480}
         aria-hidden="true"
       />
     </picture>
@@ -1202,9 +1241,14 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     {logoUrl ? (
       <img
         src={logoUrl}
+        srcSet={logoSrcSet || undefined}
+        sizes="(max-width: 640px) 76px, 120px"
         alt={store?.name || 'Logo da loja'}
         className="h-full w-full object-cover"
         loading="eager"
+        decoding="async"
+        width={120}
+        height={120}
       />
     ) : (
       <span
@@ -1451,8 +1495,14 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         {logoUrl ? (
           <img
             src={logoUrl}
+            srcSet={logoSrcSet || undefined}
+            sizes="64px"
             alt={store?.name || 'Logo da loja'}
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            width={64}
+            height={64}
           />
         ) : (
           logoInitial

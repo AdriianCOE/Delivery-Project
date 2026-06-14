@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import SEO from '../../components/seo/SEO'
 import {
@@ -42,20 +42,22 @@ import { useCart } from '../../contexts/CartContext'
 import { usePresence } from '../../hooks/usePresence'
 
 import ProductCard from './ProductCard'
-import MerchantDrawer from './MerchantDrawer'
 import {
   getStoreDocId,
   getStorePublicSlug,
 } from '../../utils/storeIdentity'
 import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import { shouldShowProductInStorefront } from '../../utils/productStatus'
-import CartDrawer from './CartDrawer'
-import CustomerDrawer from './CustomerDrawer'
-import ProductOptionsModal from './ProductOptionsModal'
 import StoreHeader from './StoreHeader'
 import StoreFooter from '../../components/layouts/StoreFooter'
 
+const MerchantDrawer = lazy(() => import('./MerchantDrawer'))
+const CartDrawer = lazy(() => import('./CartDrawer'))
+const CustomerDrawer = lazy(() => import('./CustomerDrawer'))
+const ProductOptionsModal = lazy(() => import('./ProductOptionsModal'))
+
 const BRAND_GREEN = '#f97316'
+const SITE_URL = 'https://pratoby.com'
 
 const NOINDEX_STORE_SLUGS = new Set([
   'capivaras-lanches',
@@ -781,7 +783,7 @@ function sortByOrderThenName(a, b) {
   return String(a?.name || '').localeCompare(String(b?.name || ''))
 }
 
-function LoadingScreen() {
+function LoadingScreen({ timedOut = false, onRetry = null }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] px-6">
       <div className="flex flex-col items-center gap-5 text-center">
@@ -795,12 +797,98 @@ function LoadingScreen() {
         <div>
           <p className="text-lg font-black text-[#111827]">Carregando cardápio...</p>
           <p className="mt-1 text-sm text-[#6b7280]">
-            Preparando a melhor experiência para você.
+            {timedOut
+              ? 'A conexão parece instável. Tente carregar novamente.'
+              : 'Preparando a melhor experiência para você.'}
           </p>
         </div>
+
+        {timedOut && typeof onRetry === 'function' && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-2 rounded-full bg-[#f97316] px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+          >
+            <FiRefreshCw size={16} />
+            Tentar novamente
+          </button>
+        )}
       </div>
     </div>
   )
+}
+
+function buildStoreDescription(store, storeName) {
+  const explicitDescription = String(store?.description || '').trim()
+
+  if (explicitDescription) return explicitDescription
+
+  const city = firstFilled(store?.city, store?.address?.city)
+  const segment = firstFilled(store?.segment, store?.category, store?.businessType)
+  const parts = [
+    `Peça online em ${storeName}.`,
+    segment ? `Cardápio de ${segment}.` : 'Veja cardápio, retirada e delivery pelo PratoBy.',
+    city ? `Atendimento em ${city}.` : '',
+  ]
+
+  return parts.filter(Boolean).join(' ')
+}
+
+function compactObject(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => {
+      if (item === null || item === undefined) return false
+      if (typeof item === 'string') return item.trim() !== ''
+      if (Array.isArray(item)) return item.length > 0
+      return true
+    })
+  )
+}
+
+function buildStoreJsonLd(store, {
+  storeName,
+  storeDescription,
+  storeSlug,
+  storeImage,
+}) {
+  if (!store || !storeSlug) return null
+
+  const canonicalUrl = `${SITE_URL}/${storeSlug}`
+  const addressData = store.address && typeof store.address === 'object'
+    ? store.address
+    : {}
+  const city = firstFilled(store.city, addressData.city, addressData.cidade)
+  const state = firstFilled(store.state, addressData.state, addressData.uf)
+  const street = firstFilled(store.street, addressData.street, addressData.rua, addressData.address)
+  const number = firstFilled(String(store.number || ''), String(addressData.number || addressData.numero || ''))
+  const neighborhood = firstFilled(store.neighborhood, addressData.neighborhood, addressData.bairro)
+  const postalCode = firstFilled(store.cep, store.zipCode, addressData.cep, addressData.zipCode)
+  const telephone = firstFilled(store.publicPhone, store.whatsapp, store.phone, store.contactPhone)
+  const segment = firstFilled(store.segment, store.category, store.businessType)
+
+  const address = compactObject({
+    '@type': 'PostalAddress',
+    streetAddress: [street, number].filter(Boolean).join(', '),
+    addressLocality: city,
+    addressRegion: state,
+    postalCode,
+    addressCountry: 'BR',
+  })
+
+  return compactObject({
+    '@context': 'https://schema.org',
+    '@type': 'FoodEstablishment',
+    name: storeName,
+    description: storeDescription,
+    url: canonicalUrl,
+    menu: canonicalUrl,
+    hasMenu: canonicalUrl,
+    image: storeImage,
+    telephone,
+    servesCuisine: segment,
+    address: Object.keys(address).length > 1 ? address : undefined,
+    areaServed: city || neighborhood,
+  })
 }
 
 function StoreNotFound() {
@@ -1620,6 +1708,8 @@ export default function StoreFrontPage() {
   const [products, setProducts] = useState([])
 
   const [loadingStore, setLoadingStore] = useState(true)
+  const [storeLoadTimedOut, setStoreLoadTimedOut] = useState(false)
+  const [storeReloadKey, setStoreReloadKey] = useState(0)
   const [loadingMenu, setLoadingMenu] = useState(true)
   const [menuError, setMenuError] = useState('')
   const [menuReloadKey, setMenuReloadKey] = useState(0)
@@ -2015,8 +2105,7 @@ export default function StoreFrontPage() {
 
 
 const storeName = store?.name || 'Loja'
-const storeDescription =
-  store?.description || `Veja o cardápio digital de ${storeName} no PratoBy.`
+const storeDescription = buildStoreDescription(store, storeName)
 
 const storeImage =
   store?.bannerUrl ||
@@ -2031,6 +2120,15 @@ const storeFavicon =
   '/favicon.ico'
 
 const noIndexStorefront = shouldNoIndexStorefront(storeSlug, store)
+const storeJsonLd = useMemo(
+  () => buildStoreJsonLd(store, {
+    storeName,
+    storeDescription,
+    storeSlug,
+    storeImage,
+  }),
+  [store, storeDescription, storeImage, storeName, storeSlug]
+)
 
   const showCopyMessage = useCallback((message) => {
     setCopyMessage(message)
@@ -2088,6 +2186,19 @@ const handleToggleFavorite = useCallback(() => {
     setMenuReloadKey((current) => current + 1)
   }, [])
 
+  const handleOpenProduct = useCallback((product) => {
+    setSelectedProduct(product)
+  }, [])
+
+  const handleCloseProduct = useCallback(() => {
+    setSelectedProduct(null)
+  }, [])
+
+  const handleQuickEditProduct = useCallback((product) => {
+    setQuickEditProduct(product)
+    setIsDrawerOpen(true)
+  }, [])
+
   useEffect(() => {
     if (!slug) {
       queueMicrotask(() => {
@@ -2098,6 +2209,7 @@ const handleToggleFavorite = useCallback(() => {
     }
 
     setLoadingStore(true)
+    setStoreLoadTimedOut(false)
 
     let unsubscribe = null
     let isMounted = true
@@ -2149,7 +2261,17 @@ const handleToggleFavorite = useCallback(() => {
       isMounted = false
       if (unsubscribe) unsubscribe()
     }
-  }, [navigate, slug])
+  }, [navigate, slug, storeReloadKey])
+
+  useEffect(() => {
+    if (!loadingStore) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      setStoreLoadTimedOut(true)
+    }, 12000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadingStore, slug, storeReloadKey])
 
   useEffect(() => {
     if (setStoreKey) {
@@ -2300,7 +2422,21 @@ const handleToggleFavorite = useCallback(() => {
   }, [activeCategory, categories])
 
 if (loadingStore) {
-  return <LoadingScreen />
+  return (
+    <>
+      <SEO
+        title="Cardápio PratoBy"
+        description="Cardápio digital em carregamento no PratoBy."
+        path={`/${slug || ''}`}
+        noIndex
+        noFollow
+      />
+      <LoadingScreen
+        timedOut={storeLoadTimedOut}
+        onRetry={() => setStoreReloadKey((value) => value + 1)}
+      />
+    </>
+  )
 }
 
 if (!store) {
@@ -2325,12 +2461,13 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-      title={`${storeName} | Cardápio online no PratoBy`}
+      title={`${storeName} | Cardápio e Pedidos Online`}
       description={storeDescription}
       path={`/${storeSlug}`}
       image={storeImage}
       favicon={storeFavicon}
       noIndex={noIndexStorefront}
+      jsonLd={storeJsonLd}
     />
 
     <div
@@ -2369,24 +2506,35 @@ return (
       )}
 
       {isOwner && (
-        <MerchantDrawer
-          isOpen={isDrawerOpen}
-          onClose={() => setIsDrawerOpen(false)}
-          store={store}
-          categories={categories}
-          products={products}
-          quickEditProduct={quickEditProduct}
-          onQuickEditHandled={() => setQuickEditProduct(null)}
-        />
+        <Suspense fallback={null}>
+          {isDrawerOpen && (
+            <MerchantDrawer
+              isOpen={isDrawerOpen}
+              onClose={() => setIsDrawerOpen(false)}
+              store={store}
+              categories={categories}
+              products={products}
+              quickEditProduct={quickEditProduct}
+              onQuickEditHandled={() => setQuickEditProduct(null)}
+            />
+          )}
+        </Suspense>
       )}
 
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} store={store} />
-      <CustomerDrawer
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        products={availableProducts}
-        store={store}
-      />
+      <Suspense fallback={null}>
+        {isCartOpen && (
+          <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} store={store} />
+        )}
+
+        {isProfileOpen && (
+          <CustomerDrawer
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            products={availableProducts}
+            store={store}
+          />
+        )}
+      </Suspense>
       <StoreHeader store={store} isOwner={isOwner} activeUsers={activeUsers} />
 
       <StoreQuickActions
@@ -2546,11 +2694,8 @@ return (
                           store={store}
                           disabled={!store?.isOpen && !isOwner}
                           isOwner={isOwner}
-                          onClick={(product) => setSelectedProduct(product)}
-                          onQuickEdit={(product) => {
-                            setQuickEditProduct(product)
-                            setIsDrawerOpen(true)
-                          }}
+                          onClick={handleOpenProduct}
+                          onQuickEdit={handleQuickEditProduct}
                         />
                       </div>
 
@@ -2605,11 +2750,8 @@ return (
                             store={store}
                             disabled={!store?.isOpen && !isOwner}
                             isOwner={isOwner}
-                            onQuickEdit={(product) => {
-                              setQuickEditProduct(product)
-                              setIsDrawerOpen(true)
-                            }}
-                            onClick={(product) => setSelectedProduct(product)}
+                            onQuickEdit={handleQuickEditProduct}
+                            onClick={handleOpenProduct}
                           />
                         </div>
 
@@ -2728,12 +2870,16 @@ return (
         </a>
       )}
 
-      <ProductOptionsModal
-        isOpen={!!selectedProduct}
-        product={selectedProduct}
-        store={store}
-        onClose={() => setSelectedProduct(null)}
-      />
+      <Suspense fallback={null}>
+        {selectedProduct && (
+          <ProductOptionsModal
+            isOpen={!!selectedProduct}
+            product={selectedProduct}
+            store={store}
+            onClose={handleCloseProduct}
+          />
+        )}
+      </Suspense>
 
       <CopyToast message={copyMessage} />
         </div>

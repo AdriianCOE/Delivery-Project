@@ -1,13 +1,41 @@
 const CLOUDINARY_UPLOAD_MARKER = '/upload/'
 
 export const CLOUDINARY_IMAGE_VARIANTS = {
+  productCardSmall: 'f_auto,q_auto,c_fill,g_auto,w_128,h_128',
   productCard: 'f_auto,q_auto,c_fill,g_auto,w_196,h_196',
+  productCardLarge: 'f_auto,q_auto,c_fill,g_auto,w_320,h_320',
   productDetail: 'f_auto,q_auto,c_fit,w_900,h_900',
+  storeLogoTiny: 'f_auto,q_auto,c_fit,w_64,h_64',
+  storeLogoSmall: 'f_auto,q_auto,c_fit,w_96,h_96',
   storeLogo: 'f_auto,q_auto,c_fit,w_160,h_160',
-  storeLogoSmall: 'f_auto,q_auto,c_fit,w_80,h_80',
+  storeLogoLarge: 'f_auto,q_auto,c_fit,w_240,h_240',
+  storeBannerSmall: 'f_auto,q_auto,c_fill,g_auto,w_640,h_256',
+  storeBannerMedium: 'f_auto,q_auto,c_fill,g_auto,w_960,h_384',
   storeBanner: 'f_auto,q_auto,c_fill,g_auto,w_1200,h_480',
+  storeBannerLarge: 'f_auto,q_auto,c_fill,g_auto,w_1600,h_640',
+  storeBannerMobileSmall: 'f_auto,q_auto,c_fill,g_auto,w_480,h_192',
   storeBannerMobile: 'f_auto,q_auto,c_fill,g_auto,w_800,h_320',
+  storeBannerMobileLarge: 'f_auto,q_auto,c_fill,g_auto,w_1080,h_432',
   ogImage: 'f_auto,q_auto,c_fill,g_auto,w_1200,h_630',
+}
+
+export const CLOUDINARY_IMAGE_VARIANT_WIDTHS = {
+  productCardSmall: 128,
+  productCard: 196,
+  productCardLarge: 320,
+  productDetail: 900,
+  storeLogoTiny: 64,
+  storeLogoSmall: 96,
+  storeLogo: 160,
+  storeLogoLarge: 240,
+  storeBannerSmall: 640,
+  storeBannerMedium: 960,
+  storeBanner: 1200,
+  storeBannerLarge: 1600,
+  storeBannerMobileSmall: 480,
+  storeBannerMobile: 800,
+  storeBannerMobileLarge: 1080,
+  ogImage: 1200,
 }
 
 export function isCloudinaryUrl(url) {
@@ -41,4 +69,18 @@ export function getCloudinaryImageUrl(url, variant = 'productCard') {
     CLOUDINARY_UPLOAD_MARKER,
     `${CLOUDINARY_UPLOAD_MARKER}${transform}/`
   )
+}
+
+export function getCloudinaryImageSrcSet(url, variants = []) {
+  if (!url || typeof url !== 'string' || !isCloudinaryUrl(url)) return ''
+
+  return variants
+    .map((variant) => {
+      const width = CLOUDINARY_IMAGE_VARIANT_WIDTHS[variant]
+      const imageUrl = getCloudinaryImageUrl(url, variant)
+
+      return width && imageUrl ? `${imageUrl} ${width}w` : ''
+    })
+    .filter(Boolean)
+    .join(', ')
 }

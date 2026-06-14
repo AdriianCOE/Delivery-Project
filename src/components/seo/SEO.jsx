@@ -33,6 +33,7 @@ const HEAD_DEDUPE_SELECTORS = [
   'meta[name="twitter:description"]',
   'meta[name="twitter:image"]',
   'meta[name="twitter:image:alt"]',
+  'script[data-pratoby-jsonld="true"]',
 ]
 
 function dedupeHeadElements() {
@@ -80,6 +81,16 @@ function buildCloudinaryFavicon(url) {
   )
 }
 
+function serializeJsonLd(jsonLd) {
+  if (!jsonLd) return ''
+
+  try {
+    return JSON.stringify(jsonLd).replace(/</g, '\\u003c')
+  } catch {
+    return ''
+  }
+}
+
 export default function SEO({
   title = DEFAULT_TITLE,
   description = DEFAULT_DESCRIPTION,
@@ -90,11 +101,13 @@ export default function SEO({
   type = 'website',
   noIndex = false,
   noFollow = false,
+  jsonLd = null,
 }) {
   const canonicalPath = useMemo(() => normalizePath(path), [path])
   const canonicalUrl = `${SITE_URL}${canonicalPath}`
   const absoluteImage = buildAbsoluteUrl(image, DEFAULT_IMAGE)
   const faviconUrl = buildCloudinaryFavicon(favicon)
+  const serializedJsonLd = useMemo(() => serializeJsonLd(jsonLd), [jsonLd])
 
   const robotsContent = noIndex
     ? `noindex, ${noFollow ? 'nofollow' : 'follow'}`
@@ -105,7 +118,7 @@ export default function SEO({
   useEffect(() => {
     const timer = window.setTimeout(dedupeHeadElements, 0)
     return () => window.clearTimeout(timer)
-  }, [description, finalImageAlt, absoluteImage, noIndex, noFollow, canonicalUrl, title, type])
+  }, [description, finalImageAlt, absoluteImage, noIndex, noFollow, canonicalUrl, title, type, serializedJsonLd])
 
   return (
     <Helmet>
@@ -142,6 +155,15 @@ export default function SEO({
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={absoluteImage} />
       <meta name="twitter:image:alt" content={finalImageAlt} />
+
+      {serializedJsonLd && (
+        <script
+          type="application/ld+json"
+          data-pratoby-jsonld="true"
+        >
+          {serializedJsonLd}
+        </script>
+      )}
     </Helmet>
   )
 }
