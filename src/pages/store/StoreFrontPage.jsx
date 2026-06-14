@@ -57,6 +57,23 @@ import StoreFooter from '../../components/layouts/StoreFooter'
 
 const BRAND_GREEN = '#f97316'
 
+const NOINDEX_STORE_SLUGS = new Set([
+  'capivaras-lanches',
+])
+
+function shouldNoIndexStorefront(slugValue, storeData) {
+  const candidates = [
+    slugValue,
+    storeData?.slug,
+    storeData?.storeSlug,
+    storeData?.publicSlug,
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+
+  return candidates.some((candidate) => NOINDEX_STORE_SLUGS.has(candidate))
+}
+
 // --- FUNÇÕES AUXILIARES DE HORÁRIO ---
 const WEEK_DAYS = [
   {
@@ -788,7 +805,16 @@ function LoadingScreen() {
 
 function StoreNotFound() {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f9fafb] p-6 selection:bg-orange-100 selection:text-[#f97316]">
+    <>
+      <SEO
+        title="Loja não encontrada | PratoBy"
+        description="Essa loja não foi encontrada no PratoBy. Confira o link correto com o restaurante ou volte para a página inicial."
+        path="/404"
+        noIndex
+        noFollow
+      />
+
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f9fafb] p-6 selection:bg-orange-100 selection:text-[#f97316]">
       {/* Elementos de fundo da marca PratoBy */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-20 top-10 h-72 w-72 rounded-full bg-orange-100/60 blur-3xl" />
@@ -821,6 +847,7 @@ function StoreNotFound() {
         </Link>
       </div>
     </div>
+    </>
   )
 }
 
@@ -2003,6 +2030,8 @@ const storeFavicon =
   store?.imageUrl ||
   '/favicon.ico'
 
+const noIndexStorefront = shouldNoIndexStorefront(storeSlug, store)
+
   const showCopyMessage = useCallback((message) => {
     setCopyMessage(message)
     window.setTimeout(() => setCopyMessage(''), 2400)
@@ -2270,17 +2299,6 @@ const handleToggleFavorite = useCallback(() => {
   }
   }, [activeCategory, categories])
 
-  useEffect(() => {
-    if (!store?.name) return undefined
-
-    const previousTitle = document.title
-    document.title = `${store.name} | Cardápio e pedidos online`
-
-    return () => {
-      document.title = previousTitle
-    }
-  }, [store?.name])
-
 if (loadingStore) {
   return <LoadingScreen />
 }
@@ -2297,6 +2315,7 @@ if (shouldBlockStorefront) {
         description="Este cardápio está temporariamente indisponível para pedidos."
         path={`/${storeSlug}`}
         noIndex
+        noFollow
       />
       <StoreUnavailable />
     </>
@@ -2306,12 +2325,13 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-  title={`${storeName} | Cardápio e pedidos online`}
-  description={storeDescription}
-  path={`/${storeSlug}`}
-  image={storeImage}
-  favicon={storeFavicon}
-/>
+      title={`${storeName} | Cardápio online no PratoBy`}
+      description={storeDescription}
+      path={`/${storeSlug}`}
+      image={storeImage}
+      favicon={storeFavicon}
+      noIndex={noIndexStorefront}
+    />
 
     <div
   className="min-h-screen bg-[#fff8f1] text-[#111827]"
@@ -2720,4 +2740,3 @@ return (
   </>
 )
 }
-

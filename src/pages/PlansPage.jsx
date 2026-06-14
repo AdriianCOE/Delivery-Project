@@ -519,8 +519,8 @@ export default function PlansPage() {
   return (
     <>
       <SEO
-        title="Planos do PratoBy | Cardápio digital e delivery próprio"
-        description="Escolha seu plano no PratoBy e comece com 14 dias grátis testando os recursos Premium. Venda online com cardápio digital, pedidos e pagamentos sem comissão do PratoBy por pedido."
+        title="Planos do PratoBy | Preços do cardápio digital e delivery próprio"
+        description="Compare os planos do PratoBy para vender online com cardápio digital, pedidos, Pix, QR Code, agendamento e painel de pedidos sem comissão por pedido."
         path="/planos"
       />
 

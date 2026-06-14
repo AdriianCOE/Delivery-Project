@@ -89,6 +89,7 @@ export default function SEO({
   favicon = DEFAULT_FAVICON,
   type = 'website',
   noIndex = false,
+  noFollow = false,
 }) {
   const canonicalPath = useMemo(() => normalizePath(path), [path])
   const canonicalUrl = `${SITE_URL}${canonicalPath}`
@@ -96,7 +97,7 @@ export default function SEO({
   const faviconUrl = buildCloudinaryFavicon(favicon)
 
   const robotsContent = noIndex
-    ? 'noindex, nofollow'
+    ? `noindex, ${noFollow ? 'nofollow' : 'follow'}`
     : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
 
   const finalImageAlt = imageAlt || `${title} - PratoBy`
@@ -104,7 +105,7 @@ export default function SEO({
   useEffect(() => {
     const timer = window.setTimeout(dedupeHeadElements, 0)
     return () => window.clearTimeout(timer)
-  }, [description, finalImageAlt, absoluteImage, noIndex, canonicalUrl, title, type])
+  }, [description, finalImageAlt, absoluteImage, noIndex, noFollow, canonicalUrl, title, type])
 
   return (
     <Helmet>

@@ -195,8 +195,8 @@ export default function ContactPage() {
   return (
     <>
       <SEO
-        title="Contato | PratoBy"
-        description="Fale com o PratoBy, tire dúvidas ou comece sua loja online sem comissão do PratoBy por pedido."
+        title="Contato do PratoBy | Fale sobre cardápio digital"
+        description="Fale com o PratoBy para tirar dúvidas, começar sua loja online, testar o cardápio digital ou receber ajuda com seu delivery próprio."
         path="/contato"
       />
 

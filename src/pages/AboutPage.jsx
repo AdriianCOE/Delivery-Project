@@ -141,8 +141,8 @@ export default function AboutPage() {
   return (
     <>
       <SEO
-        title="Sobre | PratoBy"
-        description="Conheça o PratoBy: cardápio digital e delivery próprio para lojistas venderem direto, sem comissão do PratoBy por pedido."
+        title="Sobre o PratoBy | Cardápio digital para restaurantes"
+        description="Conheça o PratoBy, uma plataforma para restaurantes, lanchonetes e confeitarias venderem online com cardápio digital, pedidos e delivery próprio."
         path="/sobre"
       />
 
@@ -187,15 +187,13 @@ export default function AboutPage() {
                       <FiMessageCircle size={17} />
                     </Link>
 
-                    <a
-                      href="https://pratoby.com/capivaras-lanches"
-                      target="_blank"
-                      rel="noreferrer"
+                    <Link
+                      to="/exemplos"
                       className="inline-flex h-12 items-center justify-center gap-2 rounded-[1.25rem] border border-gray-200 bg-white px-6 text-sm font-black text-[#111827] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] active:scale-95"
                     >
-                      Ver exemplo
+                      Ver exemplos
                       <FiExternalLink size={16} />
-                    </a>
+                    </Link>
                   </div>
                 </motion.div>
 

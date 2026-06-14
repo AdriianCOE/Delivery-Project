@@ -10,6 +10,7 @@ import {
   FiSettings,
 } from 'react-icons/fi'
 import MarketingLayout from '../pages/MarketingLayout'
+import SEO from '../components/seo/SEO'
 
 const suggestions = [
   {
@@ -42,7 +43,16 @@ export default function NotFoundPage() {
   const navigate = useNavigate()
 
   return (
-    <MarketingLayout>
+    <>
+      <SEO
+        title="Página não encontrada | PratoBy"
+        description="A página que você tentou acessar não foi encontrada no PratoBy. Volte para o início, veja os planos ou fale com nosso atendimento."
+        path="/404"
+        noIndex
+        noFollow
+      />
+
+      <MarketingLayout>
       <section className="relative overflow-hidden px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -left-40 top-16 h-[28rem] w-[28rem] rounded-full bg-orange-100/70 blur-3xl" />
@@ -139,8 +149,7 @@ export default function NotFoundPage() {
           </div>
         </div>
       </section>
-    </MarketingLayout>
+      </MarketingLayout>
+    </>
   )
 }
-
-
