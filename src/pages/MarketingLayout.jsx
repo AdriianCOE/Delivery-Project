@@ -1,60 +1,130 @@
-import { useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useMemo, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   FiArrowRight,
+  FiCheckCircle,
   FiExternalLink,
   FiInstagram,
   FiMenu,
+  FiMessageCircle,
+  FiShield,
   FiX,
+  FiZap,
 } from 'react-icons/fi'
 
 const navLinks = [
   { label: 'Início', to: '/' },
+  { label: 'Exemplos', to: '/exemplos' },
   { label: 'Sobre', to: '/sobre' },
   { label: 'Planos', to: '/planos' },
   { label: 'Contato', to: '/contato' },
 ]
 
-const footerLinks = [
-  { label: 'Início', to: '/' },
-  { label: 'Sobre', to: '/sobre' },
-  { label: 'Planos', to: '/planos' },
-  { label: 'Contato', to: '/contato' },
-  { label: 'Privacidade', to: '/privacidade' },
-  { label: 'Termos', to: '/termos' },
+const footerGroups = [
+  {
+    title: 'Produto',
+    links: [
+      { label: 'Início', to: '/' },
+      { label: 'Exemplos', to: '/exemplos' },
+      { label: 'Planos', to: '/planos' },
+    ],
+  },
+  {
+    title: 'Empresa',
+    links: [
+      { label: 'Sobre', to: '/sobre' },
+      { label: 'Contato', to: '/contato' },
+      { label: 'Entrar', to: '/login' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Privacidade', to: '/privacidade' },
+      { label: 'Termos', to: '/termos' },
+    ],
+  },
 ]
 
 const socialLinks = [
   {
-    label: 'Instagram',
+    label: 'Instagram do PratoBy',
     href: 'https://www.instagram.com/pratobybr',
     icon: FiInstagram,
-    hoverClass: 'hover:border-pink-200 hover:bg-pink-50 hover:text-pink-600',
   },
 ]
 
-function Logo({ compact = false }) {
+const trustHighlights = [
+  { icon: FiShield, label: 'Sem comissão do PratoBy' },
+  { icon: FiZap, label: 'Pedidos em tempo real' },
+  { icon: FiCheckCircle, label: '14 dias grátis' },
+]
+
+const easeOut = [0.16, 1, 0.3, 1]
+const springTransition = { type: 'spring', stiffness: 500, damping: 36, mass: 0.8 }
+
+function Logo({ compact = false, inverted = false, mobile = false }) {
+  const iconSize = compact
+    ? 'h-14 w-14'
+    : mobile
+      ? 'h-14 w-14 min-[390px]:h-16 min-[390px]:w-16 sm:h-[4.1rem] sm:w-[4.1rem]'
+      : 'h-14 w-14 sm:h-[4.1rem] sm:w-[4.1rem]'
+
+  const markSize = compact
+    ? 'h-9 w-9'
+    : mobile
+      ? 'h-10 w-10 min-[390px]:h-11 min-[390px]:w-11 sm:h-12 sm:w-12'
+      : 'h-11 w-11 sm:h-12 sm:w-12'
+
+  const titleSize = compact
+    ? 'text-2xl'
+    : mobile
+      ? 'text-[1.6rem] min-[390px]:text-[1.8rem] sm:text-[1.95rem]'
+      : 'text-[1.95rem]'
+
   return (
-    <div className="flex items-center gap-3">
-      <img
-        src="/icons/favicon-32x32.png"
-        alt="PratoBy"
-        width="32"
-        height="32"
-        className={`rounded-2xl object-cover shadow-lg shadow-orange-600/20 ${
-          compact ? 'h-9 w-9' : 'h-11 w-11'
-        }`}
-      />
-      <div className="leading-none">
+    <div className="group flex min-w-0 items-center gap-3 min-[390px]:gap-3.5">
+      <span
+        className={[
+          'relative grid shrink-0 place-items-center overflow-hidden rounded-[1.15rem] min-[390px]:rounded-[1.35rem]',
+          inverted
+            ? 'bg-white shadow-[0_16px_38px_rgba(249,115,22,.24)] ring-1 ring-white/10'
+            : 'bg-white shadow-[0_18px_42px_rgba(249,115,22,.24)] ring-1 ring-orange-100/80',
+          iconSize,
+        ].join(' ')}
+      >
+        <span className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-amber-50" />
+        <span className="absolute -right-4 -top-4 h-12 w-12 rounded-full bg-orange-200/45 blur-xl" />
+        <img
+          src="/icons/android-chrome-192x192.png"
+          alt="PratoBy"
+          width="192"
+          height="192"
+          className={[
+            'relative z-10 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-105',
+            markSize,
+          ].join(' ')}
+        />
+      </span>
+
+      <div className="min-w-0 leading-none">
         <p
-          className={`font-black tracking-tighter text-[#111827] ${
-            compact ? 'text-xl' : 'text-2xl'
-          }`}
+          className={[
+            'truncate font-black tracking-tighter',
+            titleSize,
+            inverted ? 'text-white' : 'text-[#111827]',
+          ].join(' ')}
         >
           Prato<span className="text-[#f97316]">By</span>
         </p>
-        <p className="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
+        <p
+          className={[
+            'mt-1.5 truncate text-[9px] font-black uppercase tracking-[0.2em] min-[390px]:text-[10px]',
+            mobile ? 'hidden min-[370px]:block' : 'block',
+            inverted ? 'text-white/45' : 'text-gray-400',
+          ].join(' ')}
+        >
           Cardápio digital e delivery
         </p>
       </div>
@@ -62,34 +132,29 @@ function Logo({ compact = false }) {
   )
 }
 
-/* ─── Botão "Entrar" ─────────────────────────────────────────── */
 export function BtnEntrar({ className = '', onClick }) {
   return (
     <Link
       to="/login"
       onClick={onClick}
       className={[
-        // base
         'group relative inline-flex h-11 items-center justify-center overflow-hidden',
-        'rounded-[1.35rem] border border-gray-200/80 bg-white px-6',
-        'text-[13px] font-bold text-gray-600',
-        // sombra inicial super sutil
-        'shadow-[0_1px_2px_rgba(0,0,0,.04)]',
-        // hover - transição aveludada
+        'rounded-[1.25rem] border border-gray-200/80 bg-white/90 px-6',
+        'text-[13px] font-black text-gray-700 backdrop-blur-xl',
+        'shadow-[0_1px_2px_rgba(15,23,42,.05)]',
         'transition-all duration-300 hover:-translate-y-[2px]',
-        'hover:border-orange-200 hover:shadow-[0_4px_12px_rgba(249,115,22,.08)]',
-        'hover:text-[#f97316] hover:bg-orange-50/30',
-        // active - clique responsivo
-        'active:scale-[0.98] active:translate-y-0 active:shadow-none',
+        'hover:border-orange-200 hover:bg-orange-50/70 hover:text-[#f97316]',
+        'hover:shadow-[0_10px_24px_rgba(249,115,22,.12)]',
+        'active:translate-y-0 active:scale-[0.98] active:shadow-none',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2',
         className,
       ].join(' ')}
     >
-      {/* brilho interno no hover - mantido da sua ideia brilhante */}
       <span
-        className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         style={{
           background:
-            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(249,115,22,.08) 0%, transparent 70%)',
+            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(249,115,22,.12) 0%, transparent 70%)',
         }}
       />
       <span className="relative z-10">Entrar</span>
@@ -97,7 +162,6 @@ export function BtnEntrar({ className = '', onClick }) {
   )
 }
 
-/* ─── Botão "Criar minha loja" ───────────────────────────────── */
 export function BtnCriarLoja({ className = '', onClick, size = 'md' }) {
   const h = size === 'sm' ? 'h-11' : 'h-12'
   const px = size === 'sm' ? 'px-6' : 'px-8'
@@ -108,30 +172,20 @@ export function BtnCriarLoja({ className = '', onClick, size = 'md' }) {
       to="/cadastro"
       onClick={onClick}
       className={[
-        // base
         'group relative inline-flex items-center justify-center gap-2 overflow-hidden',
         `${h} ${px} ${text}`,
-        'rounded-[1.35rem] font-black text-white',
-        // fundo: gradiente premium
-        'bg-gradient-to-r from-orange-500 to-amber-500',
-        // sombra inicial (Glow difuso)
-        'shadow-[0_1px_2px_rgba(249,115,22,.3),0_4px_16px_rgba(249,115,22,.25)]',
-        // hover: aumenta proporção e intensifica o brilho
-        'transition-all duration-300 hover:-translate-y-[2px] hover:scale-[1.02]',
-        'hover:shadow-[0_2px_4px_rgba(249,115,22,.3),0_8px_24px_rgba(249,115,22,.4)]',
-        // active: afunda ao clicar
-        'active:scale-[0.98] active:translate-y-0 active:shadow-sm',
+        'rounded-[1.25rem] font-black text-white',
+        'bg-[linear-gradient(135deg,#fb923c_0%,#f97316_45%,#f59e0b_100%)]',
+        'shadow-[0_12px_30px_rgba(249,115,22,.32),inset_0_1px_0_rgba(255,255,255,.35)]',
+        'transition-all duration-300 hover:-translate-y-[2px] hover:scale-[1.015]',
+        'hover:shadow-[0_18px_40px_rgba(249,115,22,.42),inset_0_1px_0_rgba(255,255,255,.45)]',
+        'active:translate-y-0 active:scale-[0.98]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2',
         className,
       ].join(' ')}
     >
-      {/* shimmer animado no hover (feixe de luz) */}
-      <span
-        className="pointer-events-none absolute inset-0 -translate-x-full skew-x-[-20deg] bg-white/15 transition-transform duration-500 ease-out group-hover:translate-x-[200%]"
-      />
-      {/* borda brilhante no topo (glass effect) */}
-      <span
-        className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-full bg-white/40"
-      />
+      <span className="pointer-events-none absolute inset-0 -translate-x-full skew-x-[-18deg] bg-white/20 transition-transform duration-700 ease-out group-hover:translate-x-[190%]" />
+      <span className="pointer-events-none absolute inset-x-3 top-0 h-px rounded-full bg-white/50" />
       <span className="relative z-10">Criar minha loja</span>
       <FiArrowRight
         size={15}
@@ -141,266 +195,367 @@ export function BtnCriarLoja({ className = '', onClick, size = 'md' }) {
   )
 }
 
+function DesktopNav({ isActivePath }) {
+  return (
+    <nav className="hidden items-center rounded-[1.45rem] border border-gray-200/70 bg-white/78 p-1 shadow-[0_10px_30px_rgba(15,23,42,.06)] backdrop-blur-xl lg:flex">
+      {navLinks.map((item) => {
+        const active = isActivePath(item.to)
+        return (
+          <Link
+            key={item.label}
+            to={item.to}
+            aria-current={active ? 'page' : undefined}
+            className={[
+              'group relative overflow-hidden rounded-[1.1rem] px-4 py-2.5 text-[13px] font-black',
+              'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300',
+              active
+                ? 'bg-orange-50 text-[#f97316] shadow-sm ring-1 ring-orange-100'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-[#111827]',
+            ].join(' ')}
+          >
+            <span className="relative z-10">{item.label}</span>
+            {active && (
+              <motion.span
+                layoutId="marketing-active-nav"
+                className="absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-[#f97316]"
+                transition={springTransition}
+              />
+            )}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+
+function MobileMenu({ isOpen, closeMenu, isActivePath }) {
+  const reduceMotion = useReducedMotion()
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.button
+            type="button"
+            aria-label="Fechar menu"
+            onClick={closeMenu}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-40 bg-[#111827]/35 backdrop-blur-[4px] lg:hidden"
+          />
+
+          <motion.aside
+            initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: easeOut }}
+            className="fixed left-2 right-2 top-[5rem] z-50 min-[390px]:top-[5.5rem] sm:left-4 sm:right-4 sm:top-[6rem] lg:hidden"
+          >
+            <div className="mx-auto max-w-md overflow-hidden rounded-[1.8rem] border border-white/75 bg-white/96 p-2 shadow-[0_26px_78px_rgba(15,23,42,.22)] backdrop-blur-2xl ring-1 ring-orange-100/70">
+              <div className="rounded-[1.55rem] bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3">
+                <div className="flex items-center justify-between gap-3 px-1 pb-3">
+                  <Logo compact />
+                  <button
+                    type="button"
+                    onClick={closeMenu}
+                    className="grid h-10 w-10 place-items-center rounded-2xl border border-orange-100 bg-white text-gray-700 shadow-sm transition active:scale-95"
+                    aria-label="Fechar menu"
+                  >
+                    <FiX size={20} />
+                  </button>
+                </div>
+
+                <motion.nav
+                  initial="closed"
+                  animate="open"
+                  exit="closed"
+                  variants={{
+                    open: { transition: { staggerChildren: 0.04, delayChildren: 0.03 } },
+                    closed: { transition: { staggerChildren: 0.025, staggerDirection: -1 } },
+                  }}
+                  className="grid gap-2"
+                >
+                  {navLinks.map((item) => {
+                    const active = isActivePath(item.to)
+                    return (
+                      <motion.div
+                        key={item.label}
+                        variants={{
+                          open: { opacity: 1, y: 0, scale: 1 },
+                          closed: { opacity: 0, y: -8, scale: 0.98 },
+                        }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                      >
+                        <Link
+                          to={item.to}
+                          onClick={closeMenu}
+                          aria-current={active ? 'page' : undefined}
+                          className={[
+                            'flex items-center justify-between rounded-[1.2rem] border px-4 py-3 text-sm font-black transition active:scale-[0.99]',
+                            active
+                              ? 'border-orange-200 bg-white text-[#f97316] shadow-sm'
+                              : 'border-transparent bg-white/55 text-gray-700 hover:border-orange-100 hover:bg-white',
+                          ].join(' ')}
+                        >
+                          {item.label}
+                          <FiArrowRight
+                            size={16}
+                            className={[
+                              'transition-transform',
+                              active ? 'translate-x-0 text-[#f97316]' : 'text-gray-400',
+                            ].join(' ')}
+                          />
+                        </Link>
+                      </motion.div>
+                    )
+                  })}
+                </motion.nav>
+
+                <div className="mt-3 grid gap-2 border-t border-orange-100/80 pt-3">
+                  <BtnCriarLoja onClick={closeMenu} className="w-full" size="sm" />
+                  <Link
+                    to="/contato"
+                    onClick={closeMenu}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[1.2rem] border border-orange-100 bg-white text-[13px] font-black text-gray-700 shadow-sm transition active:scale-[0.98]"
+                  >
+                    <FiMessageCircle size={15} className="text-[#f97316]" />
+                    Falar com o PratoBy
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  )
+}
+
+function FooterLink({ item, isActivePath }) {
+  const active = isActivePath(item.to)
+  return (
+    <Link
+      to={item.to}
+      aria-current={active ? 'page' : undefined}
+      className={[
+        'inline-flex w-fit rounded-full px-0 py-1 text-sm font-bold transition-colors',
+        active ? 'text-orange-300' : 'text-white/60 hover:text-white',
+      ].join(' ')}
+    >
+      {item.label}
+    </Link>
+  )
+}
+
 export default function MarketingLayout({ children }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const location = useLocation()
+  const prefersReducedMotion = useReducedMotion()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   function isActivePath(path) {
     if (path === '/') return location.pathname === '/'
     return location.pathname === path || location.pathname.startsWith(`${path}/`)
   }
 
+  useEffect(() => {
+    setIsMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    if (!isMenuOpen) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isMenuOpen])
+
+  useEffect(() => {
+    if (!isMenuOpen || typeof window === 'undefined') return undefined
+
+    function onKeyDown(event) {
+      if (event.key === 'Escape') setIsMenuOpen(false)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMenuOpen])
+
+  const currentYear = useMemo(() => new Date().getFullYear(), [])
+
   return (
-    <main className="min-h-screen bg-white pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316]">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,237,213,.82),transparent_31rem),linear-gradient(180deg,#fff_0%,#fffaf5_54%,#fff_100%)] pt-[5.65rem] text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] min-[390px]:pt-[6.05rem] sm:pt-[6.4rem]">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-full focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-black focus:text-[#f97316] focus:shadow-xl"
+      >
+        Pular para o conteúdo
+      </a>
 
-      {/* ── HEADER ────────────────────────────────────────────── */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
-        {/* linha laranja no rodapé do header */}
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden">
-          <span className="block h-full w-full rounded-full bg-[#f97316]" />
-        </span>
+      <header className="fixed inset-x-0 top-0 z-50 px-2 pt-2 sm:px-4 sm:pt-3">
+        <div className="mx-auto max-w-7xl">
+          <div className="relative overflow-visible rounded-[1.45rem] border border-white/80 bg-white/[0.94] shadow-[0_12px_34px_rgba(15,23,42,.08)] ring-1 ring-orange-100/60 backdrop-blur-2xl sm:rounded-[1.9rem] sm:bg-white/90 sm:shadow-[0_18px_55px_rgba(15,23,42,.09)]">
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-orange-200 to-transparent sm:inset-x-6" />
+            <div className="pointer-events-none absolute -bottom-9 left-8 hidden h-16 w-48 rounded-full bg-orange-100/50 blur-3xl sm:block" />
 
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="shrink-0" aria-label="Ir para início">
-            <Logo />
-          </Link>
+            <div className="flex h-[4.05rem] items-center justify-between gap-2 px-2.5 min-[390px]:h-[4.55rem] min-[390px]:px-3 sm:h-[4.85rem] sm:gap-3 sm:px-4 lg:px-5">
+              <Link
+                to="/"
+                className="min-w-0 flex-1 rounded-2xl transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 lg:flex-none"
+                aria-label="Ir para início"
+              >
+                <Logo mobile />
+              </Link>
 
-          {/* Nav desktop */}
-          <nav className="hidden items-center gap-1 lg:flex">
-            {navLinks.map((item) => {
-              const active = isActivePath(item.to)
-              return (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  className={`group relative rounded-full px-4 py-2 text-sm font-black transition-all duration-200 ${
-                    active
-                      ? 'bg-orange-50 text-[#f97316] shadow-sm ring-1 ring-orange-100'
-                      : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827]'
-                  }`}
+              <DesktopNav isActivePath={isActivePath} />
+
+              <div className="hidden items-center gap-2.5 lg:flex">
+                <BtnEntrar />
+                <BtnCriarLoja />
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5 lg:hidden">
+                <BtnEntrar className="h-10 rounded-[1.1rem] px-3 text-[12px] shadow-sm min-[390px]:px-4 sm:h-11 sm:px-5" />
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen((current) => !current)}
+                  className="grid h-10 w-10 place-items-center rounded-[1.1rem] border border-gray-200/70 bg-white text-[#111827] shadow-sm transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 sm:h-11 sm:w-11 sm:rounded-[1.2rem]"
+                  aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+                  aria-expanded={isMenuOpen}
                 >
-                  {item.label}
-                  {active && (
-                    <span className="absolute inset-x-4 -bottom-1 h-[2px] rounded-full bg-[#f97316]" />
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* CTAs desktop */}
-          <div className="hidden items-center gap-2.5 md:flex">
-            <BtnEntrar />
-            <BtnCriarLoja />
-          </div>
-
-          {/* Mobile: entrar + hamburguer */}
-          <div className="flex items-center gap-2 md:hidden">
-            <BtnEntrar className="h-11 px-4 text-sm" />
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((c) => !c)}
-              className="flex h-11 w-11 items-center justify-center rounded-[1.25rem] bg-gray-50 text-[#111827] ring-1 ring-gray-100 transition active:scale-95"
-              aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
-              aria-expanded={isMenuOpen}
-            >
-              {isMenuOpen ? <FiX size={22} /> : <FiMenu size={22} />}
-            </button>
+                  {isMenuOpen ? <FiX size={22} /> : <FiMenu size={22} />}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Menu mobile */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-x-0 top-full border-b border-gray-100 bg-white/95 p-4 shadow-2xl shadow-gray-200/70 backdrop-blur-xl md:hidden"
-            >
-              <motion.div
-                initial="closed"
-                animate="open"
-                exit="closed"
-                variants={{
-                  open: { transition: { staggerChildren: 0.045, delayChildren: 0.04 } },
-                  closed: { transition: { staggerChildren: 0.025, staggerDirection: -1 } },
-                }}
-                className="grid gap-2 rounded-[1.75rem] border border-gray-100 bg-[#fafafa] p-2 shadow-sm"
-              >
-                {navLinks.map((item) => {
-                  const active = isActivePath(item.to)
-                  return (
-                    <motion.div
-                      key={item.label}
-                      variants={{
-                        open: { opacity: 1, y: 0, scale: 1 },
-                        closed: { opacity: 0, y: -8, scale: 0.98 },
-                      }}
-                      transition={{ duration: 0.2, ease: 'easeOut' }}
-                    >
-                      <Link
-                        to={item.to}
-                        onClick={() => setIsMenuOpen(false)}
-                        className={`block rounded-[1.25rem] px-4 py-3 text-center text-sm font-black transition active:scale-[0.98] ${
-                          active
-                            ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100'
-                            : 'bg-white text-[#111827] shadow-sm ring-1 ring-gray-100 hover:bg-orange-50 hover:text-[#f97316]'
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    </motion.div>
-                  )
-                })}
-
-                <motion.div
-                  variants={{
-                    open: { opacity: 1, y: 0, scale: 1 },
-                    closed: { opacity: 0, y: -8, scale: 0.98 },
-                  }}
-                  transition={{ duration: 0.2, ease: 'easeOut' }}
-                >
-                  <BtnCriarLoja
-                    className="mt-1 w-full justify-center rounded-[1.25rem]"
-                    onClick={() => setIsMenuOpen(false)}
-                    size="sm"
-                  />
-                </motion.div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <MobileMenu
+          isOpen={isMenuOpen}
+          closeMenu={() => setIsMenuOpen(false)}
+          isActivePath={isActivePath}
+        />
       </header>
 
-      {/* ── CONTEÚDO ──────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
-        <motion.div
+        <motion.main
+          id="conteudo"
           key={location.pathname}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="relative z-10 flex-1 outline-none"
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 18, scale: 0.992, filter: 'blur(6px)' }}
+          animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.996, filter: 'blur(4px)' }}
+          transition={{
+            duration: 0.34,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          tabIndex={-1}
         >
           {children}
-        </motion.div>
+        </motion.main>
       </AnimatePresence>
 
-      {/* ── FOOTER PREMIUM COMPACTO ───────────────────────────── */}
-      <footer className="border-t border-gray-100 bg-white">
-        {/* faixa laranja no topo */}
-        <div className="h-[3px] w-full bg-gradient-to-r from-orange-300 via-[#f97316] to-orange-400" />
+      <footer className="relative overflow-hidden bg-[#0f172a] text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_0%,rgba(249,115,22,.22),transparent_28rem),radial-gradient(circle_at_90%_15%,rgba(251,146,60,.16),transparent_26rem)]" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-orange-400/70 to-transparent" />
 
-        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-          <div
-            className="rounded-[1.75rem] border border-gray-100 px-5 py-5 sm:px-7"
-            style={{
-              background:
-                'linear-gradient(135deg, #fafafa 0%, #fff7f0 50%, #fafafa 100%)',
-              boxShadow:
-                '0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(249,115,22,.06)',
-            }}
-          >
-            {/* linha única no desktop, coluna no mobile */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-              {/* Logo */}
+        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+          <div className="grid gap-8 lg:grid-cols-[1.08fr_.92fr] lg:items-start">
+            <div className="max-w-xl">
               <Link
                 to="/"
                 aria-label="Ir para início"
-                className="shrink-0 self-start transition-opacity hover:opacity-80 sm:self-auto"
+                className="inline-flex rounded-2xl transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]"
               >
-                <Logo compact />
+                <Logo compact inverted />
               </Link>
 
-              {/* Links de navegação — centro */}
-              <nav className="flex flex-wrap gap-x-1 gap-y-1.5 sm:justify-center">
-                {footerLinks.map((item) => (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    className={`rounded-full px-3 py-1 text-[12px] font-bold transition-all duration-150 ${
-                      isActivePath(item.to)
-                        ? 'bg-orange-50 text-[#f97316] ring-1 ring-orange-100'
-                        : 'text-gray-500 hover:bg-gray-100 hover:text-[#111827]'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </nav>
+              <p className="mt-5 max-w-lg text-sm leading-7 text-white/60">
+                Cardápio digital, pedidos online, QR Code e delivery próprio para restaurantes, lanchonetes e confeitarias venderem sem comissão do PratoBy por pedido.
+              </p>
 
-              {/* Lado direito: redes + exemplo */}
-              <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                {/* redes sociais */}
-                {socialLinks.map((item) => {
+              <div className="mt-6 flex flex-wrap gap-2.5">
+                {trustHighlights.map((item) => {
                   const Icon = item.icon
                   return (
-                    <a
+                    <span
                       key={item.label}
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={item.label}
-                      className={[
-                        'inline-flex h-8 w-8 items-center justify-center rounded-full',
-                        'border border-gray-200 bg-white text-gray-400',
-                        'shadow-[0_1px_2px_rgba(0,0,0,.05)]',
-                        'transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md',
-                        item.hoverClass,
-                      ].join(' ')}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-white/80 shadow-sm"
                     >
-                      <Icon size={14} />
-                    </a>
+                      <Icon size={14} className="text-orange-300" />
+                      {item.label}
+                    </span>
                   )
                 })}
+              </div>
 
-                {/* divisor */}
-                <span className="mx-0.5 h-5 w-px bg-gray-200" />
-
-                {/* ver exemplo */}
-                <a
-                  href="https://pratoby.com/capivaras-lanches"
-                  target="_blank"
-                  rel="noreferrer"
-                  className={[
-                    'group inline-flex h-8 items-center gap-1.5 rounded-full',
-                    'border border-orange-200/80 bg-white px-3',
-                    'text-[11px] font-black text-[#f97316]',
-                    'shadow-[0_1px_2px_rgba(249,115,22,.1),0_0_0_1px_rgba(249,115,22,.08)]',
-                    'transition-all duration-150 hover:-translate-y-0.5',
-                    'hover:border-orange-300 hover:bg-orange-50',
-                    'hover:shadow-[0_3px_8px_rgba(249,115,22,.2)]',
-                  ].join(' ')}
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <BtnCriarLoja className="w-full shadow-[0_16px_36px_rgba(249,115,22,.38)] sm:w-auto" />
+                <Link
+                  to="/exemplos"
+                  className="group inline-flex h-12 w-full items-center justify-center gap-2 rounded-[1.25rem] border border-white/10 bg-white/[0.06] px-6 text-sm font-black text-white/80 transition hover:-translate-y-[2px] hover:bg-white/[0.1] hover:text-white active:translate-y-0 active:scale-[0.98] sm:w-auto"
                 >
-                  Ver exemplo
-                  <FiExternalLink
-                    size={11}
-                    className="transition-transform duration-150 group-hover:translate-x-px"
-                  />
-                </a>
+                  Ver exemplos
+                  <FiExternalLink size={15} className="transition-transform group-hover:translate-x-1" />
+                </Link>
               </div>
             </div>
 
-            {/* separador + copyright */}
-            <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-3.5">
-              {/* ponto laranja decorativo */}
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#f97316]"
-                aria-hidden="true"
-              />
-              <p className="text-[11px] font-semibold text-gray-400">
-                © {new Date().getFullYear()} PratoBy. Todos os direitos reservados.
-              </p>
-              <span className="ml-auto text-[11px] font-semibold text-gray-300">
-                Feito com 🧡 no Brasil
-              </span>
+            <div className="grid gap-6 sm:grid-cols-3">
+              {footerGroups.map((group) => (
+                <div key={group.title}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-300">
+                    {group.title}
+                  </p>
+                  <nav className="mt-3 grid gap-1.5">
+                    {group.links.map((item) => (
+                      <FooterLink key={item.label} item={item} isActivePath={isActivePath} />
+                    ))}
+                  </nav>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-9 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 text-xs font-semibold text-white/40">
+              <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden="true" />
+              <span>© {currentYear} PratoBy. Todos os direitos reservados.</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to="/contato"
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 text-xs font-black text-white/70 transition hover:bg-white/[0.1] hover:text-white"
+              >
+                <FiMessageCircle size={14} className="text-orange-300" />
+                Fale com a gente
+              </Link>
+
+              {socialLinks.map((item) => {
+                const Icon = item.icon
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={item.label}
+                    className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-white/60 transition hover:-translate-y-0.5 hover:bg-white/[0.1] hover:text-white"
+                  >
+                    <Icon size={15} />
+                  </a>
+                )
+              })}
             </div>
           </div>
         </div>
       </footer>
-
-    </main>
+    </div>
   )
 }

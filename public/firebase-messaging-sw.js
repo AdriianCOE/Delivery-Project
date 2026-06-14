@@ -38,8 +38,8 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
       body: isCustomerStatusUpdate
         ? data.body || `Pedido ${orderNumber} foi atualizado.`
         : `Pedido ${orderNumber} aguardando confirmacao`,
-      icon: '/android-chrome-512x512.png',
-      badge: '/favicon.png',
+      icon: '/icons/android-chrome-512x512.png',
+      badge: '/icons/favicon-32x32.png',
       tag: isCustomerStatusUpdate
         ? `pratoby-order-status-${data.orderId || 'unknown'}-${data.status || 'updated'}`
         : `pratoby-new-order-${data.orderId || 'unknown'}`,

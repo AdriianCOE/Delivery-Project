@@ -272,7 +272,7 @@ function BillingFooter() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <img
-            src="/icons/icon-192.png"
+            src="/icons/android-chrome-192x192.png"
             alt="PratoBy"
             className="h-10 w-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-orange-600/15"
           />

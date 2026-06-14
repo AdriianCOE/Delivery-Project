@@ -222,8 +222,8 @@ function showForegroundFcmBrowserNotification(payload, options = {}) {
 
   const notification = new Notification(title, {
     body,
-    icon: '/android-chrome-512x512.png',
-    badge: '/favicon.png',
+    icon: '/icons/android-chrome-512x512.png',
+    badge: '/icons/favicon-32x32.png',
     tag: getFcmNotificationTag({ type, orderId, status: data.status }),
     renotify: true,
     data: {

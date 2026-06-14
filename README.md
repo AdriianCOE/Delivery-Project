@@ -186,16 +186,13 @@ functions/shared/phone.js
 Assets públicos:
 
 ```txt
-public/android-chrome-512x512.png
-public/bell.mp3
+public/.well-known/security.txt
 public/confirmation.mp3
 public/favicon.ico
-public/favicon.png
+public/firebase-messaging-sw.js
+public/humans.txt
 public/icons/*
-public/notransparent.png
 public/og/pratoby-cover.png
-public/og/pratoby-logo.png
-public/og/pratoby-mark.png
 public/robots.txt
 public/site.webmanifest
 public/sitemap.xml

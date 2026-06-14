@@ -406,7 +406,7 @@ function ProductCard({
       className={`
         group relative overflow-hidden rounded-[1.8rem] border bg-white p-3.5 shadow-sm ring-1 ring-black/[0.02] sm:p-4
         transition-all duration-300 flex flex-col
-        h-full min-h-[224px] sm:min-h-[244px] lg:h-[264px]
+        h-full min-h-[246px] sm:min-h-[268px] lg:h-[288px]
         ${
           canAdd
             ? 'cursor-pointer border-gray-100 hover:-translate-y-1 hover:border-orange-100 hover:shadow-2xl hover:shadow-orange-100/40 active:scale-[0.995]'
@@ -425,7 +425,7 @@ function ProductCard({
         <div className="flex min-w-0 flex-1 flex-col py-1">
           
           {/* BLOCO DO TOPO (Tags, Título e Descrição) */}
-          <div>
+          <div className="min-h-[148px] sm:min-h-[166px]">
             <div className="flex min-h-[2rem] max-h-[4.75rem] flex-wrap items-center gap-1.5 overflow-hidden">
               {product?.isPopular && canAdd && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 ring-1 ring-amber-100">

@@ -1725,13 +1725,13 @@ function getTrackingFooterStore(order, store) {
       store?.logoUrl ||
       store?.logo ||
       store?.imageUrl ||
-      '/icons/icon-192.png',
+      '/icons/android-chrome-192x192.png',
 
     logo:
       logoUrl ||
       store?.logo ||
       store?.logoUrl ||
-      '/icons/icon-192.png',
+      '/icons/android-chrome-192x192.png',
 
     whatsapp:
       whatsapp ||

@@ -45,7 +45,7 @@ export function showNewOrderBrowserNotification(order, options = {}) {
   const orderId = String(options.orderId || order?.firestoreId || order?.id || '').trim()
   const notification = new Notification('Novo pedido recebido 🍽️', {
     body: options.body || getNewOrderNotificationBody(order, orderId),
-    icon: '/icons/icon-192.png',
+    icon: '/icons/android-chrome-192x192.png',
     badge: '/icons/favicon-32x32.png',
     tag: `pratoby-new-order-${orderId || 'unknown'}`,
     requireInteraction: true,

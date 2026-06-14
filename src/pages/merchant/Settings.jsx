@@ -79,6 +79,8 @@ const DEFAULT_SCHEDULING_WEEKLY_WINDOWS = {
   sunday: [],
 }
 
+const MAX_SCHEDULE_DAYS_AHEAD = 365
+
 const DEFAULT_STORE_SCHEDULING = {
   enabled: false,
   minLeadMinutes: 60,
@@ -332,7 +334,7 @@ function normalizeStoreScheduling(value) {
   return {
     enabled: raw.enabled === true,
     minLeadMinutes: toBoundedInteger(raw.minLeadMinutes, defaults.minLeadMinutes, 0, 525600),
-    maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, defaults.maxDaysAhead, 0, 365),
+    maxDaysAhead: toBoundedInteger(raw.maxDaysAhead, defaults.maxDaysAhead, 0, MAX_SCHEDULE_DAYS_AHEAD),
     slotIntervalMinutes: [10, 15, 30, 60].includes(Number(raw.slotIntervalMinutes))
       ? Number(raw.slotIntervalMinutes)
       : defaults.slotIntervalMinutes,
@@ -1154,6 +1156,8 @@ const knownStoreIdsKey = useMemo(() => {
     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
     [form.scheduling?.minLeadMinutes]
   )
+  const schedulingMaxDaysAheadExceeded =
+    Number(form.scheduling?.maxDaysAhead || 0) > MAX_SCHEDULE_DAYS_AHEAD
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -2126,10 +2130,18 @@ const knownStoreIdsKey = useMemo(() => {
                       label="Aceitar até quantos dias no futuro?"
                       type="number"
                       min="1"
-                      max="365"
+                      max={MAX_SCHEDULE_DAYS_AHEAD}
                       value={form.scheduling?.maxDaysAhead ?? 14}
                       onChange={(event) => updateScheduling('maxDaysAhead', Number(event.target.value))}
                     />
+                    <div className="-mt-2 text-xs font-semibold text-gray-500 dark:text-zinc-400">
+                      Máximo de {MAX_SCHEDULE_DAYS_AHEAD} dias à frente permitido.
+                      {schedulingMaxDaysAheadExceeded && (
+                        <span className="mt-1 block font-black text-amber-700 dark:text-amber-300">
+                          Valor limitado a {MAX_SCHEDULE_DAYS_AHEAD} dias.
+                        </span>
+                      )}
+                    </div>
 
                     <Select
                       label="Intervalo dos horários"

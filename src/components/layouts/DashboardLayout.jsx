@@ -11,6 +11,7 @@ import { auth } from '../../services/firebaseAuth'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
 import ProfilePanel from '../merchant/ProfilePanel'
+import NotificationsOnboardingBanner from '../merchant/NotificationsOnboardingBanner'
 import { DashboardPageSkeleton } from '../shared/Skeletons'
 import DashboardNotificationBell from '../notifications/DashboardNotificationBell'
 import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
@@ -296,7 +297,7 @@ function PratoByMark({ compact = false, collapsed = false }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <img
-        src="/icons/icon-192.png"
+        src="/icons/android-chrome-192x192.png"
         alt="PratoBy"
         className={cn(
           compact || collapsed ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-3xl',
@@ -662,7 +663,7 @@ function MobileMoreSheet({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3">
                 <img
-                  src="/icons/icon-192.png"
+                  src="/icons/android-chrome-192x192.png"
                   alt="PratoBy"
                   className="h-10 w-10 rounded-2xl shrink-0 object-cover shadow-md shadow-orange-600/10"
                 />
@@ -1775,6 +1776,7 @@ export default function DashboardLayout() {
           <div className="pratoby-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-28 lg:pb-8">
             {/* Trial Banner Global */}
             <DashboardTrialRibbon />
+            <NotificationsOnboardingBanner />
 
             <AnimatePresence mode="wait" initial={false}>
               <motion.div

@@ -5079,12 +5079,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             : undefined
         }
         actions={
-          <>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
             {stores.length > 1 && (
               <select
                 value={selectedStoreId}
                 onChange={(event) => handleSelectStore(event.target.value)}
-                className="h-11 cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-orange-500/10"
+                className="col-span-2 h-10 w-full cursor-pointer rounded-2xl border border-gray-100 bg-white px-4 text-sm font-black text-[#111827] shadow-sm outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-orange-500/10 sm:h-11 sm:w-auto"
               >
                 {stores.map((store) => (
                   <option key={store.id} value={getStoreKeys(store)[0] || store.id}>
@@ -5098,7 +5098,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                 type="button"
                 disabled={storeActionLoading}
                 onClick={handleToggleStoreOpen}
-                className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold shadow-sm ring-1 ring-inset transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold shadow-sm ring-1 ring-inset transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:w-auto sm:px-5 ${
                   selectedStore?.isOpen
                     ? 'bg-red-50 text-red-700 ring-red-200 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/30 dark:hover:bg-red-900/40'
                     : 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/30 dark:hover:bg-emerald-900/40'
@@ -5126,7 +5126,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             <button
               type="button"
               onClick={() => showToast('success', 'Os pedidos já estão sincronizados em tempo real.')}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-5 text-sm font-semibold text-orange-700 shadow-sm transition-all hover:bg-orange-100 active:scale-95 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:hover:bg-orange-500/20"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-sm font-semibold text-orange-700 shadow-sm transition-all hover:bg-orange-100 active:scale-95 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:hover:bg-orange-500/20 sm:h-11 sm:w-auto sm:px-5"
             >
               {/* Indicador luminoso pulsante de "Live/Online" */}
               <span className="relative flex h-2 w-2">
@@ -5142,7 +5142,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                 type="button"
                 id="counter-order-btn"
                 onClick={() => setCounterOrderOpen(true)}
-                className="group relative inline-flex h-11 items-center justify-center gap-3 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-lg hover:shadow-indigo-600/30 active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:from-indigo-500 dark:to-violet-500 dark:shadow-none dark:focus-visible:ring-offset-zinc-900"
+                className="group relative col-span-2 inline-flex h-10 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-lg hover:shadow-indigo-600/30 active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:from-indigo-500 dark:to-violet-500 dark:shadow-none dark:focus-visible:ring-offset-zinc-900 sm:h-11 sm:w-auto sm:px-5"
               >
                 {/* Camada invisível que ilumina o botão no hover (efeito premium) */}
                 <span className="absolute inset-0 w-full h-full bg-white/0 transition-colors duration-200 group-hover:bg-white/10" />
@@ -5159,7 +5159,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                 </span>
               </button>
             )}
-          </>
+          </div>
         }
       />
 

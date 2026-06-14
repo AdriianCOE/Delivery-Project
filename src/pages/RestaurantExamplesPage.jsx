@@ -1,197 +1,180 @@
-import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
+import { motion } from 'motion/react'
 import SEO from '../components/seo/SEO'
+import MarketingLayout from '../pages/MarketingLayout'
 import {
   FiArrowRight,
   FiCheck,
   FiClock,
+  FiExternalLink,
+  FiGift,
   FiMapPin,
   FiMessageCircle,
   FiShoppingBag,
   FiStar,
+  FiTrendingUp,
   FiZap,
-  FiMenu,
-  FiX
 } from 'react-icons/fi'
-
-const navLinks = [
-  { label: 'Início', to: '/' },
-  { label: 'Sobre', to: '/sobre' },
-  { label: 'Planos', to: '/planos' },
-  { label: 'Contato', to: '/contato' },
-]
 
 const examples = [
   {
-    name: 'Pizzaria Bella Massa',
-    type: 'Pizzaria',
-    emoji: '🍕',
-    description:
-      'Modelo ideal para pizzarias com tamanhos, sabores, bordas recheadas, adicionais e promoções.',
-    items: ['Pizza Calabresa', 'Meio a Meio', 'Borda Recheada'],
-    features: ['Tamanhos', 'Sabores', 'Bordas', 'Combos'],
-    averageTicket: 'R$ 58,90',
-    deliveryTime: '35-50 min',
-    slug: '/la-bella-pizza',
-    badge: 'Demo ativa',
-  },
-  {
-    name: 'Burger Prime',
-    type: 'Hamburgueria',
+    name: 'Capivaras Lanches',
+    type: 'Lanchonete / fast-food',
     emoji: '🍔',
     description:
-      'Perfeito para hambúrgueres artesanais com adicionais, combos, molhos e opções extras.',
-    items: ['Smash Duplo', 'Combo Bacon', 'Batata Cheddar'],
-    features: ['Adicionais', 'Combos', 'Molhos', 'Bebidas'],
-    averageTicket: 'R$ 42,90',
-    deliveryTime: '25-40 min',
-    slug: '/exemplos',
-    badge: 'Modelo',
+      'Uma loja demo para operação rápida: combos, adicionais, entrega, retirada e acompanhamento do pedido em tempo real.',
+    items: ['Capivara Burger', 'Combo Família', 'Batata Rústica'],
+    features: ['Combos', 'Adicionais', 'Entrega e retirada', 'Status do pedido'],
+    averageTicket: 'R$ 39,90',
+    deliveryTime: '30-45 min',
+    slug: '/capivaras-lanches',
+    badge: 'Demo de lanchonete',
+    highlight: 'Pedidos rápidos',
+    gradient: 'from-orange-500 via-amber-500 to-yellow-400',
+    softGradient: 'from-orange-50 via-amber-50 to-white',
   },
   {
-    name: 'Açaí Tropical',
-    type: 'Açaiteria',
-    emoji: '🍧',
+    name: 'Doce Capivara Confeitaria',
+    type: 'Confeitaria',
+    emoji: '🧁',
     description:
-      'Modelo para lojas com tamanhos, complementos, frutas, cremes, coberturas e adicionais.',
-    items: ['Açaí 500ml', 'Cupuaçu', 'Monte seu copo'],
-    features: ['Tamanhos', 'Frutas', 'Cremes', 'Extras'],
-    averageTicket: 'R$ 27,90',
-    deliveryTime: '20-35 min',
-    slug: '/exemplos',
-    badge: 'Modelo',
-  },
-  {
-    name: 'Sushi House',
-    type: 'Japonês',
-    emoji: '🍣',
-    description:
-      'Cardápio visual para combinados, temakis, hot rolls, bebidas e promoções especiais.',
-    items: ['Combo 32 peças', 'Temaki Salmão', 'Hot Roll'],
-    features: ['Combos', 'Temakis', 'Promoções', 'Bebidas'],
-    averageTicket: 'R$ 74,90',
-    deliveryTime: '40-60 min',
-    slug: '/exemplos',
-    badge: 'Modelo',
+      'Um exemplo pensado para bolos, doces, sobremesas e kits festa, com foco em encomendas agendadas e atendimento organizado.',
+    items: ['Bolo de Chocolate', 'Kit Festa 20 pessoas', 'Brownie Gourmet'],
+    features: ['Agendamento', 'Pix antecipado', 'Kits festa', 'Encomendas'],
+    averageTicket: 'R$ 89,90',
+    deliveryTime: 'Sob encomenda',
+    slug: '/doce-capivara-confeitaria',
+    badge: 'Demo de confeitaria',
+    highlight: 'Encomendas agendadas',
+    gradient: 'from-[#D9773F] via-[#F4A6A6] to-[#FFF4E6]',
+    softGradient: 'from-[#fff4e6] via-[#fff8f1] to-white',
   },
 ]
 
 const benefits = [
-  'Visual mobile-first',
-  'Link próprio da loja',
-  'Pedido organizado no WhatsApp',
-  'Sem comissão por pedido',
+  'Loja pública com link próprio',
+  'Pedido organizado no painel',
+  'Sem comissão do PratoBy por pedido',
+  'Visual pronto para mobile',
 ]
 
 const steps = [
   {
-    title: 'Escolha o modelo',
-    description: 'Pizzaria, hambúrguer, açaí, japonês ou qualquer outro tipo de operação.',
+    icon: FiShoppingBag,
+    title: 'Veja a experiência do cliente',
+    description:
+      'Abra as lojas demo como se fosse comprar e veja categorias, produtos, adicionais, carrinho e status do pedido.',
   },
   {
-    title: 'Personalize a loja',
-    description: 'Ajuste cores, categorias, produtos, adicionais, entrega, horários e cupons.',
+    icon: FiGift,
+    title: 'Compare dois tipos de operação',
+    description:
+      'Capivaras Lanches mostra pedidos rápidos. Doce Capivara mostra encomendas e produtos mais planejados.',
   },
   {
-    title: 'Comece a vender',
-    description: 'Divulgue o link no Instagram, WhatsApp, Google Maps e cartão de visita.',
+    icon: FiTrendingUp,
+    title: 'Imagine sua loja no mesmo formato',
+    description:
+      'Depois é só trocar nome, logo, cores, produtos, horários, taxas, pagamentos e regras de atendimento.',
   },
 ]
 
-function Logo() {
-  return (
-    <div className="flex items-center gap-3">
-      <img
-        src="/icons/icon-192.png"
-        alt="PratoBy"
-        className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
-      />
+const fadeUp = {
+  hidden: { opacity: 0, y: 22 },
+  visible: { opacity: 1, y: 0 },
+}
 
-      <div className="leading-none">
-        <p className="text-2xl font-black tracking-tighter text-[#111827]">
-          Prato<span className="text-[#f97316]">by</span>
-        </p>
-        <p className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
-          Cardápio digital e delivery
-        </p>
+function PreviewItem({ item, index }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-gray-100/70"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-xs font-black text-[#f97316]">
+          {index + 1}
+        </span>
+
+        <p className="truncate text-sm font-black text-[#111827]">{item}</p>
       </div>
-    </div>
+
+      <span className="shrink-0 text-xs font-black text-[#f97316]">Ver</span>
+    </motion.div>
   )
 }
 
-function ExampleCard({ example }) {
+function ExampleCard({ example, index }) {
   return (
-    <article className="group overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl">
-      <div className="relative overflow-hidden border-b border-gray-100 bg-white p-8">
-        <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-orange-100/70 blur-3xl" />
-        <div className="absolute -bottom-20 left-10 h-40 w-40 rounded-full bg-orange-50 blur-3xl" />
+    <motion.article
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.22 }}
+      variants={fadeUp}
+      transition={{ duration: 0.5, delay: index * 0.08 }}
+      className="group relative overflow-hidden rounded-[2.25rem] border border-gray-100 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_90px_rgba(249,115,22,0.16)]"
+    >
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${example.gradient}`} />
+
+      <div className={`relative overflow-hidden bg-gradient-to-br ${example.softGradient} p-6 sm:p-8`}>
+        <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-white/70 blur-3xl" />
+        <div className="absolute -bottom-24 left-10 h-52 w-52 rounded-full bg-orange-200/30 blur-3xl" />
 
         <div className="relative flex items-start justify-between gap-5">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-[#f97316]">
+          <div className="min-w-0">
+            <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/80 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm backdrop-blur">
               <FiShoppingBag size={13} />
               {example.type}
             </span>
 
-            <h2 className="mt-5 text-2xl font-black tracking-tight text-[#111827]">
+            <h2 className="mt-5 text-2xl font-black tracking-tight text-[#111827] sm:text-3xl">
               {example.name}
             </h2>
 
-            <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-[#6b7280]">
+            <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-[#4b5563]">
               {example.description}
             </p>
           </div>
 
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-[#f9fafb] text-4xl shadow-sm ring-1 ring-gray-100 transition-transform duration-300 group-hover:scale-110">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-white text-4xl shadow-sm ring-1 ring-gray-100 transition-transform duration-300 group-hover:scale-110 sm:h-20 sm:w-20 sm:text-5xl">
             {example.emoji}
           </div>
         </div>
 
-        <div className="relative mt-7 rounded-[2rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-inner">
-          <div className="flex items-center justify-between">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.35 }}
+          transition={{ staggerChildren: 0.06, delayChildren: 0.06 }}
+          className="relative mt-7 rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-inner backdrop-blur"
+        >
+          <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-[#6b7280]">
-                Prévia do cardápio
+                Prévia da loja
               </p>
               <p className="mt-1 text-sm font-black text-[#111827]">
                 {example.badge}
               </p>
             </div>
 
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#16a34a] shadow-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-black text-[#16a34a] shadow-sm ring-1 ring-emerald-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
               Aberto
             </span>
           </div>
 
           <div className="mt-4 space-y-2">
-            {example.items.map((item, index) => (
-              <div
-                key={item}
-                className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-50 text-xs font-black text-[#f97316]">
-                    {index + 1}
-                  </span>
-
-                  <p className="text-sm font-black text-[#111827]">
-                    {item}
-                  </p>
-                </div>
-
-                <span className="text-xs font-black text-[#6b7280]">
-                  Ver
-                </span>
-              </div>
+            {example.items.map((item, itemIndex) => (
+              <PreviewItem key={item} item={item} index={itemIndex} />
             ))}
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      <div className="p-8">
+      <div className="p-6 sm:p-8">
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
+            <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
               <FiStar className="text-[#f97316]" />
               Ticket médio
             </div>
@@ -202,9 +185,9 @@ function ExampleCard({ example }) {
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#6b7280]">
+            <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
               <FiClock className="text-[#f97316]" />
-              Entrega
+              Atendimento
             </div>
 
             <p className="mt-2 text-xl font-black text-[#111827]">
@@ -215,14 +198,14 @@ function ExampleCard({ example }) {
 
         <div className="mt-6">
           <p className="text-sm font-black text-[#111827]">
-            Recursos desse modelo
+            O que esse exemplo demonstra
           </p>
 
           <div className="mt-3 flex flex-wrap gap-2">
             {example.features.map((feature) => (
               <span
                 key={feature}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-100 bg-white px-3 py-1.5 text-xs font-black text-[#6b7280] shadow-sm"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-100 bg-white px-3 py-1.5 text-xs font-black text-[#4b5563] shadow-sm"
               >
                 <FiCheck className="text-[#f97316]" size={13} />
                 {feature}
@@ -236,308 +219,206 @@ function ExampleCard({ example }) {
             to={example.slug}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[#111827] px-6 py-4 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
           >
-            Ver exemplo
-            <FiArrowRight size={18} />
+            Abrir exemplo
+            <FiExternalLink size={17} />
           </Link>
 
           <Link
             to="/contato"
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-4 text-sm font-black text-[#111827] transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:text-[#f97316]"
           >
-            Quero esse
+            Quero uma parecida
           </Link>
         </div>
       </div>
-    </article>
+    </motion.article>
+  )
+}
+
+function StepCard({ step, index }) {
+  const Icon = step.icon
+
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.32 }}
+      variants={fadeUp}
+      transition={{ duration: 0.45, delay: index * 0.08 }}
+      className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10"
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+        <Icon size={22} />
+      </div>
+      <h3 className="mt-5 text-lg font-black text-[#111827]">{step.title}</h3>
+      <p className="mt-3 text-sm font-semibold leading-6 text-[#6b7280]">
+        {step.description}
+      </p>
+    </motion.div>
   )
 }
 
 export default function RestaurantExamplesPage() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const location = useLocation()
-
   return (
     <>
       <SEO
-        title="Exemplos de cardápio digital | PratoBy"
-        description="Veja modelos de cardápio digital para pizzaria, hamburgueria, açaiteria, japonês e lojas de delivery no PratoBy."
+        title="Exemplos de lojas PratoBy | Cardápio digital na prática"
+        description="Veja dois exemplos oficiais de lojas no PratoBy: Capivaras Lanches para pedidos rápidos e Doce Capivara Confeitaria para encomendas agendadas."
         path="/exemplos"
       />
 
-      <main className="min-h-screen overflow-x-hidden bg-[#f9fafb] pt-[76px] text-[#111827] selection:bg-orange-100 selection:text-[#f97316] antialiased">
-      
-      {/* NAVBAR PADRONIZADO */}
-      <nav className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/90 shadow-sm backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <Link to="/" className="shrink-0" aria-label="Ir para início">
-            <Logo />
-          </Link>
+      <MarketingLayout>
+        <main className="overflow-hidden bg-[#f9fafb] text-[#111827]">
+          <section className="relative overflow-hidden border-b border-gray-100 bg-white py-14 sm:py-20">
+            <div className="absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100/70 blur-3xl" />
+            <div className="absolute -right-24 -top-20 h-72 w-72 rounded-full bg-amber-100/80 blur-3xl" />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-orange-200 to-transparent" />
 
-          <div className="hidden items-center gap-2 lg:flex">
-            {navLinks.map((item) => {
-              const isActive = location.pathname === item.to
-              return (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  className={`rounded-full px-4 py-2 text-sm font-bold transition-all ${
-                    isActive
-                      ? 'bg-orange-50 text-[#f97316]'
-                      : 'text-[#6b7280] hover:bg-gray-50 hover:text-[#111827]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              )
-            })}
-          </div>
-
-          <div className="hidden items-center gap-3 md:flex">
-            <Link
-              to="/login"
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316]"
-            >
-              Entrar
-            </Link>
-
-            <Link
-              to="/dashboard"
-              className="hidden rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:border-orange-100 hover:text-[#f97316] xl:inline-flex"
-            >
-              Painel
-            </Link>
-
-            <Link
-              to="/contato"
-              className="rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-black text-white transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c] hover:shadow-lg hover:shadow-orange-600/20 active:scale-90"
-            >
-              Criar minha loja
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-2 md:hidden">
-            <Link
-              to="/login"
-              className="flex h-11 items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-[#111827] shadow-sm transition active:bg-gray-50"
-            >
-              Entrar
-            </Link>
-
-            <button
-              type="button"
-              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-50 text-[#111827] ring-1 ring-gray-100 transition active:bg-gray-100"
-              onClick={() => setIsMenuOpen((current) => !current)}
-              aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
-            >
-              {isMenuOpen ? <FiX size={23} /> : <FiMenu size={23} />}
-            </button>
-          </div>
-        </div>
-
-        {isMenuOpen && (
-          <div className="absolute inset-x-0 top-full border-b border-gray-100 bg-white p-4 shadow-2xl shadow-gray-200/70 md:hidden">
-            <div className="grid gap-2">
-              {navLinks.map((item) => {
-                const isActive = location.pathname === item.to
-                return (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={`rounded-2xl px-4 py-3 text-center text-sm font-black ${
-                      isActive
-                        ? 'bg-orange-50 text-[#f97316]'
-                        : 'bg-[#f9fafb] text-[#111827]'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-
-              <Link
-                to="/contato"
-                onClick={() => setIsMenuOpen(false)}
-                className="mt-2 rounded-2xl bg-[#f97316] px-4 py-3 text-center text-sm font-black text-white"
+            <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55 }}
+                className="mx-auto max-w-4xl text-center"
               >
-                Criar minha loja
-              </Link>
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* HEADER DA PÁGINA (HERO SECTION) */}
-      <section className="relative overflow-hidden border-b border-gray-100 bg-white py-12 sm:py-20">
-        <div className="absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-100/60 blur-3xl" />
-        <div className="absolute -right-24 -top-20 h-72 w-72 rounded-full bg-orange-50/80 blur-3xl" />
-
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-3xl text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-black text-[#f97316] shadow-sm">
-              <FiZap />
-              Modelos prontos para restaurantes
-            </span>
-
-            <h1 className="mt-6 text-4xl font-black tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
-              Veja como o PratoBy pode ficar na prática.
-            </h1>
-
-            <p className="mt-6 text-lg leading-8 text-[#6b7280]">
-              Exemplos pensados para diferentes tipos de operação: pizzaria,
-              hamburgueria, açaíteria, japonês e qualquer loja que vende por delivery.
-            </p>
-
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              {benefits.map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex items-center gap-2 rounded-full border border-gray-100 bg-[#f9fafb] px-4 py-2 text-sm font-bold text-[#111827] shadow-sm"
-                >
-                  <FiCheck className="text-[#f97316]" size={16} />
-                  {item}
+                <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-black text-[#f97316] shadow-sm">
+                  <FiZap />
+                  Exemplos oficiais do PratoBy
                 </span>
+
+                <h1 className="mt-6 text-4xl font-black tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
+                  Veja duas lojas prontas funcionando na prática.
+                </h1>
+
+                <p className="mx-auto mt-6 max-w-3xl text-lg font-medium leading-8 text-[#4b5563]">
+                  Use a Capivaras Lanches para entender uma operação rápida de delivery e a Doce Capivara Confeitaria para ver encomendas, kits festa e produtos agendados.
+                </p>
+
+                <div className="mt-8 flex flex-wrap justify-center gap-3">
+                  {benefits.map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex items-center gap-2 rounded-full border border-gray-100 bg-[#f9fafb] px-4 py-2 text-sm font-bold text-[#111827] shadow-sm"
+                    >
+                      <FiCheck className="text-[#f97316]" size={16} />
+                      {item}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+                  <a
+                    href="#exemplos"
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
+                  >
+                    Ver exemplos
+                    <FiArrowRight size={18} />
+                  </a>
+
+                  <Link
+                    to="/contato"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-8 py-4 text-sm font-black text-[#111827] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:text-[#f97316]"
+                  >
+                    Quero uma loja assim
+                  </Link>
+                </div>
+              </motion.div>
+            </div>
+          </section>
+
+          <section className="relative py-12 sm:py-16">
+            <div className="mx-auto grid max-w-7xl gap-4 px-4 sm:px-6 md:grid-cols-3 lg:px-8">
+              {steps.map((step, index) => (
+                <StepCard key={step.title} step={step} index={index} />
               ))}
             </div>
+          </section>
 
-            <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link
-                to="/planos"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/30 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
+          <section id="exemplos" className="relative pb-16 sm:pb-24">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.4 }}
+                variants={fadeUp}
+                transition={{ duration: 0.45 }}
+                className="mb-8 flex flex-col gap-4 sm:mb-10 lg:flex-row lg:items-end lg:justify-between"
               >
-                Ver planos
-                <FiArrowRight size={18} />
-              </Link>
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-[#f97316]">
+                    Lojas demo
+                  </p>
+                  <h2 className="mt-3 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                    Escolha um exemplo para abrir.
+                  </h2>
+                </div>
 
-              <Link
-                to="/contato"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-8 py-4 text-sm font-black text-[#111827] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:text-[#f97316]"
-              >
-                Criar minha loja
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+                <p className="max-w-xl text-sm font-semibold leading-6 text-[#6b7280]">
+                  Os exemplos mostram como o PratoBy se adapta a operações diferentes, sem precisar virar marketplace e sem comissão do PratoBy por pedido.
+                </p>
+              </motion.div>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-wide text-[#f97316]">
-              Demonstrações
-            </p>
-
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
-              Modelos por tipo de restaurante
-            </h2>
-          </div>
-
-          <p className="max-w-xl text-sm font-medium leading-6 text-[#6b7280]">
-            Use esses exemplos como base. Depois é só trocar nome, logo, cores,
-            produtos, adicionais, taxas e horários.
-          </p>
-        </div>
-
-        <div className="grid gap-8 lg:grid-cols-2">
-          {examples.map((example) => (
-            <ExampleCard key={example.name} example={example} />
-          ))}
-        </div>
-
-        <div className="mt-16 grid gap-6 lg:grid-cols-3">
-          {steps.map((step, index) => (
-            <article
-              key={step.title}
-              className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-lg font-black text-[#f97316]">
-                {index + 1}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {examples.map((example, index) => (
+                  <ExampleCard key={example.name} example={example} index={index} />
+                ))}
               </div>
-
-              <h3 className="mt-5 text-xl font-black text-[#111827]">
-                {step.title}
-              </h3>
-
-              <p className="mt-3 text-sm font-medium leading-6 text-[#6b7280]">
-                {step.description}
-              </p>
-            </article>
-          ))}
-        </div>
-
-        <div className="mt-16 rounded-[2.5rem] border border-orange-100 bg-[#fff7ed] p-8 shadow-sm transition-all hover:shadow-md sm:p-10">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-black text-[#f97316]">
-                <FiMapPin />
-                Seu restaurante também pode ter um link próprio
-              </div>
-
-              <h3 className="mt-3 text-2xl font-black text-[#111827] sm:text-3xl">
-                Exemplo: pratoby.com/sua-loja
-              </h3>
-
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6b7280]">
-                Cada lojista divulga seu próprio link no Instagram, WhatsApp,
-                Google Maps, bio, panfleto, cartão de visita ou QR Code na mesa.
-              </p>
             </div>
+          </section>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link
-                to="/planos"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111827] px-8 py-4 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
+          <section className="border-y border-gray-100 bg-white py-14 sm:py-20">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.32 }}
+                variants={fadeUp}
+                transition={{ duration: 0.5 }}
+                className="overflow-hidden rounded-[2.5rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-8 lg:p-10"
               >
-                Ver planos
-                <FiArrowRight size={18} />
-              </Link>
+                <div className="relative">
+                  <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-orange-200/50 blur-3xl" />
 
-              <Link
-                to="/contato"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
-              >
-                <FiMessageCircle size={18} />
-                Falar comigo
-              </Link>
+                  <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-black text-[#f97316]">
+                        <FiMapPin />
+                        Seu negócio também pode ter um link próprio
+                      </div>
+
+                      <h3 className="mt-3 text-2xl font-black text-[#111827] sm:text-3xl">
+                        Exemplo: pratoby.com/sua-loja
+                      </h3>
+
+                      <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#4b5563]">
+                        Divulgue o link no Instagram, WhatsApp, Google Business, bio, panfleto, cartão de visita ou QR Code. O cliente acessa, escolhe os produtos e envia o pedido organizado.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Link
+                        to="/planos"
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111827] px-8 py-4 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
+                      >
+                        Ver planos
+                        <FiArrowRight size={18} />
+                      </Link>
+
+                      <Link
+                        to="/contato"
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
+                      >
+                        <FiMessageCircle size={18} />
+                        Falar comigo
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER PADRONIZADO */}
-      <footer className="border-t border-gray-100 bg-white px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 text-sm font-bold text-[#6b7280] sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src="/icons/icon-192.png"
-              alt="PratoBy"
-              className="h-8 w-8 rounded-xl object-cover grayscale transition hover:grayscale-0"
-            />
-
-            <p>
-              © {new Date().getFullYear()}{' '}
-              <span className="font-black text-[#111827]">PratoBy</span>. Todos os direitos reservados.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-9">
-            {navLinks.map((item) => (
-              <Link 
-                key={item.label} 
-                to={item.to} 
-                className="transition hover:text-[#f97316]"
-              >
-                {item.label}
-              </Link>
-            ))}
-            <Link to="/login" className="transition hover:text-[#f97316]">
-              Login
-            </Link>
-          </div>
-        </div>
-      </footer>
-      </main>
+          </section>
+        </main>
+      </MarketingLayout>
     </>
   )
 }
-

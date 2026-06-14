@@ -185,7 +185,7 @@ function PratoByLogo({ dark = false, compact = false }) {
   return (
     <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
       <img
-        src="/icons/icon-192.png"
+        src="/icons/android-chrome-192x192.png"
         alt="PratoBy"
         className={`${
           compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-[1.35rem]'
@@ -232,7 +232,7 @@ function LoginMobileHeader() {
         <Link to="/" className="shrink-0" aria-label="Ir para início">
           <div className="flex items-center gap-3">
             <img
-              src="/icons/icon-192.png"
+              src="/icons/android-chrome-192x192.png"
               alt="PratoBy"
               className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
             />

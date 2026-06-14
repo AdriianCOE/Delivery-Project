@@ -2022,7 +2022,7 @@ const storeImage =
   store?.bannerUrl ||
   store?.coverUrl ||
   store?.logoUrl ||
-  'https://pratoby.com/og/pratoby-mark.png'
+  'https://pratoby.com/icons/android-chrome-512x512.png'
 
 const storeFavicon =
   store?.logoUrl ||

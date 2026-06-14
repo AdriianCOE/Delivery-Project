@@ -4,6 +4,7 @@ const test = require('node:test')
 const {
   buildAsaasOrderExternalReference,
   buildAsaasPendingPaymentSnapshot,
+  createOrderPaymentLink,
   mapAsaasOrderPaymentStatus,
   parseAsaasOrderExternalReference,
   sanitizePublicStorePayments,
@@ -28,6 +29,10 @@ test('sanitizePublicStorePayments hides Asaas Orders and exposes safe Mercado Pa
         status: 'active',
         accessToken: 'secret',
         refreshToken: 'secret',
+        clientId: 'private-client',
+        clientSecret: 'private-secret',
+        collectorId: 'private-collector',
+        rawProviderPayload: { unsafe: true },
       },
       preorderPolicy: {
         mode: 'asaas_online',
@@ -75,6 +80,10 @@ test('sanitizePublicStorePayments hides Asaas Orders and exposes safe Mercado Pa
   assert.equal(result.asaas.webhookSecret, undefined)
   assert.equal(result.mercadoPago.accessToken, undefined)
   assert.equal(result.mercadoPago.refreshToken, undefined)
+  assert.equal(result.mercadoPago.clientId, undefined)
+  assert.equal(result.mercadoPago.clientSecret, undefined)
+  assert.equal(result.mercadoPago.collectorId, undefined)
+  assert.equal(result.mercadoPago.rawProviderPayload, undefined)
   assert.equal(result.mercadoPago.provider, undefined)
   assert.equal(result.mercadoPago.environment, undefined)
   assert.equal(result.mercadoPago.sandboxMode, undefined)
@@ -131,4 +140,126 @@ test('buildAsaasPendingPaymentSnapshot stores blocked online payment state', () 
   assert.equal(snapshot.operationalBlockedReason, 'awaiting_online_payment')
   assert.equal(snapshot.payment.amount, 123.45)
   assert.equal(snapshot.payment.externalReference, 'pratoby:order:store1:order1')
+})
+
+test('createOrderPaymentLink reuses an active saved Asaas link', async () => {
+  const originalFetch = global.fetch
+  global.fetch = async () => {
+    throw new Error('fetch should not be called for reusable links')
+  }
+
+  try {
+    const result = await createOrderPaymentLink({
+      apiKey: 'test-key',
+      orderRef: {
+        id: 'order_1',
+        set: async () => assert.fail('order should not be updated for reusable links'),
+      },
+      orderData: {
+        id: 'order_1',
+        storeId: 'store_1',
+        totalCents: 2500,
+        paymentStatus: 'pending',
+        payment: {
+          provider: 'asaas',
+          mode: 'online',
+          status: 'pending',
+          paymentUrl: 'https://pay.example/old',
+          invoiceUrl: 'https://pay.example/invoice',
+          paymentLinkId: 'link_1',
+        },
+      },
+      storeData: {
+        payments: { asaas: { enabled: true, status: 'active' } },
+      },
+    })
+
+    assert.deepEqual(result, {
+      paymentUrl: 'https://pay.example/old',
+      invoiceUrl: 'https://pay.example/invoice',
+      providerPaymentLinkId: 'link_1',
+      reused: true,
+    })
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('createOrderPaymentLink creates a new link when the saved link is expired', async () => {
+  const originalFetch = global.fetch
+  const originalBaseUrl = process.env.ASAAS_ORDERS_BASE_URL
+  const originalEmulator = process.env.FUNCTIONS_EMULATOR
+  let savedPatch = null
+
+  process.env.ASAAS_ORDERS_BASE_URL = 'https://asaas.test/v3'
+  process.env.FUNCTIONS_EMULATOR = 'true'
+  global.fetch = async (url, options) => {
+    assert.equal(url, 'https://asaas.test/v3/paymentLinks')
+    assert.equal(options.method, 'POST')
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        id: 'link_2',
+        url: 'https://pay.example/new',
+        invoiceUrl: 'https://pay.example/new-invoice',
+      }),
+    }
+  }
+
+  try {
+    const result = await createOrderPaymentLink({
+      admin: {
+        firestore: {
+          FieldValue: {
+            serverTimestamp: () => 'server-timestamp',
+          },
+        },
+      },
+      apiKey: 'test-key',
+      orderRef: {
+        id: 'order_1',
+        set: async (patch) => {
+          savedPatch = patch
+        },
+      },
+      orderData: {
+        id: 'order_1',
+        storeId: 'store_1',
+        trackingToken: 'track_1',
+        totalCents: 2500,
+        paymentStatus: 'pending',
+        payment: {
+          provider: 'asaas',
+          mode: 'online',
+          status: 'pending',
+          paymentUrl: 'https://pay.example/old',
+          dueDate: '2000-01-01',
+        },
+      },
+      storeData: {
+        payments: { asaas: { enabled: true, status: 'active' } },
+      },
+    })
+
+    assert.deepEqual(result, {
+      paymentUrl: 'https://pay.example/new',
+      invoiceUrl: 'https://pay.example/new-invoice',
+      providerPaymentLinkId: 'link_2',
+      reused: false,
+    })
+    assert.equal(savedPatch.payment.providerPaymentLinkId, 'link_2')
+    assert.equal(savedPatch.payment.paymentUrl, 'https://pay.example/new')
+  } finally {
+    global.fetch = originalFetch
+    if (originalBaseUrl === undefined) {
+      delete process.env.ASAAS_ORDERS_BASE_URL
+    } else {
+      process.env.ASAAS_ORDERS_BASE_URL = originalBaseUrl
+    }
+    if (originalEmulator === undefined) {
+      delete process.env.FUNCTIONS_EMULATOR
+    } else {
+      process.env.FUNCTIONS_EMULATOR = originalEmulator
+    }
+  }
 })

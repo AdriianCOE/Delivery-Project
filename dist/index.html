@@ -8,12 +8,12 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
 
-    <title data-rh="true">PratoBy | Cardápio digital e delivery sem comissão</title>
+    <title data-rh="true">PratoBy | Cardápio digital e delivery próprio sem comissão</title>
 
     <meta
       data-rh="true"
       name="description"
-      content="Crie um cardápio digital moderno para restaurante, lanchonete ou pizzaria, receba pedidos online pelo próprio link e venda sem pagar comissão por pedido."
+      content="Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido."
     />
 
     <meta name="author" content="PratoBy" />
@@ -27,6 +27,7 @@
     <meta name="facebook-domain-verification" content="v4ircglmf42zmdfimtto90or0rbme3" />
 
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <link rel="canonical" href="https://pratoby.com/" />
 
     <meta name="theme-color" content="#f97316" />
     <meta name="msapplication-TileColor" content="#f97316" />
@@ -48,13 +49,19 @@
     <meta
       data-rh="true"
       property="og:title"
-      content="PratoBy | Cardápio digital e delivery sem comissão"
+      content="PratoBy | Cardápio digital e delivery próprio sem comissão"
+    />
+
+    <meta
+      data-rh="true"
+      property="og:description"
+      content="Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido."
     />
 
     <meta
       data-rh="true"
       name="twitter:title"
-      content="PratoBy | Cardápio digital e delivery sem comissão"
+      content="PratoBy | Cardápio digital e delivery próprio sem comissão"
     />
 
     <meta
@@ -76,7 +83,7 @@
     <meta
       data-rh="true"
       property="og:image:alt"
-      content="PratoBy - Cardápio digital para restaurantes venderem online sem comissão por pedido"
+      content="PratoBy - Cardápio digital para restaurantes venderem online sem comissão do PratoBy por pedido"
     />
 
     <!-- Twitter / X -->
@@ -85,7 +92,7 @@
     <meta
       data-rh="true"
       name="twitter:description"
-      content="Crie um cardápio digital moderno, receba pedidos online pelo próprio link e venda sem comissão por pedido."
+      content="Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido."
     />
 
     <meta
@@ -97,23 +104,28 @@
     <meta
       data-rh="true"
       name="twitter:image:alt"
-      content="PratoBy - Seu cardápio, seu link, seus pedidos e zero comissão"
+      content="PratoBy - Seu cardápio, seu link e seus pedidos sem comissão do PratoBy por pedido"
     />
 
     <!-- Icons -->
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="/icons/favicon-32x32.png"
+      sizes="32x32"
+    />
 
     <link
       rel="icon"
       type="image/png"
-      href="/favicon-96x96.png"
-      sizes="96x96"
+      href="/icons/favicon-16x16.png"
+      sizes="16x16"
     />
 
     <link
       rel="apple-touch-icon"
-      href="/apple-touch-icon.png"
+      href="/icons/apple-touch-icon.png"
       sizes="180x180"
     />
 
@@ -140,10 +152,31 @@
             "@type": "Organization",
             "@id": "https://pratoby.com/#organization",
             "name": "PratoBy",
+            "legalName": "PratoBy",
             "url": "https://pratoby.com/",
-            "logo": "https://pratoby.com/og/pratoby-mark.png",
+            "logo": {
+              "@type": "ImageObject",
+              "@id": "https://pratoby.com/#logo",
+              "url": "https://pratoby.com/icons/android-chrome-512x512.png"
+            },
+            "image": "https://pratoby.com/og/pratoby-cover.png",
+            "description": "O PratoBy é uma plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, entrega, retirada e encomendas.",
+            "areaServed": {
+              "@type": "Country",
+              "name": "Brasil"
+            },
             "sameAs": [
               "https://www.instagram.com/pratobybr"
+            ],
+            "contactPoint": [
+              {
+                "@type": "ContactPoint",
+                "contactType": "customer support",
+                "availableLanguage": [
+                  "pt-BR"
+                ],
+                "url": "https://pratoby.com/contato"
+              }
             ]
           },
           {
@@ -151,56 +184,143 @@
             "@id": "https://pratoby.com/#website",
             "url": "https://pratoby.com/",
             "name": "PratoBy",
-            "description": "Cardápio digital e delivery online sem comissão por pedido.",
+            "alternateName": "PratoBy Cardápio Digital",
+            "description": "Cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online — sem comissão do PratoBy por pedido.",
+            "inLanguage": "pt-BR",
             "publisher": {
               "@id": "https://pratoby.com/#organization"
+            }
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://pratoby.com/#webpage",
+            "url": "https://pratoby.com/",
+            "name": "PratoBy | Cardápio digital e delivery próprio sem comissão",
+            "description": "Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido.",
+            "isPartOf": {
+              "@id": "https://pratoby.com/#website"
+            },
+            "about": {
+              "@id": "https://pratoby.com/#app"
+            },
+            "primaryImageOfPage": {
+              "@type": "ImageObject",
+              "url": "https://pratoby.com/og/pratoby-cover.png",
+              "width": 1200,
+              "height": 630
             },
             "inLanguage": "pt-BR"
           },
           {
-            "@type": "WebApplication",
+            "@type": "SoftwareApplication",
             "@id": "https://pratoby.com/#app",
             "name": "PratoBy",
-            "alternateName": "PratoBy Cardápio Digital",
+            "alternateName": [
+              "PratoBy Cardápio Digital",
+              "PratoBy Delivery Próprio"
+            ],
             "url": "https://pratoby.com/",
             "applicationCategory": "BusinessApplication",
+            "applicationSubCategory": "Cardápio digital e sistema de pedidos online",
             "operatingSystem": "Web",
             "browserRequirements": "Requires JavaScript",
+            "softwareVersion": "1.0",
             "image": "https://pratoby.com/og/pratoby-cover.png",
-            "logo": "https://pratoby.com/og/pratoby-mark.png",
-            "description": "Plataforma de cardápio digital para restaurantes, lanchonetes e pizzarias receberem pedidos online pelo próprio link, sem comissão por pedido.",
+            "screenshot": "https://pratoby.com/og/pratoby-cover.png",
+            "logo": {
+              "@id": "https://pratoby.com/#logo"
+            },
+            "description": "Plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, retirada, entrega, cupons e encomendas — sem comissão do PratoBy por pedido.",
             "inLanguage": "pt-BR",
+            "areaServed": {
+              "@type": "Country",
+              "name": "Brasil"
+            },
             "brand": {
               "@id": "https://pratoby.com/#organization"
             },
-            "featureList": [
-              "Cardápio digital online",
-              "Pedidos pelo próprio link",
-              "Gestão de produtos e categorias",
-              "Cupons de desconto",
-              "Pedidos em tempo real",
-              "Sem comissão por pedido"
-            ],
+            "provider": {
+              "@id": "https://pratoby.com/#organization"
+            },
             "audience": {
               "@type": "Audience",
-              "audienceType": "Restaurantes, lanchonetes, pizzarias e negócios de alimentação"
-            }
+              "audienceType": "Restaurantes, lanchonetes, pizzarias, confeitarias e negócios de alimentação"
+            },
+            "featureList": [
+              "Cardápio digital online",
+              "Link próprio para receber pedidos",
+              "Gestão de produtos e categorias",
+              "Pedidos em tempo real",
+              "Entrega e retirada",
+              "Pagamento online",
+              "Pix manual",
+              "Cupons de desconto",
+              "Agendamento de encomendas",
+              "Painel de pedidos",
+              "Relatórios básicos",
+              "Sem comissão do PratoBy por pedido"
+            ],
+            "offers": [
+              {
+                "@type": "Offer",
+                "name": "Plano Essencial",
+                "url": "https://pratoby.com/planos",
+                "price": "59.99",
+                "priceCurrency": "BRL",
+                "availability": "https://schema.org/InStock",
+                "category": "Assinatura mensal"
+              },
+              {
+                "@type": "Offer",
+                "name": "Plano Profissional",
+                "url": "https://pratoby.com/planos",
+                "price": "89.99",
+                "priceCurrency": "BRL",
+                "availability": "https://schema.org/InStock",
+                "category": "Assinatura mensal"
+              },
+              {
+                "@type": "Offer",
+                "name": "Plano Premium",
+                "url": "https://pratoby.com/planos",
+                "price": "159.99",
+                "priceCurrency": "BRL",
+                "availability": "https://schema.org/InStock",
+                "category": "Assinatura mensal"
+              }
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://pratoby.com/#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Início",
+                "item": "https://pratoby.com/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Planos",
+                "item": "https://pratoby.com/planos"
+              }
+            ]
           }
         ]
       }
     </script>
-    <script type="module" crossorigin src="/assets/index-CiAawcyU.js"></script>
+    <script type="module" crossorigin src="/assets/index-CV9Lq-vB.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-BYbx6iT9.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-C2M4UB4l.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-router-DAkcI1Hf.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-B-Al_SZg.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-B4aRmArG.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-app-DLaGjCCh.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-sentry-DGqTv4cJ.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-motion-CllOX6Yu.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-react-C-EVk_8D.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-seo-DsmYKj5d.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-BsXVbN6x.css">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-CZ84NvhE.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-router-D78dnPXZ.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-DI6z_4y4.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-sentry-BoN_T1E-.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-motion-DWZwkGBX.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-BnwYXYmm.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-seo-De8Q26W5.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BvzpuzJh.css">
   </head>
 
   <body>
@@ -209,6 +329,6 @@
     </noscript>
 
     <div id="root"></div>
-
+
   </body>
 </html>

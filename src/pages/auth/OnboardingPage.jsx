@@ -213,7 +213,7 @@ function OnboardingMobileHeader() {
         <Link to="/" className="shrink-0" aria-label="Ir para início">
           <div className="flex items-center gap-3">
             <img
-              src="/icons/icon-192.png"
+              src="/icons/android-chrome-192x192.png"
               alt="PratoBy"
               className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
             />
@@ -335,7 +335,7 @@ function OnboardingSidebar({ displayName, email, emailVerified, phoneVerified, p
       <div className="relative z-10 flex h-full flex-col">
         <Link to="/" className="group inline-flex w-fit items-center gap-3" aria-label="Ir para início">
           <img
-            src="/icons/icon-192.png"
+            src="/icons/android-chrome-192x192.png"
             alt="PratoBy"
             className="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-orange-600/25 ring-1 ring-white/10 transition duration-300 group-hover:scale-105"
           />
@@ -1086,7 +1086,7 @@ export default function OnboardingPage() {
               >
                 <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
                   <img
-                    src="/icons/icon-192.png"
+                    src="/icons/android-chrome-192x192.png"
                     alt="PratoBy"
                     className="h-10 w-10 rounded-2xl object-cover shadow-lg shadow-orange-600/20 ring-1 ring-black/5 transition duration-300 group-hover:scale-105"
                   />

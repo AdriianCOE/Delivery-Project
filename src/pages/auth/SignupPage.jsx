@@ -189,7 +189,7 @@ function PratoByLogo({ dark = false, compact = false }) {
   return (
     <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
       <img
-        src="/icons/icon-192.png"
+        src="/icons/android-chrome-192x192.png"
         alt="PratoBy"
         className={`${
           compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-[1.35rem]'

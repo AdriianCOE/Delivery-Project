@@ -33,6 +33,14 @@ const TERMINAL_PAYMENT_STATUSES = new Set([
   'failed',
   'expired',
 ])
+const NON_REUSABLE_LINK_STATUSES = new Set([
+  'expired',
+  'overdue',
+  'cancelled',
+  'canceled',
+  'failed',
+  'failed_link_creation',
+])
 const SLOT_RELEASE_PAYMENT_STATUSES = new Set(['failed', 'canceled', 'expired'])
 
 function hasValue(value) {
@@ -187,18 +195,53 @@ function normalizePreorderPolicy(store = {}) {
   })
 }
 
+function pickAllowed(source, allowedKeys) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return undefined
+
+  return allowedKeys.reduce((acc, key) => {
+    if (source[key] !== undefined) {
+      acc[key] = source[key]
+    }
+    return acc
+  }, {})
+}
+
+const PUBLIC_MANUAL_PAYMENT_KEYS = ['pix', 'card', 'cash']
+const PUBLIC_ASAAS_PAYMENT_KEYS = [
+  'enabled',
+  'status',
+  'legacy',
+  'billingType',
+  'allowPix',
+  'allowCreditCard',
+  'allowBoleto',
+  'maxInstallmentCount',
+]
+const PUBLIC_MERCADO_PAGO_PAYMENT_KEYS = [
+  'enabled',
+  'status',
+  'allowPix',
+  'allowCreditCard',
+  'allowBoleto',
+  'maxInstallmentCount',
+  'billingType',
+  'requireForScheduled',
+  'minOrderCents',
+]
+const PUBLIC_PREORDER_POLICY_KEYS = ['mode', 'requiredMethod', 'legacyMode']
+
 function sanitizePublicStorePayments(store = {}) {
-  const mercadoPago = { ...normalizeMercadoPagoPublicConfig(store) }
-  delete mercadoPago.environment
-  delete mercadoPago.sandboxMode
-  delete mercadoPago.provider
+  const manual = pickAllowed(normalizeManualPayments(store), PUBLIC_MANUAL_PAYMENT_KEYS)
+  const asaas = pickAllowed(normalizeAsaasPublicConfig(store), PUBLIC_ASAAS_PAYMENT_KEYS)
+  const mercadoPago = pickAllowed(normalizeMercadoPagoPublicConfig(store), PUBLIC_MERCADO_PAGO_PAYMENT_KEYS)
+  const preorderPolicy = pickAllowed(normalizePreorderPolicy(store), PUBLIC_PREORDER_POLICY_KEYS)
 
   return stripUndefinedDeep({
-    manual: normalizeManualPayments(store),
-    asaas: normalizeAsaasPublicConfig(store),
+    manual,
+    asaas,
     mercadoPago,
     mercadopago: mercadoPago,
-    preorderPolicy: normalizePreorderPolicy(store),
+    preorderPolicy,
   })
 }
 
@@ -366,6 +409,45 @@ function getAsaasPaymentUrl(payload = {}) {
   return payload.url || payload.paymentUrl || payload.invoiceUrl || payload.bankSlipUrl || ''
 }
 
+function toMillis(value) {
+  if (!value) return null
+  if (typeof value.toMillis === 'function') return value.toMillis()
+  if (typeof value.toDate === 'function') return value.toDate().getTime()
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 1000000000000 ? value * 1000 : value
+  }
+
+  const parsed = Date.parse(String(value))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function isExpiredDate(value, nowMs = Date.now()) {
+  const millis = toMillis(value)
+  return millis !== null && millis <= nowMs
+}
+
+function getReusableOrderPaymentLink(orderData = {}) {
+  const payment = orderData.payment || {}
+  const status = normalizeText(payment.status || orderData.paymentStatus)
+
+  if (NON_REUSABLE_LINK_STATUSES.has(status)) return null
+  if (isExpiredDate(payment.expiresAt || payment.dueDate || orderData.paymentExpiresAt || orderData.paymentDueDate)) {
+    return null
+  }
+
+  const paymentUrl = payment.paymentUrl || orderData.paymentUrl || payment.invoiceUrl || orderData.invoiceUrl
+  const invoiceUrl = payment.invoiceUrl || orderData.invoiceUrl || payment.paymentUrl || orderData.paymentUrl
+  if (!paymentUrl && !invoiceUrl) return null
+
+  return {
+    paymentUrl: paymentUrl || invoiceUrl,
+    invoiceUrl: invoiceUrl || paymentUrl,
+    providerPaymentLinkId: payment.providerPaymentLinkId || payment.paymentLinkId || orderData.providerPaymentLinkId || null,
+    reused: true,
+  }
+}
+
 async function deactivateOrderPaymentLink({ apiKey, paymentLinkId }) {
   if (!paymentLinkId) return { skipped: true }
   return callAsaasOrdersApi({
@@ -395,20 +477,15 @@ async function createOrderPaymentLink({ admin, logger, apiKey, orderRef, orderDa
     throw error
   }
 
-  if (TERMINAL_PAYMENT_STATUSES.has(String(orderData.payment?.status || orderData.paymentStatus || '').toLowerCase())) {
+  const currentStatus = normalizeText(orderData.payment?.status || orderData.paymentStatus)
+  if (TERMINAL_PAYMENT_STATUSES.has(currentStatus) && !NON_REUSABLE_LINK_STATUSES.has(currentStatus)) {
     const error = new Error('Pagamento online ja finalizado para este pedido.')
     error.code = 'failed-precondition'
     throw error
   }
 
-  if (orderData.payment?.paymentUrl || orderData.payment?.invoiceUrl) {
-    return {
-      paymentUrl: orderData.payment.paymentUrl || orderData.payment.invoiceUrl,
-      invoiceUrl: orderData.payment.invoiceUrl || orderData.payment.paymentUrl,
-      providerPaymentLinkId: orderData.payment.providerPaymentLinkId || null,
-      reused: true,
-    }
-  }
+  const reusablePaymentLink = getReusableOrderPaymentLink(orderData)
+  if (reusablePaymentLink) return reusablePaymentLink
 
   // TODO(scheduled-slots-ttl): add a safe cleanup path for pending scheduled
   // slots if the customer never pays and no Asaas webhook is received.

@@ -245,21 +245,32 @@ function isMercadoPagoOnlineOrderData(orderData = {}) {
 }
 
 async function findActiveMercadoPagoOrder({ db, storeId, storeData = {} }) {
-  const storeKeys = uniqueTruthy([
+  const docKeys = uniqueTruthy([
     storeId,
     storeData.storeDocId,
     storeData.id,
     storeData.docId,
-    storeData.storeId,
+  ])
+  const slugKeys = uniqueTruthy([
     storeData.slug,
     storeData.storeSlug,
-  ]).slice(0, 10)
-  const queryTargets = []
-
-  for (const key of storeKeys) {
-    queryTargets.push(['storeDocId', key])
-    queryTargets.push(['storeId', key])
-  }
+  ])
+  const compatibilityKeys = uniqueTruthy([
+    storeData.storeId,
+  ]).filter((key) => !docKeys.includes(key) && !slugKeys.includes(key))
+  const queryTargets = uniqueTruthy([
+    ...docKeys.map((key) => ['storeId', key]),
+    ...slugKeys.map((key) => ['storeId', key]),
+    ...docKeys.map((key) => ['storeDocId', key]),
+    ...slugKeys.map((key) => ['storeDocId', key]),
+    ...compatibilityKeys.map((key) => ['storeId', key]),
+    ...compatibilityKeys.map((key) => ['storeDocId', key]),
+  ].map(([field, key]) => `${field}:${key}`))
+    .slice(0, 12)
+    .map((target) => {
+      const separator = target.indexOf(':')
+      return [target.slice(0, separator), target.slice(separator + 1)]
+    })
 
   for (const [field, key] of queryTargets) {
     const snapshot = await db.collection('orders')
