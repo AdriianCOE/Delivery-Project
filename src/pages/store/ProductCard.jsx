@@ -729,7 +729,7 @@ function ProductCard({
         {/* CONTAINER DA IMAGEM */}
         <div
           className={`
-            relative shrink-0 overflow-hidden rounded-[1.45rem] bg-gray-100 shadow-inner ring-1 ring-black/[0.03]
+            relative shrink-0 overflow-hidden rounded-[1.45rem] bg-white shadow-sm ring-1 ring-black/[0.04]
             ${compact ? 'h-28 w-28' : 'h-32 w-32 sm:h-40 sm:w-40'}
           `}
         >
@@ -750,7 +750,7 @@ function ProductCard({
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
               className={`
-                h-full w-full object-contain object-center p-2 transition duration-500
+                h-full w-full bg-white object-contain object-center p-2 transition duration-500
                 ${imgLoaded ? 'scale-100 opacity-100 group-hover:scale-[1.03]' : 'scale-95 opacity-0'}
               `}
             />

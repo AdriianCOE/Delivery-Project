@@ -43,31 +43,31 @@
           }
         ]
       },
-        {
-      "source": "/.well-known/security.txt",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        },
-        {
-          "key": "Content-Type",
-          "value": "text/plain; charset=utf-8"
-        }
-      ]
-    },
-    {
-      "source": "/humans.txt",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        },
-        {
-          "key": "Content-Type",
-          "value": "text/plain; charset=utf-8"
-        }
-      ]
+      {
+        "source": "/.well-known/security.txt",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          },
+          {
+            "key": "Content-Type",
+            "value": "text/plain; charset=utf-8"
+          }
+        ]
+      },
+      {
+        "source": "/humans.txt",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          },
+          {
+            "key": "Content-Type",
+            "value": "text/plain; charset=utf-8"
+          }
+        ]
       },
       {
         "source": "/assets/**",
@@ -80,6 +80,15 @@
       },
       {
         "source": "/icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800"
+          }
+        ]
+      },
+      {
+        "source": "/og/**",
         "headers": [
           {
             "key": "Cache-Control",
@@ -142,6 +151,11 @@
     ],
     "redirects": [
       {
+        "regex": "^/(login|cadastro|onboarding|dashboard|admin|planos|sobre|contato|exemplos|privacidade|privacy|termos|terms)/+$",
+        "destination": "/:1",
+        "type": 301
+      },
+      {
         "regex": "^/planos(?:\\]|%5[Dd])/?$",
         "destination": "/planos",
         "type": 301
@@ -152,6 +166,7 @@
         "source": "/",
         "destination": "/index.html"
       },
+
       {
         "source": "/login",
         "destination": "/index.html"
@@ -168,14 +183,24 @@
         "source": "/auth/action",
         "destination": "/index.html"
       },
+
+      {
+        "source": "/dashboard",
+        "destination": "/index.html"
+      },
       {
         "source": "/dashboard/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/admin",
         "destination": "/index.html"
       },
       {
         "source": "/admin/**",
         "destination": "/index.html"
       },
+
       {
         "source": "/store/**",
         "destination": "/index.html"
@@ -192,6 +217,7 @@
         "source": "/order/**",
         "destination": "/index.html"
       },
+
       {
         "source": "/orders",
         "destination": "/index.html"
@@ -201,11 +227,11 @@
         "destination": "/index.html"
       },
       {
-        "source": "/Statistics",
+        "source": "/statistics",
         "destination": "/index.html"
       },
       {
-        "source": "/statistics",
+        "source": "/Statistics",
         "destination": "/index.html"
       },
       {
@@ -236,6 +262,7 @@
         "source": "/motoboy",
         "destination": "/index.html"
       },
+
       {
         "source": "/planos",
         "destination": "/index.html"
@@ -268,12 +295,7 @@
         "source": "/terms",
         "destination": "/index.html"
       },
-      { "source": "/dashboard", 
-        "destination": "/index.html" 
-      },
-      { "source": "/admin", 
-        "destination": "/index.html" 
-      },
+
       {
         "regex": "^/([A-Za-z0-9][A-Za-z0-9-]{1,120})/?$",
         "function": {
@@ -281,6 +303,7 @@
           "region": "southamerica-east1"
         }
       },
+
       {
         "source": "**",
         "destination": "/index.html"

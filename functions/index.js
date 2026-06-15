@@ -3602,7 +3602,7 @@ function absolutePublicUrl(value) {
 function buildSeoFaviconUrl(value) {
   const url = absolutePublicUrl(value)
 
-  if (!url) return `${PUBLIC_APP_ORIGIN}/favicon.ico`
+  if (!url) return `${PUBLIC_APP_ORIGIN}/icons/android-chrome-192x192.png?v=5`
 
   if (!url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) {
     return url
@@ -3610,7 +3610,7 @@ function buildSeoFaviconUrl(value) {
 
   return url.replace(
     '/image/upload/',
-    '/image/upload/f_png,q_auto,e_trim,w_128,h_128,c_fill,g_auto,r_24,b_white/'
+    '/image/upload/f_png,q_auto/e_trim/c_fit,w_92,h_92/c_pad,w_128,h_128,b_rgb:ffffff,r_32,bo_1px_solid_rgb:e5e7eb/'
   )
 }
 

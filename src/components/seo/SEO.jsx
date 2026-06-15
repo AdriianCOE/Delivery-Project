@@ -1,51 +1,38 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Helmet } from 'react-helmet-async'
 
 const SITE_URL = 'https://pratoby.com'
+const SITE_NAME = 'PratoBy'
 const DEFAULT_TITLE = 'PratoBy | Cardápio digital'
 const DEFAULT_DESCRIPTION =
-  'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido.'
+  'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão por pedido.'
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
-const DEFAULT_FAVICON = '/favicon.ico'
+const DEFAULT_FAVICON = `${SITE_URL}/icons/android-chrome-192x192.png?v=4`
 const TWITTER_HANDLE = '@pratobybr'
+const DEFAULT_THEME_COLOR = '#F97316'
 
-const HEAD_DEDUPE_SELECTORS = [
-  'meta[name="description"]',
-  'meta[name="robots"]',
-  'meta[name="googlebot"]',
-  'link[rel="canonical"]',
-  'link[rel="icon"]',
-  'link[rel="shortcut icon"]',
-  'link[rel="apple-touch-icon"]',
-  'meta[property="og:locale"]',
-  'meta[property="og:type"]',
-  'meta[property="og:site_name"]',
-  'meta[property="og:url"]',
-  'meta[property="og:title"]',
-  'meta[property="og:description"]',
-  'meta[property="og:image"]',
-  'meta[property="og:image:secure_url"]',
-  'meta[property="og:image:type"]',
-  'meta[property="og:image:width"]',
-  'meta[property="og:image:height"]',
-  'meta[property="og:image:alt"]',
-  'meta[name="twitter:card"]',
-  'meta[name="twitter:site"]',
-  'meta[name="twitter:creator"]',
-  'meta[name="twitter:title"]',
-  'meta[name="twitter:description"]',
-  'meta[name="twitter:image"]',
-  'meta[name="twitter:image:alt"]',
-  'script[data-pratoby-jsonld="true"]',
-]
+const SOCIAL_IMAGE_WIDTH = 1200
+const SOCIAL_IMAGE_HEIGHT = 630
 
-function dedupeHeadElements() {
-  if (typeof document === 'undefined') return
+const VALID_OG_TYPES = new Set([
+  'website',
+  'article',
+  'profile',
+  'business.business',
+  'product',
+  'restaurant',
+])
 
-  HEAD_DEDUPE_SELECTORS.forEach((selector) => {
-    const nodes = Array.from(document.head.querySelectorAll(selector))
-    nodes.slice(0, -1).forEach((node) => node.remove())
-  })
+function cleanText(value, fallback, maxLength = 180) {
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const safe = text || fallback
+
+  if (safe.length <= maxLength) return safe
+
+  return `${safe.slice(0, maxLength - 1).trim()}…`
 }
 
 function normalizePath(path) {
@@ -55,23 +42,81 @@ function normalizePath(path) {
       ? window.location.pathname
       : '/'
 
+  try {
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+      const parsed = new URL(rawPath)
+      return normalizePath(`${parsed.pathname}${parsed.search}${parsed.hash}`)
+    }
+  } catch {
+    // ignora e normaliza como path comum
+  }
+
   const withoutQuery = rawPath.split('?')[0].split('#')[0]
   const withSlash = withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`
+  const cleanPath = withSlash.replace(/\/{2,}/g, '/')
 
-  if (withSlash === '/index.html') return '/'
-  return withSlash
+  if (cleanPath === '/index.html') return '/'
+  if (cleanPath.length > 1) return cleanPath.replace(/\/+$/, '')
+
+  return cleanPath
 }
 
 function buildAbsoluteUrl(url, fallback = SITE_URL) {
-  if (!url || typeof url !== 'string') return fallback
+  const rawUrl = String(url || '').trim()
+  const fallbackUrl = String(fallback || SITE_URL).trim() || SITE_URL
 
-  if (url.startsWith('https://') || url.startsWith('http://')) return url
-  if (url.startsWith('/')) return `${SITE_URL}${url}`
+  if (!rawUrl) return fallbackUrl
 
-  return `${SITE_URL}/${url}`
+  if (rawUrl.startsWith('//')) {
+    return `https:${rawUrl}`
+  }
+
+  if (rawUrl.startsWith('/')) {
+    return `${SITE_URL}${rawUrl}`
+  }
+
+  try {
+    const parsed = new URL(rawUrl)
+
+    if (parsed.protocol === 'http:' && parsed.hostname.endsWith('pratoby.com')) {
+      parsed.protocol = 'https:'
+      return parsed.toString()
+    }
+
+    if (parsed.protocol === 'https:') {
+      return parsed.toString()
+    }
+
+    return fallbackUrl
+  } catch {
+    return `${SITE_URL}/${rawUrl.replace(/^\/+/, '')}`
+  }
 }
 
-function buildCloudinaryFavicon(url) {
+function transformCloudinaryUrl(url, transformation) {
+  const absoluteUrl = buildAbsoluteUrl(url, '')
+
+  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+    return absoluteUrl
+  }
+
+  return absoluteUrl.replace('/image/upload/', `/image/upload/${transformation}/`)
+}
+
+function buildSocialImageUrl(url) {
+  const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_IMAGE)
+
+  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+    return absoluteUrl
+  }
+
+  return transformCloudinaryUrl(
+    absoluteUrl,
+    `f_auto,q_auto,w_${SOCIAL_IMAGE_WIDTH},h_${SOCIAL_IMAGE_HEIGHT},c_fill,g_auto`
+  )
+}
+
+function buildAppleTouchIcon(url) {
   const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_FAVICON)
 
   if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
@@ -80,8 +125,32 @@ function buildCloudinaryFavicon(url) {
 
   return absoluteUrl.replace(
     '/image/upload/',
-    '/image/upload/f_png,q_auto,e_trim,w_128,h_128,c_fill,g_auto,r_24,b_white/'
+    '/image/upload/f_png,q_auto/e_trim/c_fit,w_132,h_132/c_pad,w_180,h_180,b_rgb:ffffff,r_40,bo_1px_solid_rgb:e5e7eb/'
   )
+}
+
+function buildAppleTouchIcon(url) {
+  const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_FAVICON)
+
+  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+    return absoluteUrl
+  }
+
+  return transformCloudinaryUrl(
+    absoluteUrl,
+    'f_png,q_auto,e_trim,w_180,h_180,c_fill,g_auto,r_36,b_white'
+  )
+}
+
+function getImageType(url) {
+  const cleanUrl = String(url || '').split('?')[0].toLowerCase()
+
+  if (cleanUrl.endsWith('.jpg') || cleanUrl.endsWith('.jpeg')) return 'image/jpeg'
+  if (cleanUrl.endsWith('.webp')) return 'image/webp'
+  if (cleanUrl.endsWith('.ico')) return 'image/x-icon'
+  if (cleanUrl.endsWith('.svg')) return 'image/svg+xml'
+
+  return 'image/png'
 }
 
 function serializeJsonLd(jsonLd) {
@@ -92,6 +161,14 @@ function serializeJsonLd(jsonLd) {
   } catch {
     return ''
   }
+}
+
+function normalizeOgType(type) {
+  const safeType = String(type || '').trim()
+
+  if (VALID_OG_TYPES.has(safeType)) return safeType
+
+  return 'website'
 }
 
 export default function SEO({
@@ -105,57 +182,97 @@ export default function SEO({
   noIndex = false,
   noFollow = false,
   jsonLd = null,
+  themeColor = DEFAULT_THEME_COLOR,
 }) {
   const canonicalPath = useMemo(() => normalizePath(path), [path])
-  const canonicalUrl = `${SITE_URL}${canonicalPath}`
-  const absoluteImage = buildAbsoluteUrl(image, DEFAULT_IMAGE)
-  const faviconUrl = buildCloudinaryFavicon(favicon)
-  const serializedJsonLd = useMemo(() => serializeJsonLd(jsonLd), [jsonLd])
+
+  const canonicalUrl = useMemo(
+    () => `${SITE_URL}${canonicalPath}`,
+    [canonicalPath]
+  )
+
+  const finalTitle = useMemo(
+    () => cleanText(title, DEFAULT_TITLE, 70),
+    [title]
+  )
+
+  const finalDescription = useMemo(
+    () => cleanText(description, DEFAULT_DESCRIPTION, 180),
+    [description]
+  )
+
+  const absoluteImage = useMemo(
+    () => buildSocialImageUrl(image),
+    [image]
+  )
+
+  const faviconUrl = useMemo(
+    () => buildCloudinaryFavicon(favicon),
+    [favicon]
+  )
+
+  const appleTouchIconUrl = useMemo(
+    () => buildAppleTouchIcon(favicon),
+    [favicon]
+  )
+
+  const serializedJsonLd = useMemo(
+    () => serializeJsonLd(jsonLd),
+    [jsonLd]
+  )
 
   const robotsContent = noIndex
     ? `noindex, ${noFollow ? 'nofollow' : 'follow'}`
     : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
 
-  const finalImageAlt = imageAlt || `${title} - PratoBy`
+  const finalImageAlt = cleanText(
+    imageAlt || `${finalTitle} - ${SITE_NAME}`,
+    `${SITE_NAME} - Cardápio digital`,
+    120
+  )
 
-  useEffect(() => {
-    const timer = window.setTimeout(dedupeHeadElements, 0)
-    return () => window.clearTimeout(timer)
-  }, [description, finalImageAlt, absoluteImage, noIndex, noFollow, canonicalUrl, title, type, serializedJsonLd])
+  const finalType = normalizeOgType(type)
+  const imageType = getImageType(absoluteImage)
+  const faviconType = getImageType(faviconUrl)
+  const finalThemeColor = cleanText(themeColor, DEFAULT_THEME_COLOR, 20)
 
   return (
-    <Helmet>
-      <title>{title}</title>
+    <Helmet prioritizeSeoTags>
+      <html lang="pt-BR" />
 
-      <meta name="description" content={description} />
+      <title>{finalTitle}</title>
 
+      <meta name="description" content={finalDescription} />
       <meta name="robots" content={robotsContent} />
       <meta name="googlebot" content={robotsContent} />
+      <meta name="theme-color" content={finalThemeColor} />
+      <meta name="application-name" content={SITE_NAME} />
 
       <link rel="canonical" href={canonicalUrl} />
 
-      <link rel="icon" href={faviconUrl} sizes="any" />
-      <link rel="shortcut icon" href={faviconUrl} />
-      <link rel="apple-touch-icon" href={faviconUrl} />
+      <link rel="icon" href={faviconUrl} type={faviconType} sizes="128x128" />
+      <link rel="shortcut icon" href={faviconUrl} type={faviconType} />
+      <link rel="apple-touch-icon" href={appleTouchIconUrl} sizes="180x180" />
 
       <meta property="og:locale" content="pt_BR" />
-      <meta property="og:type" content={type} />
-      <meta property="og:site_name" content="PratoBy" />
+      <meta property="og:type" content={finalType} />
+      <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:url" content={canonicalUrl} />
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
+      <meta property="og:title" content={finalTitle} />
+      <meta property="og:description" content={finalDescription} />
       <meta property="og:image" content={absoluteImage} />
+      <meta property="og:image:url" content={absoluteImage} />
       <meta property="og:image:secure_url" content={absoluteImage} />
-      <meta property="og:image:type" content="image/png" />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      <meta property="og:image:type" content={imageType} />
+      <meta property="og:image:width" content={String(SOCIAL_IMAGE_WIDTH)} />
+      <meta property="og:image:height" content={String(SOCIAL_IMAGE_HEIGHT)} />
       <meta property="og:image:alt" content={finalImageAlt} />
 
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:site" content={TWITTER_HANDLE} />
       <meta name="twitter:creator" content={TWITTER_HANDLE} />
-      <meta name="twitter:title" content={title} />
-      <meta name="twitter:description" content={description} />
+      <meta name="twitter:title" content={finalTitle} />
+      <meta name="twitter:description" content={finalDescription} />
       <meta name="twitter:image" content={absoluteImage} />
       <meta name="twitter:image:alt" content={finalImageAlt} />
 

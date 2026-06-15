@@ -259,7 +259,7 @@ function AdminMark({ compact = false }) {
       className="flex min-w-0 items-center gap-3 rounded-[1.35rem] transition hover:bg-gray-50/80"
     >
       <img
-        src="/icons/android-chrome-192x192.png"
+        src="/icons/android-chrome-192x192.png?v=4"
         alt="PratoBy"
         className={cn(
           compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-3xl',

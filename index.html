@@ -21,22 +21,70 @@
     <meta name="creator" content="PratoBy" />
     <meta name="publisher" content="PratoBy" />
 
-    <meta data-rh="true" name="robots" content="index, follow, max-image-preview:large" />
-    <meta data-rh="true" name="googlebot" content="index, follow, max-image-preview:large" />
+    <meta
+      data-rh="true"
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+
+    <meta
+      data-rh="true"
+      name="googlebot"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <meta name="facebook-domain-verification" content="v4ircglmf42zmdfimtto90or0rbme3" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="color-scheme" content="light dark" />
+
+    <meta
+      name="facebook-domain-verification"
+      content="v4ircglmf42zmdfimtto90or0rbme3"
+    />
+
+    <meta data-rh="true" name="theme-color" content="#f97316" />
+    <meta name="msapplication-TileColor" content="#f97316" />
 
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-    <meta name="theme-color" content="#f97316" />
-    <meta name="msapplication-TileColor" content="#f97316" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="format-detection" content="telephone=no" />
+    <link data-rh="true" rel="canonical" href="https://pratoby.com/" />
 
     <!-- PWA / Mobile -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="PratoBy" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Icons -->
+    <link
+      data-rh="true"
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/icons/android-chrome-192x192.png?v=4?v=4"
+    />
+
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="512x512"
+      href="/icons/android-chrome-512x512.png"
+    />
+
+    <link
+      data-rh="true"
+      rel="shortcut icon"
+      type="image/png"
+      href="/icons/android-chrome-192x192.png?v=4?v=4"
+    />
+
+    <link
+      data-rh="true"
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/icons/apple-touch-icon.png"
+    />
+
+    <link rel="manifest" href="/site.webmanifest" />
 
     <!-- Open Graph -->
     <meta data-rh="true" property="og:locale" content="pt_BR" />
@@ -58,13 +106,13 @@
 
     <meta
       data-rh="true"
-      name="twitter:title"
-      content="PratoBy | Cardápio digital e delivery"
+      property="og:image"
+      content="https://pratoby.com/og/pratoby-cover.png"
     />
 
     <meta
       data-rh="true"
-      property="og:image"
+      property="og:image:url"
       content="https://pratoby.com/og/pratoby-cover.png"
     />
 
@@ -81,11 +129,19 @@
     <meta
       data-rh="true"
       property="og:image:alt"
-      content="PratoBy - Cardápio digital para restaurantes venderem online sem comissão do PratoBy por pedido"
+      content="PratoBy - Cardápio digital para restaurantes venderem online sem comissão por pedido"
     />
 
     <!-- Twitter / X -->
     <meta data-rh="true" name="twitter:card" content="summary_large_image" />
+    <meta data-rh="true" name="twitter:site" content="@pratobybr" />
+    <meta data-rh="true" name="twitter:creator" content="@pratobybr" />
+
+    <meta
+      data-rh="true"
+      name="twitter:title"
+      content="PratoBy | Cardápio digital e delivery"
+    />
 
     <meta
       data-rh="true"
@@ -102,44 +158,22 @@
     <meta
       data-rh="true"
       name="twitter:image:alt"
-      content="PratoBy - Seu cardápio, seu link e seus pedidos sem comissão do PratoBy por pedido"
+      content="PratoBy - Seu cardápio, seu link e seus pedidos sem comissão por pedido"
     />
-
-    <!-- Icons -->
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link
-      rel="icon"
-      type="image/png"
-      href="/icons/favicon-32x32.png"
-      sizes="32x32"
-    />
-
-    <link
-      rel="icon"
-      type="image/png"
-      href="/icons/favicon-16x16.png"
-      sizes="16x16"
-    />
-
-    <link
-      rel="apple-touch-icon"
-      href="/icons/apple-touch-icon.png"
-      sizes="180x180"
-    />
-
-    <link rel="manifest" href="/site.webmanifest" />
 
     <!-- Performance hints -->
     <link rel="dns-prefetch" href="https://res.cloudinary.com" />
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
 
+    <link rel="dns-prefetch" href="https://www.gstatic.com" />
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+
     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
     <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
     <link rel="dns-prefetch" href="https://securetoken.googleapis.com" />
-    <link rel="dns-prefetch" href="https://www.gstatic.com" />
-
-    <link rel="preconnect" href="https://firestore.googleapis.com" />
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://firebaseinstallations.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fcmregistrations.googleapis.com" />
+    <link rel="dns-prefetch" href="https://viacep.com.br" />
 
     <!-- Schema.org -->
     <script type="application/ld+json">
@@ -155,7 +189,9 @@
             "logo": {
               "@type": "ImageObject",
               "@id": "https://pratoby.com/#logo",
-              "url": "https://pratoby.com/icons/android-chrome-512x512.png"
+              "url": "https://pratoby.com/icons/android-chrome-512x512.png",
+              "width": 512,
+              "height": 512
             },
             "image": "https://pratoby.com/og/pratoby-cover.png",
             "description": "O PratoBy é uma plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online com pedidos, pagamentos, entrega, retirada e encomendas.",

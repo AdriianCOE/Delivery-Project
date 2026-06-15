@@ -2178,10 +2178,13 @@ const storeImage =
   'https://pratoby.com/icons/android-chrome-512x512.png'
 
 const storeFavicon =
+  store?.faviconUrl ||
+  store?.logoIconUrl ||
   store?.logoUrl ||
   store?.logo ||
-  store?.imageUrl ||
-  '/favicon.ico'
+  store?.brand?.logoUrl ||
+  store?.branding?.logoUrl ||
+  storeImage
 
 const noIndexStorefront = shouldNoIndexStorefront(storeSlug, store)
 const storeJsonLd = useMemo(
@@ -2489,19 +2492,10 @@ const handleToggleFavorite = useCallback(() => {
 
 if (loadingStore) {
   return (
-    <>
-      <SEO
-        title={`${loadingStoreName} | Cardápio online`}
-        description="Carregando cardápio digital no PratoBy."
-        path={`/${slug || ''}`}
-        noIndex
-        noFollow
-      />
-      <LoadingScreen
-        timedOut={storeLoadTimedOut}
-        onRetry={() => setStoreReloadKey((value) => value + 1)}
-      />
-    </>
+    <LoadingScreen
+      timedOut={storeLoadTimedOut}
+      onRetry={() => setStoreReloadKey((value) => value + 1)}
+    />
   )
 }
 
@@ -2527,13 +2521,17 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-      title={`${storeName} | Cardápio digital`}
+      title={`${storeName} | Cardápio online`}
       description={storeDescription}
-      path={`/${storeSlug}`}
+      path={`/${storeSlug || store?.slug || store?.storeSlug || slug || ''}`}
       image={storeImage}
+      imageAlt={`${storeName} | Cardápio online - PratoBy`}
       favicon={storeFavicon}
+      type="website"
       noIndex={noIndexStorefront}
+      noFollow={noIndexStorefront}
       jsonLd={storeJsonLd}
+      themeColor={themeColor}
     />
 
     <div

@@ -759,7 +759,7 @@ function getOperationalStatus(store, scheduleStatus = {}) {
   if (scheduleStatus.hasSchedule && !scheduleStatus.isWithinSchedule) {
     return {
       label: 'Fora do horário',
-      description: 'Pedidos liberados no horário de atendimento.',
+      description: 'Pedidos liberados apenas no horário de atendimento.',
       isOpen: false,
       tone: 'warning',
     }
