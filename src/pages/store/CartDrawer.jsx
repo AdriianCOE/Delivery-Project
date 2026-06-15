@@ -26,7 +26,7 @@ import {
   FiSmartphone,
   FiZap,
 } from 'react-icons/fi'
-
+import { FaPix, FaCreditCard } from "react-icons/fa6";
 import { useCart } from '../../contexts/CartContext'
 import { scrollToFirstError } from '../../utils/scroll'
 import { getCartSchedulingState } from '../../utils/publicScheduling'
@@ -1595,7 +1595,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'pix_manual',
         legacyLabel: 'Pix',
         label: 'Pix com comprovante',
-        Icon: FiZap,
+        Icon: FaPix,
         iconLabel: 'Pix',
         description: 'Copie o Pix na próxima tela, envie o comprovante pelo WhatsApp e aguarde a confirmação da loja.',
         paymentStatus: 'pending',
@@ -1604,12 +1604,12 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'card_on_delivery',
         legacyLabel: 'Cartão',
         label: 'Cartão na entrega',
-        Icon: FiCreditCard,
+        Icon: FaCreditCard,
         iconLabel: 'Cartão',
         description: 'Débito ou crédito na maquininha.',
         paymentStatus: 'pay_on_delivery',
       },
-      cashEnabled && {
+      cashEnabled && { 
         value: 'cash',
         legacyLabel: 'Dinheiro',
         label: 'Dinheiro na entrega',

@@ -476,7 +476,7 @@ export default function StoreFooter({ store, todayHoursLabel }) {
                 <span
                   className={[
                     'absolute -bottom-1 -right-1 h-[18px] w-[18px] rounded-full border-[3px] border-white shadow-sm',
-                    isOpen ? 'bg-orange-500' : 'bg-gray-400',
+                    isOpen ? 'bg-green-500' : 'bg-red-400',
                   ].join(' ')}
                   aria-hidden="true"
                 />

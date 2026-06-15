@@ -13,9 +13,9 @@ export const CLOUDINARY_IMAGE_VARIANTS = {
   storeBannerMedium: 'f_auto,q_auto:good,c_fill,w_1024,h_300,g_auto',
   storeBanner: 'f_auto,q_auto:good,c_fill,w_1440,h_420,g_auto',
   storeBannerLarge: 'f_auto,q_auto:good,c_fill,w_1440,h_420,g_auto',
-  storeBannerMobileSmall: 'f_auto,q_auto:good,c_fill,w_480,h_160,g_auto',
-  storeBannerMobile: 'f_auto,q_auto:good,c_fill,w_768,h_256,g_auto',
-  storeBannerMobileLarge: 'f_auto,q_auto:good,c_fill,w_768,h_256,g_auto',
+  storeBannerMobileSmall: 'f_auto,q_auto:good,c_fill,w_480,h_267,g_center',
+  storeBannerMobile: 'f_auto,q_auto:good,c_fill,w_900,h_500,g_center',
+  storeBannerMobileLarge: 'f_auto,q_auto:good,c_fill,w_1080,h_600,g_center',
   ogImage: 'f_auto,q_auto,c_fill,g_auto,w_1200,h_630',
 }
 
@@ -33,8 +33,8 @@ export const CLOUDINARY_IMAGE_VARIANT_WIDTHS = {
   storeBanner: 1440,
   storeBannerLarge: 1440,
   storeBannerMobileSmall: 480,
-  storeBannerMobile: 768,
-  storeBannerMobileLarge: 768,
+  storeBannerMobile: 900,
+  storeBannerMobileLarge: 1080,
   ogImage: 1200,
 }
 

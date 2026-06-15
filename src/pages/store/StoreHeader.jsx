@@ -25,7 +25,7 @@ import {
   FiShoppingBag,
   FiGrid,
 } from 'react-icons/fi'
-
+import { FaPix, FaCreditCard } from "react-icons/fa6";
 const FAVORITES_KEY = '@PratoBy:favorites'
 const LEGACY_FAVORITES_KEY = '@DeliveryApp:favorites'
 const DEFAULT_THEME = '#f97316'
@@ -930,9 +930,38 @@ function InfoRow({ icon: Icon, label, value, action, themeColor }) {
   )
 }
 
+function isObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getStoreSchedulingConfig(store) {
+  const settings = store?.settings || {}
+  const candidates = [
+    store?.publicScheduling,
+    store?.scheduling,
+    settings?.scheduling,
+    store?.scheduledOrders,
+    settings?.scheduledOrders,
+  ]
+
+  const scheduling = candidates.find((candidate) => isObject(candidate)) || {}
+  const legacyEnabled =
+    store?.schedulingEnabled === true ||
+    store?.acceptScheduling === true ||
+    store?.acceptScheduledOrders === true ||
+    settings?.schedulingEnabled === true ||
+    settings?.acceptScheduling === true ||
+    settings?.acceptScheduledOrders === true
+
+  return {
+    ...scheduling,
+    enabled: scheduling.enabled === true || legacyEnabled,
+  }
+}
+
 function getAcceptedServiceTypes(store) {
   const settings = store?.settings || {}
-  const publicScheduling = store?.publicScheduling || store?.scheduling || {}
+  const publicScheduling = getStoreSchedulingConfig(store)
 
   const acceptsDelivery =
     store?.acceptDelivery ??
@@ -1002,13 +1031,13 @@ function getAcceptedPaymentMethods(store) {
     pixEnabled && {
       id: 'pix',
       label: 'Pix',
-      icon: FiZap,
+      icon: FaPix,
       description: 'Pagamento direto para a loja',
     },
     cardEnabled && {
       id: 'card',
       label: 'Cartão',
-      icon: FiCreditCard,
+      icon: FaCreditCard,
       description: 'Débito ou crédito na entrega',
     },
     cashEnabled && {
@@ -1996,16 +2025,13 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <button
-              label="Abrir QR Code"
-              desktopLabel="QR"
-              showLabelOnDesktop
-              onClick={() => setShowQrModal(true)}
-              themeColor={themeColor}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:bg-orange-50 active:scale-[0.99]"
-            >
-              <FiCopy />
-                Copiar link
-            </button>
+                type="button"
+                onClick={() => setShowQrModal(true)}
+                className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:bg-orange-50 active:scale-[0.99]"
+              >
+                <FiGrid />
+                Abrir QR Code
+              </button>
 
               <button
                 type="button"

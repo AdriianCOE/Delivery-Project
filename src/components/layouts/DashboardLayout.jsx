@@ -15,6 +15,7 @@ import NotificationsOnboardingBanner from '../merchant/NotificationsOnboardingBa
 import { DashboardPageSkeleton } from '../shared/Skeletons'
 import DashboardNotificationBell from '../notifications/DashboardNotificationBell'
 import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
+import FloatingToast from '../ui/FloatingToast'
 import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
 import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
 import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
@@ -1497,6 +1498,11 @@ export default function DashboardLayout() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true)
+      try {
+        sessionStorage.removeItem(`pratoby-dashboard-welcome:${user?.uid || 'anonymous'}`)
+      } catch (storageError) {
+        console.warn('Não foi possível limpar o toast de boas-vindas:', storageError)
+      }
       await new Promise((resolve) => setTimeout(resolve, 600))
 
       if (typeof logout === 'function') {
@@ -1563,6 +1569,7 @@ export default function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [soonFeature, setSoonFeature] = useState(null)
+  const [welcomeToast, setWelcomeToast] = useState(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const storeName =
@@ -1573,6 +1580,35 @@ export default function DashboardLayout() {
 
   const avatarUrl = userData?.photoURL || userData?.avatarUrl || user?.photoURL || ''
   const avatarInitial = (userData?.displayName || userData?.name || user?.displayName || storeName || 'L')[0]?.toUpperCase() || 'L'
+
+  useEffect(() => {
+    if (loading || !user?.uid) return
+
+    const storageKey = `pratoby-dashboard-welcome:${user.uid}`
+
+    try {
+      if (sessionStorage.getItem(storageKey)) return
+      sessionStorage.setItem(storageKey, 'shown')
+    } catch (storageError) {
+      console.warn('Não foi possível registrar o toast de boas-vindas:', storageError)
+    }
+
+    const displayName =
+      userData?.displayName ||
+      userData?.name ||
+      user?.displayName ||
+      user?.email?.split('@')?.[0] ||
+      ''
+    const firstName = String(displayName).trim().split(/\s+/)[0]
+
+    setWelcomeToast({
+      type: 'success',
+      title: 'Bem-vindo de volta',
+      message: firstName
+        ? `Olá, ${firstName}. Seu painel está pronto.`
+        : 'Seu painel está pronto.',
+    })
+  }, [loading, user?.displayName, user?.email, user?.uid, userData?.displayName, userData?.name])
 
   const moreActive = useMemo(() => {
   const isBottomItem = MOBILE_NAV_PATHS.some((path) => {
@@ -1600,6 +1636,10 @@ export default function DashboardLayout() {
       <SoonToast
         feature={soonFeature}
         onClose={() => setSoonFeature(null)}
+      />
+      <FloatingToast
+        toast={welcomeToast}
+        onClose={() => setWelcomeToast(null)}
       />
 
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
