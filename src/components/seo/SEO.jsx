@@ -3,16 +3,28 @@ import { Helmet } from 'react-helmet-async'
 
 const SITE_URL = 'https://pratoby.com'
 const SITE_NAME = 'PratoBy'
+
 const DEFAULT_TITLE = 'PratoBy | Cardápio digital'
 const DEFAULT_DESCRIPTION =
   'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão por pedido.'
+
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
-const DEFAULT_FAVICON = `${SITE_URL}/icons/android-chrome-192x192.png?v=4`
+const DEFAULT_FAVICON = `${SITE_URL}/icons/android-chrome-192x192.png?v=5`
+
 const TWITTER_HANDLE = '@pratobybr'
 const DEFAULT_THEME_COLOR = '#F97316'
 
 const SOCIAL_IMAGE_WIDTH = 1200
 const SOCIAL_IMAGE_HEIGHT = 630
+
+const STORE_FAVICON_TRANSFORM =
+  'f_png,q_auto/e_trim/c_fill,w_164,h_164,g_auto,r_42/c_pad,w_192,h_192,b_transparent'
+
+const STORE_APPLE_ICON_TRANSFORM =
+  'f_png,q_auto/e_trim/c_fill,w_156,h_156,g_auto,r_40/c_pad,w_180,h_180,b_transparent'
+
+const SOCIAL_IMAGE_TRANSFORM =
+  `f_auto,q_auto,w_${SOCIAL_IMAGE_WIDTH},h_${SOCIAL_IMAGE_HEIGHT},c_fill,g_auto`
 
 const VALID_OG_TYPES = new Set([
   'website',
@@ -45,7 +57,7 @@ function normalizePath(path) {
   try {
     if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
       const parsed = new URL(rawPath)
-      return normalizePath(`${parsed.pathname}${parsed.search}${parsed.hash}`)
+      return normalizePath(parsed.pathname)
     }
   } catch {
     // ignora e normaliza como path comum
@@ -93,10 +105,18 @@ function buildAbsoluteUrl(url, fallback = SITE_URL) {
   }
 }
 
+function isCloudinaryImageUrl(url) {
+  return (
+    typeof url === 'string' &&
+    url.includes('res.cloudinary.com') &&
+    url.includes('/image/upload/')
+  )
+}
+
 function transformCloudinaryUrl(url, transformation) {
   const absoluteUrl = buildAbsoluteUrl(url, '')
 
-  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+  if (!isCloudinaryImageUrl(absoluteUrl)) {
     return absoluteUrl
   }
 
@@ -108,14 +128,14 @@ function transformCloudinaryUrl(url, transformation) {
   const prefix = absoluteUrl.slice(0, markerIndex + marker.length)
   const afterUpload = absoluteUrl.slice(markerIndex + marker.length)
 
-  // Remove transformações anteriores quando existe /v1234567890/
-  const versionMatch = afterUpload.match(/(?:^|\/)(v\d+\/)/)
+  // Remove qualquer transformação anterior e preserva a URL a partir do /v123...
+  const versionMatch = afterUpload.match(/(^|\/)v\d+\//)
 
   if (versionMatch) {
-    const versionStart =
+    const versionIndex =
       versionMatch.index + (versionMatch[0].startsWith('/') ? 1 : 0)
 
-    const suffix = afterUpload.slice(versionStart)
+    const suffix = afterUpload.slice(versionIndex)
 
     return `${prefix}${transformation}/${suffix}`
   }
@@ -126,40 +146,31 @@ function transformCloudinaryUrl(url, transformation) {
 function buildSocialImageUrl(url) {
   const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_IMAGE)
 
-  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+  if (!isCloudinaryImageUrl(absoluteUrl)) {
     return absoluteUrl
   }
 
-  return transformCloudinaryUrl(
-    absoluteUrl,
-    `f_auto,q_auto,w_${SOCIAL_IMAGE_WIDTH},h_${SOCIAL_IMAGE_HEIGHT},c_fill,g_auto`
-  )
+  return transformCloudinaryUrl(absoluteUrl, SOCIAL_IMAGE_TRANSFORM)
 }
 
 function buildCloudinaryFavicon(url) {
   const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_FAVICON)
 
-  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+  if (!isCloudinaryImageUrl(absoluteUrl)) {
     return absoluteUrl
   }
 
-  return transformCloudinaryUrl(
-    absoluteUrl,
-    'f_png,q_auto/e_trim/c_fill,w_164,h_164,g_auto,r_36/c_pad,w_192,h_192,b_transparent'
-  )
+  return transformCloudinaryUrl(absoluteUrl, STORE_FAVICON_TRANSFORM)
 }
 
 function buildAppleTouchIcon(url) {
   const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_FAVICON)
 
-  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+  if (!isCloudinaryImageUrl(absoluteUrl)) {
     return absoluteUrl
   }
 
-  return transformCloudinaryUrl(
-    absoluteUrl,
-    'f_png,q_auto/e_trim/c_fill,w_156,h_156,g_auto,r_40/c_pad,w_180,h_180,b_transparent'
-  )
+  return transformCloudinaryUrl(absoluteUrl, STORE_APPLE_ICON_TRANSFORM)
 }
 
 function getImageType(url) {

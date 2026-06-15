@@ -3599,6 +3599,36 @@ function absolutePublicUrl(value) {
   }
 }
 
+const STORE_FAVICON_TRANSFORM =
+  'f_png,q_auto/e_trim/c_fill,w_164,h_164,g_auto,r_42/c_pad,w_192,h_192,b_transparent'
+
+function transformCloudinaryPublicUrl(value, transformation) {
+  const url = absolutePublicUrl(value)
+
+  if (!url) return ''
+  if (!url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) {
+    return url
+  }
+
+  const marker = '/image/upload/'
+  const markerIndex = url.indexOf(marker)
+
+  if (markerIndex === -1) return url
+
+  const prefix = url.slice(0, markerIndex + marker.length)
+  const afterUpload = url.slice(markerIndex + marker.length)
+  const versionMatch = afterUpload.match(/(^|\/)v\d+\//)
+
+  if (versionMatch) {
+    const versionIndex = versionMatch.index + (versionMatch[0].startsWith('/') ? 1 : 0)
+    const suffix = afterUpload.slice(versionIndex)
+
+    return `${prefix}${transformation}/${suffix}`
+  }
+
+  return `${prefix}${transformation}/${afterUpload.replace(/^\/+/, '')}`
+}
+
 function buildSeoFaviconUrl(value) {
   const url = absolutePublicUrl(value)
 
@@ -3608,10 +3638,7 @@ function buildSeoFaviconUrl(value) {
     return url
   }
 
-  return url.replace(
-    '/image/upload/',
-    '/image/upload/f_png,q_auto/e_trim/c_fill,w_164,h_164,g_auto,r_36/c_pad,w_192,h_192,b_transparent/'
-  )
+  return transformCloudinaryPublicUrl(url, STORE_FAVICON_TRANSFORM)
 }
 
 function replaceOrInsertHeadTag(html, matcher, tag) {
@@ -3689,7 +3716,7 @@ function injectStorefrontSeo(html, meta) {
     ],
     [
       /<link\b(?=[^>]*\brel=["']apple-touch-icon["'])[^>]*>/i,
-      `<link rel="apple-touch-icon" href="${safeFavicon}">`,
+      `<link rel="apple-touch-icon" href="${safeFavicon}" sizes="180x180">`,
     ],
   ]
 
@@ -3727,6 +3754,7 @@ function buildStorefrontSeoMeta(store) {
   // 2. Busca do favicon com os fallbacks corretos
   const favicon = buildSeoFaviconUrl(
     store?.faviconUrl ||
+      store?.logoIconUrl ||
       store?.logoUrl ||
       store?.logo
   )

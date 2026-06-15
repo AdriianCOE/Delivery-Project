@@ -722,23 +722,16 @@ function normalizeStore(input, fallbackSlug = '') {
   const docId = getStoreDocId(input) || input?.id || fallbackSlug
   const storeSlug = getStorePublicSlug(input) || input?.slug || fallbackSlug || docId
 
-  const logoUrl = getCloudinaryImageUrl(
-    firstFilled(data.logoUrl, data.logo, data.avatarUrl, data.photoUrl),
-    'storeLogo',
-  )
+  const rawLogoUrl = firstFilled(data.logoUrl, data.logo, data.avatarUrl, data.photoUrl)
+  const rawFaviconUrl = firstFilled(data.faviconUrl, data.logoIconUrl, rawLogoUrl)
+  const rawBannerUrl = firstFilled(data.bannerUrl, data.coverUrl, data.bannerImageUrl, data.coverImageUrl)
+  const rawBannerMobileUrl = firstFilled(data.bannerMobileUrl, data.mobileBannerUrl, data.mobileBannerURL)
+  const rawShareImageUrl = firstFilled(data.shareImageUrl, data.seoImageUrl, data.ogImageUrl)
 
-  const bannerUrl = getCloudinaryImageUrl(
-    firstFilled(data.bannerUrl, data.coverUrl, data.bannerImageUrl, data.coverImageUrl),
-    'storeBanner',
-  )
-  const bannerMobileUrl = getCloudinaryImageUrl(
-    firstFilled(data.bannerMobileUrl, data.mobileBannerUrl, data.mobileBannerURL),
-    'storeBannerMobile',
-  )
-  const shareImageUrl = getCloudinaryImageUrl(
-  firstFilled(data.shareImageUrl, data.seoImageUrl, data.ogImageUrl),
-  'storeBanner',
-  )
+  const logoUrl = getCloudinaryImageUrl(rawLogoUrl, 'storeLogo')
+  const bannerUrl = getCloudinaryImageUrl(rawBannerUrl, 'storeBanner')
+  const bannerMobileUrl = getCloudinaryImageUrl(rawBannerMobileUrl, 'storeBannerMobile')
+  const shareImageUrl = getCloudinaryImageUrl(rawShareImageUrl, 'storeBanner')
 
   return {
     ...data,
@@ -747,15 +740,26 @@ function normalizeStore(input, fallbackSlug = '') {
     storeId: docId,
     storeSlug,
     slug: data.slug || storeSlug,
+
+    rawLogoUrl,
+    rawFaviconUrl,
+    rawBannerUrl,
+    rawBannerMobileUrl,
+    rawShareImageUrl,
+
     logoUrl,
     logo: logoUrl,
+    faviconUrl: rawFaviconUrl,
+
     bannerUrl,
     bannerMobileUrl,
     mobileBannerUrl: bannerMobileUrl,
     coverUrl: bannerUrl,
+
     shareImageUrl,
     seoImageUrl: shareImageUrl,
     ogImageUrl: shareImageUrl,
+
     themeColor: firstFilled(data.themeColor, data.primaryColor, data.brandColor) || BRAND_GREEN,
     whatsapp: firstFilled(data.whatsapp, data.phone, data.contactPhone),
     city: firstFilled(data.city, data.address?.city),
@@ -2169,21 +2173,24 @@ const storeName = store?.name || 'Loja'
 const storeDescription = buildStoreDescription(store, storeName)
 
 const storeImage =
+  store?.rawShareImageUrl ||
   store?.shareImageUrl ||
   store?.seoImageUrl ||
   store?.ogImageUrl ||
+  store?.rawBannerUrl ||
   store?.bannerUrl ||
   store?.coverUrl ||
+  store?.rawLogoUrl ||
   store?.logoUrl ||
-  'https://pratoby.com/icons/android-chrome-512x512.png'
+  'https://pratoby.com/icons/android-chrome-192x192.png?v=5'
 
 const storeFavicon =
+  store?.rawFaviconUrl ||
   store?.faviconUrl ||
   store?.logoIconUrl ||
+  store?.rawLogoUrl ||
   store?.logoUrl ||
   store?.logo ||
-  store?.brand?.logoUrl ||
-  store?.branding?.logoUrl ||
   storeImage
 
 const noIndexStorefront = shouldNoIndexStorefront(storeSlug, store)
