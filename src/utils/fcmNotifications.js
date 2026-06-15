@@ -43,6 +43,21 @@ function getNotificationPermission() {
   return Notification.permission
 }
 
+let fcmServiceWorkerRegistrationPromise = null
+let fcmTokenRequestPromise = null
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function isIndexedDbClosingError(error) {
+  return (
+    error?.name === 'InvalidStateError' ||
+    String(error?.message || '').toLowerCase().includes('database connection is closing') ||
+    String(error?.message || '').toLowerCase().includes('idbdatabase')
+  )
+}
+
 async function sha256Hex(value) {
   const bytes = new TextEncoder().encode(value)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
@@ -309,6 +324,9 @@ async function clearMessagingPushSubscription(registration) {
 }
 
 async function resetMessagingServiceWorker() {
+  fcmServiceWorkerRegistrationPromise = null
+  fcmTokenRequestPromise = null
+
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
 
   try {
@@ -331,44 +349,85 @@ async function registerMessagingServiceWorker() {
     return null
   }
 
-  const registration = await navigator.serviceWorker.register(getFirebaseMessagingSwUrl(), {
-    scope: '/',
-  })
+  if (!fcmServiceWorkerRegistrationPromise) {
+    fcmServiceWorkerRegistrationPromise = (async () => {
+      const existingRegistration = await navigator.serviceWorker.getRegistration('/')
 
-  registration.update().catch(() => {})
+      if (
+        existingRegistration?.active?.scriptURL &&
+        existingRegistration.active.scriptURL.includes('/firebase-messaging-sw.js')
+      ) {
+        existingRegistration.update().catch(() => {})
+        return existingRegistration
+      }
 
-  if (!registration.active) {
-    await waitForServiceWorkerActivation(registration.installing || registration.waiting)
+      const registration = await navigator.serviceWorker.register(getFirebaseMessagingSwUrl(), {
+        scope: '/',
+      })
+
+      registration.update().catch(() => {})
+
+      if (!registration.active) {
+        await waitForServiceWorkerActivation(registration.installing || registration.waiting)
+      }
+
+      await navigator.serviceWorker.ready
+
+      return registration.active ? registration : navigator.serviceWorker.ready
+    })().catch((error) => {
+      fcmServiceWorkerRegistrationPromise = null
+      throw error
+    })
   }
 
-  return registration.active
-    ? registration
-    : navigator.serviceWorker.ready
+  return fcmServiceWorkerRegistrationPromise
 }
 
 async function getFcmTokenWithRecovery(messaging, vapidKey) {
-  const serviceWorkerRegistration = await registerMessagingServiceWorker()
+  if (fcmTokenRequestPromise) {
+    return fcmTokenRequestPromise
+  }
 
-  try {
-    return await getToken(messaging, {
+  fcmTokenRequestPromise = (async () => {
+    const serviceWorkerRegistration = await registerMessagingServiceWorker()
+
+    const tokenOptions = {
       vapidKey,
       serviceWorkerRegistration,
-    })
-  } catch (error) {
-    if (getFcmErrorReason(error) !== 'push-service-error') {
-      throw error
     }
 
-    console.warn('[FCM] Falha no push service. Limpando subscription antiga e tentando novamente.', error)
-    await clearMessagingPushSubscription(serviceWorkerRegistration)
-    await resetMessagingServiceWorker()
+    try {
+      return await getToken(messaging, tokenOptions)
+    } catch (error) {
+      if (isIndexedDbClosingError(error)) {
+        console.warn('[FCM] IndexedDB estava fechando durante getToken. Tentando novamente...', error)
+        await wait(900)
+        return getToken(messaging, tokenOptions)
+      }
 
-    const freshRegistration = await registerMessagingServiceWorker()
-    return getToken(messaging, {
-      vapidKey,
-      serviceWorkerRegistration: freshRegistration,
-    })
-  }
+      if (getFcmErrorReason(error) !== 'push-service-error') {
+        throw error
+      }
+
+      console.warn('[FCM] Falha no push service. Limpando subscription antiga e tentando novamente.', error)
+
+      await clearMessagingPushSubscription(serviceWorkerRegistration)
+      await resetMessagingServiceWorker()
+
+      fcmServiceWorkerRegistrationPromise = null
+
+      const freshRegistration = await registerMessagingServiceWorker()
+
+      return getToken(messaging, {
+        vapidKey,
+        serviceWorkerRegistration: freshRegistration,
+      })
+    } finally {
+      fcmTokenRequestPromise = null
+    }
+  })()
+
+  return fcmTokenRequestPromise
 }
 
 function getPlatform() {
