@@ -24,6 +24,7 @@ const {
   disableCustomerOrderPushToken,
   registerCustomerOrderPushToken,
   sendCustomerOrderStatusPushToOrder,
+  sendMerchantTestPushToStore,
   sendNewOrderPushToStore,
 } = require('./fcmNotifications')
 const {
@@ -399,6 +400,45 @@ exports.disableCustomerOrderPushToken = onCall(PUBLIC_CALLABLE_OPTIONS, async (r
     tokenHash: request.data?.tokenHash,
   })
 })
+
+exports.sendMerchantTestPush = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    memory: '256MiB',
+    maxInstances: 10,
+  },
+  async (request) => {
+    const uid = assertNonAnonymousDashboardUser(request)
+    const storeId = String(request.data?.storeId || '').trim()
+
+    if (!storeId) {
+      throw new HttpsError('invalid-argument', 'Loja obrigatoria.')
+    }
+
+    const [userSnapshot, storeSnapshot] = await Promise.all([
+      db.collection('users').doc(uid).get(),
+      db.collection('stores').doc(storeId).get(),
+    ])
+
+    if (!userSnapshot.exists) {
+      throw new HttpsError('permission-denied', 'Usuario nao encontrado.')
+    }
+
+    if (!storeSnapshot.exists) {
+      throw new HttpsError('not-found', 'Loja nao encontrada.')
+    }
+
+    assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userSnapshot.data() || {})
+
+    return sendMerchantTestPushToStore({
+      db,
+      admin,
+      logger,
+      storeId,
+    })
+  }
+)
 
 exports.confirmCustomerDelivery = onCall(PUBLIC_CALLABLE_OPTIONS, async (request) => {
   await assertPublicCallableRateLimit('confirmCustomerDelivery', request)

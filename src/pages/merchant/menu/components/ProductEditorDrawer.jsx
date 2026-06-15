@@ -19,6 +19,7 @@ import {
   FiClock,
   FiCreditCard,
   FiDollarSign,
+  FiDownload,
   FiEye,
   FiGift,
   FiHome,
@@ -1257,6 +1258,21 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                                 {visibleImage ? 'Clique para escolher da biblioteca' : 'Escolher imagem da biblioteca'}
                               </span>
                             </button>
+
+                            {visibleImage ? (
+                              <a
+                                href={visibleImage}
+                                download
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                className="absolute right-16 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/85 text-slate-900 shadow-sm ring-1 ring-black/10 backdrop-blur transition hover:bg-white hover:text-[#f97316] dark:bg-[#151922]/85 dark:text-slate-100 dark:ring-white/10 dark:hover:bg-[#151922]"
+                                aria-label="Baixar imagem do produto"
+                                title="Baixar imagem"
+                              >
+                                <FiDownload size={15} />
+                              </a>
+                            ) : null}
 
                             {visibleImage ? (
                               <button

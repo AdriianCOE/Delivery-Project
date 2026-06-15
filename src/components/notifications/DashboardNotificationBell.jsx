@@ -14,6 +14,7 @@ import {
   isFcmSupported,
   requestFcmPermissionAndToken,
   saveMerchantFcmToken,
+  sendMerchantTestPush,
   showLocalMerchantPushTestNotification,
 } from '../../utils/fcmNotifications'
 import { formatNotificationTime } from '../../utils/notificationFormatters'
@@ -400,6 +401,21 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     }
   }
 
+  const handleSendRealPushTest = async () => {
+    if (!storeId || pushLoading || pushStatus !== 'enabled') return
+
+    try {
+      setPushLoading(true)
+      await sendMerchantTestPush({ storeId })
+      setPushTestMessage('Teste push real enviado para os dispositivos ativos desta loja.')
+    } catch (error) {
+      console.warn('[FCM] Falha ao enviar teste push real.', error)
+      setPushTestMessage('Não foi possível enviar o teste push real agora.')
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
   const handleTogglePreference = async (group, key, value) => {
     if (group === 'channels' && key === 'fcm') {
       if (value) {
@@ -424,6 +440,25 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     setSoundTestMessage(played
       ? 'Som de teste reproduzido neste dispositivo.'
       : 'Este navegador nao liberou o som de teste.')
+  }
+
+  const pushEnabled = pushStatus === 'enabled'
+
+  const pushToggleDisabled =
+    pushLoading ||
+    !storeId ||
+    pushStatus === 'unsupported' ||
+    pushStatus === 'denied'
+
+  const handleTogglePushNotifications = () => {
+    if (pushToggleDisabled) return
+
+    if (pushEnabled) {
+      handleDisablePushNotifications()
+      return
+    }
+
+    handleEnablePushNotifications()
   }
 
   return (
@@ -567,58 +602,95 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <div className="flex items-start justify-between gap-3">
                       <span className="min-w-0">
                         <span className="block text-xs font-black text-gray-900 dark:text-zinc-100">
                           Push FCM neste dispositivo
                         </span>
                         <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-zinc-400">
-                          {pushStatus === 'enabled'
-                            ? 'Ativo. Use o teste para conferir o aviso local.'
-                            : 'Ative manualmente para receber avisos do navegador.'}
+                          {pushEnabled
+                            ? 'Ativo. Este dispositivo pode receber avisos de novos pedidos.'
+                            : 'Ative para receber avisos mesmo com o painel em segundo plano.'}
                         </span>
                       </span>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${
-                        pushStatus === 'enabled'
-                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
-                          : 'bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-300'
-                      }`}>
+
+                      <button
+                        type="button"
+                        onClick={handleTogglePushNotifications}
+                        disabled={pushToggleDisabled}
+                        title={
+                          pushEnabled
+                            ? 'Desativar push neste dispositivo'
+                            : 'Ativar push neste dispositivo'
+                        }
+                        aria-pressed={pushEnabled}
+                        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
+                          pushEnabled
+                            ? 'border-emerald-500 bg-emerald-500 shadow-sm shadow-emerald-500/20'
+                            : 'border-gray-200 bg-gray-200 dark:border-zinc-700 dark:bg-zinc-800'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                            pushEnabled ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                        <span className="sr-only">
+                          {pushEnabled ? 'Desativar push' : 'Ativar push'}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-zinc-950/60">
+                      <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400 dark:text-zinc-500">
+                        Status
+                      </span>
+
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                          pushEnabled
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                            : 'bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-300'
+                        }`}
+                      >
                         {getPushStatusLabel(pushStatus, pushLoading)}
                       </span>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {pushStatus === 'enabled' ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={handleSendPushTest}
-                            disabled={pushLoading || !storeId}
-                            className="inline-flex h-8 items-center justify-center rounded-xl bg-emerald-600 px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Enviar teste
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleDisablePushNotifications}
-                            disabled={pushLoading || !storeId}
-                            className="inline-flex h-8 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          >
-                            Desativar push
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleEnablePushNotifications}
-                          disabled={pushLoading || !storeId || pushStatus === 'unsupported' || pushStatus === 'denied'}
-                          className="inline-flex h-8 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Ativar notificacoes push
-                        </button>
-                      )}
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSendPushTest}
+                        disabled={pushLoading || !storeId || !pushEnabled}
+                        title={
+                          !pushEnabled
+                            ? 'Ative o push primeiro.'
+                            : 'Enviar teste local neste navegador'
+                        }
+                        className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Teste local
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSendRealPushTest}
+                        disabled={pushLoading || !storeId || !pushEnabled}
+                        title={
+                          !pushEnabled
+                            ? 'Ative as notificações push primeiro.'
+                            : 'Enviar teste push real via FCM'
+                        }
+                        className="inline-flex h-9 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Teste push real
+                      </button>
                     </div>
+
+                    <p className="mt-2 text-[10px] font-semibold leading-4 text-gray-500 dark:text-zinc-400">
+                      Para ver o push real como notificação do Windows, deixe o painel minimizado ou em segundo plano.
+                    </p>
 
                     <AnimatePresence>
                       {pushTestMessage && (
@@ -676,7 +748,6 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                       {EVENT_SETTINGS.map((setting) => {
                         const checked = preferences[setting.group][setting.key] === true
                         const eventMeta = NOTIFICATION_EVENT_TYPES[setting.key]
-
                         return (
                           <label
                             key={`${setting.group}:${setting.key}`}
@@ -769,7 +840,20 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                       disabled={pushLoading || !storeId}
                       className="inline-flex h-8 items-center justify-center rounded-xl bg-emerald-600 px-3 text-[11px] font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Enviar teste
+                      Teste local
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendRealPushTest}
+                      disabled={pushLoading || !storeId || pushStatus !== 'enabled'}
+                      title={
+                        pushStatus !== 'enabled'
+                          ? 'Ative as notificações push primeiro.'
+                          : 'Enviar teste push real'
+                      }
+                      className="inline-flex h-8 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Teste push real
                     </button>
                     <button
                       type="button"

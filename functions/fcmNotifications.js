@@ -1,5 +1,10 @@
 const crypto = require('crypto')
 
+const MERCHANT_DASHBOARD_URL = 'https://pratoby.com/dashboard/orders'
+const MERCHANT_DASHBOARD_PATH = '/dashboard/orders'
+const WEB_PUSH_ICON = '/icons/android-chrome-192x192.png'
+const WEB_PUSH_BADGE = '/icons/android-chrome-192x192.png'
+
 function isInvalidFcmTokenError(error) {
   const code = String(error?.code || error?.errorInfo?.code || '').toLowerCase()
   return [
@@ -217,7 +222,7 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
       hasStoreId: Boolean(normalizedStoreId),
       hasOrderId: Boolean(normalizedOrderId),
     })
-    return { sent: 0, failed: 0, invalidated: 0 }
+    return { ok: false, tokenCount: 0, successCount: 0, failureCount: 0, sent: 0, failed: 0, invalidated: 0 }
   }
 
   const tokenSnapshot = await db
@@ -233,7 +238,7 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
       storeId: normalizedStoreId,
       orderId: normalizedOrderId,
     })
-    return { sent: 0, failed: 0, invalidated: 0 }
+    return { ok: false, tokenCount: 0, successCount: 0, failureCount: 0, sent: 0, failed: 0, invalidated: 0 }
   }
 
   const tokenDocs = tokenSnapshot.docs
@@ -246,16 +251,35 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
       orderId: normalizedOrderId,
       docCount: tokenSnapshot.size,
     })
-    return { sent: 0, failed: 0, invalidated: 0 }
+    return { ok: false, tokenCount: 0, successCount: 0, failureCount: 0, sent: 0, failed: 0, invalidated: 0 }
   }
 
+  const title = 'Novo pedido recebido'
+  const body = 'Toque para abrir o painel de pedidos.'
+  const tag = `pratoby-new-order-${normalizedOrderId}`
   const response = await admin.messaging().sendEachForMulticast({
     tokens: tokenDocs.map((entry) => entry.data.token),
     data: {
       type: 'new_order',
       orderId: normalizedOrderId,
       storeId: normalizedStoreId,
-      url: '/dashboard/orders',
+      url: MERCHANT_DASHBOARD_PATH,
+      title,
+      body,
+    },
+    webpush: {
+      notification: {
+        title,
+        body,
+        icon: WEB_PUSH_ICON,
+        badge: WEB_PUSH_BADGE,
+        tag,
+        renotify: true,
+        requireInteraction: true,
+      },
+      fcmOptions: {
+        link: MERCHANT_DASHBOARD_URL,
+      },
     },
   })
 
@@ -296,6 +320,120 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
   })
 
   return {
+    ok: response.successCount > 0,
+    tokenCount: tokenDocs.length,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+    sent: response.successCount,
+    failed: response.failureCount,
+    invalidated,
+  }
+}
+
+async function sendMerchantTestPushToStore({ db, admin, logger, storeId }) {
+  const normalizedStoreId = String(storeId || '').trim()
+
+  if (!normalizedStoreId) {
+    logger.warn('[fcm] Skipping merchant test push without storeId.')
+    return { ok: false, tokenCount: 0, successCount: 0, failureCount: 0, sent: 0, failed: 0, invalidated: 0 }
+  }
+
+  const tokenSnapshot = await db
+    .collection('stores')
+    .doc(normalizedStoreId)
+    .collection('notificationTokens')
+    .where('enabled', '==', true)
+    .limit(100)
+    .get()
+
+  if (tokenSnapshot.empty) {
+    logger.info('[fcm] No enabled merchant tokens for test push.', {
+      storeId: normalizedStoreId,
+    })
+    return { ok: false, tokenCount: 0, successCount: 0, failureCount: 0, sent: 0, failed: 0, invalidated: 0 }
+  }
+
+  const tokenDocs = tokenSnapshot.docs
+    .map((doc) => ({ ref: doc.ref, id: doc.id, data: doc.data() || {} }))
+    .filter((entry) => typeof entry.data.token === 'string' && entry.data.token.trim())
+
+  if (tokenDocs.length === 0) {
+    logger.warn('[fcm] Enabled merchant token docs without token payload for test push.', {
+      storeId: normalizedStoreId,
+      docCount: tokenSnapshot.size,
+    })
+    return { ok: false, tokenCount: 0, successCount: 0, failureCount: 0, sent: 0, failed: 0, invalidated: 0 }
+  }
+
+  const title = 'Push ativado no PratoBy'
+  const body = 'Este dispositivo já pode receber avisos de novos pedidos.'
+  const tag = `pratoby-merchant-test-${normalizedStoreId}`
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens: tokenDocs.map((entry) => entry.data.token),
+    data: {
+      type: 'merchant_test',
+      storeId: normalizedStoreId,
+      title,
+      body,
+      url: MERCHANT_DASHBOARD_PATH,
+    },
+    webpush: {
+      notification: {
+        title,
+        body,
+        icon: WEB_PUSH_ICON,
+        badge: WEB_PUSH_BADGE,
+        tag,
+        renotify: true,
+        requireInteraction: false,
+      },
+      fcmOptions: {
+        link: MERCHANT_DASHBOARD_URL,
+      },
+    },
+  })
+
+  const batch = db.batch()
+  let invalidated = 0
+
+  response.responses.forEach((sendResult, index) => {
+    const tokenDoc = tokenDocs[index]
+    if (!tokenDoc) return
+
+    if (sendResult.success) {
+      batch.set(tokenDoc.ref, {
+        lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastTestSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true })
+      return
+    }
+
+    if (isInvalidFcmTokenError(sendResult.error)) {
+      invalidated += 1
+      batch.set(tokenDoc.ref, {
+        enabled: false,
+        invalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        invalidationReason: String(sendResult.error?.code || 'messaging-error').slice(0, 120),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true })
+    }
+  })
+
+  await batch.commit()
+
+  logger.info('[fcm] Merchant test push sent.', {
+    storeId: normalizedStoreId,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+    invalidated,
+  })
+
+  return {
+    ok: response.successCount > 0,
+    tokenCount: tokenDocs.length,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
     sent: response.successCount,
     failed: response.failureCount,
     invalidated,
@@ -432,5 +570,6 @@ module.exports = {
   disableCustomerOrderPushToken,
   registerCustomerOrderPushToken,
   sendCustomerOrderStatusPushToOrder,
+  sendMerchantTestPushToStore,
   sendNewOrderPushToStore,
 }

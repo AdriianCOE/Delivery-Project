@@ -18,6 +18,8 @@ import { notificationPreferenceEnabled } from './notificationPreferences'
 
 let foregroundFcmUnsubscribe = null
 let warnedMissingVapidKey = false
+const FOREGROUND_FCM_DEDUPE_MS = 2 * 60 * 1000
+const foregroundFcmDedupe = new Map()
 const foregroundFcmConfig = {
   merchantEnabled: false,
   merchantPreferences: null,
@@ -142,6 +144,7 @@ function isFocusedVisiblePage() {
 function getFcmPayloadType(data = {}) {
   const type = String(data.type || '').trim()
   if (type === 'order_status_update') return 'order_status_update'
+  if (type === 'merchant_test') return 'merchant_test'
   return 'new_order'
 }
 
@@ -158,7 +161,53 @@ function getFcmNotificationTag({ type, orderId, status }) {
     return `pratoby-order-status-${orderId || 'unknown'}-${status || 'updated'}`
   }
 
+  if (type === 'merchant_test') {
+    return 'pratoby-merchant-test'
+  }
+
   return `pratoby-new-order-${orderId || 'unknown'}`
+}
+
+function getForegroundFcmDedupeKey(type, data = {}) {
+  if (type === 'new_order') {
+    const orderId = String(data.orderId || '').trim()
+    return orderId ? `new_order:${orderId}` : ''
+  }
+
+  return ''
+}
+
+function pruneForegroundFcmDedupe(now = Date.now()) {
+  foregroundFcmDedupe.forEach((timestamp, key) => {
+    if (now - timestamp > FOREGROUND_FCM_DEDUPE_MS) {
+      foregroundFcmDedupe.delete(key)
+    }
+  })
+}
+
+export function markMerchantOrderNotificationSeen(orderId) {
+  const normalizedOrderId = String(orderId || '').trim()
+  if (!normalizedOrderId) return
+
+  const now = Date.now()
+  pruneForegroundFcmDedupe(now)
+  foregroundFcmDedupe.set(`new_order:${normalizedOrderId}`, now)
+}
+
+function shouldSkipForegroundFcmNotification(type, data = {}) {
+  const key = getForegroundFcmDedupeKey(type, data)
+  if (!key) return false
+
+  const now = Date.now()
+  pruneForegroundFcmDedupe(now)
+
+  const lastSeenAt = foregroundFcmDedupe.get(key)
+  if (lastSeenAt && now - lastSeenAt <= FOREGROUND_FCM_DEDUPE_MS) {
+    return true
+  }
+
+  foregroundFcmDedupe.set(key, now)
+  return false
 }
 
 function canShowForegroundBrowserNotification({ type, data, ignoreFocus = false, ignorePreferences = false }) {
@@ -211,14 +260,22 @@ function showForegroundFcmBrowserNotification(payload, options = {}) {
     return { shown: false, reason: permission.reason }
   }
 
+  if (!options.ignoreDedupe && shouldSkipForegroundFcmNotification(type, data)) {
+    return { shown: false, reason: 'duplicate-order' }
+  }
+
   const orderId = data.orderId || ''
   const orderNumber = `#${getOrderShortCode(orderId)}`
   const title = type === 'order_status_update'
     ? data.title || 'Pedido atualizado'
-    : 'Novo pedido recebido'
+    : type === 'merchant_test'
+      ? data.title || 'Push ativado no PratoBy'
+      : 'Novo pedido recebido'
   const body = type === 'order_status_update'
     ? data.body || `Pedido ${orderNumber} foi atualizado.`
-    : `Pedido ${orderNumber} aguardando confirmacao.`
+    : type === 'merchant_test'
+      ? data.body || 'Este dispositivo ja pode receber avisos de novos pedidos.'
+      : 'Toque para abrir o painel de pedidos.'
 
   const notification = new Notification(title, {
     body,
@@ -449,7 +506,7 @@ async function ensureForegroundFcmListener() {
 
   foregroundFcmUnsubscribe = onMessage(messaging, (payload) => {
     const data = payload?.data || {}
-    if (!['new_order', 'order_status_update'].includes(data.type || 'new_order')) return
+    if (!['new_order', 'order_status_update', 'merchant_test'].includes(data.type || 'new_order')) return
 
     try {
       showForegroundFcmBrowserNotification(payload)
@@ -483,19 +540,31 @@ export async function ensureCustomerOrderForegroundFcmListener({ orderId } = {})
 }
 
 export function showLocalMerchantPushTestNotification() {
-  // TODO: trocar por callable de loopback FCM quando houver rotina operacional de diagnostico de push.
   const result = showForegroundFcmBrowserNotification({
     data: {
-      type: 'new_order',
-      orderId: 'TEST',
+      type: 'merchant_test',
+      title: 'Teste local de push',
+      body: 'Este navegador consegue exibir notificações locais do painel.',
       url: '/dashboard/orders',
     },
-  }, { ignoreFocus: true, ignorePreferences: true })
+  }, { ignoreFocus: true, ignorePreferences: true, ignoreDedupe: true })
 
   return {
     ...result,
     reason: result.shown ? 'test-shown' : result.reason,
   }
+}
+
+export async function sendMerchantTestPush({ storeId } = {}) {
+  const normalizedStoreId = String(storeId || '').trim()
+  if (!normalizedStoreId) {
+    throw new Error('storeId obrigatorio para teste de push.')
+  }
+
+  const sendMerchantTestPushCallable = httpsCallable(functions, 'sendMerchantTestPush')
+  const result = await sendMerchantTestPushCallable({ storeId: normalizedStoreId })
+
+  return result.data || { ok: true }
 }
 
 export async function requestCustomerOrderFcmPermissionAndToken({ orderId, trackingToken, skipPermissionPrompt = false }) {

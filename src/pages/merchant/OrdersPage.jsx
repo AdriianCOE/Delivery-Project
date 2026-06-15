@@ -313,11 +313,19 @@ const CANCELLATION_REASON_OPTIONS = [
 const ACTIVE_STATUSES = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota']
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ALL_ORDERS = 250
+const SCHEDULED_ORDERS_QUERY_LIMIT = 250
 const DATE_FILTER_OPTIONS = [
   { key: 'hoje', label: 'Hoje' },
   { key: 'ontem', label: 'Ontem' },
   { key: '7d', label: '7 dias' },
   { key: '30d', label: '30 dias' },
+  { key: 'all', label: 'Todos' },
+]
+const SCHEDULED_DATE_FILTER_OPTIONS = [
+  { key: 'hoje', label: 'Hoje' },
+  { key: 'amanha', label: 'Amanhã' },
+  { key: '7d', label: 'Próximos 7 dias' },
+  { key: 'atrasados', label: 'Atrasados' },
   { key: 'all', label: 'Todos' },
 ]
 
@@ -399,6 +407,14 @@ function getOrderDate(order) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function getOrderDateForFilter(order, timingFilter) {
+  if (timingFilter === 'scheduled') {
+    return getScheduledDate(order) || getOrderDate(order)
+  }
+
+  return getOrderDate(order)
+}
+
 function startOfLocalDay(date = new Date()) {
   const value = new Date(date)
   value.setHours(0, 0, 0, 0)
@@ -417,6 +433,11 @@ function getDateFilterRange(filter) {
     return { start: new Date(today.getTime() - 6 * DAY_MS), end: null, limitCount: null }
   }
 
+  if (filter === 'amanha') {
+    const start = new Date(today.getTime() + DAY_MS)
+    return { start, end: new Date(today.getTime() + 2 * DAY_MS), limitCount: null }
+  }
+
   if (filter === '30d') {
     return { start: new Date(today.getTime() - 29 * DAY_MS), end: null, limitCount: null }
   }
@@ -428,11 +449,38 @@ function getDateFilterRange(filter) {
   return { start: today, end: new Date(today.getTime() + DAY_MS), limitCount: null }
 }
 
-function isOrderInDateFilter(order, filter) {
-  const date = getOrderDate(order)
+function getScheduledDateFilterRange(filter) {
+  const today = startOfLocalDay()
+
+  if (filter === 'amanha') {
+    const start = new Date(today.getTime() + DAY_MS)
+    return { start, end: new Date(today.getTime() + 2 * DAY_MS), limitCount: null }
+  }
+
+  if (filter === '7d') {
+    return { start: today, end: new Date(today.getTime() + 7 * DAY_MS), limitCount: null }
+  }
+
+  if (filter === 'all' || filter === 'atrasados') {
+    return { start: null, end: null, limitCount: SCHEDULED_ORDERS_QUERY_LIMIT }
+  }
+
+  return { start: today, end: new Date(today.getTime() + DAY_MS), limitCount: null }
+}
+
+function isOrderInDateFilter(order, filter, timingFilter = 'now', now = new Date()) {
+  if (timingFilter === 'scheduled' && filter === 'atrasados') {
+    const status = normalizeStatus(order.status)
+    return !FINAL_STATUSES.includes(status) &&
+      getScheduledOperationalState(order, { now }) === 'scheduled_late'
+  }
+
+  const date = getOrderDateForFilter(order, timingFilter)
   if (!date) return filter === 'all'
 
-  const { start, end } = getDateFilterRange(filter)
+  const { start, end } = timingFilter === 'scheduled'
+    ? getScheduledDateFilterRange(filter)
+    : getDateFilterRange(filter)
 
   if (start && date < start) return false
   if (end && date >= end) return false
@@ -4148,6 +4196,9 @@ export default function OrdersPage() {
 
   const loading = loadingStores || loadingOrders
   const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
+  const dateFilterOptions = timingFilter === 'scheduled'
+    ? SCHEDULED_DATE_FILTER_OPTIONS
+    : DATE_FILTER_OPTIONS
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -4163,6 +4214,13 @@ export default function OrdersPage() {
     if (!queryFilter || !TIMING_FILTER_KEYS.has(queryFilter)) return
     setTimingFilter(queryFilter)
   }, [location.search])
+
+  useEffect(() => {
+    const allowedDateFilters = new Set(dateFilterOptions.map((filter) => filter.key))
+    if (!allowedDateFilters.has(dateFilter)) {
+      setDateFilter('hoje')
+    }
+  }, [dateFilter, dateFilterOptions])
 
   useEffect(() => {
     if (!moreFiltersOpen) return undefined
@@ -4820,7 +4878,10 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       }
     }
 
-    const dateRange = getDateFilterRange(dateFilter)
+    const scheduledQueryMode = timingFilter === 'scheduled'
+    const dateRange = scheduledQueryMode
+      ? { start: null, end: null, limitCount: SCHEDULED_ORDERS_QUERY_LIMIT }
+      : getDateFilterRange(dateFilter)
 
     // Simplifica a busca para usar apenas o docId principal.
     // Garante que a regra de segurança passe tranquilamente sem analisar slugs.
@@ -4869,7 +4930,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       Object.values(newOrderTimersRef.current).forEach((timer) => clearTimeout(timer))
       newOrderTimersRef.current = {}
     }
-  }, [authLoading, canReadOrders, dateFilter, selectedStore, showToast])
+  }, [authLoading, canReadOrders, dateFilter, selectedStore, showToast, timingFilter])
 
   const statusCounts = useMemo(() => {
     const counts = {
@@ -4979,7 +5040,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         return false
       }
 
-      if (!isOrderInDateFilter(order, dateFilter)) {
+      if (!isOrderInDateFilter(order, dateFilter, timingFilter, slaNow)) {
         return false
       }
 
@@ -5056,12 +5117,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     return filteredOrders.reduce((latest, order) => {
       if (!latest) return order
 
-      const latestDate = getOrderDate(latest)?.getTime() || 0
-      const orderDate = getOrderDate(order)?.getTime() || 0
+      const latestDate = getOrderDateForFilter(latest, timingFilter)?.getTime() || 0
+      const orderDate = getOrderDateForFilter(order, timingFilter)?.getTime() || 0
 
       return orderDate > latestDate ? order : latest
     }, null)?.id || ''
-  }, [filteredOrders])
+  }, [filteredOrders, timingFilter])
 
   return (
     <main className="min-h-full">
@@ -5449,7 +5510,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
                 <div className="pratoby-scrollbar max-w-full overflow-x-auto">
                   <AnimatedSegmentedControl
-                    options={DATE_FILTER_OPTIONS.map((filter) => ({
+                    options={dateFilterOptions.map((filter) => ({
                       label: filter.label,
                       value: filter.key,
                     }))}
@@ -5462,6 +5523,12 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                   />
                 </div>
               </div>
+
+              {timingFilter === 'scheduled' && (
+                <p className="-mt-2 text-xs font-bold text-[#9a3412] dark:text-orange-300">
+                  Em Agendados, a data usa o horário marcado pelo cliente.
+                </p>
+              )}
             </div>
 
             <div className="hidden rounded-[1.5rem] border border-gray-100 bg-white px-4 py-3 text-xs font-black uppercase tracking-wide text-[#6b7280] shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 lg:grid lg:grid-cols-[100px_1fr_160px_150px_180px_auto] lg:gap-4">

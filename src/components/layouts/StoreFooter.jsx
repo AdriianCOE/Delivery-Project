@@ -476,7 +476,7 @@ export default function StoreFooter({ store, todayHoursLabel }) {
                 <span
                   className={[
                     'absolute -bottom-1 -right-1 h-[18px] w-[18px] rounded-full border-[3px] border-white shadow-sm',
-                    isOpen ? 'bg-emerald-500' : 'bg-gray-400',
+                    isOpen ? 'bg-orange-500' : 'bg-gray-400',
                   ].join(' ')}
                   aria-hidden="true"
                 />
@@ -492,14 +492,14 @@ export default function StoreFooter({ store, todayHoursLabel }) {
                     className={[
                       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1',
                       isOpen
-                        ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                        ? 'bg-orange-50 text-orange-700 ring-orange-200'
                         : 'bg-gray-100 text-gray-600 ring-gray-200',
                     ].join(' ')}
                   >
                     <span
                       className={[
                         'h-1.5 w-1.5 rounded-full',
-                        isOpen ? 'bg-emerald-500' : 'bg-gray-400',
+                        isOpen ? 'bg-orange-500' : 'bg-gray-400',
                       ].join(' ')}
                     />
                     {isOpen ? 'Aberto agora' : 'Fechado agora'}

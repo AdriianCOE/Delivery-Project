@@ -983,64 +983,80 @@ function ImageUploadField({
         >
           {({ openLibrary, disabled }) => (
             <>
-              <button
-                type="button"
-                onClick={openLibrary}
-                disabled={disabled || uploading}
-                onDragEnter={handleDragOver}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDroppedFile}
-                className={`${previewClass} group relative flex shrink-0 items-center justify-center overflow-hidden border border-dashed bg-white text-gray-400 transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-950 dark:text-zinc-500 ${
-                  isDraggingFile
-                    ? 'border-orange-400 bg-orange-50 ring-4 ring-orange-100 dark:border-orange-500 dark:bg-zinc-900 dark:ring-orange-500/20'
-                    : 'border-gray-200 hover:border-orange-200 hover:bg-orange-50/40 dark:border-zinc-700 dark:hover:border-orange-500/50 dark:hover:bg-zinc-900'
-                }`}
-                title="Clique para escolher da biblioteca ou arraste uma imagem aqui"
-              >
-                {value ? (
-                  <img
-                    src={value}
-                    alt={label}
-                    className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] group-hover:opacity-80"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 px-4 text-center">
-                    <FiImage size={24} />
-                    <span className="text-xs font-black text-gray-400 dark:text-zinc-500">
-                      Clique ou arraste uma imagem
+              <div className={`${previewClass} relative shrink-0`}>
+                <button
+                  type="button"
+                  onClick={openLibrary}
+                  disabled={disabled || uploading}
+                  onDragEnter={handleDragOver}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDroppedFile}
+                  className={`group absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden rounded-[1.5rem] border border-dashed bg-white text-gray-400 transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-950 dark:text-zinc-500 ${
+                    isDraggingFile
+                      ? 'border-orange-400 bg-orange-50 ring-4 ring-orange-100 dark:border-orange-500 dark:bg-zinc-900 dark:ring-orange-500/20'
+                      : 'border-gray-200 hover:border-orange-200 hover:bg-orange-50/40 dark:border-zinc-700 dark:hover:border-orange-500/50 dark:hover:bg-zinc-900'
+                  }`}
+                  title="Clique para escolher da biblioteca ou arraste uma imagem aqui"
+                >
+                  {value ? (
+                    <img
+                      src={value}
+                      alt={label}
+                      className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] group-hover:opacity-80"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 px-4 text-center">
+                      <FiImage size={24} />
+                      <span className="text-xs font-black text-gray-400 dark:text-zinc-500">
+                        Clique ou arraste uma imagem
+                      </span>
+                    </div>
+                  )}
+
+                  {uploading && (
+                    <div className="absolute inset-0 grid place-items-center bg-black/45 text-white">
+                      <div className="flex items-center gap-2 rounded-2xl bg-black/50 px-4 py-2 text-xs font-black">
+                        <FiLoader className="animate-spin" />
+                        Enviando...
+                      </div>
+                    </div>
+                  )}
+
+                  {!uploading && isDraggingFile && (
+                    <div className="absolute inset-0 grid place-items-center bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-200">
+                      <div className="rounded-2xl bg-white/90 px-4 py-2 text-xs font-black shadow-lg dark:bg-zinc-950/90">
+                        Solte a imagem para enviar
+                      </div>
+                    </div>
+                  )}
+
+                  {!uploading && value && !isDraggingFile && (
+                    <span className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 px-3 py-2 text-center text-[11px] font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+                      Clique para escolher ou arraste uma imagem
                     </span>
-                  </div>
-                )}
+                  )}
 
-                {uploading && (
-                  <div className="absolute inset-0 grid place-items-center bg-black/45 text-white">
-                    <div className="flex items-center gap-2 rounded-2xl bg-black/50 px-4 py-2 text-xs font-black">
-                      <FiLoader className="animate-spin" />
-                      Enviando...
-                    </div>
-                  </div>
-                )}
-
-                {!uploading && isDraggingFile && (
-                  <div className="absolute inset-0 grid place-items-center bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-200">
-                    <div className="rounded-2xl bg-white/90 px-4 py-2 text-xs font-black shadow-lg dark:bg-zinc-950/90">
-                      Solte a imagem para enviar
-                    </div>
-                  </div>
-                )}
-
-                {!uploading && value && !isDraggingFile && (
-                  <span className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 px-3 py-2 text-center text-[11px] font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100">
-                    Clique para escolher ou arraste uma imagem
+                  <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black text-white shadow-sm">
+                    {previewRatioLabel}
                   </span>
-                )}
+                </button>
 
-                <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black text-white shadow-sm">
-                  {previewRatioLabel}
-                </span>
-              </button>
+                {value && (
+                  <a
+                    href={value}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Baixar ${label}`}
+                    title="Baixar imagem"
+                    className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/85 text-[#111827] shadow-sm ring-1 ring-black/10 backdrop-blur transition hover:bg-white hover:text-[#f97316] dark:bg-zinc-950/80 dark:text-zinc-100 dark:ring-white/10 dark:hover:bg-zinc-900"
+                  >
+                    <FiDownload size={14} />
+                  </a>
+                )}
+              </div>
 
               <div className={actionsLayoutClass}>
                 <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]">
@@ -1079,19 +1095,6 @@ function ImageUploadField({
                   <FiImage />
                   Escolher da biblioteca
                 </button>
-
-                {value && (
-                  <a
-                    href={value}
-                    download
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  >
-                    <FiDownload />
-                    Baixar imagem
-                  </a>
-                )}
 
                 <p className={helperTextClass}>
                   {recommendation}

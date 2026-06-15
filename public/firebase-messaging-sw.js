@@ -25,27 +25,35 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
     const data = payload.data || {}
     const orderId = String(data.orderId || '').trim()
     const orderNumber = orderId ? `#${orderId.slice(-4).toUpperCase()}` : '#----'
-    const isCustomerStatusUpdate = data.type === 'order_status_update'
+    const type = data.type || 'new_order'
+    const isCustomerStatusUpdate = type === 'order_status_update'
+    const isMerchantTest = type === 'merchant_test'
     console.info('[FCM SW] background message', {
-      type: data.type || 'new_order',
+      type,
       hasOrderId: Boolean(orderId),
       status: data.status || '',
     })
     const title = isCustomerStatusUpdate
       ? data.title || 'Pedido atualizado'
+      : isMerchantTest
+        ? data.title || 'Push ativado no PratoBy'
       : 'Novo pedido recebido'
     const options = {
       body: isCustomerStatusUpdate
         ? data.body || `Pedido ${orderNumber} foi atualizado.`
-        : `Pedido ${orderNumber} aguardando confirmacao`,
+        : isMerchantTest
+          ? data.body || 'Este dispositivo ja pode receber avisos de novos pedidos.'
+          : 'Toque para abrir o painel de pedidos.',
       icon: '/icons/android-chrome-512x512.png',
       badge: '/icons/favicon-32x32.png',
       tag: isCustomerStatusUpdate
         ? `pratoby-order-status-${data.orderId || 'unknown'}-${data.status || 'updated'}`
+        : isMerchantTest
+          ? `pratoby-merchant-test-${data.storeId || 'store'}`
         : `pratoby-new-order-${data.orderId || 'unknown'}`,
       renotify: true,
       data: {
-        type: data.type || 'new_order',
+        type,
         orderId: data.orderId || '',
         storeId: data.storeId || '',
         status: data.status || '',

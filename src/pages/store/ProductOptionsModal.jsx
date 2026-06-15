@@ -382,9 +382,11 @@ export default function ProductOptionsModal({
   const [selectedOptions, setSelectedOptions] = useState({})
   const [error, setError] = useState('')
   const [errorGroupId, setErrorGroupId] = useState('')
+  const [isEntering, setIsEntering] = useState(true)
   const [isClosing, setIsClosing] = useState(false)
   const optionGroupRefs = useRef({})
   const closeTimerRef = useRef(null)
+  const enterFrameRef = useRef(null)
 
   const themeColor =
     store?.themeColor ||
@@ -486,6 +488,10 @@ const modalInfoBadges = useMemo(() => {
   useEffect(() => {
     if (!isOpen) return
 
+    const prefersReducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+    setIsEntering(!prefersReducedMotion)
     setIsClosing(false)
     setQuantity(1)
     setObservation('')
@@ -494,6 +500,22 @@ const modalInfoBadges = useMemo(() => {
     setError('')
     setErrorGroupId('')
     optionGroupRefs.current = {}
+
+    if (prefersReducedMotion) return undefined
+
+    enterFrameRef.current = window.requestAnimationFrame(() => {
+      enterFrameRef.current = window.requestAnimationFrame(() => {
+        setIsEntering(false)
+        enterFrameRef.current = null
+      })
+    })
+
+    return () => {
+      if (enterFrameRef.current) {
+        window.cancelAnimationFrame(enterFrameRef.current)
+        enterFrameRef.current = null
+      }
+    }
   }, [isOpen, product?.id])
 
   useEffect(() => {
@@ -568,6 +590,7 @@ const modalInfoBadges = useMemo(() => {
   const requestClose = useCallback(() => {
     if (closeTimerRef.current) return
 
+    setIsEntering(false)
     setIsClosing(true)
 
     closeTimerRef.current = window.setTimeout(() => {
@@ -577,6 +600,8 @@ const modalInfoBadges = useMemo(() => {
   }, [onClose])
 
   if (!isOpen || !product) return null
+
+  const modalHidden = isClosing || isEntering
 
   const productCanAdd = canAddProductToCart(product)
   const productUnavailable = isProductUnavailable(product)
@@ -766,16 +791,16 @@ const modalInfoBadges = useMemo(() => {
       <button
         type="button"
         onClick={requestClose}
-        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
-          isClosing ? 'opacity-0' : 'opacity-100'
+        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ease-out ${
+          modalHidden ? 'opacity-0' : 'opacity-100'
         }`}
         aria-label="Fechar detalhes do produto"
       />
 
       <div
-        className={`relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 transition duration-200 ease-out md:rounded-[2rem] ${
-          isClosing
-            ? 'translate-y-6 scale-[0.98] opacity-0 md:translate-y-2'
+        className={`relative flex max-h-[92vh] w-full max-w-xl origin-bottom flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-white/70 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:origin-center md:rounded-[2rem] ${
+          modalHidden
+            ? 'translate-y-8 scale-[0.96] opacity-0 md:translate-y-3'
             : 'translate-y-0 scale-100 opacity-100'
         }`}
       >
