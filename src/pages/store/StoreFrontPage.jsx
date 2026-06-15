@@ -82,7 +82,7 @@ function titleFromSlug(value) {
     .replace(/[-_]+/g, ' ')
     .trim()
 
-  if (!text) return 'Cardápio online'
+  if (!text) return 'Cardápio digital'
 
   return text
     .split(' ')
@@ -2528,11 +2528,11 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-      title={`${storeName} | Cardápio online`}
+      title={`${storeName} | Cardápio digital`}
       description={storeDescription}
       path={`/${storeSlug || store?.slug || store?.storeSlug || slug || ''}`}
       image={storeImage}
-      imageAlt={`${storeName} | Cardápio online - PratoBy`}
+      imageAlt={`${storeName} | Cardápio digital - PratoBy`}
       favicon={storeFavicon}
       type="website"
       noIndex={noIndexStorefront}

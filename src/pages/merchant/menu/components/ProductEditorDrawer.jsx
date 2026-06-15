@@ -44,6 +44,7 @@ import { uploadImageToCloudinary } from '../../../../services/cloudinary'
 import { registerStoreMediaAsset } from '../../../../services/storeMediaLibrary'
 import { hasPlanFeature } from '../../../../utils/planCatalog'
 import { getCloudinaryImageUrl } from '../../../../utils/cloudinaryImages'
+import { getProductSchedulingBadges } from '../../../../utils/publicScheduling'
 import LockedFeatureCard from '../../../../components/billing/LockedFeatureCard'
 import MediaLibraryPicker from '../../../../components/media/MediaLibraryPicker'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
@@ -301,13 +302,59 @@ function getServingPreviewLabel(form) {
   return ''
 }
 
+function isIncludedPricingMode(group) {
+  const mode = String(group?.pricingMode || group?.priceMode || '').toLowerCase()
+
+  return ['included', 'included_first', 'first_included', 'firstincluded'].includes(mode)
+}
+
+function getGroupMin(group) {
+  const required = group?.required || group?.isRequired
+  const rawMin = group?.min ?? group?.minSelections ?? group?.minSelected
+  const numericMin = Number(rawMin)
+
+  if (Number.isFinite(numericMin) && numericMin > 0) return Math.floor(numericMin)
+
+  return required ? 1 : 0
+}
+
+function getMinimumRequiredOptionsPrice(optionGroups = []) {
+  return (Array.isArray(optionGroups) ? optionGroups : []).reduce((total, group) => {
+    const min = getGroupMin(group)
+
+    if (min <= 0 || isIncludedPricingMode(group)) return total
+
+    const availablePrices = (Array.isArray(group.options) ? group.options : [])
+      .filter((option) => option?.available !== false && option?.isAvailable !== false)
+      .map((option) => parseCurrency(option?.price ?? option?.unitPrice ?? ''))
+      .filter((price) => Number.isFinite(price) && price > 0)
+      .sort((a, b) => a - b)
+
+    if (availablePrices.length === 0) return total
+
+    let groupTotal = 0
+
+    for (let index = 0; index < min; index += 1) {
+      groupTotal += availablePrices[index] ?? availablePrices[availablePrices.length - 1]
+    }
+
+    return total + groupTotal
+  }, 0)
+}
+
 function ProductSummary({ form, visibleImage, categoryName, discountPct }) {
   const price = parseCurrency(form.price)
-  const hasPrice = Number.isFinite(price) && price > 0
+  const requiredOptionsPrice = getMinimumRequiredOptionsPrice(form.optionGroups)
+  const displayPrice = Math.max(0, (Number.isFinite(price) ? price : 0) + requiredOptionsPrice)
+  const hasPrice = displayPrice > 0
+  const hasPriceFromOptions = requiredOptionsPrice > 0
   const productName = form.name.trim() || 'Produto sem nome'
   const description = form.description.trim() || 'Descrição do produto aparece aqui.'
   const servingLabel = getServingPreviewLabel(form)
   const hasOptions = Array.isArray(form.optionGroups) && form.optionGroups.length > 0
+  const schedulingBadges = getProductSchedulingBadges({ scheduling: form.scheduling }, {
+    publicScheduling: { enabled: true },
+  })
   const selectedVisualBadges = normalizeVisualBadgesForForm({ visualBadges: form.visualBadges })
     .slice(0, 2)
     .map((badgeId) => {
@@ -321,7 +368,18 @@ function ProductSummary({ form, visibleImage, categoryName, discountPct }) {
   const topBadges = [
     !form.isAvailable ? { id: 'unavailable', label: 'Indisponível', Icon: FiInfo, className: 'bg-orange-50 text-orange-700 ring-orange-100' } : null,
     form.isPromotion ? { id: 'promotion', label: discountPct ? `-${discountPct}%` : 'Promoção', Icon: FiTag, className: 'bg-red-50 text-red-600 ring-red-100' } : null,
-    form.scheduling?.mode === 'scheduled_only' ? { id: 'scheduled', label: 'Sob encomenda', Icon: FiClock, className: 'bg-amber-50 text-amber-700 ring-amber-100' } : null,
+    ...schedulingBadges.map((badge) => ({
+      id: `schedule-${badge.id}`,
+      label: badge.label,
+      Icon: badge.tone === 'orange' ? FiTag : FiClock,
+      className: badge.tone === 'amber'
+        ? 'bg-amber-50 text-amber-700 ring-amber-100'
+        : badge.tone === 'green'
+          ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+          : badge.tone === 'orange'
+            ? 'bg-orange-50 text-orange-700 ring-orange-100'
+            : 'bg-slate-50 text-slate-600 ring-slate-100',
+    })),
     form.isFeatured ? { id: 'featured', label: 'Destaque', Icon: FiStar, className: 'bg-orange-50 text-orange-700 ring-orange-100' } : null,
     form.acceptsCoupons && form.showCouponBadge !== false ? { id: 'coupon', label: 'Aceita cupom', Icon: FiTag, className: 'bg-emerald-50 text-emerald-700 ring-emerald-100' } : null,
     ...selectedVisualBadges.map((badge) => ({
@@ -399,17 +457,15 @@ function ProductSummary({ form, visibleImage, categoryName, discountPct }) {
                   {formatMoney(parseCurrency(form.oldPrice))}
                 </p>
               ) : null}
-              <p className="text-[10px] font-black uppercase leading-none text-[#f97316]">
-                A partir de
-              </p>
+              {hasPriceFromOptions ? (
+                <p className="text-[10px] font-black uppercase leading-none text-[#f97316]">
+                  A partir de
+                </p>
+              ) : null}
               <p className="mt-1 whitespace-nowrap text-xl font-black leading-none tracking-tight text-slate-950 dark:text-slate-50">
-                {hasPrice ? formatMoney(price) : 'R$ 0,00'}
+                {hasPrice ? formatMoney(displayPrice) : 'R$ 0,00'}
               </p>
             </div>
-
-            <span className="inline-flex h-10 min-w-[96px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm dark:border-white/10 dark:bg-[#151922] dark:text-slate-200">
-              Editar
-            </span>
           </div>
         </div>
 
@@ -424,10 +480,6 @@ function ProductSummary({ form, visibleImage, categoryName, discountPct }) {
           )}
         </div>
       </div>
-
-      <p className="mt-2 truncate text-[11px] font-bold text-slate-400 dark:text-slate-500">
-        {categoryName || 'Sem categoria'}
-      </p>
     </div>
   )
 }
@@ -943,7 +995,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                     {editingProduct ? 'Editar produto' : 'Novo produto'}
                   </h2>
                   <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    {editingProduct ? 'Ajuste informações, preço, imagem, status e opções.' : 'Crie um item com aparência profissional para sua loja.'}
+                    {editingProduct ? 'Ajuste informações, preço, imagem, status...' : 'Crie um item com aparência profissional para sua loja.'}
                   </p>
                 </div>
                 <button

@@ -457,7 +457,7 @@ export default function StoreFooter({ store, todayHoursLabel }) {
           <div
             className="h-1 w-full"
             style={{
-              background: `linear-gradient(90deg, ${themeColor}, #fb923c, #22c55e)`,
+              background: `linear-gradient(90deg, ${themeColor}, #fb923c, #ffb67b)`,
             }}
           />
 

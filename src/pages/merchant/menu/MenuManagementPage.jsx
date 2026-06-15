@@ -408,6 +408,7 @@ export default function MenuManagementPage() {
               <MenuProductsTab
                 products={activeProducts}
                 categories={sortedCategories}
+                store={store}
                 search={search}
                 setSearch={setSearch}
                 filterCategoryId={filterCategoryId}

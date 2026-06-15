@@ -5,49 +5,274 @@ import { useMemo } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FiBox,
+  FiCalendar,
   FiCheck,
+  FiClock,
+  FiCoffee,
   FiCopy,
   FiEdit2,
   FiEye,
   FiEyeOff,
+  FiGift,
+  FiHome,
   FiImage,
   FiList,
+  FiPackage,
   FiSearch,
+  FiStar,
+  FiTag,
   FiTrash2,
+  FiUsers,
   FiX,
+  FiZap,
 } from 'react-icons/fi'
 
 import { formatMoney, normalizeMoney } from '../utils/menuFormatters'
-import { STATUS_FILTERS } from '../utils/menuPayloads'
+import { STATUS_FILTERS, VISUAL_BADGE_OPTIONS } from '../utils/menuPayloads'
 import MenuEmptyState from './MenuEmptyState'
 import { hasOutOfStock } from '../../../../utils/productStatus'
+import { getProductSchedulingBadges } from '../../../../utils/publicScheduling'
 import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
 
 // ── ProductBadges ──────────────────────────────────────────────────────────────
 
-function ProductBadges({ product }) {
+function productShowsCouponBadge(product) {
+  return product?.acceptsCoupons !== false
+    && product?.acceptsCoupon !== false
+    && product?.couponEligible !== false
+    && product?.showCouponBadge !== false
+}
+
+const VISUAL_BADGE_LABELS = new Map(
+  VISUAL_BADGE_OPTIONS.map((badge) => [badge.id, badge.label])
+)
+
+const VISUAL_BADGE_ICONS = {
+  artesanal: FiCoffee,
+  caseiro: FiHome,
+  feito_na_hora: FiZap,
+  especial_da_casa: FiStar,
+  cremoso: FiTag,
+  saboroso: FiTag,
+  para_compartilhar: FiUsers,
+  acompanhamento: FiPackage,
+  novidade: FiGift,
+  edicao_limitada: FiClock,
+  premium: FiStar,
+}
+
+function normalizeVisualBadgeId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function getProductVisualBadges(product) {
+  const raw = Array.isArray(product?.visualBadges) ? product.visualBadges : []
+
+  return [
+    ...new Map(
+      raw
+        .map((badge) => {
+          const id = normalizeVisualBadgeId(badge?.id || badge?.value || badge)
+          const label = VISUAL_BADGE_LABELS.get(id) || String(badge?.label || '').trim()
+
+          if (!id || !label) return null
+
+          return [
+            id,
+            {
+              l: label,
+              Icon: VISUAL_BADGE_ICONS[id] || FiTag,
+              c: 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/25 dark:text-orange-300 dark:ring-orange-900/50',
+            },
+          ]
+        })
+        .filter(Boolean)
+    ).values(),
+  ].slice(0, 5)
+}
+
+function getServingLabel(product) {
+  const serving = product?.serving
+
+  if (serving && typeof serving === 'object' && !Array.isArray(serving)) {
+    if (serving.enabled === false) return ''
+    const label = String(serving.label || '').trim()
+    const count = Number(serving.count)
+
+    if (label) return label.slice(0, 40)
+    if (Number.isFinite(count) && count > 0) {
+      const rounded = Math.floor(count)
+      return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+    }
+  }
+
+  const legacy = product?.serves ?? product?.portion
+  if (legacy === undefined || legacy === null || legacy === '') return ''
+
+  const numeric = Number(legacy)
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const rounded = Math.floor(numeric)
+    return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+  }
+
+  return String(legacy).trim().slice(0, 40)
+}
+
+function hasProductOptions(product) {
+  return Boolean(
+    Array.isArray(product?.optionGroups) && product.optionGroups.length > 0
+      || Array.isArray(product?.optionsGroups) && product.optionsGroups.length > 0
+      || Array.isArray(product?.customizationGroups) && product.customizationGroups.length > 0
+      || Array.isArray(product?.choiceGroups) && product.choiceGroups.length > 0
+      || Array.isArray(product?.options) && product.options.length > 0
+      || Array.isArray(product?.extras) && product.extras.length > 0
+  )
+}
+
+function getGroupMin(group) {
+  const required = group?.required || group?.isRequired
+  const rawMin = group?.min ?? group?.minSelections ?? group?.minSelected
+  const numericMin = Number(rawMin)
+
+  if (Number.isFinite(numericMin) && numericMin > 0) return Math.floor(numericMin)
+
+  return required ? 1 : 0
+}
+
+function isIncludedPricingMode(group) {
+  const mode = String(group?.pricingMode || group?.priceMode || '').toLowerCase()
+
+  return ['included', 'included_first', 'first_included', 'firstincluded'].includes(mode)
+}
+
+function getOptionPrice(option) {
+  return normalizeMoney(option?.price ?? option?.unitPrice, option?.priceCents ?? option?.unitPriceCents)
+}
+
+function getMinimumRequiredOptionsPrice(product) {
+  const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : []
+
+  return groups.reduce((total, group) => {
+    const min = getGroupMin(group)
+
+    if (min <= 0 || isIncludedPricingMode(group)) return total
+
+    const availablePrices = (Array.isArray(group.options) ? group.options : [])
+      .filter((option) => option?.available !== false && option?.isAvailable !== false)
+      .map(getOptionPrice)
+      .filter((price) => Number.isFinite(price) && price > 0)
+      .sort((a, b) => a - b)
+
+    if (availablePrices.length === 0) return total
+
+    let groupTotal = 0
+    for (let index = 0; index < min; index += 1) {
+      groupTotal += availablePrices[index] ?? availablePrices[availablePrices.length - 1]
+    }
+
+    return total + groupTotal
+  }, 0)
+}
+
+function ProductQuickInfo({ product }) {
+  const chips = []
+  const servingLabel = getServingLabel(product)
+  const optionGroupsCount = Array.isArray(product.optionGroups) ? product.optionGroups.length : 0
+  const requiredOptionsPrice = getMinimumRequiredOptionsPrice(product)
+
+  if (product.preparationTime) chips.push({ label: product.preparationTime, Icon: FiClock })
+  if (hasProductOptions(product)) chips.push({ label: optionGroupsCount > 0 ? `${optionGroupsCount} grupo${optionGroupsCount > 1 ? 's' : ''} de opções` : 'Com opções', Icon: FiList })
+  if (requiredOptionsPrice > 0) chips.push({ label: `Opções +${formatMoney(requiredOptionsPrice)}`, Icon: FiPackage })
+  if (servingLabel) chips.push({ label: servingLabel, Icon: FiUsers })
+  if (product.scheduling?.mode === 'asap_only') chips.push({ label: 'Somente imediato', Icon: FiCalendar })
+  if (product.stock !== undefined && product.stock !== null && product.stock !== '') chips.push({ label: `Estoque ${Number(product.stock)}`, Icon: FiPackage })
+
+  if (chips.length === 0) return null
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {chips.slice(0, 5).map((chip) => {
+        const Icon = chip.Icon
+
+        return (
+          <span
+            key={chip.label}
+            className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-[11px] font-bold text-gray-600 ring-1 ring-gray-100 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800"
+          >
+            <Icon size={11} />
+            {chip.label}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function ProductBadges({ product, store }) {
   const badges = []
+
+  if (productShowsCouponBadge(product)) {
+    badges.push({
+      l: 'Cupom',
+      c: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/25 dark:text-emerald-300 dark:ring-emerald-900/50',
+    })
+  }
+
+  getProductVisualBadges(product).forEach((badge) => {
+    badges.push(badge)
+  })
+
+  getProductSchedulingBadges(product, store).forEach((badge) => {
+    badges.push({
+      l: badge.label,
+      c: badge.tone === 'amber'
+        ? 'bg-amber-50 text-amber-700 ring-amber-200'
+        : badge.tone === 'green'
+          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+          : badge.tone === 'orange'
+            ? 'bg-orange-50 text-orange-700 ring-orange-200'
+            : 'bg-gray-50 text-gray-600 ring-gray-200',
+    })
+  })
+
   if (product.isFeatured)              badges.push({ l: '⭐ Destaque',    c: 'bg-yellow-50 text-yellow-700 ring-yellow-200' })
   if (product.isPromotion)             badges.push({ l: '🏷️ Promoção',    c: 'bg-red-50 text-red-600 ring-red-200' })
   if (hasOutOfStock(product))          badges.push({ l: 'Esgotado',       c: 'bg-red-50 text-red-600 ring-red-200' })
   if (product.isAvailable === false)   badges.push({ l: 'Indisponível',   c: 'bg-orange-50 text-orange-700 ring-orange-200' })
   if (product.isVisible === false)     badges.push({ l: 'Oculto',         c: 'bg-gray-100 text-gray-500 ring-gray-200' })
   if (product.isActive === false)      badges.push({ l: 'Inativo',        c: 'bg-red-50 text-red-500 ring-red-200' })
+
   return (
     <div className="flex flex-wrap gap-1">
-      {badges.map((b) => (
-        <span key={b.l} className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${b.c}`}>
-          {b.l}
-        </span>
-      ))}
+      {badges.map((b, index) => {
+        const Icon = b.Icon
+
+        return (
+          <span
+            key={`${b.l}-${index}`}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${b.c}`}
+          >
+            {Icon ? <Icon size={10} aria-hidden="true" /> : null}
+            {b.l}
+          </span>
+        )
+      })}
     </div>
   )
 }
 
 // ── ProductRow ─────────────────────────────────────────────────────────────────
 
-function ProductRow({ product, categories, onEdit, onDuplicate, onDelete, onToggle }) {
-  const price   = normalizeMoney(product.price, product.priceCents)
+function ProductRow({ product, categories, store, onEdit, onDuplicate, onDelete, onToggle }) {
+  const basePrice = normalizeMoney(product.price, product.priceCents)
+  const requiredOptionsPrice = getMinimumRequiredOptionsPrice(product)
+  const price = basePrice + requiredOptionsPrice
+  const showFromPrice = requiredOptionsPrice > 0
   const catName = categories.find((c) => c.id === product.categoryId)?.name || ''
 
   return (
@@ -84,14 +309,18 @@ function ProductRow({ product, categories, onEdit, onDuplicate, onDelete, onTogg
             <p className="mt-0.5 line-clamp-2 text-xs text-[#9ca3af] sm:line-clamp-1">{product.description}</p>
           )}
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-black text-[#f97316]">{formatMoney(price)}</span>
+            <span className="text-sm font-black text-[#f97316]">
+              {showFromPrice ? 'A partir de ' : ''}
+              {formatMoney(price)}
+            </span>
             {product.oldPrice != null && normalizeMoney(product.oldPrice, product.oldPriceCents) > 0 && (
               <span className="text-xs font-bold text-gray-400 line-through">
                 {formatMoney(normalizeMoney(product.oldPrice, product.oldPriceCents))}
               </span>
             )}
-            <ProductBadges product={product} />
+            <ProductBadges product={product} store={store} />
           </div>
+          <ProductQuickInfo product={product} />
         </div>
       </div>
 
@@ -154,6 +383,7 @@ function ProductRow({ product, categories, onEdit, onDuplicate, onDelete, onTogg
 export default function MenuProductsTab({
   products,
   categories,
+  store,
   search,
   setSearch,
   filterCategoryId,
@@ -191,6 +421,31 @@ export default function MenuProductsTab({
         (a.name || '').localeCompare(b.name || '')
       )
   }, [products, filterCategoryId, filterStatus, search])
+
+  const productGroups = useMemo(() => {
+    const categoryById = new Map(categories.map((category) => [category.id, category]))
+    const groupsById = new Map()
+
+    filteredProducts.forEach((product) => {
+      const categoryId = product.categoryId || '__uncategorized__'
+      const category = categoryById.get(categoryId)
+      const groupKey = category ? category.id : '__uncategorized__'
+
+      if (!groupsById.has(groupKey)) {
+        groupsById.set(groupKey, {
+          id: groupKey,
+          name: category?.name || 'Sem categoria',
+          order: category ? Number(category.order ?? 9999) : 999999,
+          products: [],
+        })
+      }
+
+      groupsById.get(groupKey).products.push(product)
+    })
+
+    return Array.from(groupsById.values())
+      .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))
+  }, [categories, filteredProducts])
 
   const hasFilters = search || filterStatus !== 'all' || filterCategoryId !== 'all'
 
@@ -255,19 +510,42 @@ export default function MenuProductsTab({
 
       {/* Product list */}
       {filteredProducts.length > 0 ? (
-        <AnimatePresence mode="popLayout">
-          {filteredProducts.map((product) => (
-            <ProductRow
-              key={product.id}
-              product={product}
-              categories={categories}
-              onEdit={onEdit}
-              onDuplicate={onDuplicate}
-              onDelete={onDelete}
-              onToggle={onToggle}
-            />
+        <div className="space-y-5">
+          {productGroups.map((group) => (
+            <section key={group.id} className="space-y-2.5">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[#f97316] ring-1 ring-orange-100">
+                    <FiList size={14} />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-black text-[#111827]">
+                      {group.name}
+                    </h3>
+                    <p className="text-xs font-bold text-[#9ca3af]">
+                      {group.products.length} produto{group.products.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <AnimatePresence mode="popLayout">
+                {group.products.map((product) => (
+                  <ProductRow
+                    key={product.id}
+                    product={product}
+                    categories={categories}
+                    store={store}
+                    onEdit={onEdit}
+                    onDuplicate={onDuplicate}
+                    onDelete={onDelete}
+                    onToggle={onToggle}
+                  />
+                ))}
+              </AnimatePresence>
+            </section>
           ))}
-        </AnimatePresence>
+        </div>
       ) : categories.length === 0 ? (
         <MenuEmptyState
           icon={FiList}

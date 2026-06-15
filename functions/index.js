@@ -3760,7 +3760,7 @@ function buildStorefrontSeoMeta(store) {
   )
 
   return {
-    title: `${storeName} | Cardápio online`, // Título encurtado conforme solicitado
+    title: `${storeName} | Cardápio digital`, // Título encurtado conforme solicitado
     description,
     image,
     canonical,
