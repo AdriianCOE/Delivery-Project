@@ -608,7 +608,7 @@ exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request
 
 const PUBLIC_STORE_FIELDS = [
   'name', 'storeName', 'description', 'publicDescription', 'segment', 'category',
-  'logoUrl', 'logo', 'bannerUrl', 'bannerMobileUrl', 'coverUrl', 'mobileBannerUrl', 'bannerPosition',
+  'logoUrl', 'logo', 'bannerPosition', 'bannerUrl', 'bannerMobileUrl', 'shareImageUrl', 'seoImageUrl', 'ogImageUrl', 'faviconUrl', 'coverUrl', 'mobileBannerUrl',
   'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
   'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
   'isPublic', 'isVisible',
@@ -639,7 +639,7 @@ const PUBLIC_PRODUCT_FIELDS = [
 
 const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'name', 'storeName', 'description', 'segment', 'category',
-  'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+  'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'shareImageUrl', 'seoImageUrl', 'ogImageUrl', 'faviconUrl', 'themeColor', 'whatsapp', 'whatsapp1',
   'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
@@ -3599,6 +3599,21 @@ function absolutePublicUrl(value) {
   }
 }
 
+function buildSeoFaviconUrl(value) {
+  const url = absolutePublicUrl(value)
+
+  if (!url) return `${PUBLIC_APP_ORIGIN}/favicon.ico`
+
+  if (!url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) {
+    return url
+  }
+
+  return url.replace(
+    '/image/upload/',
+    '/image/upload/f_png,q_auto,e_trim,w_128,h_128,c_fill,g_auto,r_24,b_white/'
+  )
+}
+
 function replaceOrInsertHeadTag(html, matcher, tag) {
   if (matcher.test(html)) return html.replace(matcher, tag)
   return html.replace(/<\/head>/i, `  ${tag}\n</head>`)
@@ -3611,6 +3626,9 @@ function injectStorefrontSeo(html, meta) {
   const safeDescription = escapeHtml(meta.description)
   const safeImage = escapeHtml(meta.image)
   const safeCanonical = escapeHtml(meta.canonical)
+  const faviconUrl = meta.favicon || `${PUBLIC_APP_ORIGIN}/favicon.ico`
+  const safeFavicon = escapeHtml(faviconUrl)
+  const safeFaviconType = faviconUrl.toLowerCase().endsWith('.ico') ? 'image/x-icon' : 'image/png'
 
   const tags = [
     [
@@ -3661,6 +3679,18 @@ function injectStorefrontSeo(html, meta) {
       /<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i,
       `<link rel="canonical" href="${safeCanonical}">`,
     ],
+    [
+      /<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i,
+      `<link rel="icon" href="${safeFavicon}" type="${safeFaviconType}" sizes="128x128">`,
+    ],
+    [
+      /<link\b(?=[^>]*\brel=["']shortcut icon["'])[^>]*>/i,
+      `<link rel="shortcut icon" href="${safeFavicon}" type="${safeFaviconType}">`,
+    ],
+    [
+      /<link\b(?=[^>]*\brel=["']apple-touch-icon["'])[^>]*>/i,
+      `<link rel="apple-touch-icon" href="${safeFavicon}">`,
+    ],
   ]
 
   for (const [matcher, tag] of tags) {
@@ -3674,13 +3704,19 @@ function buildStorefrontSeoMeta(store) {
   const storeName = String(store?.name || store?.storeName || 'PratoBy').trim()
   const slug = getPublicStoreSlug(store?.storeId || store?.id || '', store)
   const canonical = `${PUBLIC_APP_ORIGIN}/${slug}`
+  
   const description = String(
     store?.publicDescription ||
       store?.description ||
       `Veja o cardápio digital de ${storeName} no PratoBy.`
   ).trim().slice(0, 180)
+
+  // 1. Prioridade para imagem de compartilhamento/SEO
   const image = absolutePublicUrl(
-    store?.bannerUrl ||
+    store?.shareImageUrl ||
+      store?.seoImageUrl ||
+      store?.ogImageUrl ||
+      store?.bannerUrl ||
       store?.coverUrl ||
       store?.bannerMobileUrl ||
       store?.mobileBannerUrl ||
@@ -3688,11 +3724,19 @@ function buildStorefrontSeoMeta(store) {
       store?.logo
   ) || DEFAULT_OG_IMAGE
 
+  // 2. Busca do favicon com os fallbacks corretos
+  const favicon = buildSeoFaviconUrl(
+    store?.faviconUrl ||
+      store?.logoUrl ||
+      store?.logo
+  )
+
   return {
-    title: `${storeName} | Cardápio Digital`,
+    title: `${storeName} | Cardápio online`, // Título encurtado conforme solicitado
     description,
     image,
     canonical,
+    favicon, // Favicon adicionado ao retorno
   }
 }
 

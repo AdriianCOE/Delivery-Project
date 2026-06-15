@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { Helmet } from 'react-helmet-async'
 
 const SITE_URL = 'https://pratoby.com'
-const DEFAULT_TITLE = 'PratoBy | Cardápio digital e delivery próprio sem comissão'
+const DEFAULT_TITLE = 'PratoBy | Cardápio digital'
 const DEFAULT_DESCRIPTION =
   'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido.'
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
@@ -14,6 +14,9 @@ const HEAD_DEDUPE_SELECTORS = [
   'meta[name="robots"]',
   'meta[name="googlebot"]',
   'link[rel="canonical"]',
+  'link[rel="icon"]',
+  'link[rel="shortcut icon"]',
+  'link[rel="apple-touch-icon"]',
   'meta[property="og:locale"]',
   'meta[property="og:type"]',
   'meta[property="og:site_name"]',
@@ -69,15 +72,15 @@ function buildAbsoluteUrl(url, fallback = SITE_URL) {
 }
 
 function buildCloudinaryFavicon(url) {
-  if (!url || typeof url !== 'string') return DEFAULT_FAVICON
+  const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_FAVICON)
 
-  if (!url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) {
-    return url
+  if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
+    return absoluteUrl
   }
 
-  return url.replace(
+  return absoluteUrl.replace(
     '/image/upload/',
-    '/image/upload/f_png,w_96,h_96,c_pad,b_white,r_18/'
+    '/image/upload/f_png,q_auto,e_trim,w_128,h_128,c_fill,g_auto,r_24,b_white/'
   )
 }
 

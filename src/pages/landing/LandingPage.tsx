@@ -15,7 +15,7 @@ export default function LandingPage() {
   return (
     <MarketingLayout>
       <SEO
-        title="PratoBy | Cardápio digital e delivery próprio sem comissão"
+        title="PratoBy | Cardápio digital e delivery"
         description="Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido."
         path="/"
       />

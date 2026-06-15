@@ -126,6 +126,7 @@ const DEFAULT_FORM = {
   logoUrl: '',
   bannerUrl: '',
   bannerMobileUrl: '',
+  shareImageUrl: '',
   themeColor: DEFAULT_THEME,
   whatsapp: '',
   instagram: '',
@@ -620,6 +621,12 @@ function mapStoreToForm(store) {
       settings?.bannerMobileUrl ||
       settings?.mobileBannerUrl ||
       '',
+    shareImageUrl:
+      store?.shareImageUrl ||
+      store?.seoImageUrl ||
+      store?.ogImageUrl ||
+      settings?.shareImageUrl ||
+      '',
     themeColor:
       store?.themeColor ||
       store?.primaryColor ||
@@ -804,23 +811,43 @@ function ImageUploadField({
 }) {
   const [isDraggingFile, setIsDraggingFile] = useState(false)
 
+  const isWidePreview = aspect === 'banner' || aspect === 'share'
+
   const previewClass =
-    aspect === 'banner'
-      ? 'h-40 w-full rounded-[1.5rem]'
-      : 'h-32 w-32 rounded-[1.5rem]'
+    aspect === 'share'
+      ? 'aspect-[1200/630] w-full rounded-[1.5rem]'
+      : aspect === 'banner'
+        ? 'h-40 w-full rounded-[1.5rem]'
+        : 'h-32 w-32 rounded-[1.5rem]'
+
+  const fieldLayoutClass = isWidePreview
+    ? 'space-y-3'
+    : 'flex flex-col gap-4 sm:flex-row sm:items-center'
+
+  const actionsLayoutClass = isWidePreview
+    ? 'grid gap-3 sm:grid-cols-2'
+    : 'min-w-0 flex-1 space-y-3'
+
+  const helperTextClass = isWidePreview
+    ? 'text-xs leading-5 text-[#6b7280] dark:text-zinc-400 sm:col-span-2'
+    : 'text-xs leading-5 text-[#6b7280] dark:text-zinc-400'
 
   const recommendation = useMemo(() => {
     const normalizedLabel = String(label || '').toLowerCase()
+
+    if (aspect === 'share') {
+      return 'Recomendado para compartilhamento: 1200 x 630 px.'
+    }
 
     if (aspect === 'banner' && normalizedLabel.includes('mobile')) {
       return 'Recomendado para celular: 1200 x 520 px.'
     }
 
     if (aspect === 'banner') {
-      return 'Recomendado para desktop: 2400 x 400 px.'
+      return 'Recomendado para desktop: 2400 x 700 px.' 
     }
 
-    return 'Recomendado: imagem quadrada.'
+    return 'Recomendado: imagem quadrada (1:1).'
   }, [aspect, label])
 
   const handleDroppedFile = (event) => {
@@ -886,13 +913,7 @@ function ImageUploadField({
         )}
       </div>
 
-      <div
-        className={
-          aspect === 'banner'
-            ? 'space-y-3'
-            : 'flex flex-col gap-4 sm:flex-row sm:items-center'
-        }
-      >
+      <div className={fieldLayoutClass}>
         <MediaLibraryPicker
           storeId={storeId}
           type={mediaType}
@@ -955,7 +976,7 @@ function ImageUploadField({
                 )}
               </button>
 
-              <div className="min-w-0 flex-1 space-y-3">
+              <div className={actionsLayoutClass}>
                 <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-black text-white transition hover:bg-[#ea580c]">
                   {uploading ? (
                     <FiLoader className="animate-spin" />
@@ -993,20 +1014,20 @@ function ImageUploadField({
                   Escolher da biblioteca
                 </button>
 
-                <p className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
+                <p className={helperTextClass}>
                   {recommendation}
                 </p>
 
-                <p className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
+                <p className={helperTextClass}>
                   Você pode clicar no preview, escolher da biblioteca, enviar
                   pelo botão ou arrastar uma imagem diretamente aqui.
                 </p>
 
                 {value && (
-                  <p className="text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
-                    Remover desta seção limpa apenas este campo. A imagem
-                    continua na biblioteca.
-                  </p>
+                  <p className={helperTextClass}>
+                  Remover desta seção limpa apenas este campo. A imagem
+                  continua na biblioteca.
+                </p>
                 )}
               </div>
             </>
@@ -1452,6 +1473,7 @@ const knownStoreIdsKey = useMemo(() => {
 
   const handleSave = useCallback(async () => {
     if (!selectedStore || saving) return
+    
 
     const cleanName = sanitizeTextField(form.name, 100)
     if (!cleanName) {
@@ -1475,6 +1497,7 @@ const knownStoreIdsKey = useMemo(() => {
       const logoUrl = sanitizeImageUrl(form.logoUrl)
       const bannerUrl = sanitizeImageUrl(form.bannerUrl)
       const bannerMobileUrl = sanitizeImageUrl(form.bannerMobileUrl)
+      const shareImageUrl = sanitizeImageUrl(form.shareImageUrl)
       if (form.whatsapp && whatsapp.replace(/\D/g, '').length < 12) {
         throw new Error('Informe um WhatsApp brasileiro válido com DDD.')
       }
@@ -1538,6 +1561,7 @@ const knownStoreIdsKey = useMemo(() => {
         logoUrl,
         bannerUrl,
         bannerMobileUrl,
+        shareImageUrl,
         themeColor,
 
         whatsapp,
@@ -1588,7 +1612,7 @@ const knownStoreIdsKey = useMemo(() => {
 
       const ALLOWED_KEYS = [
         'name', 'storeName', 'description', 'segment', 'category',
-        'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'themeColor', 'whatsapp', 'whatsapp1',
+        'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'shareImageUrl', 'themeColor', 'whatsapp', 'whatsapp1',
         'phone', 'instagram', 'social', 'isActive', 'activeDays',
         'hoursOpen', 'hoursClose', 'openingHours', 'scheduling', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
@@ -1938,6 +1962,19 @@ const knownStoreIdsKey = useMemo(() => {
                 onUpload={(file) => handleUploadStoreImage(file, 'bannerMobileUrl')}
                 onSelectFromLibrary={(url) => updateField('bannerMobileUrl', url)}
                 onRemove={() => updateField('bannerMobileUrl', '')}
+              />
+
+              <ImageUploadField
+                label="Imagem de compartilhamento"
+                description="Usada quando o link da loja for enviado no WhatsApp, Instagram e redes sociais. Recomendado: 1200 x 630 px."
+                aspect="share"
+                value={form.shareImageUrl}
+                uploading={uploadingImage === 'shareImageUrl'}
+                storeId={selectedStore.id}
+                mediaType="banner"
+                onUpload={(file) => handleUploadStoreImage(file, 'shareImageUrl')}
+                onSelectFromLibrary={(url) => updateField('shareImageUrl', url)}
+                onRemove={() => updateField('shareImageUrl', '')}
               />
 
               <ImageUploadField

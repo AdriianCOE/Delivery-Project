@@ -76,6 +76,21 @@ function shouldNoIndexStorefront(slugValue, storeData) {
   return candidates.some((candidate) => NOINDEX_STORE_SLUGS.has(candidate))
 }
 
+function titleFromSlug(value) {
+  const text = String(value || '')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+
+  if (!text) return 'Cardápio online'
+
+  return text
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 // --- FUNÇÕES AUXILIARES DE HORÁRIO ---
 const WEEK_DAYS = [
   {
@@ -720,6 +735,10 @@ function normalizeStore(input, fallbackSlug = '') {
     firstFilled(data.bannerMobileUrl, data.mobileBannerUrl, data.mobileBannerURL),
     'storeBannerMobile',
   )
+  const shareImageUrl = getCloudinaryImageUrl(
+  firstFilled(data.shareImageUrl, data.seoImageUrl, data.ogImageUrl),
+  'storeBanner',
+  )
 
   return {
     ...data,
@@ -734,6 +753,9 @@ function normalizeStore(input, fallbackSlug = '') {
     bannerMobileUrl,
     mobileBannerUrl: bannerMobileUrl,
     coverUrl: bannerUrl,
+    shareImageUrl,
+    seoImageUrl: shareImageUrl,
+    ogImageUrl: shareImageUrl,
     themeColor: firstFilled(data.themeColor, data.primaryColor, data.brandColor) || BRAND_GREEN,
     whatsapp: firstFilled(data.whatsapp, data.phone, data.contactPhone),
     city: firstFilled(data.city, data.address?.city),
@@ -2147,6 +2169,9 @@ const storeName = store?.name || 'Loja'
 const storeDescription = buildStoreDescription(store, storeName)
 
 const storeImage =
+  store?.shareImageUrl ||
+  store?.seoImageUrl ||
+  store?.ogImageUrl ||
   store?.bannerUrl ||
   store?.coverUrl ||
   store?.logoUrl ||
@@ -2460,12 +2485,14 @@ const handleToggleFavorite = useCallback(() => {
   }
   }, [activeCategory, categories])
 
+  const loadingStoreName = titleFromSlug(slug)
+
 if (loadingStore) {
   return (
     <>
       <SEO
-        title="Cardápio PratoBy"
-        description="Cardápio digital em carregamento no PratoBy."
+        title={`${loadingStoreName} | Cardápio online`}
+        description="Carregando cardápio digital no PratoBy."
         path={`/${slug || ''}`}
         noIndex
         noFollow
@@ -2500,7 +2527,7 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-      title={`${storeName} | Cardápio e Pedidos Online`}
+      title={`${storeName} | Cardápio digital`}
       description={storeDescription}
       path={`/${storeSlug}`}
       image={storeImage}
