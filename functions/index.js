@@ -3610,7 +3610,7 @@ function buildSeoFaviconUrl(value) {
 
   return url.replace(
     '/image/upload/',
-    '/image/upload/f_png,q_auto/e_trim/c_fit,w_92,h_92/c_pad,w_128,h_128,b_rgb:ffffff,r_32,bo_1px_solid_rgb:e5e7eb/'
+    '/image/upload/f_png,q_auto/e_trim/c_fill,w_164,h_164,g_auto,r_36/c_pad,w_192,h_192,b_transparent/'
   )
 }
 
@@ -3681,7 +3681,7 @@ function injectStorefrontSeo(html, meta) {
     ],
     [
       /<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i,
-      `<link rel="icon" href="${safeFavicon}" type="${safeFaviconType}" sizes="128x128">`,
+      `<link rel="icon" href="${safeFavicon}" type="${safeFaviconType}" sizes="192x192">`,
     ],
     [
       /<link\b(?=[^>]*\brel=["']shortcut icon["'])[^>]*>/i,

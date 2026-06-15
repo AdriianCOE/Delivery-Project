@@ -100,7 +100,27 @@ function transformCloudinaryUrl(url, transformation) {
     return absoluteUrl
   }
 
-  return absoluteUrl.replace('/image/upload/', `/image/upload/${transformation}/`)
+  const marker = '/image/upload/'
+  const markerIndex = absoluteUrl.indexOf(marker)
+
+  if (markerIndex === -1) return absoluteUrl
+
+  const prefix = absoluteUrl.slice(0, markerIndex + marker.length)
+  const afterUpload = absoluteUrl.slice(markerIndex + marker.length)
+
+  // Remove transformações anteriores quando existe /v1234567890/
+  const versionMatch = afterUpload.match(/(?:^|\/)(v\d+\/)/)
+
+  if (versionMatch) {
+    const versionStart =
+      versionMatch.index + (versionMatch[0].startsWith('/') ? 1 : 0)
+
+    const suffix = afterUpload.slice(versionStart)
+
+    return `${prefix}${transformation}/${suffix}`
+  }
+
+  return `${prefix}${transformation}/${afterUpload.replace(/^\/+/, '')}`
 }
 
 function buildSocialImageUrl(url) {
@@ -116,16 +136,16 @@ function buildSocialImageUrl(url) {
   )
 }
 
-function buildAppleTouchIcon(url) {
+function buildCloudinaryFavicon(url) {
   const absoluteUrl = buildAbsoluteUrl(url, DEFAULT_FAVICON)
 
   if (!absoluteUrl.includes('res.cloudinary.com') || !absoluteUrl.includes('/image/upload/')) {
     return absoluteUrl
   }
 
-  return absoluteUrl.replace(
-    '/image/upload/',
-    '/image/upload/f_png,q_auto/e_trim/c_fit,w_132,h_132/c_pad,w_180,h_180,b_rgb:ffffff,r_40,bo_1px_solid_rgb:e5e7eb/'
+  return transformCloudinaryUrl(
+    absoluteUrl,
+    'f_png,q_auto/e_trim/c_fill,w_164,h_164,g_auto,r_36/c_pad,w_192,h_192,b_transparent'
   )
 }
 
@@ -138,7 +158,7 @@ function buildAppleTouchIcon(url) {
 
   return transformCloudinaryUrl(
     absoluteUrl,
-    'f_png,q_auto,e_trim,w_180,h_180,c_fill,g_auto,r_36,b_white'
+    'f_png,q_auto/e_trim/c_fill,w_156,h_156,g_auto,r_40/c_pad,w_180,h_180,b_transparent'
   )
 }
 
@@ -250,7 +270,7 @@ export default function SEO({
 
       <link rel="canonical" href={canonicalUrl} />
 
-      <link rel="icon" href={faviconUrl} type={faviconType} sizes="128x128" />
+      <link rel="icon" href={faviconUrl} type={faviconType} sizes="192x192" />
       <link rel="shortcut icon" href={faviconUrl} type={faviconType} />
       <link rel="apple-touch-icon" href={appleTouchIconUrl} sizes="180x180" />
 
