@@ -15,10 +15,13 @@ import {
   FiAlertTriangle,
   FiCalendar,
   FiCheck,
+  FiCoffee,
   FiClock,
   FiCreditCard,
   FiDollarSign,
   FiEye,
+  FiGift,
+  FiHome,
   FiImage,
   FiInfo,
   FiLayers,
@@ -31,13 +34,16 @@ import {
   FiTrash2,
   FiTrendingUp,
   FiTruck,
+  FiUsers,
   FiX,
+  FiZap,
 } from 'react-icons/fi'
 
 import { db } from '../../../../services/firebase'
 import { uploadImageToCloudinary } from '../../../../services/cloudinary'
 import { registerStoreMediaAsset } from '../../../../services/storeMediaLibrary'
 import { hasPlanFeature } from '../../../../utils/planCatalog'
+import { getCloudinaryImageUrl } from '../../../../utils/cloudinaryImages'
 import LockedFeatureCard from '../../../../components/billing/LockedFeatureCard'
 import MediaLibraryPicker from '../../../../components/media/MediaLibraryPicker'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
@@ -156,6 +162,20 @@ const statusGroups = [
 
 const statusItemByKey = new Map(statusItems.map((item) => [item.key, item]))
 
+const visualBadgeIcons = {
+  artesanal: FiCoffee,
+  caseiro: FiHome,
+  feito_na_hora: FiZap,
+  especial_da_casa: FiStar,
+  cremoso: FiTag,
+  saboroso: FiTag,
+  para_compartilhar: FiUsers,
+  acompanhamento: FiPackage,
+  novidade: FiGift,
+  edicao_limitada: FiClock,
+  premium: FiStar,
+}
+
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
 function splitSchedulingMinutes(minutes) {
@@ -266,43 +286,148 @@ function StatusToggleCard({ item, checked, onChange, disabled }) {
   )
 }
 
+function getServingPreviewLabel(form) {
+  const serving = normalizeProductServingForForm({ serving: form.serving })
+
+  if (serving.enabled === false) return ''
+  if (String(serving.label || '').trim()) return String(serving.label).trim()
+
+  const count = Number(serving.count)
+  if (Number.isFinite(count) && count > 0) {
+    const rounded = Math.floor(count)
+    return `Serve ${rounded} ${rounded === 1 ? 'pessoa' : 'pessoas'}`
+  }
+
+  return ''
+}
+
 function ProductSummary({ form, visibleImage, categoryName, discountPct }) {
   const price = parseCurrency(form.price)
   const hasPrice = Number.isFinite(price) && price > 0
+  const productName = form.name.trim() || 'Produto sem nome'
+  const description = form.description.trim() || 'Descrição do produto aparece aqui.'
+  const servingLabel = getServingPreviewLabel(form)
+  const hasOptions = Array.isArray(form.optionGroups) && form.optionGroups.length > 0
+  const selectedVisualBadges = normalizeVisualBadgesForForm({ visualBadges: form.visualBadges })
+    .slice(0, 2)
+    .map((badgeId) => {
+      const option = VISUAL_BADGE_OPTIONS.find((badge) => badge.id === badgeId)
+      const Icon = visualBadgeIcons[badgeId] || FiTag
+
+      return option ? { id: badgeId, label: option.label, Icon } : null
+    })
+    .filter(Boolean)
+
+  const topBadges = [
+    !form.isAvailable ? { id: 'unavailable', label: 'Indisponível', Icon: FiInfo, className: 'bg-orange-50 text-orange-700 ring-orange-100' } : null,
+    form.isPromotion ? { id: 'promotion', label: discountPct ? `-${discountPct}%` : 'Promoção', Icon: FiTag, className: 'bg-red-50 text-red-600 ring-red-100' } : null,
+    form.scheduling?.mode === 'scheduled_only' ? { id: 'scheduled', label: 'Sob encomenda', Icon: FiClock, className: 'bg-amber-50 text-amber-700 ring-amber-100' } : null,
+    form.isFeatured ? { id: 'featured', label: 'Destaque', Icon: FiStar, className: 'bg-orange-50 text-orange-700 ring-orange-100' } : null,
+    form.acceptsCoupons && form.showCouponBadge !== false ? { id: 'coupon', label: 'Aceita cupom', Icon: FiTag, className: 'bg-emerald-50 text-emerald-700 ring-emerald-100' } : null,
+    ...selectedVisualBadges.map((badge) => ({
+      ...badge,
+      className: 'bg-orange-50 text-orange-700 ring-orange-100',
+    })),
+  ].filter(Boolean).slice(0, 2)
+
+  const infoChips = [
+    hasOptions ? { id: 'options', label: 'Com opções', Icon: null } : null,
+    servingLabel ? { id: 'serving', label: servingLabel, Icon: FiUsers } : null,
+    form.preparationTime ? { id: 'prep', label: form.preparationTime, Icon: FiClock } : null,
+  ].filter(Boolean).slice(0, 2)
 
   return (
-    <div className="mt-5 overflow-hidden rounded-[1.7rem] border border-orange-100/80 bg-white/80 p-3 shadow-sm shadow-orange-950/5 ring-1 ring-white/70 dark:border-white/10 dark:bg-[#151922]/80 dark:ring-white/5">
-      <div className="flex items-center gap-4">
-        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-100 to-orange-50 ring-1 ring-orange-100 dark:from-white/10 dark:to-white/5 dark:ring-white/10">
-          {visibleImage ? (
-            <img src={visibleImage} alt="Preview do produto" className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full w-full place-items-center text-[#f97316]">
-              <FiImage size={22} />
+    <div className="mt-5 overflow-hidden rounded-[1.7rem] border border-orange-100/80 bg-white/90 p-3 shadow-sm shadow-orange-950/5 ring-1 ring-white/70 dark:border-white/10 dark:bg-[#151922]/90 dark:ring-white/5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#ea580c] ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20">
+          <FiEye size={11} />
+          Prévia do cardápio
+        </span>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${form.isActive && form.isAvailable && form.isVisible ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
+          {form.isActive && form.isAvailable && form.isVisible ? 'Publicado' : 'Revisar'}
+        </span>
+      </div>
+
+      <div className="relative flex min-h-[178px] gap-3 rounded-[1.35rem] bg-white p-3 ring-1 ring-slate-100 dark:bg-[#11141B] dark:ring-white/10 sm:min-h-[188px]">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="min-h-[112px]">
+            <div className="flex min-h-[1.8rem] flex-wrap items-center gap-1.5 overflow-hidden">
+              {topBadges.map((badge) => {
+                const Icon = badge.Icon
+
+                return (
+                  <span
+                    key={badge.id}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-black ring-1 ${badge.className}`}
+                  >
+                    <Icon size={11} />
+                    {badge.label}
+                  </span>
+                )
+              })}
             </div>
-          )}
-          {form.isPromotion ? (
-            <span className="absolute bottom-1 right-1 rounded-full bg-[#f97316] px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm">OFF</span>
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-black text-slate-950 dark:text-slate-50 md:text-base">{form.name.trim() || 'Produto sem nome'}</p>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${form.isActive && form.isAvailable && form.isVisible ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
-              {form.isActive && form.isAvailable && form.isVisible ? 'Publicado' : 'Revisar'}
+
+            <h3 className="mt-2 line-clamp-2 text-base font-black leading-tight text-slate-950 dark:text-slate-50">
+              {productName}
+            </h3>
+
+            <p className="mt-1.5 line-clamp-2 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">
+              {description}
+            </p>
+
+            <div className="mt-2 flex min-h-[1.5rem] flex-wrap items-start gap-1.5 overflow-hidden">
+              {infoChips.map((chip) => {
+                const Icon = chip.Icon
+
+                return (
+                  <span
+                    key={chip.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600 ring-1 ring-slate-100 dark:bg-white/10 dark:text-slate-300 dark:ring-white/10"
+                  >
+                    {Icon ? <Icon size={11} /> : null}
+                    {chip.label}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="mt-auto flex items-end justify-between gap-3 pt-3">
+            <div className="min-w-0">
+              {typeof discountPct === 'number' ? (
+                <p className="text-[11px] font-bold text-slate-400 line-through dark:text-slate-500">
+                  {formatMoney(parseCurrency(form.oldPrice))}
+                </p>
+              ) : null}
+              <p className="text-[10px] font-black uppercase leading-none text-[#f97316]">
+                A partir de
+              </p>
+              <p className="mt-1 whitespace-nowrap text-xl font-black leading-none tracking-tight text-slate-950 dark:text-slate-50">
+                {hasPrice ? formatMoney(price) : 'R$ 0,00'}
+              </p>
+            </div>
+
+            <span className="inline-flex h-10 min-w-[96px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm dark:border-white/10 dark:bg-[#151922] dark:text-slate-200">
+              Editar
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-            <span>{categoryName || 'Sem categoria'}</span>
-            {form.preparationTime ? <><span className="text-slate-300 dark:text-white/20">•</span><span>{form.preparationTime}</span></> : null}
-            {typeof discountPct === 'number' ? <><span className="text-slate-300 dark:text-white/20">•</span><span className="text-emerald-600 dark:text-emerald-300">-{discountPct}%</span></> : null}
-          </div>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Preço</p>
-          <p className="mt-0.5 text-base font-black text-[#f97316] md:text-lg">{hasPrice ? formatMoney(price) : 'R$ 0,00'}</p>
+
+        <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[1.35rem] bg-white shadow-sm ring-1 ring-black/[0.04] dark:bg-[#151922] dark:ring-white/10 sm:h-32 sm:w-32">
+          {visibleImage ? (
+            <img src={visibleImage} alt="Preview do produto" className="h-full w-full object-contain object-center p-2" />
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 text-slate-300 dark:from-white/10 dark:to-white/5 dark:text-slate-500">
+              <FiImage size={24} />
+              <span className="mt-1 text-[9px] font-black uppercase tracking-widest">Sem foto</span>
+            </div>
+          )}
         </div>
       </div>
+
+      <p className="mt-2 truncate text-[11px] font-bold text-slate-400 dark:text-slate-500">
+        {categoryName || 'Sem categoria'}
+      </p>
     </div>
   )
 }
@@ -628,7 +753,12 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
     setImageFile(null)
     if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview)
     setImagePreview('')
-    setField('imageUrl', item.url || '')
+    setField(
+      'imageUrl',
+      getCloudinaryImageUrl(item.url || '', 'productDetail', {
+        replaceExistingTransform: true,
+      })
+    )
     setField('imagePublicId', item.publicId || '')
     if (imgRef.current) imgRef.current.value = ''
   }, [imagePreview, setField])
@@ -658,7 +788,9 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         const res = await uploadImageToCloudinary(imageFile, 'PratoBy/produtos', {
           storeId: mediaStoreId,
         })
-        finalImageUrl = res.secure_url || res.url || ''
+        finalImageUrl = getCloudinaryImageUrl(res.secure_url || res.url || '', 'productDetail', {
+          replaceExistingTransform: true,
+        })
         finalImagePublicId = res.public_id || ''
         try {
           await registerStoreMediaAsset({
@@ -1000,64 +1132,86 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
               {section === 'image' && (
                 <div className="space-y-5">
                   <SectionCard title="Imagem do produto" description="Uma foto boa aumenta a confiança e melhora a conversão do cardápio." icon={FiImage}>
-                    {visibleImage ? (
-                      <div className="group relative overflow-hidden rounded-[1.6rem] border border-orange-100 shadow-sm dark:border-white/10">
-                        <img src={visibleImage} alt="Preview" className="h-72 w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-80" />
-                        <button
-                          type="button"
-                          onClick={handleRemoveImage}
-                          className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-2xl bg-red-500/90 text-white shadow-lg backdrop-blur-sm transition-all hover:scale-105 hover:bg-red-600 active:scale-95"
-                          aria-label="Remover imagem"
-                        >
-                          <FiTrash2 size={16} />
-                        </button>
-                        <div className="absolute bottom-4 left-4 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-black text-slate-900 shadow-lg backdrop-blur-sm">
-                            {imagePreview ? 'Nova imagem pendente' : 'Imagem atual'}
-                          </span>
-                          <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white shadow-lg">
-                            PratoBy
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => imgRef.current?.click()}
-                        className="group flex h-72 w-full flex-col items-center justify-center gap-4 rounded-[1.6rem] border-2 border-dashed border-orange-200 bg-gradient-to-br from-orange-50 to-white transition-all duration-200 hover:border-orange-300 hover:from-orange-100 hover:to-orange-50 dark:border-white/10 dark:from-white/[0.045] dark:to-white/[0.02] dark:hover:border-orange-500/30 dark:hover:from-orange-500/10"
-                      >
-                        <div className="grid h-16 w-16 place-items-center rounded-3xl bg-white text-[#f97316] shadow-lg shadow-orange-950/10 ring-1 ring-orange-100 transition-transform duration-300 group-hover:scale-110 dark:bg-[#1A1F2B] dark:ring-white/10">
-                          <FiImage size={28} />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-base font-black text-slate-950 dark:text-slate-50">Clique para selecionar</p>
-                          <p className="mt-1.5 text-xs font-bold text-slate-400 dark:text-slate-500">PNG, JPG, WEBP (máx. 5 MB)</p>
-                        </div>
-                      </button>
-                    )}
-
                     <input ref={imgRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                    <button
-                      type="button"
-                      onClick={() => imgRef.current?.click()}
-                      className={`mt-4 flex w-full items-center justify-center gap-2 ${ui.secondaryButton}`}
-                    >
-                      <FiImage size={16} />
-                      {visibleImage ? 'Trocar imagem' : 'Selecionar imagem'}
-                    </button>
 
-                    <div className="mt-3">
-                      <MediaLibraryPicker
-                        storeId={mediaStoreId}
-                        type="product"
-                        onSelect={handleSelectLibraryImage}
-                        className={`flex w-full items-center justify-center gap-2 ${ui.secondaryButton}`}
-                      />
-                    </div>
+                    <MediaLibraryPicker
+                      storeId={mediaStoreId}
+                      type="product"
+                      onSelect={handleSelectLibraryImage}
+                    >
+                      {({ openLibrary, disabled }) => (
+                        <>
+                          <div className="group relative overflow-hidden rounded-[1.6rem] border border-orange-100 bg-white p-4 shadow-sm transition hover:border-orange-200 hover:bg-orange-50/40 dark:border-white/10 dark:bg-[#11141B] dark:hover:border-orange-500/30">
+                            <button
+                              type="button"
+                              onClick={() => (disabled ? imgRef.current?.click() : openLibrary())}
+                              className="relative flex w-full items-center justify-center"
+                            >
+                              <div className="relative aspect-square w-full max-w-[260px] overflow-hidden rounded-[1.45rem] bg-white shadow-sm ring-1 ring-black/[0.04] dark:bg-[#151922] dark:ring-white/10">
+                                {visibleImage ? (
+                                  <img
+                                    src={visibleImage}
+                                    alt="Preview do produto no cardápio"
+                                    className="h-full w-full object-contain object-center p-3 transition duration-500 group-hover:scale-[1.03]"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 text-slate-300 dark:from-white/10 dark:to-white/5 dark:text-slate-500">
+                                    <FiImage size={34} />
+                                    <span className="mt-2 text-[10px] font-black uppercase tracking-widest">Sem foto</span>
+                                  </div>
+                                )}
+
+                                <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black text-white shadow-sm">
+                                  Prévia 1:1 do card
+                                </span>
+                              </div>
+
+                              <span className="absolute bottom-0 left-0 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-slate-900 shadow-lg ring-1 ring-black/5 backdrop-blur-sm dark:bg-[#151922]/95 dark:text-slate-100 dark:ring-white/10">
+                                {visibleImage ? 'Clique para escolher da biblioteca' : 'Escolher imagem da biblioteca'}
+                              </span>
+                            </button>
+
+                            {visibleImage ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleRemoveImage()
+                                }}
+                                className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-2xl bg-red-500/90 text-white shadow-lg backdrop-blur-sm transition-all hover:scale-105 hover:bg-red-600 active:scale-95"
+                                aria-label="Remover imagem"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() => imgRef.current?.click()}
+                              className={`flex w-full items-center justify-center gap-2 ${ui.secondaryButton}`}
+                            >
+                              <FiImage size={16} />
+                              Enviar arquivo
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={openLibrary}
+                              disabled={disabled}
+                              className={`flex w-full items-center justify-center gap-2 ${ui.secondaryButton}`}
+                            >
+                              <FiImage size={16} />
+                              Escolher da biblioteca
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </MediaLibraryPicker>
 
                     <p className={ui.hint}>
-                      Remover imagem atual limpa apenas este produto. Para excluir da biblioteca, use a ação "Excluir da biblioteca" dentro da biblioteca.
+                      A prévia usa o mesmo padrão do cardápio público: imagem quadrada, centralizada e sem corte. Remover limpa apenas este produto.
                     </p>
                   </SectionCard>
                 </div>
@@ -1160,17 +1314,19 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                         <div className="flex flex-wrap gap-2">
                           {VISUAL_BADGE_OPTIONS.map((badge) => {
                             const active = normalizeVisualBadgesForForm({ visualBadges: form.visualBadges }).includes(badge.id)
+                            const Icon = visualBadgeIcons[badge.id] || FiTag
                             return (
                               <button
                                 key={badge.id}
                                 type="button"
                                 onClick={() => toggleVisualBadge(badge.id)}
-                                className={`max-w-full rounded-full px-3 py-2 text-xs font-black ring-1 transition ${
+                                className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black ring-1 transition ${
                                   active
                                     ? 'bg-orange-500 text-white ring-orange-500'
                                     : 'bg-orange-50 text-orange-700 ring-orange-100 hover:bg-orange-100 dark:bg-white/5 dark:text-orange-200 dark:ring-white/10'
                                 }`}
                               >
+                                <Icon className="shrink-0" size={13} />
                                 <span className="block truncate">{badge.label}</span>
                               </button>
                             )

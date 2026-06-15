@@ -728,10 +728,10 @@ function normalizeStore(input, fallbackSlug = '') {
   const rawBannerMobileUrl = firstFilled(data.bannerMobileUrl, data.mobileBannerUrl, data.mobileBannerURL)
   const rawShareImageUrl = firstFilled(data.shareImageUrl, data.seoImageUrl, data.ogImageUrl)
 
-  const logoUrl = getCloudinaryImageUrl(rawLogoUrl, 'storeLogo')
-  const bannerUrl = getCloudinaryImageUrl(rawBannerUrl, 'storeBanner')
-  const bannerMobileUrl = getCloudinaryImageUrl(rawBannerMobileUrl, 'storeBannerMobile')
-  const shareImageUrl = getCloudinaryImageUrl(rawShareImageUrl, 'storeBanner')
+  const logoUrl = getCloudinaryImageUrl(rawLogoUrl, 'storeLogo', { replaceExistingTransform: true })
+  const bannerUrl = getCloudinaryImageUrl(rawBannerUrl, 'storeBanner', { replaceExistingTransform: true })
+  const bannerMobileUrl = getCloudinaryImageUrl(rawBannerMobileUrl, 'storeBannerMobile', { replaceExistingTransform: true })
+  const shareImageUrl = getCloudinaryImageUrl(rawShareImageUrl, 'ogImage', { replaceExistingTransform: true })
 
   return {
     ...data,
@@ -1353,11 +1353,11 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
   if (!banner) return null
 
   return (
-    <section className="mx-auto mt-3 max-w-[1120px] px-3 sm:mt-5 sm:px-4">
+    <section className="mx-auto mt-2 max-w-[1120px] px-3 sm:mt-4 sm:px-4">
       <button
         type="button"
         onClick={() => onClick?.(banner)}
-        className="group relative flex w-full min-w-0 items-center overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-100/50 sm:rounded-[1.7rem] lg:min-h-[118px]"
+        className="group relative flex w-full min-w-0 items-center overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-100/50 sm:rounded-[1.7rem] lg:min-h-[104px]"
       >
         <div
           className="absolute inset-0 opacity-[0.07]"
@@ -1366,9 +1366,9 @@ function StorePromoBanner({ banner, themeColor, onClick }) {
           }}
         />
 
-        <div className="relative flex w-full min-w-0 flex-1 items-center gap-3 p-3 sm:gap-5 sm:p-4 lg:p-5">
+        <div className="relative flex w-full min-w-0 flex-1 items-center gap-3 p-3 sm:gap-5 sm:p-4 lg:p-4">
           {banner.imageUrl ? (
-            <div className="aspect-[4/3] w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-50 via-white to-amber-50 p-1.5 ring-1 ring-orange-100/70 sm:w-32 lg:w-36">
+            <div className="aspect-[4/3] w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-50 via-white to-amber-50 p-1.5 ring-1 ring-orange-100/70 sm:w-30 lg:w-32">
               <img
                 src={banner.imageUrl}
                 alt={banner.title}

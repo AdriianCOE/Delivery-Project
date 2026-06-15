@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FiAlertCircle,
+  FiAward,
   FiCheck,
+  FiClock,
+  FiCoffee,
+  FiGift,
+  FiHome,
   FiMinus,
+  FiPackage,
   FiPlus,
   FiShoppingBag,
+  FiSmile,
+  FiTag,
+  FiUsers,
   FiX,
+  FiZap,
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
@@ -118,6 +128,20 @@ const VISUAL_BADGE_LABELS = {
   premium: 'Premium',
 }
 
+const VISUAL_BADGE_ICONS = {
+  artesanal: FiCoffee,
+  caseiro: FiHome,
+  feito_na_hora: FiZap,
+  especial_da_casa: FiAward,
+  cremoso: FiSmile,
+  saboroso: FiSmile,
+  para_compartilhar: FiUsers,
+  acompanhamento: FiPackage,
+  novidade: FiGift,
+  edicao_limitada: FiClock,
+  premium: FiAward,
+}
+
 function getFirstValidValue(...values) {
   return values.find((value) => value !== undefined && value !== null && String(value).trim()) || ''
 }
@@ -180,7 +204,7 @@ function normalizeVisualBadges(product, limit = 3) {
     .map((badge) => {
       const id = String(badge?.id || badge || '').trim()
       const label = String(badge?.label || VISUAL_BADGE_LABELS[id] || '').trim()
-      return label ? { id: id || label, label: label.slice(0, 28) } : null
+      return label ? { id: id || label, label: label.slice(0, 28), Icon: VISUAL_BADGE_ICONS[id] || FiTag } : null
     })
     .filter(Boolean)
     .slice(0, limit)
@@ -444,6 +468,7 @@ const modalInfoBadges = useMemo(() => {
     badges.push({
       id: `visual-${badge.id}`,
       label: badge.label,
+      Icon: badge.Icon,
       className: 'bg-orange-50 text-orange-700 ring-orange-100',
     })
   })
@@ -816,14 +841,19 @@ const modalInfoBadges = useMemo(() => {
                 </p>
 
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {modalInfoBadges.map((badge) => (
-                    <span
-                      key={badge.id}
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${badge.className}`}
-                    >
-                      {badge.label}
-                    </span>
-                  ))}
+                  {modalInfoBadges.map((badge) => {
+                    const Icon = badge.Icon
+
+                    return (
+                      <span
+                        key={badge.id}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${badge.className}`}
+                      >
+                        {Icon && <Icon size={12} />}
+                        {badge.label}
+                      </span>
+                    )
+                  })}
                 </div>
               </div>
             )}

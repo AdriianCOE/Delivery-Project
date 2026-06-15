@@ -10,6 +10,27 @@ import {
 } from 'firebase/database'
 import { rtdb } from '../services/firebase'
 
+const AUTH_SESSION_MARKER = 'pratoby:auth:session'
+const FIREBASE_AUTH_STORAGE_PREFIX = 'firebase:authUser:'
+
+function hasStoredDashboardAuth() {
+  if (typeof window === 'undefined') return false
+
+  try {
+    if (window.localStorage.getItem(AUTH_SESSION_MARKER) === '1') return true
+
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      if (window.localStorage.key(index)?.startsWith(FIREBASE_AUTH_STORAGE_PREFIX)) {
+        return true
+      }
+    }
+  } catch {
+    return false
+  }
+
+  return false
+}
+
 async function getPresenceUser() {
   const [
     { browserSessionPersistence, setPersistence, signInAnonymously },
@@ -23,6 +44,7 @@ async function getPresenceUser() {
   // skip setPersistence entirely. Calling it here could downgrade a merchant's
   // localStorage-based session to sessionStorage, logging them out on the next tab.
   if (auth.currentUser) return auth.currentUser
+  if (hasStoredDashboardAuth()) return null
 
   // Only change persistence when we are certain no user is active.
   await setPersistence(auth, browserSessionPersistence)

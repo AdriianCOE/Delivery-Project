@@ -2,15 +2,22 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import {
   FiAward,
   FiCheckCircle,
+  FiCoffee,
   FiClock,
   FiEdit2,
+  FiGift,
   FiHeart,
+  FiHome,
   FiImage,
   FiInfo,
+  FiPackage,
   FiPlus,
   FiShoppingCart,
+  FiSmile,
   FiTag,
   FiTrendingUp,
+  FiUsers,
+  FiZap,
 } from 'react-icons/fi'
 
 import { useCart } from '../../contexts/CartContext'
@@ -289,6 +296,20 @@ const VISUAL_BADGE_LABELS = {
   premium: 'Premium',
 }
 
+const VISUAL_BADGE_ICONS = {
+  artesanal: FiCoffee,
+  caseiro: FiHome,
+  feito_na_hora: FiZap,
+  especial_da_casa: FiAward,
+  cremoso: FiSmile,
+  saboroso: FiSmile,
+  para_compartilhar: FiUsers,
+  acompanhamento: FiPackage,
+  novidade: FiGift,
+  edicao_limitada: FiClock,
+  premium: FiAward,
+}
+
 function normalizeServingLabel(product) {
   const serving = product?.serving
 
@@ -323,7 +344,7 @@ function normalizeVisualBadges(product, limit = 2) {
     .map((badge) => {
       const id = String(badge?.id || badge || '').trim()
       const label = String(badge?.label || VISUAL_BADGE_LABELS[id] || '').trim()
-      return label ? { id: id || label, label: label.slice(0, 28) } : null
+      return label ? { id: id || label, label: label.slice(0, 28), Icon: VISUAL_BADGE_ICONS[id] || FiTag } : null
     })
     .filter(Boolean)
     .slice(0, limit)
@@ -479,6 +500,7 @@ function ProductCard({
       badges.push(makeCardBadge({
         id: `visual-${badge.id}`,
         label: badge.label,
+        icon: badge.Icon,
         className: 'bg-orange-50 text-orange-700 ring-orange-100',
       }))
     })

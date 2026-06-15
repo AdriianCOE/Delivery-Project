@@ -15,6 +15,7 @@ import {
   FiCheckCircle,
   FiClock,
   FiCopy,
+  FiDownload,
   FiExternalLink,
   FiGlobe,
   FiImage,
@@ -41,6 +42,7 @@ import { uploadImageToCloudinary } from '../../services/cloudinary'
 import { registerStoreMediaAsset } from '../../services/storeMediaLibrary'
 import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
 import { hasPlanFeature } from '../../utils/planCatalog'
+import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 import MediaLibraryPicker from '../../components/media/MediaLibraryPicker'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -279,6 +281,14 @@ function getStoreImageMediaType(fieldName) {
   if (fieldName === 'logoUrl') return 'logo'
   if (fieldName === 'bannerUrl' || fieldName === 'bannerMobileUrl') return 'banner'
   return 'general'
+}
+
+function getStoreImageVariant(fieldName) {
+  if (fieldName === 'logoUrl') return 'storeLogoLarge'
+  if (fieldName === 'bannerUrl') return 'storeBanner'
+  if (fieldName === 'bannerMobileUrl') return 'storeBannerMobile'
+  if (fieldName === 'shareImageUrl') return 'ogImage'
+  return 'storeBannerMobile'
 }
 
 function sanitizeTextField(value, maxLength) {
@@ -811,14 +821,17 @@ function ImageUploadField({
 }) {
   const [isDraggingFile, setIsDraggingFile] = useState(false)
 
+  const normalizedLabel = String(label || '').toLowerCase()
   const isWidePreview = aspect === 'banner' || aspect === 'share'
 
   const previewClass =
     aspect === 'share'
       ? 'aspect-[1200/630] w-full rounded-[1.5rem]'
       : aspect === 'banner'
-        ? 'h-40 w-full rounded-[1.5rem]'
-        : 'h-32 w-32 rounded-[1.5rem]'
+        ? normalizedLabel.includes('mobile')
+          ? 'aspect-[3/2] w-full rounded-[1.5rem]'
+          : 'aspect-[3/1] w-full rounded-[1.5rem]'
+        : 'aspect-square w-32 rounded-[1.5rem]'
 
   const fieldLayoutClass = isWidePreview
     ? 'space-y-3'
@@ -833,22 +846,38 @@ function ImageUploadField({
     : 'text-xs leading-5 text-[#6b7280] dark:text-zinc-400'
 
   const recommendation = useMemo(() => {
-    const normalizedLabel = String(label || '').toLowerCase()
-
     if (aspect === 'share') {
-      return 'Recomendado para compartilhamento: 1200 x 630 px.'
+      return 'Recomendado: 1200 x 630 px. Mantenha textos e elementos importantes no centro.'
     }
 
     if (aspect === 'banner' && normalizedLabel.includes('mobile')) {
-      return 'Recomendado para celular: 1200 x 520 px.'
+      return 'Recomendado: 1080 x 720 px. Proporção ideal: 3:2.'
     }
 
     if (aspect === 'banner') {
-      return 'Recomendado para desktop: 2400 x 700 px.' 
+      return 'Recomendado: 1600 x 533 px ou 1440 x 480 px. Proporção ideal: 3:1.'
     }
 
-    return 'Recomendado: imagem quadrada (1:1).'
-  }, [aspect, label])
+    return 'Recomendado: 800 x 800 px ou 1200 x 1200 px. Use imagem quadrada, de preferência PNG/WebP, com boa margem e fundo transparente.'
+  }, [aspect, normalizedLabel])
+
+  const previewRatioLabel =
+    aspect === 'share'
+      ? 'Prévia 1200:630'
+      : aspect === 'banner'
+        ? normalizedLabel.includes('mobile')
+          ? 'Prévia 3:2 mobile'
+          : 'Prévia 3:1 desktop'
+        : 'Prévia 1:1'
+
+  const libraryOptimizedVariant =
+    aspect === 'share'
+      ? 'ogImage'
+      : aspect === 'banner'
+        ? normalizedLabel.includes('mobile')
+          ? 'storeBannerMobile'
+          : 'storeBanner'
+        : 'storeLogoLarge'
 
   const handleDroppedFile = (event) => {
     event.preventDefault()
@@ -908,7 +937,7 @@ function ImageUploadField({
             className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 dark:bg-red-950/35 dark:text-red-300 dark:hover:bg-red-950/60"
             title="Remove a imagem deste campo, mas mantém ela na biblioteca."
           >
-            Remover desta seção
+            Remover
           </button>
         )}
       </div>
@@ -917,7 +946,15 @@ function ImageUploadField({
         <MediaLibraryPicker
           storeId={storeId}
           type={mediaType}
-          onSelect={(item) => onSelectFromLibrary?.(item.url, item)}
+          onSelect={(item) => {
+            const selectedUrl = getCloudinaryImageUrl(
+              item.originalUrl || item.url,
+              libraryOptimizedVariant,
+              { replaceExistingTransform: true }
+            )
+
+            onSelectFromLibrary?.(selectedUrl, item)
+          }}
         >
           {({ openLibrary, disabled }) => (
             <>
@@ -974,6 +1011,10 @@ function ImageUploadField({
                     Clique para escolher ou arraste uma imagem
                   </span>
                 )}
+
+                <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black text-white shadow-sm">
+                  {previewRatioLabel}
+                </span>
               </button>
 
               <div className={actionsLayoutClass}>
@@ -1014,6 +1055,19 @@ function ImageUploadField({
                   Escolher da biblioteca
                 </button>
 
+                {value && (
+                  <a
+                    href={value}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] transition hover:bg-orange-50 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                  >
+                    <FiDownload />
+                    Baixar imagem
+                  </a>
+                )}
+
                 <p className={helperTextClass}>
                   {recommendation}
                 </p>
@@ -1025,7 +1079,7 @@ function ImageUploadField({
 
                 {value && (
                   <p className={helperTextClass}>
-                  Remover desta seção limpa apenas este campo. A imagem
+                  Remover limpa apenas este campo. A imagem
                   continua na biblioteca.
                 </p>
                 )}
@@ -1446,7 +1500,12 @@ const knownStoreIdsKey = useMemo(() => {
           throw new Error('Cloudinary não retornou a URL da imagem.')
         }
 
-        updateField(fieldName, imageUrl)
+        updateField(
+          fieldName,
+          getCloudinaryImageUrl(imageUrl, getStoreImageVariant(fieldName), {
+            replaceExistingTransform: true,
+          })
+        )
         try {
           await registerStoreMediaAsset({
             storeId: selectedStore.id,
@@ -1939,8 +1998,20 @@ const knownStoreIdsKey = useMemo(() => {
             )}
             <div className="grid gap-4">
               <ImageUploadField
+                label="Logo da loja"
+                description="Recomendado: 800 x 800 px ou 1200 x 1200 px. Use imagem quadrada, de preferência PNG/WebP, com boa margem e fundo transparente."
+                value={form.logoUrl}
+                uploading={uploadingImage === 'logoUrl'}
+                storeId={selectedStore.id}
+                mediaType="logo"
+                onUpload={(file) => handleUploadStoreImage(file, 'logoUrl')}
+                onSelectFromLibrary={(url) => updateField('logoUrl', url)}
+                onRemove={() => updateField('logoUrl', '')}
+              />
+
+              <ImageUploadField
                 label="Banner principal"
-                description="Usado em telas maiores, como computador e tablet."
+                description="Usado em telas maiores, como computador e tablet. Recomendado: 1600 x 533 px ou 1440 x 480 px. Proporção ideal: 3:1."
                 aspect="banner"
                 value={form.bannerUrl}
                 uploading={uploadingImage === 'bannerUrl'}
@@ -1953,7 +2024,7 @@ const knownStoreIdsKey = useMemo(() => {
 
               <ImageUploadField
                 label="Banner mobile"
-                description="Versão opcional para celular. Se não enviar, usaremos o banner principal."
+                description="Versão otimizada para celular. Se não enviar, usaremos o banner principal. Recomendado: 1080 x 720 px. Proporção ideal: 3:2."
                 aspect="banner"
                 value={form.bannerMobileUrl}
                 uploading={uploadingImage === 'bannerMobileUrl'}
@@ -1966,7 +2037,7 @@ const knownStoreIdsKey = useMemo(() => {
 
               <ImageUploadField
                 label="Imagem de compartilhamento"
-                description="Usada quando o link da loja for enviado no WhatsApp, Instagram e redes sociais. Recomendado: 1200 x 630 px."
+                description="Usada quando o link da loja é compartilhado no WhatsApp, Instagram, Google e redes sociais. Recomendado: 1200 x 630 px. Mantenha textos e elementos importantes no centro."
                 aspect="share"
                 value={form.shareImageUrl}
                 uploading={uploadingImage === 'shareImageUrl'}
@@ -1975,18 +2046,6 @@ const knownStoreIdsKey = useMemo(() => {
                 onUpload={(file) => handleUploadStoreImage(file, 'shareImageUrl')}
                 onSelectFromLibrary={(url) => updateField('shareImageUrl', url)}
                 onRemove={() => updateField('shareImageUrl', '')}
-              />
-
-              <ImageUploadField
-                label="Logo da loja"
-                description="Imagem quadrada usada no perfil e nos cards."
-                value={form.logoUrl}
-                uploading={uploadingImage === 'logoUrl'}
-                storeId={selectedStore.id}
-                mediaType="logo"
-                onUpload={(file) => handleUploadStoreImage(file, 'logoUrl')}
-                onSelectFromLibrary={(url) => updateField('logoUrl', url)}
-                onRemove={() => updateField('logoUrl', '')}
               />
             </div>
           </Section>

@@ -271,11 +271,15 @@ function getLogoSource(store) {
 }
 
 function getBannerDesktopUrl(store) {
-  return getCloudinaryImageUrl(getBannerDesktopSource(store), 'storeBanner')
+  return getCloudinaryImageUrl(getBannerDesktopSource(store), 'storeBanner', {
+    replaceExistingTransform: true,
+  })
 }
 
 function getBannerMobileUrl(store) {
-  return getCloudinaryImageUrl(getBannerMobileSource(store), 'storeBannerMobile')
+  return getCloudinaryImageUrl(getBannerMobileSource(store), 'storeBannerMobile', {
+    replaceExistingTransform: true,
+  })
 }
 
 function getLogoUrl(store) {
@@ -759,7 +763,7 @@ function getOperationalStatus(store, scheduleStatus = {}) {
   if (scheduleStatus.hasSchedule && !scheduleStatus.isWithinSchedule) {
     return {
       label: 'Fora do horário',
-      description: 'Pedidos liberados apenas no horário de atendimento.',
+      description: 'Pedidos liberados apenas quando loja aberta.',
       isOpen: false,
       tone: 'warning',
     }
@@ -1006,14 +1010,16 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const bannerDesktopSrcSet = useMemo(
     () => getCloudinaryImageSrcSet(
       getBannerDesktopSource(store),
-      ['storeBannerSmall', 'storeBannerMedium', 'storeBanner', 'storeBannerLarge']
+      ['storeBannerSmall', 'storeBannerMedium', 'storeBanner', 'storeBannerLarge'],
+      { replaceExistingTransform: true }
     ),
     [store]
   )
   const bannerMobileSrcSet = useMemo(
     () => getCloudinaryImageSrcSet(
       getBannerMobileSource(store),
-      ['storeBannerMobileSmall', 'storeBannerMobile', 'storeBannerMobileLarge']
+      ['storeBannerMobileSmall', 'storeBannerMobile', 'storeBannerMobileLarge'],
+      { replaceExistingTransform: true }
     ),
     [store]
   )
@@ -1179,7 +1185,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
   return (
     <header className="relative w-full overflow-visible bg-[#fff8f1]">
-      <div className="store-banner-shell relative h-[150px] w-full overflow-hidden border-b border-white/70 sm:h-[248px] lg:h-[292px]">
+      <div className="store-banner-shell relative aspect-[9/5] w-full overflow-hidden border-b border-white/70 sm:aspect-[3/1] lg:max-h-[500px]">
   {bannerUrl ? (
     <picture>
       {bannerMobileUrl && (
@@ -1194,12 +1200,12 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         srcSet={bannerDesktopSrcSet || undefined}
         sizes="100vw"
         alt=""
-        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
+        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-center"
         fetchPriority="high"
         loading="eager"
         decoding="async"
-        width={1200}
-        height={480}
+        width={1600}
+        height={533}
         aria-hidden="true"
       />
     </picture>
@@ -1212,8 +1218,8 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
     />
   )}
 
-  <div className="absolute inset-0 bg-gradient-to-b from-black/[0.04] via-white/[0.03] to-[#fff8f1]" />
-  <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#fff8f1] via-[#fff8f1]/75 to-transparent" />
+  <div className="absolute inset-0 bg-gradient-to-b from-black/[0.025] via-white/[0.015] to-[#fff8f1]/80" />
+  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#fff8f1] via-[#fff8f1]/55 to-transparent sm:h-24" />
   <div
     className="pointer-events-none absolute inset-0 opacity-40"
     style={{
@@ -1222,7 +1228,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   />
 </div>
 
-      <section className="relative z-10 mx-auto -mt-7 max-w-[1120px] px-3 pb-4 sm:-mt-12 sm:px-4 lg:-mt-16">
+      <section className="relative z-10 mx-auto -mt-7 max-w-[1120px] px-3 pb-3 sm:-mt-14 sm:px-4 sm:pb-4 lg:-mt-24">
         <div className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/95 shadow-2xl shadow-gray-200/80 ring-1 ring-gray-100/80 backdrop-blur-xl sm:rounded-[2.15rem]">
           <div
             className="h-1.5 w-full"
@@ -1381,9 +1387,11 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
               )}
 
               {minOrder > 0 && (
-                <InfoPill icon={FiDollarSign} themeColor={themeColor}>
-                  Mínimo {formatMoney(minOrder)}
-                </InfoPill>
+                <span className="hidden sm:inline-flex">
+                  <InfoPill icon={FiDollarSign} themeColor={themeColor}>
+                    Mínimo {formatMoney(minOrder)}
+                  </InfoPill>
+                </span>
               )}
             </div>
 
