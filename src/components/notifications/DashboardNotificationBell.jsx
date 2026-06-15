@@ -406,8 +406,32 @@ export default function DashboardNotificationBell({ notificationState, storeId }
 
     try {
       setPushLoading(true)
-      await sendMerchantTestPush({ storeId })
-      setPushTestMessage('Teste push real enviado para os dispositivos ativos desta loja.')
+
+      const result = await sendMerchantTestPush({ storeId })
+      const data = result?.data || result || {}
+
+      const tokenCount = Number(data.tokenCount || 0)
+      const successCount = Number(data.successCount || data.sent || 0)
+      const failureCount = Number(data.failureCount || data.failed || 0)
+      const invalidated = Number(data.invalidated || 0)
+
+      if (successCount > 0) {
+        setPushTestMessage(
+          `Teste push real enviado para ${successCount}/${tokenCount || successCount} dispositivo(s).`
+        )
+        return
+      }
+
+      if (tokenCount > 0) {
+        setPushTestMessage(
+          `Nenhum dispositivo recebeu o push. Tokens ativos: ${tokenCount}. Falhas: ${failureCount}. Invalidados: ${invalidated}.`
+        )
+        return
+      }
+
+      setPushTestMessage(
+        'Nenhum dispositivo ativo encontrado. Desative e ative o push novamente neste navegador.'
+      )
     } catch (error) {
       console.warn('[FCM] Falha ao enviar teste push real.', error)
       setPushTestMessage('Não foi possível enviar o teste push real agora.')

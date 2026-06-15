@@ -274,7 +274,7 @@ function showForegroundFcmBrowserNotification(payload, options = {}) {
   const body = type === 'order_status_update'
     ? data.body || `Pedido ${orderNumber} foi atualizado.`
     : type === 'merchant_test'
-      ? data.body || 'Este dispositivo ja pode receber avisos de novos pedidos.'
+      ? data.body || 'Este dispositivo já pode receber avisos de novos pedidos.'
       : 'Toque para abrir o painel de pedidos.'
 
   const notification = new Notification(title, {
@@ -506,12 +506,25 @@ async function ensureForegroundFcmListener() {
 
   foregroundFcmUnsubscribe = onMessage(messaging, (payload) => {
     const data = payload?.data || {}
-    if (!['new_order', 'order_status_update', 'merchant_test'].includes(data.type || 'new_order')) return
+    const type = data.type || 'new_order'
+
+    if (!['new_order', 'order_status_update', 'merchant_test'].includes(type)) return
 
     try {
-      showForegroundFcmBrowserNotification(payload)
+      const result = showForegroundFcmBrowserNotification(payload, {
+        ignoreFocus: type === 'merchant_test',
+        ignorePreferences: type === 'merchant_test',
+        ignoreDedupe: type === 'merchant_test',
+      })
+
+      console.info('[FCM] Mensagem foreground recebida:', {
+        type,
+        shown: result?.shown,
+        reason: result?.reason,
+        data,
+      })
     } catch (error) {
-      console.warn('[FCM] Nao foi possivel mostrar push em primeiro plano.', error)
+      console.warn('[FCM] Não foi possível mostrar push em primeiro plano.', error)
     }
   })
 
