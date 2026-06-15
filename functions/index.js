@@ -949,13 +949,21 @@ function sanitizePublicProductServing(value, data = {}) {
     ? Math.min(999, Math.floor(countNumber))
     : null
   const label = String(raw.label || (!count && legacy ? legacy : '') || '').trim().slice(0, 40)
-  const enabled = raw.enabled === true || Boolean(label || count)
+  const userExplicitlyDisabled = raw.enabled === false
+  const enabled = !userExplicitlyDisabled && (raw.enabled === true || Boolean(label || count))
 
   return {
     enabled,
     label: enabled ? label : '',
     count: enabled ? count : null,
   }
+}
+
+function normalizePublicProductCouponFlag(data = {}) {
+  if (data.acceptsCoupons !== undefined) return data.acceptsCoupons !== false
+  if (data.acceptsCoupon !== undefined) return data.acceptsCoupon !== false
+  if (data.couponEligible !== undefined) return data.couponEligible !== false
+  return true
 }
 
 function sanitizePublicProductVisualBadges(value) {
@@ -967,6 +975,143 @@ function sanitizePublicProductVisualBadges(value) {
       id,
       label: PUBLIC_VISUAL_BADGE_LABELS[id],
     }))
+}
+
+function sanitizePublicText(value, maxLength = 160) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+}
+
+function sanitizePublicInteger(value, fallback = 0, min = 0, max = 100000000) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(min, Math.min(max, Math.round(number)))
+}
+
+function parsePublicMoneyToCents(value) {
+  if (value === undefined || value === null || value === '') return 0
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.round(value * 100)
+  }
+
+  let cleaned = String(value || '').trim().replace(/[^\d,.-]/g, '')
+
+  if (cleaned.includes(',')) {
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.')
+  }
+
+  const parsed = Number.parseFloat(cleaned)
+  if (!Number.isFinite(parsed)) return 0
+
+  return Math.round(parsed * 100)
+}
+
+function sanitizePublicPriceFields(value = {}) {
+  const rawCents = value.priceCents ?? value.unitPriceCents ?? value.priceInCents
+
+  const fallbackCents = parsePublicMoneyToCents(
+    value.price ?? value.unitPrice ?? value.value ?? 0
+  )
+
+  const priceCents = sanitizePublicInteger(
+    rawCents !== undefined && rawCents !== null && rawCents !== ''
+      ? rawCents
+      : fallbackCents,
+    0,
+    0,
+    MAX_ORDER_CENTS
+  )
+
+  return {
+    price: priceCents / 100,
+    priceCents,
+    unitPrice: priceCents / 100,
+    unitPriceCents: priceCents,
+  }
+}
+
+function sanitizePublicOption(option, index) {
+  const name = sanitizePublicText(option?.name || option?.title, 120)
+  if (!name) return null
+
+  const id = sanitizePublicText(
+    option?.id || option?.optionId || option?.extraId || option?.addonId || option?.name || `option-${index}`,
+    80
+  )
+  const price = sanitizePublicPriceFields(option)
+
+  return {
+    id,
+    optionId: id,
+    name,
+    title: name,
+    description: sanitizePublicText(option?.description || option?.details || option?.subtitle, 240),
+    ...price,
+    available: option?.available !== false && option?.isAvailable !== false,
+    isAvailable: option?.available !== false && option?.isAvailable !== false,
+  }
+}
+
+function sanitizePublicOptionGroups(value) {
+  const rawGroups = Array.isArray(value) ? value : []
+
+  return rawGroups
+    .slice(0, 30)
+    .map((group, groupIndex) => {
+      const title = sanitizePublicText(group?.title || group?.name, 120)
+      if (!title) return null
+
+      const rawType = String(group?.type || '').toLowerCase()
+      const allowQuantity = group?.allowQuantity === true || group?.quantityEnabled === true || rawType === 'quantity' || rawType === 'qty'
+      const type = ['single', 'multiple', 'quantity'].includes(rawType)
+        ? rawType
+        : allowQuantity
+          ? 'quantity'
+          : 'multiple'
+      const required = Boolean(group?.required || group?.isRequired)
+      const min = sanitizePublicInteger(group?.min ?? group?.minSelections ?? (required ? 1 : 0), required ? 1 : 0, 0, 99)
+      const max = type === 'single'
+        ? 1
+        : sanitizePublicInteger(group?.max ?? group?.maxSelections ?? 0, 0, 0, 99)
+      const groupId = sanitizePublicText(group?.id || group?.groupId || `group-${groupIndex}`, 80)
+      const options = (Array.isArray(group?.options) ? group.options : [])
+        .slice(0, 80)
+        .map(sanitizePublicOption)
+        .filter(Boolean)
+
+      if (!options.length) return null
+
+      return {
+        id: groupId,
+        groupId,
+        title,
+        name: title,
+        description: sanitizePublicText(group?.description || group?.subtitle, 240),
+        type,
+        required,
+        isRequired: required,
+        min,
+        minSelections: min,
+        max,
+        maxSelections: max,
+        allowQuantity: type === 'quantity' || allowQuantity,
+        pricingMode: ['additive', 'included', 'included_first', 'first_included', 'firstIncluded'].includes(group?.pricingMode)
+          ? group.pricingMode
+          : 'additive',
+        includedQuantity: sanitizePublicInteger(group?.includedQuantity ?? (min || 1), min || 1, 0, 99),
+        options,
+      }
+    })
+    .filter(Boolean)
+}
+
+function sanitizePublicExtras(value) {
+  const raw = Array.isArray(value) ? value : []
+
+  return raw
+    .slice(0, 80)
+    .map((extra, index) => sanitizePublicOption(extra, index))
+    .filter(Boolean)
 }
 
 function sanitizePublicProduct(data, storeData = {}) {
@@ -984,6 +1129,15 @@ function sanitizePublicProduct(data, storeData = {}) {
   if (Array.isArray(product.gallery)) product.gallery = product.gallery.slice(0, imageLimit)
   product.serving = sanitizePublicProductServing(data?.serving, data)
   product.visualBadges = sanitizePublicProductVisualBadges(data?.visualBadges)
+  product.acceptsCoupons = normalizePublicProductCouponFlag(data)
+  product.showCouponBadge = product.acceptsCoupons && data?.showCouponBadge !== false
+  delete product.acceptsCoupon
+  delete product.couponEligible
+  product.optionGroups = sanitizePublicOptionGroups(data?.optionGroups)
+  product.extras = sanitizePublicExtras(data?.extras)
+  product.addons = sanitizePublicExtras(data?.addons)
+  product.additionalOptions = sanitizePublicExtras(data?.additionalOptions)
+  product.variations = sanitizePublicExtras(data?.variations)
 
   return product
 }
@@ -3641,8 +3795,44 @@ function buildSeoFaviconUrl(value) {
   return transformCloudinaryPublicUrl(url, STORE_FAVICON_TRANSFORM)
 }
 
+function normalizePreviewImageUrl(url) {
+  const imageUrl = String(url || '').trim()
+  if (!imageUrl) return ''
+
+  if (!imageUrl.includes('res.cloudinary.com') || !imageUrl.includes('/image/upload/')) {
+    return imageUrl
+  }
+
+  if (/\/image\/upload\/[^/]*c_fill,w_1200,h_630/.test(imageUrl)) {
+    return imageUrl
+  }
+
+  return imageUrl.replace(
+    '/image/upload/',
+    '/image/upload/f_jpg,q_auto:good,c_fill,w_1200,h_630,g_auto/'
+  )
+}
+
+function getPreviewImageType(url) {
+  const cleanUrl = String(url || '').split('?')[0].toLowerCase()
+  if (cleanUrl.includes('res.cloudinary.com') && cleanUrl.includes('/f_jpg,')) return 'image/jpeg'
+  if (cleanUrl.endsWith('.jpg') || cleanUrl.endsWith('.jpeg')) return 'image/jpeg'
+  if (cleanUrl.endsWith('.webp')) return 'image/webp'
+  if (cleanUrl.endsWith('.png')) return 'image/png'
+  return 'image/jpeg'
+}
+
 function replaceOrInsertHeadTag(html, matcher, tag) {
-  if (matcher.test(html)) return html.replace(matcher, tag)
+  const flags = matcher.flags.includes('g') ? matcher.flags : `${matcher.flags}g`
+  const globalMatcher = new RegExp(matcher.source, flags)
+  let replaced = false
+  const nextHtml = html.replace(globalMatcher, () => {
+    if (replaced) return ''
+    replaced = true
+    return tag
+  })
+
+  if (replaced) return nextHtml
   return html.replace(/<\/head>/i, `  ${tag}\n</head>`)
 }
 
@@ -3652,6 +3842,8 @@ function injectStorefrontSeo(html, meta) {
   const safeTitle = escapeHtml(meta.title)
   const safeDescription = escapeHtml(meta.description)
   const safeImage = escapeHtml(meta.image)
+  const safeImageType = escapeHtml(meta.imageType || getPreviewImageType(meta.image))
+  const safeImageAlt = escapeHtml(meta.imageAlt || meta.title || 'PratoBy')
   const safeCanonical = escapeHtml(meta.canonical)
   const faviconUrl = meta.favicon || `${PUBLIC_APP_ORIGIN}/favicon.ico`
   const safeFavicon = escapeHtml(faviconUrl)
@@ -3675,8 +3867,32 @@ function injectStorefrontSeo(html, meta) {
       `<meta property="og:description" content="${safeDescription}">`,
     ],
     [
-      /<meta\b(?=[^>]*\bproperty=["']og:image["'])[^>]*>/i,
+      /<meta\b(?=[^>]*\bproperty=["']og:image["'])[\s\S]*?>/i,
       `<meta property="og:image" content="${safeImage}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image:url["'])[\s\S]*?>/i,
+      `<meta property="og:image:url" content="${safeImage}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image:secure_url["'])[\s\S]*?>/i,
+      `<meta property="og:image:secure_url" content="${safeImage}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image:type["'])[\s\S]*?>/i,
+      `<meta property="og:image:type" content="${safeImageType}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image:width["'])[\s\S]*?>/i,
+      '<meta property="og:image:width" content="1200">',
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image:height["'])[\s\S]*?>/i,
+      '<meta property="og:image:height" content="630">',
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:image:alt["'])[\s\S]*?>/i,
+      `<meta property="og:image:alt" content="${safeImageAlt}">`,
     ],
     [
       /<meta\b(?=[^>]*\bproperty=["']og:url["'])[^>]*>/i,
@@ -3699,8 +3915,12 @@ function injectStorefrontSeo(html, meta) {
       `<meta name="twitter:description" content="${safeDescription}">`,
     ],
     [
-      /<meta\b(?=[^>]*\bname=["']twitter:image["'])[^>]*>/i,
+      /<meta\b(?=[^>]*\bname=["']twitter:image["'])[\s\S]*?>/i,
       `<meta name="twitter:image" content="${safeImage}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:image:alt["'])[\s\S]*?>/i,
+      `<meta name="twitter:image:alt" content="${safeImageAlt}">`,
     ],
     [
       /<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i,
@@ -3727,19 +3947,28 @@ function injectStorefrontSeo(html, meta) {
   return nextHtml
 }
 
+function truncateSeoText(value, maxLength = 180) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (text.length <= maxLength) return text
+  return `${text
+    .slice(0, maxLength - 3)
+    .replace(/\s+\S*$/, '')
+    .trim()}...`
+}
+
 function buildStorefrontSeoMeta(store) {
   const storeName = String(store?.name || store?.storeName || 'PratoBy').trim()
   const slug = getPublicStoreSlug(store?.storeId || store?.id || '', store)
   const canonical = `${PUBLIC_APP_ORIGIN}/${slug}`
   
-  const description = String(
+  const description = truncateSeoText(
     store?.publicDescription ||
       store?.description ||
       `Veja o cardápio digital de ${storeName} no PratoBy.`
-  ).trim().slice(0, 180)
+  )
 
   // 1. Prioridade para imagem de compartilhamento/SEO
-  const image = absolutePublicUrl(
+  const rawImage = absolutePublicUrl(
     store?.shareImageUrl ||
       store?.seoImageUrl ||
       store?.ogImageUrl ||
@@ -3750,6 +3979,7 @@ function buildStorefrontSeoMeta(store) {
       store?.logoUrl ||
       store?.logo
   ) || DEFAULT_OG_IMAGE
+  const image = normalizePreviewImageUrl(rawImage) || DEFAULT_OG_IMAGE
 
   // 2. Busca do favicon com os fallbacks corretos
   const favicon = buildSeoFaviconUrl(
@@ -3763,6 +3993,8 @@ function buildStorefrontSeoMeta(store) {
     title: `${storeName} | Cardápio digital`, // Título encurtado conforme solicitado
     description,
     image,
+    imageType: getPreviewImageType(image),
+    imageAlt: storeName,
     canonical,
     favicon, // Favicon adicionado ao retorno
   }
@@ -3774,21 +4006,32 @@ async function loadStaticIndexHtml() {
     return cachedSeoIndexHtml
   }
 
-  const response = await fetch(`${PUBLIC_APP_ORIGIN}/index.html`, {
-    headers: { accept: 'text/html' },
-  })
-  if (!response.ok) throw new Error(`index.html fetch failed with ${response.status}`)
-  const html = await response.text()
-  cachedSeoIndexHtml = html
-  cachedSeoIndexLoadedAt = now
-  return html
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
+  try {
+    const response = await fetch(`${PUBLIC_APP_ORIGIN}/index.html`, {
+      headers: { accept: 'text/html' },
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`index.html fetch failed with ${response.status}`)
+    const html = await response.text()
+    cachedSeoIndexHtml = html
+    cachedSeoIndexLoadedAt = now
+    return html
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 function buildMinimalSeoHtml(meta = {}) {
+  const previewImage = normalizePreviewImageUrl(absolutePublicUrl(meta.image) || DEFAULT_OG_IMAGE) || DEFAULT_OG_IMAGE
   const safeMeta = {
     title: meta.title || 'PratoBy | Cardápio digital',
     description: meta.description || 'Cardápio digital PratoBy.',
-    image: absolutePublicUrl(meta.image) || DEFAULT_OG_IMAGE,
+    image: previewImage,
+    imageType: getPreviewImageType(previewImage),
+    imageAlt: meta.imageAlt || meta.title || 'PratoBy',
     canonical: absolutePublicUrl(meta.canonical) || PUBLIC_APP_ORIGIN,
   }
 
@@ -3805,11 +4048,18 @@ function buildMinimalSeoHtml(meta = {}) {
     `<meta property="og:title" content="${escapeHtml(safeMeta.title)}">`,
     `<meta property="og:description" content="${escapeHtml(safeMeta.description)}">`,
     `<meta property="og:image" content="${escapeHtml(safeMeta.image)}">`,
+    `<meta property="og:image:url" content="${escapeHtml(safeMeta.image)}">`,
+    `<meta property="og:image:secure_url" content="${escapeHtml(safeMeta.image)}">`,
+    `<meta property="og:image:type" content="${escapeHtml(safeMeta.imageType)}">`,
+    '<meta property="og:image:width" content="1200">',
+    '<meta property="og:image:height" content="630">',
+    `<meta property="og:image:alt" content="${escapeHtml(safeMeta.imageAlt)}">`,
     `<meta property="og:url" content="${escapeHtml(safeMeta.canonical)}">`,
     '<meta name="twitter:card" content="summary_large_image">',
     `<meta name="twitter:title" content="${escapeHtml(safeMeta.title)}">`,
     `<meta name="twitter:description" content="${escapeHtml(safeMeta.description)}">`,
     `<meta name="twitter:image" content="${escapeHtml(safeMeta.image)}">`,
+    `<meta name="twitter:image:alt" content="${escapeHtml(safeMeta.imageAlt)}">`,
     '</head>',
     '<body>',
     '<main>PratoBy</main>',

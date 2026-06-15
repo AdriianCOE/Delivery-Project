@@ -12,7 +12,7 @@ Idioma principal: pt-BR
 /* SITE */
 
 Nome: PratoBy
-Descrição: Cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias.
+Descrição: Cardápio digital próprio para restaurantes, lanchonetes, pizzarias e confeitarias.
 URL: https://pratoby.com
 Tecnologias: React, Vite, Firebase, Firestore, Cloud Functions, Firebase Hosting
 Lançamento/Piloto: 2026

@@ -716,18 +716,33 @@ function Section({ id, icon: Icon, title, description, children }) {
   )
 }
 
-function Label({ children }) {
+function toFieldId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getFieldId(props, label) {
+  return props.id || props.name || (label ? `settings-${toFieldId(label)}` : undefined)
+}
+
+function Label({ children, htmlFor }) {
   return (
-    <label className="mb-2 block text-[11px] font-black uppercase tracking-[0.08em] text-gray-500 dark:text-zinc-500 leading-snug">
+    <label htmlFor={htmlFor} className="mb-2 block text-[11px] font-black uppercase tracking-[0.08em] text-gray-500 dark:text-zinc-500 leading-snug">
       {children}
     </label>
   )
 }
 
 function Input({ label, icon: Icon, className = '', ...props }) {
+  const fieldId = getFieldId(props, label)
+
   return (
     <div className={className}>
-      {label && <Label>{label}</Label>}
+      {label && <Label htmlFor={fieldId}>{label}</Label>}
 
       <div className="relative">
         {Icon && (
@@ -736,6 +751,8 @@ function Input({ label, icon: Icon, className = '', ...props }) {
 
         <input
           {...props}
+          id={fieldId}
+          name={props.name || fieldId}
           className={`h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/20 ${
             Icon ? 'pl-11' : ''
           } ${props.className || ''}`}
@@ -746,12 +763,16 @@ function Input({ label, icon: Icon, className = '', ...props }) {
 }
 
 function Select({ label, children, className = '', ...props }) {
+  const fieldId = getFieldId(props, label)
+
   return (
     <div className={className}>
-      {label && <Label>{label}</Label>}
+      {label && <Label htmlFor={fieldId}>{label}</Label>}
 
       <select
         {...props}
+        id={fieldId}
+        name={props.name || fieldId}
         className="h-12 w-full rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/20"
       >
         {children}
@@ -761,12 +782,16 @@ function Select({ label, children, className = '', ...props }) {
 }
 
 function Textarea({ label, className = '', ...props }) {
+  const fieldId = getFieldId(props, label)
+
   return (
     <div className={className}>
-      {label && <Label>{label}</Label>}
+      {label && <Label htmlFor={fieldId}>{label}</Label>}
 
       <textarea
         {...props}
+        id={fieldId}
+        name={props.name || fieldId}
         className="min-h-[110px] w-full resize-none rounded-2xl border border-gray-100 bg-[#f9fafb] px-4 py-3 text-sm font-medium leading-6 text-[#111827] outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:focus:bg-zinc-900 dark:focus:ring-orange-500/20"
       />
     </div>

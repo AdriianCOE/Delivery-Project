@@ -123,7 +123,7 @@ function Logo({ compact = false, inverted = false, mobile = false }) {
             inverted ? 'text-white/45' : 'text-gray-400',
           ].join(' ')}
         >
-          Cardápio digital e delivery
+          Cardápio digital
         </p>
       </div>
     </div>

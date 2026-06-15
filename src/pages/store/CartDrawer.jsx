@@ -887,17 +887,30 @@ function SectionCard({ title, icon: Icon, children, description }) {
   )
 }
 
+function toInputId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function InputField({ label, className = '', error, ...props }) {
+  const fieldId = props.id || props.name || `checkout-${toInputId(label || props.placeholder || 'campo')}`
+
   return (
     <div className={`scroll-mt-24 ${className}`}>
       {label && (
-        <label className={`mb-1.5 block text-xs font-black uppercase tracking-wide ${error ? 'text-red-500' : 'text-[#6b7280]'}`}>
+        <label htmlFor={fieldId} className={`mb-1.5 block text-xs font-black uppercase tracking-wide ${error ? 'text-red-500' : 'text-[#6b7280]'}`}>
           {label}
         </label>
       )}
 
       <input
         {...props}
+        id={fieldId}
+        name={props.name || fieldId}
         aria-invalid={!!error}
         className={`h-12 w-full rounded-2xl border bg-[#F9FAFB] px-4 text-sm font-medium text-[#111827] outline-none transition placeholder:text-gray-400 focus:bg-white focus:ring-4 ${
           error
@@ -2855,11 +2868,13 @@ if (orderType === 'delivery') {
 </div>
                       {deliveryNeighborhoods.length > 0 ? (
                         <div>
-                          <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+                          <label htmlFor="checkout-neighborhood" className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
                             Bairro
                           </label>
 
                           <select
+                            id="checkout-neighborhood"
+                            name="checkout-neighborhood"
                             value={customer.neighborhood}
                             aria-invalid={!!getFieldError('neighborhood')}
                             onChange={(event) => {
@@ -3188,7 +3203,10 @@ if (orderType === 'delivery') {
                       <>
                         <div className="flex gap-2">
                           <input
+                            id="checkout-coupon-code"
+                            name="couponCode"
                             type="text"
+                            autoComplete="off"
                             placeholder="Código do cupom"
                             value={couponCode}
                             onChange={(event) => {

@@ -1101,11 +1101,13 @@ const modalInfoBadges = useMemo(() => {
           )}
 
           <section className="mt-6 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
+            <label htmlFor="product-observation" className="mb-2 block text-xs font-black uppercase tracking-wide text-[#6b7280]">
               Alguma observação?
             </label>
 
             <textarea
+              id="product-observation"
+              name="productObservation"
               rows={3}
               value={observation}
               onChange={(event) => setObservation(event.target.value)}

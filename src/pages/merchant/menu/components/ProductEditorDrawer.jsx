@@ -202,9 +202,9 @@ function schedulingInputToMinutes(value, unit) {
   return amount
 }
 
-function FieldLabel({ children, required }) {
+function FieldLabel({ children, required, htmlFor }) {
   return (
-    <label className={ui.label}>
+    <label htmlFor={htmlFor} className={ui.label}>
       {children}{required ? <span className="text-[#f97316]"> *</span> : null}
     </label>
   )
@@ -280,7 +280,14 @@ function StatusToggleCard({ item, checked, onChange, disabled }) {
         </div>
       </div>
       <div className="relative shrink-0">
-        <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="sr-only" />
+        <input
+          type="checkbox"
+          name={item.key}
+          checked={checked}
+          onChange={onChange}
+          disabled={disabled}
+          className="sr-only"
+        />
         <ToggleSwitch checked={checked} />
       </div>
     </label>
@@ -530,6 +537,8 @@ function OptionGroupsEditor({ groups, onChange }) {
               <div>
                 <FieldLabel required>Nome do grupo</FieldLabel>
                 <input
+                  id={`product-option-group-${gi}-title`}
+                  name={`optionGroups.${gi}.title`}
                   type="text"
                   value={group.title}
                   onChange={(e) => upGroup(gi, 'title', e.target.value)}
@@ -543,6 +552,8 @@ function OptionGroupsEditor({ groups, onChange }) {
                 <div>
                   <FieldLabel>Tipo</FieldLabel>
                   <select
+                    id={`product-option-group-${gi}-type`}
+                    name={`optionGroups.${gi}.type`}
                     value={group.type}
                     onChange={(e) => {
                       upGroup(gi, 'type', e.target.value)
@@ -558,6 +569,8 @@ function OptionGroupsEditor({ groups, onChange }) {
                 <div>
                   <FieldLabel>Obrigatoriedade</FieldLabel>
                   <select
+                    id={`product-option-group-${gi}-required`}
+                    name={`optionGroups.${gi}.required`}
                     value={group.required ? 'true' : 'false'}
                     onChange={(e) => upGroup(gi, 'required', e.target.value === 'true')}
                     className={ui.input}
@@ -573,6 +586,8 @@ function OptionGroupsEditor({ groups, onChange }) {
                   <div>
                     <FieldLabel>Mínimo</FieldLabel>
                     <input
+                      id={`product-option-group-${gi}-min`}
+                      name={`optionGroups.${gi}.min`}
                       type="number"
                       min="0"
                       value={group.min}
@@ -583,6 +598,8 @@ function OptionGroupsEditor({ groups, onChange }) {
                   <div>
                     <FieldLabel>Máximo</FieldLabel>
                     <input
+                      id={`product-option-group-${gi}-max`}
+                      name={`optionGroups.${gi}.max`}
                       type="number"
                       min="1"
                       value={group.max}
@@ -599,6 +616,8 @@ function OptionGroupsEditor({ groups, onChange }) {
                   {group.options.map((opt, oi) => (
                     <div key={opt.id} className="group/opt flex gap-2">
                       <input
+                        id={`product-option-group-${gi}-option-${oi}-name`}
+                        name={`optionGroups.${gi}.options.${oi}.name`}
                         type="text"
                         value={opt.name}
                         onChange={(e) => upOption(gi, oi, 'name', e.target.value)}
@@ -606,6 +625,8 @@ function OptionGroupsEditor({ groups, onChange }) {
                         className="h-12 min-w-0 flex-1 rounded-2xl border border-orange-100/80 bg-white px-3 text-base font-bold text-slate-950 shadow-sm outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-orange-200 focus:border-[#f97316] dark:border-white/10 dark:bg-[#1A1F2B] dark:text-slate-50 dark:placeholder:text-slate-500 dark:hover:border-orange-500/40 md:h-11 md:text-sm"
                       />
                       <input
+                        id={`product-option-group-${gi}-option-${oi}-price`}
+                        name={`optionGroups.${gi}.options.${oi}.price`}
                         type="text"
                         inputMode="decimal"
                         value={opt.price}
@@ -1057,8 +1078,10 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                   <SectionCard title="Informações principais" description="Nome, descrição e categoria definem como o cliente encontra este produto." icon={FiInfo}>
                     <div className="space-y-5">
                       <div>
-                        <FieldLabel required>Nome</FieldLabel>
+                        <FieldLabel htmlFor="product-name" required>Nome</FieldLabel>
                         <input
+                          id="product-name"
+                          name="name"
                           type="text"
                           value={form.name}
                           onChange={(e) => setField('name', e.target.value)}
@@ -1072,6 +1095,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Descrição</FieldLabel>
                         <textarea
+                          id="product-description"
+                          name="description"
                           value={form.description}
                           onChange={(e) => setField('description', e.target.value)}
                           placeholder="Ingredientes, diferenciais, tamanho..."
@@ -1085,6 +1110,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Categoria</FieldLabel>
                         <select
+                          id="product-category"
+                          name="categoryId"
                           value={form.categoryId}
                           onChange={(e) => setField('categoryId', e.target.value)}
                           className={ui.input}
@@ -1103,6 +1130,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Tempo de preparo</FieldLabel>
                         <input
+                          id="product-preparation-time"
+                          name="preparationTime"
                           type="text"
                           value={form.preparationTime}
                           onChange={(e) => setField('preparationTime', e.target.value)}
@@ -1113,6 +1142,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Ordem de exibição</FieldLabel>
                         <input
+                          id="product-display-order"
+                          name="order"
                           type="number"
                           min="0"
                           value={form.order}
@@ -1137,6 +1168,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div className="relative">
                         <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400 dark:text-slate-500">R$</span>
                         <input
+                          id="product-price"
+                          name="price"
                           type="text"
                           inputMode="decimal"
                           value={form.price}
@@ -1163,6 +1196,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div className="relative">
                         <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-black text-slate-400 dark:text-slate-500">R$</span>
                         <input
+                          id="product-old-price"
+                          name="oldPrice"
                           type="text"
                           inputMode="decimal"
                           value={form.oldPrice}
@@ -1184,7 +1219,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
               {section === 'image' && (
                 <div className="space-y-5">
                   <SectionCard title="Imagem do produto" description="Uma foto boa aumenta a confiança e melhora a conversão do cardápio." icon={FiImage}>
-                    <input ref={imgRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                    <input ref={imgRef} id="product-image-file" name="productImage" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
 
                     <MediaLibraryPicker
                       storeId={mediaStoreId}
@@ -1332,6 +1367,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                           <div>
                             <FieldLabel>Qtd. pessoas</FieldLabel>
                             <input
+                              id="product-serving-count"
+                              name="servingCount"
                               type="number"
                               min="1"
                               max="999"
@@ -1345,6 +1382,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                           <div>
                             <FieldLabel>Texto opcional</FieldLabel>
                             <input
+                              id="product-serving-label"
+                              name="servingLabel"
                               value={form.serving?.label || ''}
                               onChange={(event) => setServingField('label', event.target.value)}
                               placeholder="Ex: Fatia individual"
@@ -1455,6 +1494,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                         <div>
                           <FieldLabel>Antecedência mínima</FieldLabel>
                           <input
+                            id="product-min-lead"
+                            name="minLeadMinutes"
                             type="number"
                             min="0"
                             value={productLeadInput.value}
@@ -1471,6 +1512,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                         <div>
                           <FieldLabel>Unidade</FieldLabel>
                           <select
+                            id="product-min-lead-unit"
+                            name="minLeadUnit"
                             value={productLeadInput.unit}
                             onChange={(event) => setSchedulingField(
                               'minLeadMinutes',
@@ -1488,6 +1531,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Limite de dias à frente</FieldLabel>
                         <input
+                          id="product-max-days-ahead"
+                          name="maxDaysAhead"
                           type="number"
                           min="0"
                           max="365"
@@ -1501,6 +1546,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Intervalo dos horários</FieldLabel>
                         <select
+                          id="product-slot-interval"
+                          name="slotIntervalMinutes"
                           value={productScheduling.slotIntervalMinutes ?? ''}
                           onChange={(event) => setSchedulingField('slotIntervalMinutes', event.target.value === '' ? null : Number(event.target.value))}
                           className={ui.input}
@@ -1517,6 +1564,8 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                       <div>
                         <FieldLabel>Pagamento</FieldLabel>
                         <select
+                          id="product-prepayment-policy"
+                          name="prepaymentPolicy"
                           value={productScheduling.prepaymentPolicy}
                           onChange={(event) => setSchedulingField('prepaymentPolicy', event.target.value)}
                           className={ui.input}
@@ -1552,6 +1601,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                           className="flex cursor-pointer items-center gap-3 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-black text-slate-700 dark:border-white/10 dark:bg-[#1A1F2B] dark:text-slate-200"
                         >
                           <input
+                            name={`fulfillment-${key}`}
                             type="checkbox"
                             checked={(productScheduling.fulfillmentTypes || { delivery: true, pickup: true })[key] !== false}
                             onChange={(event) => setSchedulingField('fulfillmentTypes', {

@@ -223,7 +223,7 @@ function OnboardingMobileHeader() {
                 Prato<span className="text-[#f97316]">By</span>
               </p>
               <p className="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
-                Cardápio digital e delivery
+                Cardápio digital
               </p>
             </div>
           </div>
@@ -1130,7 +1130,7 @@ async function getRecaptchaVerifier() {
                       Prato<span className="text-[#f97316]">By</span>
                     </p>
                     <p className="mt-1 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.16em] text-[#9ca3af]">
-                      Cardápio digital e delivery
+                      Cardápio digital
                     </p>
                   </div>
                 </Link>

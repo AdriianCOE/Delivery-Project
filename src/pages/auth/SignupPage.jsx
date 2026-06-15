@@ -209,7 +209,7 @@ function PratoByLogo({ dark = false, compact = false }) {
             dark ? 'text-white/55' : 'text-[#9ca3af]'
           }`}
         >
-          Cardápio digital e delivery
+          Cardápio digital
         </p>
       </div>
     </Link>

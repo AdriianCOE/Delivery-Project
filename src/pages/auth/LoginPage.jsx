@@ -205,7 +205,7 @@ function PratoByLogo({ dark = false, compact = false }) {
             dark ? 'text-white/55' : 'text-[#9ca3af]'
           }`}
         >
-          Cardápio digital e delivery
+          Cardápio digital
         </p>
       </div>
     </Link>
@@ -242,7 +242,7 @@ function LoginMobileHeader() {
                 Prato<span className="text-[#f97316]">By</span>
               </p>
               <p className="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-[#9ca3af]">
-                Cardápio digital e delivery
+                Cardápio digital
               </p>
             </div>
           </div>
@@ -606,7 +606,7 @@ export default function LoginPage() {
                 <div>
                   <p className="font-black">PratoBy Cloud</p>
                   <p className="mt-1 text-sm font-medium leading-6 text-gray-300">
-                    Cardápio digital e delivery para negócios locais venderem direto, sem
+                    Cardápio digital para negócios locais venderem direto, sem
                     depender de marketplace.
                   </p>
                 </div>

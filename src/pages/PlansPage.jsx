@@ -504,7 +504,7 @@ export default function PlansPage() {
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     url: 'https://pratoby.com/planos',
-    description: 'Cardápio digital e delivery próprio para restaurantes, lanchonetes e confeitarias sem comissão por pedido.',
+    description: 'Cardápio digital próprio para restaurantes, lanchonetes e confeitarias sem comissão por pedido.',
     offers: {
       '@type': 'OfferCatalog',
       name: 'Planos do PratoBy',

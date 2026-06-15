@@ -81,8 +81,13 @@ export function normalizeProductServingForForm(product) {
 
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const count = Number(raw.count)
+    const userExplicitlyDisabled = raw.enabled === false
     return {
-      enabled: raw.enabled === true || Boolean(raw.label) || (Number.isFinite(count) && count > 0),
+      enabled: !userExplicitlyDisabled && (
+        raw.enabled === true ||
+        Boolean(raw.label) ||
+        (Number.isFinite(count) && count > 0)
+      ),
       label: String(raw.label || '').trim().slice(0, 40),
       count: Number.isFinite(count) && count > 0 ? String(Math.floor(count)) : '',
     }
@@ -114,7 +119,8 @@ export function sanitizeProductServingForSave(value) {
     : null
 
   const label = String(raw.label || '').trim().slice(0, 40)
-  const enabled = raw.enabled === true || Boolean(label || count)
+  const userExplicitlyDisabled = raw.enabled === false
+  const enabled = !userExplicitlyDisabled && (raw.enabled === true || Boolean(label || count))
 
   if (!enabled || (!label && !count)) {
     return {

@@ -278,7 +278,7 @@ function BillingFooter() {
           />
           <div className="min-w-0">
             <p className="truncate text-sm font-black text-[#111827] dark:text-white">
-              PratoBy · Cardápio digital e delivery
+              PratoBy · Cardápio digital
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
               Em caso de dúvida, fale com nosso suporte antes da primeira cobrança.
