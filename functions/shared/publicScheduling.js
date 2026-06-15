@@ -145,7 +145,9 @@ function sanitizePublicStoreScheduling(store = {}) {
     ? store.scheduling
     : isObject(store?.publicScheduling)
       ? store.publicScheduling
-      : {}
+      : isObject(store?.settings?.scheduling)
+        ? store.settings.scheduling
+        : {}
 
   return sanitizeStoreScheduling(raw, {
     acceptDelivery: store?.acceptDelivery !== false && store?.settings?.acceptDelivery !== false,

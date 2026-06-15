@@ -207,7 +207,9 @@ function normalizeStoreScheduling(store = {}) {
     ? store.publicScheduling
     : isObject(store.scheduling)
       ? store.scheduling
-      : {}
+      : isObject(store.settings?.scheduling)
+        ? store.settings.scheduling
+        : {}
   const rawFulfillment = isObject(raw.fulfillmentTypes) ? raw.fulfillmentTypes : {}
 
   return {

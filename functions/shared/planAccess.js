@@ -1,3 +1,5 @@
+'use strict'
+
 const PLAN_IDS = {
   ESSENTIAL: 'essential',
   PROFESSIONAL: 'professional',
@@ -85,6 +87,61 @@ function getSubscriptionStatus(data = {}) {
   return String(data.subscriptionStatus || data.subscription?.status || '').trim().toLowerCase()
 }
 
+/**
+ * Lê o trialStatus de múltiplos campos possíveis.
+ * Não confundir com subscriptionStatus — esse é exclusivo da assinatura.
+ */
+function getTrialStatus(data = {}) {
+  return String(
+    data.trialStatus ||
+    data.trial?.status ||
+    data.billing?.trialStatus ||
+    ''
+  ).trim().toLowerCase()
+}
+
+/**
+ * Retorna true se a loja estiver em trial ativo por qualquer sinal conhecido:
+ * - subscriptionStatus === 'trialing' (Asaas/stripe padrão)
+ * - trialStatus ∈ { 'trialing', 'trial', 'active' }
+ * - trialEndsAt no futuro (Timestamp Firestore, Date ou string ISO)
+ *
+ * Nunca lança exceção — em caso de parse inválido retorna false.
+ */
+function hasActiveTrial(data = {}) {
+  const subscriptionStatus = getSubscriptionStatus(data)
+  if (subscriptionStatus === 'trialing') return true
+
+  // Rejeitar estados bloqueados antes de checar trialStatus
+  if (isPlanAccessBlocked(data)) return false
+
+  const trialStatus = getTrialStatus(data)
+  if (['trialing', 'trial', 'active'].includes(trialStatus)) return true
+
+  const trialEndsAt =
+    data.trialEndsAt ||
+    data.trialEndAt ||
+    data.trial?.endsAt ||
+    data.billing?.trialEndsAt
+
+  try {
+    const endDate =
+      typeof trialEndsAt?.toDate === 'function'
+        ? trialEndsAt.toDate()
+        : trialEndsAt
+          ? new Date(trialEndsAt)
+          : null
+
+    if (endDate && Number.isFinite(endDate.getTime()) && endDate.getTime() > Date.now()) {
+      return true
+    }
+  } catch (_) {
+    // parse inválido → não é trial
+  }
+
+  return false
+}
+
 function isPlanAccessBlocked(data = {}) {
   if (!data) return true
   if (data.isBillingBlocked === true || data.isBlocked === true || data.isDeleted === true || data.deletedAt) return true
@@ -95,8 +152,12 @@ function isPlanAccessBlocked(data = {}) {
 function getEffectivePlan(data = {}) {
   if (isPlanAccessBlocked(data)) return null
 
-  const status = getSubscriptionStatus(data)
-  if (status === 'trialing') return normalizePlanId(data.trialEntitlementsPlan, PLAN_IDS.PREMIUM)
+  if (hasActiveTrial(data)) {
+    return normalizePlanId(
+      data.trialEntitlementsPlan || data.trial?.entitlementsPlan,
+      PLAN_IDS.PREMIUM
+    )
+  }
 
   return normalizePlanId(
     data.effectivePlan ||
@@ -149,6 +210,8 @@ module.exports = {
   getRequiredPlanForFeature,
   getStorePlanLimit,
   hasPlanFeature,
+  hasActiveTrial,
+  isPlanAccessBlocked,
   assertPlanFeature,
   normalizePlanId,
 }

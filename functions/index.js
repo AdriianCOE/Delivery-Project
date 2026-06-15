@@ -42,6 +42,7 @@ const {
   archiveStoreTableHandler,
 } = require('./storeTables')
 const {
+  getEffectivePlan,
   getStorePlanLimit,
   hasPlanFeature,
 } = require('./shared/planAccess')
@@ -2110,6 +2111,13 @@ exports.updateStoreSettings = onCall(
     return {
       ok: true,
       updatedFields: Object.keys(patch).filter((field) => field !== 'updatedAt'),
+      planDebug: {
+        effectivePlan: getEffectivePlan(storeData),
+        schedulingAllowed: hasPlanFeature(storeData, 'scheduling'),
+        subscriptionStatus: storeData.subscriptionStatus || null,
+        trialStatus: storeData.trialStatus || storeData.trial?.status || null,
+        trialEntitlementsPlan: storeData.trialEntitlementsPlan || storeData.trial?.entitlementsPlan || null,
+      },
     }
   }
 )

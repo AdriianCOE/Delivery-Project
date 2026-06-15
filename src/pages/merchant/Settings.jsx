@@ -682,7 +682,11 @@ function mapStoreToForm(store) {
       store?.autoCloseGraceMinutes ??
       30
     ),
-    scheduling: normalizeStoreScheduling(store?.scheduling),
+    scheduling: normalizeStoreScheduling(
+      store?.scheduling ||
+      store?.settings?.scheduling ||
+      store?.publicScheduling
+    ),
     ...address,
   }
 }

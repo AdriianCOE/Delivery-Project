@@ -203,8 +203,73 @@ export function getPlanLimit(planId, limitKey) {
   return PLAN_LIMITS[normalizePlanId(planId)]?.[limitKey] ?? 0
 }
 
+/**
+ * Lê o trialStatus de múltiplos campos possíveis.
+ */
+function getTrialStatus(storeData = {}) {
+  return String(
+    storeData.trialStatus ||
+    storeData.trial?.status ||
+    storeData.billing?.trialStatus ||
+    ''
+  ).trim().toLowerCase()
+}
+
+function getSubscriptionStatus(storeData = {}) {
+  return String(storeData.subscriptionStatus || storeData.subscription?.status || '').trim().toLowerCase()
+}
+
+/**
+ * Retorna true se a loja estiver em trial ativo por qualquer sinal conhecido:
+ * - subscriptionStatus === 'trialing'
+ * - trialStatus ∈ { 'trialing', 'trial', 'active' }
+ * - trialEndsAt no futuro
+ *
+ * Nunca lança exceção.
+ */
+export function hasActiveTrial(storeData = {}) {
+  const subscriptionStatus = getSubscriptionStatus(storeData)
+  if (subscriptionStatus === 'trialing') return true
+
+  // Não liberar trial em estados bloqueados
+  if (
+    storeData.isBillingBlocked === true ||
+    storeData.isBlocked === true ||
+    storeData.isDeleted === true ||
+    Boolean(storeData.deletedAt) ||
+    BLOCKED_PLAN_STATUSES.includes(subscriptionStatus)
+  ) return false
+
+  const trialStatus = getTrialStatus(storeData)
+  if (['trialing', 'trial', 'active'].includes(trialStatus)) return true
+
+  const trialEndsAt =
+    storeData.trialEndsAt ||
+    storeData.trialEndAt ||
+    storeData.trial?.endsAt ||
+    storeData.billing?.trialEndsAt
+
+  try {
+    const endDate =
+      typeof trialEndsAt?.toDate === 'function'
+        ? trialEndsAt.toDate()
+        : trialEndsAt
+          ? new Date(trialEndsAt)
+          : null
+
+    if (endDate && Number.isFinite(endDate.getTime()) && endDate.getTime() > Date.now()) {
+      return true
+    }
+  } catch (_) {
+    // parse inválido — não é trial
+  }
+
+  return false
+}
+
 export function getEffectivePlan(storeData = {}) {
-  const status = String(storeData.subscriptionStatus || storeData.subscription?.status || '').trim().toLowerCase()
+  const status = getSubscriptionStatus(storeData)
+
   if (
     storeData.isBillingBlocked === true ||
     storeData.isBlocked === true ||
@@ -214,7 +279,14 @@ export function getEffectivePlan(storeData = {}) {
   ) {
     return null
   }
-  if (status === 'trialing') return normalizePlanId(storeData.trialEntitlementsPlan, PLAN_IDS.PREMIUM)
+
+  if (hasActiveTrial(storeData)) {
+    return normalizePlanId(
+      storeData.trialEntitlementsPlan || storeData.trial?.entitlementsPlan,
+      PLAN_IDS.PREMIUM
+    )
+  }
+
   return normalizePlanId(
     storeData.effectivePlan ||
       storeData.billingPlan ||
@@ -233,4 +305,3 @@ export function getStorePlanLimit(storeData = {}, limitKey) {
   const planId = getEffectivePlan(storeData)
   return planId ? getPlanLimit(planId, limitKey) : 0
 }
-
