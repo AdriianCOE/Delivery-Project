@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { ArrowRight, Check, Crown, MousePointer2, X, Zap } from 'lucide-react'
+import { FaCrown as Crown } from 'react-icons/fa6'
+import {
+  FiArrowRight as ArrowRight,
+  FiCheck as Check,
+  FiMousePointer as MousePointer2,
+  FiX as X,
+  FiZap as Zap,
+} from 'react-icons/fi'
 
 const features = [
   { name: 'Link próprio', importance: 'high' },

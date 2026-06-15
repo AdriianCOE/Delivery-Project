@@ -13,6 +13,7 @@ function getPackageName(id) {
 }
 
 function manualChunks(id) {
+  const normalized = id.replace(/\\/g, '/')
   const packageName = getPackageName(id)
   if (!packageName) return undefined
 
@@ -20,7 +21,17 @@ function manualChunks(id) {
     return 'vendor-react'
   }
   if (packageName === 'react-router' || packageName === 'react-router-dom') return 'vendor-router'
-  if (packageName === 'firebase' || packageName === '@firebase/app') return 'vendor-firebase-app'
+  if (packageName === 'firebase') {
+    if (normalized.includes('/firebase/app-check')) return 'vendor-firebase-app-check'
+    if (normalized.includes('/firebase/auth')) return 'vendor-firebase-auth'
+    if (normalized.includes('/firebase/database')) return 'vendor-firebase-database'
+    if (normalized.includes('/firebase/firestore')) return 'vendor-firebase-firestore'
+    if (normalized.includes('/firebase/functions')) return 'vendor-firebase-functions'
+    if (normalized.includes('/firebase/messaging')) return 'vendor-firebase-messaging'
+    if (normalized.includes('/firebase/storage')) return 'vendor-firebase-storage'
+    return 'vendor-firebase-app'
+  }
+  if (packageName === '@firebase/app') return 'vendor-firebase-app'
   if (packageName === '@firebase/firestore') return 'vendor-firebase-firestore'
   if (packageName === '@firebase/auth') return 'vendor-firebase-auth'
   if (packageName === '@firebase/messaging') return 'vendor-firebase-messaging'

@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { FiChevronDown as ChevronDown } from 'react-icons/fi';
 
 const faqs = [
   {

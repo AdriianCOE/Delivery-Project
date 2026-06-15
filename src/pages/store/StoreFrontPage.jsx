@@ -39,7 +39,6 @@ import {
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCart } from '../../contexts/CartContext'
-import { usePresence } from '../../hooks/usePresence'
 
 import ProductCard from './ProductCard'
 import {
@@ -1278,7 +1277,7 @@ function StoreQuickActions({
           className={`flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] px-3 text-sm font-black transition duration-200 active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem] ${
             searchExpanded || searchTerm
               ? 'text-white shadow-lg shadow-orange-200/50'
-              : 'bg-[#fff8f1] text-[#111827] hover:bg-orange-50 hover:text-[#f97316]'
+              : 'bg-[#f9fafb] text-[#111827] hover:bg-orange-50 hover:text-[#f97316]'
           }`}
           style={{
             backgroundColor: searchExpanded || searchTerm ? themeColor : undefined,
@@ -1291,7 +1290,7 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onOpenProfile}
-          className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#fff8f1] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem]"
+          className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem]"
         >
           <FiUser />
             <span className="sm:hidden">Pedidos</span>
@@ -1301,7 +1300,7 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onCopyLink}
-          className="hidden min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#fff8f1] px-3 text-sm font-black text-[#6b7280] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:flex"
+          className="hidden min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:flex"
         >
           {copied ? <FiCheck /> : <FiCopy />}
           {copied ? 'Copiado!' : 'Copiar link'}
@@ -1796,7 +1795,6 @@ export default function StoreFrontPage() {
 
   const themeColor = store?.themeColor || BRAND_GREEN
   const storeSlug = getStoreSlug(store, slug)
-  const activeUsers = usePresence(store?.id)
 
   const businessHours = useMemo(() => getBusinessHours(store), [store])
   const todayHoursLabel = useMemo(() => getTodayHoursLabel(businessHours), [businessHours])
@@ -2606,7 +2604,7 @@ return (
           />
         )}
       </Suspense>
-      <StoreHeader store={store} isOwner={isOwner} activeUsers={activeUsers} />
+      <StoreHeader store={store} isOwner={isOwner} />
 
       <StoreQuickActions
         searchExpanded={searchExpanded}

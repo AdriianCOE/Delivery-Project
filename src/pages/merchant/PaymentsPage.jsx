@@ -1061,7 +1061,7 @@ export default function PaymentsPage() {
                     value={formatPixKeyForInput(form.pixKey, form.pixKeyType)}
                     onChange={(event) => updateField('pixKey', normalizePixKeyForInput(event.target.value, form.pixKeyType))}
                     placeholder="Chave Pix da loja"
-                    className={!pixCompleteness.hasKey && form.paymentPix ? 'rounded-2xl ring-2 ring-red-500' : ''}
+                    className={!pixCompleteness.hasKey && form.paymentPix ? 'rounded-2xl shadow-lg shadow-red-500/50' : ''}
                   />
 
                   <Input

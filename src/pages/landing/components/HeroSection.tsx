@@ -1,15 +1,15 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
+import { FaPercent as BadgePercent } from 'react-icons/fa6'
 import {
-  ArrowRight,
-  BadgePercent,
-  CheckCircle2,
-  ExternalLink,
-  Link as LinkIcon,
-  ShieldCheck,
-  TrendingUp,
-  Users,
-} from 'lucide-react'
+  FiArrowRight as ArrowRight,
+  FiCheckCircle as CheckCircle2,
+  FiExternalLink as ExternalLink,
+  FiLink as LinkIcon,
+  FiShield as ShieldCheck,
+  FiTrendingUp as TrendingUp,
+  FiUsers as Users,
+} from 'react-icons/fi'
 import { PhoneMockup } from './PhoneMockup'
 
 const EXAMPLE_URL = 'https://pratoby.com/capivaras-lanches'

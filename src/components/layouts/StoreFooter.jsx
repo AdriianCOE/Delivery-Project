@@ -450,7 +450,7 @@ export default function StoreFooter({ store, todayHoursLabel }) {
 
   return (
     <footer className="relative overflow-hidden border-t border-orange-100/80 bg-gradient-to-b from-white via-orange-50/20 to-[#fff7ed]/35 antialiased">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,.12),transparent_34%),radial-gradient(circle_at_top_right,rgba(16,185,129,.1),transparent_30%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(149,115,22,.12),transparent_34%),radial-gradient(circle_at_top_right,rgba(16,185,129,.1),transparent_30%)]" />
 
       <div className="relative mx-auto max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] border border-orange-100/90 bg-white/88 shadow-[0_24px_90px_rgba(15,23,42,0.08)] backdrop-blur-xl">

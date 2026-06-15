@@ -1,14 +1,6 @@
 // hooks/usePresence.js
 import { useEffect, useState } from 'react'
-import {
-  ref,
-  onValue,
-  onDisconnect,
-  set,
-  remove,
-  serverTimestamp,
-} from 'firebase/database'
-import { rtdb } from '../services/firebase'
+import { getRealtimeDatabase } from '../services/firebase'
 
 const AUTH_SESSION_MARKER = 'pratoby:auth:session'
 const FIREBASE_AUTH_STORAGE_PREFIX = 'firebase:authUser:'
@@ -69,7 +61,23 @@ export function usePresence(storeId, isMerchant = false) {
     let isRegisteringPresence = false
     let isCancelled = false
 
-    const startPresence = () => {
+    const startPresence = async () => {
+      if (isCancelled) return
+
+      const [
+        {
+          ref,
+          onValue,
+          onDisconnect,
+          set,
+          serverTimestamp,
+        },
+        rtdb,
+      ] = await Promise.all([
+        import('firebase/database'),
+        getRealtimeDatabase(),
+      ])
+
       if (isCancelled) return
 
       const connectedRef = ref(rtdb, '.info/connected')
@@ -114,7 +122,9 @@ export function usePresence(storeId, isMerchant = false) {
       window.clearTimeout(startTimer)
 
       if (myUserRef) {
-        remove(myUserRef).catch(() => {})
+        import('firebase/database')
+          .then(({ remove }) => remove(myUserRef))
+          .catch(() => {})
       }
 
       unsubscribeConnected?.()

@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
-import { Check, Pizza, Sparkles } from 'lucide-react';
+import { FaPizzaSlice as Pizza, FaWandMagicSparkles as Sparkles } from 'react-icons/fa6';
+import { FiCheck as Check } from 'react-icons/fi';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl';

@@ -3755,6 +3755,44 @@ function publicCatalogEntitlementsChanged(beforeData, afterData) {
 const PUBLIC_APP_ORIGIN = 'https://pratoby.com'
 const DEFAULT_OG_IMAGE = `${PUBLIC_APP_ORIGIN}/og/pratoby-cover.png`
 const SEO_INDEX_CACHE_MS = 60 * 1000
+const HOME_SEO_DESCRIPTION =
+  'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples, sem comissão por pedido.'
+const INSTITUTIONAL_SEO_ROUTES = {
+  '/': {
+    title: 'PratoBy | Cardápio digital e delivery sem comissão',
+    description: HOME_SEO_DESCRIPTION,
+  },
+  '/sobre': {
+    title: 'Sobre o PratoBy | Cardápio digital para restaurantes',
+    description:
+      'Conheça o PratoBy, uma plataforma de cardápio digital e delivery próprio para restaurantes venderem online com pedidos, pagamentos, entrega e retirada.',
+  },
+  '/planos': {
+    title: 'Planos do PratoBy | Cardápio digital sem comissão',
+    description:
+      'Compare os planos do PratoBy para vender online com cardápio digital, pedidos, Pix, QR Code, agendamento e painel de pedidos sem comissão por pedido.',
+  },
+  '/contato': {
+    title: 'Contato PratoBy | Cardápio digital e delivery próprio',
+    description:
+      'Fale com o PratoBy para tirar dúvidas, começar sua loja online, testar o cardápio digital ou receber ajuda com seu delivery próprio.',
+  },
+  '/login': {
+    title: 'Entrar no PratoBy | Painel do lojista',
+    description:
+      'Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio.',
+  },
+  '/privacidade': {
+  title: 'Política de Privacidade | PratoBy',
+  description:
+    'Entenda como o PratoBy trata dados de lojistas, clientes, pedidos, pagamentos e informações usadas no cardápio digital.',
+  },
+  '/termos': {
+    title: 'Termos de Uso | PratoBy',
+    description:
+      'Confira os termos de uso do PratoBy para lojistas que usam cardápio digital, pedidos online, delivery próprio e recursos da plataforma.',
+  },
+}
 let cachedSeoIndexHtml = ''
 let cachedSeoIndexLoadedAt = 0
 
@@ -3874,6 +3912,112 @@ function replaceOrInsertHeadTag(html, matcher, tag) {
 
   if (replaced) return nextHtml
   return html.replace(/<\/head>/i, `  ${tag}\n</head>`)
+}
+
+function normalizeInstitutionalSeoPath(value) {
+  const rawPath = String(value || '/').split('?')[0].split('#')[0].trim() || '/'
+  const withSlash = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+  const cleanPath = withSlash.replace(/\/{2,}/g, '/')
+
+  if (cleanPath === '/index.html') return '/'
+  if (cleanPath.length > 1) return cleanPath.replace(/\/+$/, '')
+  return '/'
+}
+
+function getInstitutionalSeoMeta(path) {
+  const cleanPath = normalizeInstitutionalSeoPath(path)
+  const route = INSTITUTIONAL_SEO_ROUTES[cleanPath]
+
+  if (!route) return null
+
+  const canonical = cleanPath === '/'
+    ? `${PUBLIC_APP_ORIGIN}/`
+    : `${PUBLIC_APP_ORIGIN}${cleanPath}`
+
+  return {
+    ...route,
+    path: cleanPath,
+    canonical,
+  }
+}
+
+function buildInstitutionalWebPageJsonLd(meta) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': `${meta.canonical}#webpage`,
+    url: meta.canonical,
+    name: meta.title,
+    description: meta.description,
+    isPartOf: {
+      '@id': `${PUBLIC_APP_ORIGIN}/#website`,
+    },
+    publisher: {
+      '@id': `${PUBLIC_APP_ORIGIN}/#organization`,
+    },
+    inLanguage: 'pt-BR',
+  }
+}
+
+function buildJsonLdScript(jsonLd) {
+  const safeJson = JSON.stringify(jsonLd).replace(/</g, '\\u003c')
+  return `<script type="application/ld+json" data-pratoby-institutional-seo="true">${safeJson}</script>`
+}
+
+function injectInstitutionalSeo(html, meta) {
+  let nextHtml = html.replace(
+    /<script\b(?=[^>]*\btype=["']application\/ld\+json["'])(?=[^>]*\bdata-pratoby-institutional-seo=["']true["'])[\s\S]*?<\/script>/gi,
+    ''
+  )
+
+  const safeTitle = escapeHtml(meta.title)
+  const safeDescription = escapeHtml(meta.description)
+  const safeCanonical = escapeHtml(meta.canonical)
+
+  const tags = [
+    [
+      /<title\b[^>]*>[\s\S]*?<\/title>/i,
+      `<title>${safeTitle}</title>`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']description["'])[\s\S]*?>/i,
+      `<meta name="description" content="${safeDescription}">`,
+    ],
+    [
+      /<link\b(?=[^>]*\brel=["']canonical["'])[\s\S]*?>/i,
+      `<link rel="canonical" href="${safeCanonical}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:url["'])[\s\S]*?>/i,
+      `<meta property="og:url" content="${safeCanonical}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:title["'])[\s\S]*?>/i,
+      `<meta property="og:title" content="${safeTitle}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:description["'])[\s\S]*?>/i,
+      `<meta property="og:description" content="${safeDescription}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:title["'])[\s\S]*?>/i,
+      `<meta name="twitter:title" content="${safeTitle}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']twitter:description["'])[\s\S]*?>/i,
+      `<meta name="twitter:description" content="${safeDescription}">`,
+    ],
+    [
+      /<script\b(?=[^>]*\btype=["']application\/ld\+json["'])(?=[^>]*\bdata-pratoby-institutional-seo=["']true["'])[\s\S]*?<\/script>/i,
+      buildJsonLdScript(buildInstitutionalWebPageJsonLd(meta)),
+    ],
+  ]
+
+  for (const [matcher, tag] of tags) {
+    nextHtml = replaceOrInsertHeadTag(nextHtml, matcher, tag)
+  }
+
+  return nextHtml
 }
 
 function injectStorefrontSeo(html, meta) {
@@ -4067,13 +4211,14 @@ async function loadStaticIndexHtml() {
 function buildMinimalSeoHtml(meta = {}) {
   const previewImage = normalizePreviewImageUrl(absolutePublicUrl(meta.image) || DEFAULT_OG_IMAGE) || DEFAULT_OG_IMAGE
   const safeMeta = {
-    title: meta.title || 'PratoBy | Cardápio digital',
-    description: meta.description || 'Cardápio digital PratoBy.',
+    title: meta.title || 'PratoBy | Cardápio digital e delivery sem comissão',
+    description: meta.description || HOME_SEO_DESCRIPTION,
     image: previewImage,
     imageType: getPreviewImageType(previewImage),
     imageAlt: meta.imageAlt || meta.title || 'PratoBy',
-    canonical: absolutePublicUrl(meta.canonical) || PUBLIC_APP_ORIGIN,
+    canonical: absolutePublicUrl(meta.canonical) || `${PUBLIC_APP_ORIGIN}/`,
   }
+  const jsonLd = meta.jsonLd ? buildJsonLdScript(meta.jsonLd) : ''
 
   return [
     '<!doctype html>',
@@ -4100,6 +4245,7 @@ function buildMinimalSeoHtml(meta = {}) {
     `<meta name="twitter:description" content="${escapeHtml(safeMeta.description)}">`,
     `<meta name="twitter:image" content="${escapeHtml(safeMeta.image)}">`,
     `<meta name="twitter:image:alt" content="${escapeHtml(safeMeta.imageAlt)}">`,
+    jsonLd,
     '</head>',
     '<body>',
     '<main>PratoBy</main>',
@@ -4118,7 +4264,11 @@ exports.storefrontSeoPreview = onRequest(
     invoker: 'public',
   },
   async (request, response) => {
-    const slug = normalizePublicStoreLookupParam(request.path || request.url || '')
+    const requestPath = normalizeInstitutionalSeoPath(request.path || request.url || '/')
+    const institutionalMeta = getInstitutionalSeoMeta(requestPath)
+    const slug = institutionalMeta
+      ? ''
+      : normalizePublicStoreLookupParam(request.path || request.url || '')
     response.set('Content-Type', 'text/html; charset=utf-8')
     response.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
 
@@ -4127,9 +4277,17 @@ exports.storefrontSeoPreview = onRequest(
       html = await loadStaticIndexHtml()
     } catch (error) {
       logger.error('[storefrontSeoPreview] index html unavailable', {
+        path: requestPath,
         slug,
         message: error?.message || String(error),
       })
+      if (institutionalMeta) {
+        response.status(200).send(buildMinimalSeoHtml({
+          ...institutionalMeta,
+          jsonLd: buildInstitutionalWebPageJsonLd(institutionalMeta),
+        }))
+        return
+      }
       response.status(200).send(buildMinimalSeoHtml({
         canonical: slug ? `${PUBLIC_APP_ORIGIN}/${slug}` : PUBLIC_APP_ORIGIN,
       }))
@@ -4137,6 +4295,11 @@ exports.storefrontSeoPreview = onRequest(
     }
 
     try {
+      if (institutionalMeta) {
+        response.status(200).send(injectInstitutionalSeo(html, institutionalMeta))
+        return
+      }
+
       if (!slug) {
         response.status(200).send(html)
         return
@@ -4152,9 +4315,17 @@ exports.storefrontSeoPreview = onRequest(
       response.status(200).send(injectStorefrontSeo(html, buildStorefrontSeoMeta(publicStore)))
     } catch (error) {
       logger.warn('[storefrontSeoPreview] seo injection failed, returning static index', {
+        path: requestPath,
         slug,
         message: error?.message || String(error),
       })
+      if (institutionalMeta) {
+        response.status(200).send(html || buildMinimalSeoHtml({
+          ...institutionalMeta,
+          jsonLd: buildInstitutionalWebPageJsonLd(institutionalMeta),
+        }))
+        return
+      }
       response.status(200).send(html || buildMinimalSeoHtml({
         canonical: slug ? `${PUBLIC_APP_ORIGIN}/${slug}` : PUBLIC_APP_ORIGIN,
       }))

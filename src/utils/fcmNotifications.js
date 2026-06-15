@@ -43,6 +43,20 @@ function getNotificationPermission() {
   return Notification.permission
 }
 
+function getWebPushPlatformState() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { isIos: false, isStandalone: false }
+  }
+
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+    (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1)
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true
+
+  return { isIos, isStandalone }
+}
+
 let fcmServiceWorkerRegistrationPromise = null
 let fcmTokenRequestPromise = null
 
@@ -436,27 +450,55 @@ function getPlatform() {
 }
 
 export async function isFcmSupported() {
+  const platformState = getWebPushPlatformState()
+
+  if (platformState.isIos && !platformState.isStandalone) {
+    console.info('[FCM] iOS Safari fora de PWA; push web requer app na Tela de Inicio.')
+    return {
+      supported: false,
+      reason: 'ios-pwa-required',
+      permission: getNotificationPermission(),
+      ...platformState,
+    }
+  }
+
   if (!hasNotificationApi()) {
+    console.info('[FCM] Notification API indisponivel neste navegador.')
     return {
       supported: false,
       reason: 'unsupported',
       permission: 'unsupported',
+      ...platformState,
     }
   }
 
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    console.info('[FCM] Service Worker indisponivel neste navegador.')
     return {
       supported: false,
       reason: 'service-worker-unavailable',
       permission: getNotificationPermission(),
+      ...platformState,
+    }
+  }
+
+  if (typeof window === 'undefined' || !('PushManager' in window)) {
+    console.info('[FCM] Push API indisponivel neste navegador.')
+    return {
+      supported: false,
+      reason: 'push-api-unavailable',
+      permission: getNotificationPermission(),
+      ...platformState,
     }
   }
 
   if (typeof crypto === 'undefined' || !crypto.subtle) {
+    console.info('[FCM] Web Crypto indisponivel; token FCM nao pode ser gerado.')
     return {
       supported: false,
       reason: 'crypto-unavailable',
       permission: getNotificationPermission(),
+      ...platformState,
     }
   }
 
@@ -466,6 +508,7 @@ export async function isFcmSupported() {
       supported: false,
       reason: 'messaging-unavailable',
       permission: getNotificationPermission(),
+      ...platformState,
     }
   }
 
@@ -473,6 +516,7 @@ export async function isFcmSupported() {
     supported: true,
     reason: 'supported',
     permission: getNotificationPermission(),
+    ...platformState,
   }
 }
 
@@ -508,6 +552,7 @@ export async function requestFcmPermissionAndToken({ skipPermissionPrompt = fals
   }
 
   if (permission !== 'granted') {
+    console.info('[FCM] Permissao de notificacao nao concedida.', { permission })
     return {
       supported: true,
       permission,
@@ -538,6 +583,13 @@ export async function requestFcmPermissionAndToken({ skipPermissionPrompt = fals
   }
 
   const tokenHash = await getMerchantTokenHash(token)
+
+  if (token) {
+    console.info('[FCM] Token FCM obtido para este dispositivo.', {
+      tokenHash,
+      platform: getPlatform(),
+    })
+  }
 
   return {
     supported: true,

@@ -3,15 +3,15 @@ import SEO from '../components/seo/SEO'
 import MarketingLayout from './MarketingLayout'
 import { Link } from 'react-router-dom'
 import {
-  Eye,
-  Settings,
-  Database,
-  Lock,
-  ArrowLeft,
-  Clock,
-  ShieldCheck,
-  ChevronRight,
-} from 'lucide-react'
+  FiArrowLeft as ArrowLeft,
+  FiChevronRight as ChevronRight,
+  FiClock as Clock,
+  FiDatabase as Database,
+  FiEye as Eye,
+  FiLock as Lock,
+  FiSettings as Settings,
+  FiShield as ShieldCheck,
+} from 'react-icons/fi'
 
 const LAST_UPDATED = '24 de maio de 2026'
 const SUPPORT_EMAIL = 'contato@pratoby.com'

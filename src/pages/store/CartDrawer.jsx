@@ -37,7 +37,7 @@ import {
   isPublicMercadoPagoOnlineAllowed,
   isPublicPaymentMethodAllowed,
 } from '../../utils/publicPaymentMethods'
-import { functions } from '../../services/firebase'
+import { ensureAppCheck, functions } from '../../services/firebase'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
@@ -1909,6 +1909,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     setCouponLoading(true)
 
     try {
+      await ensureAppCheck()
       const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
 
       const subtotalCents = Math.round(subtotal * 100)
@@ -1961,6 +1962,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       }
 
       try {
+        await ensureAppCheck()
         const validatePublicCoupon = httpsCallable(functions, 'validatePublicCoupon')
         const result = await validatePublicCoupon({
           storeId: finalStoreId,
@@ -2222,6 +2224,7 @@ if (orderType === 'delivery') {
 
       const items = buildPublicOrderItems(cartItems)
 
+      await ensureAppCheck()
       const createPublicOrder = httpsCallable(functions, 'createPublicOrder')
       const result = await createPublicOrder({
         storeId: finalStoreId,

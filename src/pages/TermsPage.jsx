@@ -3,16 +3,16 @@ import SEO from '../components/seo/SEO'
 import MarketingLayout from './MarketingLayout'
 import { Link } from 'react-router-dom'
 import {
-  Clock,
-  UserCheck,
-  ShoppingBag,
-  CreditCard,
-  Scale,
-  ArrowLeft,
-  ShieldAlert,
-  ChevronRight,
-  FileText,
-} from 'lucide-react'
+  FiArrowLeft as ArrowLeft,
+  FiChevronRight as ChevronRight,
+  FiClock as Clock,
+  FiCreditCard as CreditCard,
+  FiFileText as FileText,
+  FiShield as ShieldAlert,
+  FiShoppingBag as ShoppingBag,
+  FiUserCheck as UserCheck,
+} from 'react-icons/fi'
+import { FaScaleBalanced as Scale } from 'react-icons/fa6'
 
 const LAST_UPDATED = '24 de maio de 2026'
 const SUPPORT_EMAIL = 'contato@pratoby.com'

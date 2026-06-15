@@ -23,6 +23,7 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
 
   messaging.onBackgroundMessage((payload) => {
     const data = payload.data || {}
+    const notificationPayload = payload.notification || {}
     const orderId = String(data.orderId || '').trim()
     const orderNumber = orderId ? `#${orderId.slice(-4).toUpperCase()}` : '#----'
     const type = data.type || 'new_order'
@@ -33,25 +34,26 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
       hasOrderId: Boolean(orderId),
       status: data.status || '',
     })
-    const title = isCustomerStatusUpdate
+    const title = notificationPayload.title || (isCustomerStatusUpdate
       ? data.title || 'Pedido atualizado'
       : isMerchantTest
         ? data.title || 'Push ativado no PratoBy'
-      : 'Novo pedido recebido'
+      : 'Novo pedido recebido')
     const options = {
-      body: isCustomerStatusUpdate
+      body: notificationPayload.body || (isCustomerStatusUpdate
         ? data.body || `Pedido ${orderNumber} foi atualizado.`
         : isMerchantTest
           ? data.body || 'Este dispositivo ja pode receber avisos de novos pedidos.'
-          : 'Toque para abrir o painel de pedidos.',
-      icon: '/icons/android-chrome-512x512.png',
-      badge: '/icons/favicon-32x32.png',
-      tag: isCustomerStatusUpdate
+          : 'Toque para abrir o painel de pedidos.'),
+      icon: notificationPayload.icon || '/icons/android-chrome-192x192.png',
+      badge: notificationPayload.badge || '/icons/android-chrome-192x192.png',
+      tag: notificationPayload.tag || (isCustomerStatusUpdate
         ? `pratoby-order-status-${data.orderId || 'unknown'}-${data.status || 'updated'}`
         : isMerchantTest
           ? `pratoby-merchant-test-${data.storeId || 'store'}`
-        : `pratoby-new-order-${data.orderId || 'unknown'}`,
-      renotify: true,
+        : `pratoby-new-order-${data.orderId || 'unknown'}`),
+      renotify: notificationPayload.renotify !== false,
+      requireInteraction: notificationPayload.requireInteraction === true || type === 'new_order',
       data: {
         type,
         orderId: data.orderId || '',
@@ -68,7 +70,20 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const targetUrl = new URL(event.notification?.data?.url || '/dashboard/orders', self.location.origin)
+  let targetUrl = new URL('/dashboard/orders', self.location.origin)
+
+  try {
+    const candidateUrl = new URL(event.notification?.data?.url || '/dashboard/orders', self.location.origin)
+
+    if (
+      candidateUrl.origin === self.location.origin &&
+      ['http:', 'https:'].includes(candidateUrl.protocol)
+    ) {
+      targetUrl = candidateUrl
+    }
+  } catch {
+    targetUrl = new URL('/dashboard/orders', self.location.origin)
+  }
 
   event.waitUntil((async () => {
     const windowClients = await clients.matchAll({

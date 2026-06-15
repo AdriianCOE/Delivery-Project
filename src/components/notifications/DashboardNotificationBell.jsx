@@ -146,6 +146,14 @@ function getPushStatusLabel(status, loading) {
   return 'Desativado'
 }
 
+function getPushSupportMessage(status, reason, enabled) {
+  if (enabled) return 'Ativo. Este dispositivo pode receber avisos de novos pedidos.'
+  if (reason === 'ios-pwa-required') return 'No iPhone, adicione o PratoBy a Tela de Inicio para ativar push.'
+  if (status === 'unsupported') return 'Este navegador nao suporta push web.'
+  if (status === 'denied') return 'As notificacoes foram bloqueadas no navegador. Libere nas configuracoes do site.'
+  return 'Ative para receber avisos mesmo com o painel em segundo plano.'
+}
+
 function playNotificationSoundPreview() {
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext
   if (!AudioContextCtor) return false
@@ -472,7 +480,11 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     pushLoading ||
     !storeId ||
     pushStatus === 'unsupported' ||
-    pushStatus === 'denied'
+    pushStatus === 'denied' ||
+    pushStatus === 'missing-vapid-key' ||
+    pushStatus === 'push-service-error' ||
+    pushStatus === 'invalid-vapid-key' ||
+    pushStatus === 'service-worker-error'
 
   const handleTogglePushNotifications = () => {
     if (pushToggleDisabled) return
@@ -633,9 +645,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                           Push FCM neste dispositivo
                         </span>
                         <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-zinc-400">
-                          {pushEnabled
-                            ? 'Ativo. Este dispositivo pode receber avisos de novos pedidos.'
-                            : 'Ative para receber avisos mesmo com o painel em segundo plano.'}
+                          {getPushSupportMessage(pushStatus, pushStatusReason, pushEnabled)}
                         </span>
                       </span>
 

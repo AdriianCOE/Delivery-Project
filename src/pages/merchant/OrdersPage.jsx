@@ -213,6 +213,12 @@ const FILTER_BUTTON_MOTION = {
 
 const FINAL_STATUSES = ['entregue', 'cancelado', 'concluido', 'finalizado']
 
+const PAGE_ENTER_MOTION = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
+}
+
 const FILTER_DROPDOWN_VARIANTS = {
   hidden: {
     opacity: 0,
@@ -5125,7 +5131,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
   }, [filteredOrders, timingFilter])
 
   return (
-    <main className="min-h-full">
+    <motion.main className="min-h-full" {...PAGE_ENTER_MOTION}>
       <DashboardPageHeader
         title="Gerenciamento de pedidos"
         description="Operação e acompanhamento em tempo real."
@@ -5638,6 +5644,6 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       <Toast toast={toast} onClose={() => setToast(null)} />
         <DashboardFooter store={selectedStore} />
 
-    </main>
+    </motion.main>
   )
 }

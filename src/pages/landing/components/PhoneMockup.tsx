@@ -1,13 +1,13 @@
 import { motion } from 'motion/react'
 import {
-  ArrowRight,
-  ExternalLink,
-  Heart,
-  Link as LinkIcon,
-  ShoppingCart,
-  Star,
-  TrendingUp,
-} from 'lucide-react'
+  FiArrowRight as ArrowRight,
+  FiExternalLink as ExternalLink,
+  FiHeart as Heart,
+  FiLink as LinkIcon,
+  FiShoppingCart as ShoppingCart,
+  FiStar as Star,
+  FiTrendingUp as TrendingUp,
+} from 'react-icons/fi'
 
 const EXAMPLE_URL = 'https://pratoby.com/capivaras-lanches'
 const EXAMPLE_LABEL = 'pratoby.com/capivaras-lanches'

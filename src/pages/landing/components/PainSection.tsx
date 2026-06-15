@@ -1,5 +1,10 @@
 import { motion } from 'motion/react'
-import { Ban, Database, Ghost, TrendingDown } from 'lucide-react'
+import { FaGhost as Ghost } from 'react-icons/fa6'
+import {
+  FiDatabase as Database,
+  FiSlash as Ban,
+  FiTrendingDown as TrendingDown,
+} from 'react-icons/fi'
 
 const problems = [
   {

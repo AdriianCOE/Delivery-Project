@@ -1,28 +1,28 @@
 import { motion } from 'motion/react'
 import { Link } from 'react-router-dom'
-import type { LucideIcon } from 'lucide-react'
+import type { IconType } from 'react-icons'
+import { FaWandMagicSparkles as Sparkles } from 'react-icons/fa6'
 import {
-  ArrowRight,
-  CheckCircle2,
-  Clock3,
-  Link2,
-  PackagePlus,
-  Share2,
-  Sparkles,
-  Store,
-  Zap,
-} from 'lucide-react'
+  FiArrowRight as ArrowRight,
+  FiCheckCircle as CheckCircle2,
+  FiClock as Clock3,
+  FiLink as Link2,
+  FiPackage as PackagePlus,
+  FiShare2 as Share2,
+  FiShoppingBag as Store,
+  FiZap as Zap,
+} from 'react-icons/fi'
 
 type Step = {
   number: string
-  icon: LucideIcon
+  icon: IconType
   title: string
   description: string
   detail: string
 }
 
 type Highlight = {
-  icon: LucideIcon
+  icon: IconType
   label: string
 }
 

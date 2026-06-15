@@ -23,6 +23,7 @@ import {
   FiX,
   FiCalendar,
   FiShoppingBag,
+  FiGrid,
 } from 'react-icons/fi'
 
 const FAVORITES_KEY = '@PratoBy:favorites'
@@ -312,6 +313,36 @@ function sanitizeSocial(value) {
     .split(/[/?#]/)[0]
 
   return social.replace(/^@/, '').trim()
+}
+
+const PRATOBY_INSTAGRAM = 'pratobybr'
+
+function getPublicPlanId(store) {
+  return String(
+    store?.publicPlan ||
+      store?.plan ||
+      store?.planId ||
+      store?.subscription?.planId ||
+      store?.billing?.planId ||
+      'essential'
+  )
+    .trim()
+    .toLowerCase()
+}
+
+function shouldShowPratoBySocial(store) {
+  const planId = getPublicPlanId(store)
+
+  const hideBranding =
+    store?.removePratoByBranding === true ||
+    store?.branding?.removePratoByBranding === true ||
+    store?.branding?.hidePratoByBranding === true ||
+    store?.publicBranding?.removePratoByBranding === true ||
+    store?.publicBranding?.hidePratoByBranding === true
+
+  if (hideBranding) return false
+
+  return planId !== 'premium'
 }
 
 function getInstagram(store) {
@@ -997,8 +1028,11 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   )
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [QrCodeSvg, setQrCodeSvg] = useState(null)
   const [favorited, setFavorited] = useState(false)
   const [animateHeart, setAnimateHeart] = useState(false)
+  const [showMap, setShowMap] = useState(false)
 
   const themeColor = getStoreTheme(store)
   const themeSoft = getRgba(themeColor, 0.1)
@@ -1010,7 +1044,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const bannerDesktopSrcSet = useMemo(
     () => getCloudinaryImageSrcSet(
       getBannerDesktopSource(store),
-      ['storeBannerSmall', 'storeBannerMedium', 'storeBanner', 'storeBannerLarge'],
+      ['storeBannerMedium', 'storeBanner'],
       { replaceExistingTransform: true }
     ),
     [store]
@@ -1018,7 +1052,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const bannerMobileSrcSet = useMemo(
     () => getCloudinaryImageSrcSet(
       getBannerMobileSource(store),
-      ['storeBannerMobileSmall', 'storeBannerMobile', 'storeBannerMobileLarge'],
+      ['storeBannerMobileSmall', 'storeBannerMobile'],
       { replaceExistingTransform: true }
     ),
     [store]
@@ -1040,7 +1074,18 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const whatsappDigits = normalizeBrazilianPhoneForWhatsApp(whatsapp)
   const instagram = getInstagram(store)
   const twitter = getTwitter(store)
+  const showPratoBySocial = shouldShowPratoBySocial(store)
   const address = useMemo(() => getAddressData(store), [store])
+  const mapSearchUrl = useMemo(() => {
+    if (!address.full) return ''
+
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.full)}`
+  }, [address.full])
+  const mapEmbedUrl = useMemo(() => {
+    if (!address.full) return ''
+
+    return `https://www.google.com/maps?q=${encodeURIComponent(address.full)}&output=embed`
+  }, [address.full])
   const acceptedPaymentMethods = useMemo(
     () => getAcceptedPaymentMethods(store),
     [store]
@@ -1093,13 +1138,16 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   })
 }, [primaryFavoriteKey, storeKeys])
   useEffect(() => {
-    if (!showModal || typeof document === 'undefined') return undefined
+    if ((!showModal && !showQrModal) || typeof document === 'undefined') return undefined
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setShowModal(false)
+      if (event.key === 'Escape') {
+        setShowModal(false)
+        setShowQrModal(false)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -1108,7 +1156,26 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showModal])
+  }, [showModal, showQrModal])
+  useEffect(() => {
+    if (!showQrModal || QrCodeSvg) return undefined
+
+    let mounted = true
+
+    import('qrcode.react')
+      .then((module) => {
+        if (mounted) {
+          setQrCodeSvg(() => module.QRCodeSVG)
+        }
+      })
+      .catch((error) => {
+        console.warn('[StoreHeader] Não foi possível carregar QR Code.', error)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [QrCodeSvg, showQrModal])
 
   const triggerCopiedToast = useCallback(() => {
     setCopied(true)
@@ -1469,30 +1536,30 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
             }}
           />
 
-<div
-  className="relative shrink-0 overflow-hidden border-b border-gray-100 px-5 pb-6 pt-5"
-  style={{
-    background: `linear-gradient(135deg, ${themeSofter}, #ffffff 62%, ${getRgba(
-      themeColor,
-      0.08
-    )})`,
-  }}
->
-  <div
-    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
-    style={{ backgroundColor: getRgba(themeColor, 0.18) }}
-  />
+          <div
+            className="relative shrink-0 overflow-hidden border-b border-gray-100 px-5 pb-6 pt-5"
+            style={{
+              background: `linear-gradient(135deg, ${themeSofter}, #ffffff 62%, ${getRgba(
+                themeColor,
+                0.08
+              )})`,
+            }}
+          >
+            <div
+              className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
+              style={{ backgroundColor: getRgba(themeColor, 0.18) }}
+            />
 
-  <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 md:hidden" />
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 md:hidden" />
 
-  <button
-    type="button"
-    onClick={() => setShowModal(false)}
-    className="absolute right-4 top-4 z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-[#111827] shadow-lg shadow-gray-200/70 ring-1 ring-gray-100 backdrop-blur-xl transition hover:bg-[#111827] hover:text-white active:scale-95"
-    aria-label="Fechar"
-  >
-    <FiX size={19} />
-  </button>
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="absolute right-4 top-4 z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-[#111827] shadow-lg shadow-gray-200/70 ring-1 ring-gray-100 backdrop-blur-xl transition hover:bg-[#111827] hover:text-white active:scale-95"
+              aria-label="Fechar"
+            >
+              <FiX size={19} />
+            </button>
 
   <div className="relative pr-12">
     <div className="flex items-start gap-4">
@@ -1614,7 +1681,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         </p>
 
         <p className="text-sm font-black text-[#111827]">
-          Como você pode receber o pedido
+          Como a loja atende seus pedidos
         </p>
       </div>
     </div>
@@ -1722,31 +1789,52 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         </p>
       </div>
 
-      <a
-        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          address.full
-        )}`}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm transition active:scale-95"
-        style={{ color: themeColor }}
-      >
-        Abrir
-        <FiExternalLink size={12} />
-      </a>
+      <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => setShowMap(true)}
+          className="inline-flex items-center justify-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm transition active:scale-95"
+          style={{ color: themeColor }}
+        >
+          Ver mapa
+        </button>
+
+        <a
+          href={mapSearchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center justify-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm transition active:scale-95"
+          style={{ color: themeColor }}
+        >
+          Abrir
+          <FiExternalLink size={12} />
+        </a>
+      </div>
     </div>
 
     <div className="border-t border-gray-100 bg-white p-2">
       <div className="overflow-hidden rounded-[1rem] border border-gray-100 bg-gray-100">
-        <iframe
-          title={`Mapa de ${store?.name || 'loja'}`}
-          src={`https://www.google.com/maps?q=${encodeURIComponent(
-            address.full
-          )}&output=embed`}
-          className="h-48 w-full border-0"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
+        {showMap ? (
+          <iframe
+            title={`Mapa de ${store?.name || 'loja'}`}
+            src={mapEmbedUrl}
+            className="h-48 w-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowMap(true)}
+            className="flex h-28 w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-orange-50 to-white px-4 text-center text-sm font-black text-[#111827] transition hover:bg-orange-50"
+          >
+            <FiMapPin size={22} style={{ color: themeColor }} />
+            Ver mapa da loja
+            <span className="text-xs font-semibold text-[#6b7280]">
+              O mapa carrega somente após o toque.
+            </span>
+          </button>
+        )}
       </div>
     </div>
   </section>
@@ -1773,7 +1861,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
               )}
             </div>
 
-            {(instagram || twitter) && (
+            {(instagram || twitter || showPratoBySocial) && (
               <div>
                 <p className="mb-3 text-xs font-black uppercase tracking-wide text-[#6b7280]">
                   Redes sociais
@@ -1821,6 +1909,33 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
                       </div>
 
                       <FiExternalLink className="shrink-0 text-blue-500" />
+                    </a>
+                  )}
+
+                  {showPratoBySocial && (
+                    <a
+                      href={`https://instagram.com/${PRATOBY_INSTAGRAM}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 rounded-[1.25rem] border border-orange-100 bg-orange-50 p-4 shadow-sm transition hover:bg-orange-100 active:scale-[0.99]"
+                    >
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-2xl text-white shadow-sm"
+                        style={{ backgroundColor: themeColor }}
+                      >
+                        <FiInstagram size={20} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-[#111827]">
+                          Feito com PratoBy
+                        </p>
+                        <p className="truncate text-xs font-bold text-orange-600">
+                          @{PRATOBY_INSTAGRAM}
+                        </p>
+                      </div>
+
+                      <FiExternalLink className="shrink-0 text-orange-500" />
                     </a>
                   )}
                 </div>
@@ -1881,13 +1996,16 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <button
-                type="button"
-                onClick={handleCopyLink}
-                className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:bg-orange-50 active:scale-[0.99]"
-              >
-                <FiCopy />
+              label="Abrir QR Code"
+              desktopLabel="QR"
+              showLabelOnDesktop
+              onClick={() => setShowQrModal(true)}
+              themeColor={themeColor}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-black text-[#111827] shadow-sm transition hover:bg-orange-50 active:scale-[0.99]"
+            >
+              <FiCopy />
                 Copiar link
-              </button>
+            </button>
 
               <button
                 type="button"
@@ -1902,6 +2020,88 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
           </div>
         </div>
       </div>
+
+      <div
+        className={`fixed inset-0 z-[85] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm transition-all duration-300 ${
+          showQrModal ? 'visible opacity-100' : 'invisible pointer-events-none opacity-0'
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="QR Code do cardápio"
+      >
+  <button
+    type="button"
+    className="absolute inset-0 cursor-default"
+    aria-label="Fechar QR Code"
+    onClick={() => setShowQrModal(false)}
+  />
+
+  <div
+      className={`relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5 transition-all duration-300 ${
+        showQrModal ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'
+      }`}
+    >
+    <div
+      className="h-1.5 w-full"
+      style={{
+        background: `linear-gradient(90deg, ${themeColor}, ${getRgba(themeColor, 0.25)}, transparent)`,
+      }}
+    />
+
+    <div className="p-5 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
+        <FiGrid size={22} />
+      </div>
+
+      <h2 className="text-lg font-black text-[#111827]">
+        Abrir cardápio no celular
+      </h2>
+
+      <p className="mx-auto mt-1 max-w-[260px] text-sm font-semibold leading-6 text-[#6b7280]">
+        Escaneie o QR Code para acessar esta loja em outro dispositivo.
+      </p>
+
+      <div className="mx-auto mt-5 flex w-fit rounded-[1.5rem] border border-gray-100 bg-white p-3 shadow-sm">
+        {QrCodeSvg ? (
+          <QrCodeSvg
+            value={publicUrl}
+            size={188}
+            level="M"
+            includeMargin={false}
+          />
+        ) : (
+          <div className="flex h-[188px] w-[188px] items-center justify-center rounded-2xl bg-gray-50 text-xs font-bold text-gray-400">
+            Carregando QR...
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 break-all rounded-2xl bg-gray-50 px-3 py-2 text-[11px] font-bold leading-5 text-gray-500">
+        {publicUrl}
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 text-sm font-black text-[#111827] shadow-sm transition hover:bg-orange-50 active:scale-[0.99]"
+        >
+          <FiCopy />
+          Copiar
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowQrModal(false)}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black text-white shadow-sm transition active:scale-[0.99]"
+          style={{ backgroundColor: themeColor }}
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
     </header>
   )
 }

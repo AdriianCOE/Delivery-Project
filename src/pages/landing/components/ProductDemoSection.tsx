@@ -1,23 +1,23 @@
 ﻿import { motion } from 'motion/react'
-import type { LucideIcon } from 'lucide-react'
+import type { IconType } from 'react-icons'
 import {
-  BarChart2,
-  Bell,
-  ChevronRight,
-  Clock,
-  CreditCard,
-  LayoutDashboard,
-  LogOut,
-  MessageSquare,
-  Settings,
-  ShoppingBag,
-  Star,
-  Store,
-  TrendingUp,
-  User,
-  Users,
-  Zap,
-} from 'lucide-react'
+  FiBarChart2 as BarChart2,
+  FiBell as Bell,
+  FiChevronRight as ChevronRight,
+  FiClock as Clock,
+  FiCreditCard as CreditCard,
+  FiGrid as LayoutDashboard,
+  FiLogOut as LogOut,
+  FiMessageSquare as MessageSquare,
+  FiSettings as Settings,
+  FiShoppingBag as ShoppingBag,
+  FiStar as Star,
+  FiHome as Store,
+  FiTrendingUp as TrendingUp,
+  FiUser as User,
+  FiUsers as Users,
+  FiZap as Zap,
+} from 'react-icons/fi'
 
 const CAPIVARA_LOGO =
   'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto,w_64,h_64,c_fill/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
@@ -25,7 +25,7 @@ const CAPIVARA_LOGO =
 const PRATOBY_LOGO = '/icons/favicon-32x32.png'
 
 type NavItem = {
-  icon: LucideIcon
+  icon: IconType
   label: string
   sub: string
   active?: boolean

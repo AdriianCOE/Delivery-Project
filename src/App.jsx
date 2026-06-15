@@ -124,14 +124,20 @@ function DeferredCookieConsent() {
     const showConsent = () => setShouldRender(true)
 
     if ('requestIdleCallback' in window) {
-      const idleId = window.requestIdleCallback(showConsent, { timeout: 2000 })
+      let idleId = null
+      const timeoutId = window.setTimeout(() => {
+        idleId = window.requestIdleCallback(showConsent, { timeout: 1000 })
+      }, 1400)
 
       return () => {
-        window.cancelIdleCallback?.(idleId)
+        window.clearTimeout(timeoutId)
+        if (idleId !== null) {
+          window.cancelIdleCallback?.(idleId)
+        }
       }
     }
 
-    const timeoutId = window.setTimeout(showConsent, 1200)
+    const timeoutId = window.setTimeout(showConsent, 1800)
 
     return () => {
       window.clearTimeout(timeoutId)

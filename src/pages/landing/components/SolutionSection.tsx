@@ -1,5 +1,12 @@
 import { motion } from 'motion/react';
-import { Menu, ShoppingCart, BarChart3, Link as LinkIcon, Tag, Star } from 'lucide-react';
+import {
+  FiBarChart2 as BarChart3,
+  FiLink as LinkIcon,
+  FiMenu as Menu,
+  FiShoppingCart as ShoppingCart,
+  FiStar as Star,
+  FiTag as Tag,
+} from 'react-icons/fi';
 
 const solutions = [
   {

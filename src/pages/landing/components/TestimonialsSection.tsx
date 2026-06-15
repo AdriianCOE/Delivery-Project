@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Star } from 'lucide-react';
+import { FiStar as Star } from 'react-icons/fi';
 
 const testimonials = [
   {

@@ -1,5 +1,10 @@
 import { motion } from 'motion/react';
-import { Shield, Lock, TrendingUp, CheckCircle } from 'lucide-react';
+import {
+  FiCheckCircle as CheckCircle,
+  FiLock as Lock,
+  FiShield as Shield,
+  FiTrendingUp as TrendingUp,
+} from 'react-icons/fi';
 
 const trustFeatures = [
   {

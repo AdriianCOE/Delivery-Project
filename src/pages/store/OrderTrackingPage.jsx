@@ -31,7 +31,7 @@ import {
   FiXCircle,
 } from 'react-icons/fi'
 
-import { db, functions } from '../../services/firebase'
+import { db, ensureAppCheck, functions } from '../../services/firebase'
 import StoreFooter from '../../components/layouts/StoreFooter'
 import { formatScheduledOrderDate, isScheduledOrder } from '../../utils/publicScheduling'
 import {
@@ -1439,6 +1439,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
     try {
       setLoading(true)
       setError('')
+      await ensureAppCheck()
       const createPayment = httpsCallable(functions, 'createAsaasOrderPayment')
       const result = await createPayment({
         orderId: order.id,
@@ -1557,6 +1558,7 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
     try {
       setLoading(true)
       setError('')
+      await ensureAppCheck()
       const createPayment = httpsCallable(functions, 'createMercadoPagoOrderPayment')
       const result = await createPayment({
         orderId: order.id,

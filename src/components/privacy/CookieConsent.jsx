@@ -105,7 +105,7 @@ export default function CookieConsent() {
     const frame = window.requestAnimationFrame(() => {
       timer = window.setTimeout(() => {
         setVisible(true)
-      }, 1600)
+      }, 300)
     })
 
     return () => {
@@ -135,7 +135,7 @@ export default function CookieConsent() {
       role="region"
       aria-label="Aviso de cookies"
     >
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-orange-100 bg-white/95 shadow-xl shadow-gray-900/10 ring-1 ring-white/70 backdrop-blur-xl dark:border-orange-500/20 dark:bg-zinc-950/95 dark:shadow-black/30 dark:ring-white/10">
+      <div className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-orange-100 bg-white/95 shadow-xl shadow-gray-900/10 ring-1 ring-white/70 backdrop-blur-xl dark:border-orange-500/20 dark:bg-zinc-950/95 dark:shadow-black/30 dark:ring-white/10">
         <div className="p-3 sm:p-3.5">
           <div className="flex items-start gap-2.5">
             <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300 sm:flex">
@@ -177,7 +177,7 @@ export default function CookieConsent() {
                 <button
                   type="button"
                   onClick={handleAcceptPreferences}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[#f97316] px-3 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 active:scale-[0.98] dark:shadow-orange-950/40 dark:focus:ring-offset-zinc-950"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-orange-700 px-3 text-xs font-black text-white shadow-md shadow-orange-200 transition hover:bg-orange-800 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 active:scale-[0.98] dark:bg-orange-600 dark:hover:bg-orange-500 dark:shadow-orange-950/40 dark:focus:ring-offset-zinc-950"
                 >
                   <FiCheck aria-hidden="true" />
                   Aceitar preferências

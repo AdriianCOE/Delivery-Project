@@ -3,26 +3,53 @@ import * as Sentry from '@sentry/react'
 const isProduction = import.meta.env.PROD
 const dsn = import.meta.env.VITE_SENTRY_DSN
 
+function isPublicStorefrontPath() {
+  if (typeof window === 'undefined') return false
+
+  const pathname = window.location?.pathname || '/'
+  const privatePrefixes = [
+    '/admin',
+    '/dashboard',
+    '/login',
+    '/cadastro',
+    '/onboarding',
+    '/pedido',
+    '/tracking',
+  ]
+
+  return pathname !== '/' && !privatePrefixes.some((prefix) => (
+    pathname === prefix || pathname.startsWith(`${prefix}/`)
+  ))
+}
+
 export function initSentry() {
   if (!dsn) return
+
+  const isPublicStorefront = isPublicStorefrontPath()
+  const integrations = [
+    Sentry.browserTracingIntegration(),
+  ]
+
+  if (!isPublicStorefront) {
+    integrations.push(
+      Sentry.replayIntegration({
+        maskAllText: true,
+        blockAllMedia: true,
+      })
+    )
+  }
 
   Sentry.init({
     dsn,
     environment: import.meta.env.MODE,
     release: `pratoby@${import.meta.env.VITE_APP_VERSION || 'dev'}`,
 
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({
-        maskAllText: true,
-        blockAllMedia: true,
-      }),
-    ],
+    integrations,
 
-    tracesSampleRate: isProduction ? 0.15 : 1.0,
+    tracesSampleRate: isProduction ? (isPublicStorefront ? 0.01 : 0.05) : 1.0,
 
-    replaysSessionSampleRate: isProduction ? 0.03 : 0,
-    replaysOnErrorSampleRate: 1.0,
+    replaysSessionSampleRate: isProduction && !isPublicStorefront ? 0.01 : 0,
+    replaysOnErrorSampleRate: isProduction && !isPublicStorefront ? 0.05 : 0,
 
     ignoreErrors: [
       'No Listener: tabs:outgoing.message.ready',

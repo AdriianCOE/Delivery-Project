@@ -424,6 +424,7 @@ async function sendMerchantTestPushToStore({ db, admin, logger, storeId }) {
 
   logger.info('[fcm] Merchant test push sent.', {
     storeId: normalizedStoreId,
+    tokenCount: tokenDocs.length,
     successCount: response.successCount,
     failureCount: response.failureCount,
     invalidated,

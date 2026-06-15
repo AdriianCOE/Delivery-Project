@@ -34,6 +34,8 @@ import {
   FiX,
   FiZap,
 } from 'react-icons/fi'
+import { FaPix, FaCreditCard } from "react-icons/fa6";
+import { SiMercadopago } from "react-icons/si";
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 
 import { db, functions } from '../../services/firebase'
@@ -2618,16 +2620,38 @@ const knownStoreIdsKey = useMemo(() => {
                   Ir para Pagamentos
                 </Link>
               </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {/* Card Pix */}
+              <div className="flex items-center gap-3 rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#32B1A4]/10 text-[#32B1A4]">
+                  <FaPix size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Pix manual</p>
+                  <p className="mt-0.5">{selectedStore?.paymentMethods?.pix === true ? 'Ativo' : 'Inativo'}</p>
+                </div>
+              </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
-                  Pix manual: {selectedStore?.paymentMethods?.pix === true ? 'ativo' : 'inativo'}
+              {/* Card Cartão */}
+              <div className="flex items-center gap-3 rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+                  <FaCreditCard size={20} />
                 </div>
-                <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
-                  Cartao presencial: {selectedStore?.paymentMethods?.card === false ? 'inativo' : 'ativo'}
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cartão presencial</p>
+                  <p className="mt-0.5">{selectedStore?.paymentMethods?.card === false ? 'Inativo' : 'Ativo'}</p>
                 </div>
-                <div className="rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
-                  Mercado Pago: {mercadoPagoOrderPaymentsActive ? 'ativo' : 'inativo'}
+              </div>
+
+              {/* Card Mercado Pago */}
+              <div className="flex items-center gap-3 rounded-2xl bg-white p-4 text-sm font-black text-[#111827] shadow-sm dark:bg-zinc-950/50 dark:text-zinc-100">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00B1EA]/10 text-[#00B1EA]">
+                  <SiMercadopago size={24} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Mercado Pago</p>
+                  <p className="mt-0.5">{mercadoPagoOrderPaymentsActive ? 'Ativo' : 'Inativo'}</p>
+                </div>
                 </div>
               </div>
             </div>

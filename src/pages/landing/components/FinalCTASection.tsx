@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom'
-import { ArrowRight, MessageCircle } from 'lucide-react';
+import { FiArrowRight as ArrowRight, FiMessageCircle as MessageCircle } from 'react-icons/fi';
 
 export function FinalCTASection() {
   return (

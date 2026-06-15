@@ -496,7 +496,7 @@ export default function LoginPage() {
       <main className="flex min-h-screen items-center justify-center bg-[#fff7ed]">
         <SEO
           title="Entrar no PratoBy | Painel do lojista"
-          description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos, pagamentos, entregas e configurações da sua loja."
+          description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio."
           path="/login"
         />
         <div className="flex flex-col items-center justify-center gap-4">
@@ -511,7 +511,7 @@ export default function LoginPage() {
     <main className="relative min-h-dvh overflow-hidden bg-[#fff7ed] pt-20 text-[#111827] antialiased selection:bg-orange-100 selection:text-[#f97316] lg:pt-0">
       <SEO
         title="Entrar no PratoBy | Painel do lojista"
-        description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos, pagamentos, entregas e configurações da sua loja."
+        description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio."
         path="/login"
       />
       <LoginMobileHeader />

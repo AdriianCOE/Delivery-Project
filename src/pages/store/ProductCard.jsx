@@ -408,7 +408,7 @@ function ProductCard({
     rawImageUrl,
     compact
       ? ['productCardSmall', 'productCard']
-      : ['productCardSmall', 'productCard', 'productCardLarge']
+      : ['productCardSmall', 'productCardLarge', 'productCard']
   )
 
   const lowStock =
