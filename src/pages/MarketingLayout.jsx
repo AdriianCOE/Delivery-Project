@@ -31,18 +31,6 @@ const footerGroups = [
     ],
   },
   {
-    title: 'Soluções',
-    links: [
-      { label: 'Cardápio digital', to: '/cardapio-digital' },
-      { label: 'Delivery sem comissão', to: '/delivery-sem-comissao' },
-      { label: 'Sistema para confeitaria', to: '/sistema-para-confeitaria' },
-      { label: 'Sistema para lanchonete', to: '/sistema-para-lanchonete' },
-      { label: 'Sistema para pizzaria', to: '/sistema-para-pizzaria' },
-      { label: 'Cardápio para restaurante', to: '/cardapio-digital-para-restaurante' },
-      { label: 'Loja online para restaurante', to: '/loja-online-para-restaurante' },
-    ],
-  },
-  {
     title: 'Empresa',
     links: [
       { label: 'Sobre', to: '/sobre' },
