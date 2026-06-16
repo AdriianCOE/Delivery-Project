@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { FaPercent as BadgePercent } from 'react-icons/fa6'
 import {
@@ -54,15 +54,15 @@ export function HeroSection() {
             </div>
 
             <h1 className="mt-7 text-4xl font-black leading-[1.04] tracking-tight text-[#111827] sm:text-6xl lg:text-7xl">
-              Seu delivery próprio,{' '}
+              Seu cardápio digital.{' '}
               <br className="hidden lg:block" />
 
               <span className="text-[#f97316]">
-                sem taxa{' '}
+                Seu delivery.
               </span>
 
               <span className="relative inline-block text-[#f97316]">
-                nenhuma.
+                {' '}Zero comissão.
                 <svg
                   className="absolute -bottom-3 left-[-5%] h-4 w-[110%]"
                   viewBox="0 0 190 18"
@@ -82,8 +82,8 @@ export function HeroSection() {
             </h1>
 
             <p className="mx-auto mt-7 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] sm:text-lg lg:mx-0">
-              Crie um cardápio digital profissional, receba pedidos em tempo real
-              e venda pelo seu próprio link com uma experiência moderna para o cliente.
+              Crie sua loja online, receba pedidos pelo próprio link e venda sem pagar comissão por pedido.
+              Organize entrega, retirada, encomendas e atendimento no painel do lojista.
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -146,21 +146,31 @@ export function HeroSection() {
               >
                 Ver planos
               </Link>
+
+              <Link
+                to="/cardapio-digital"
+                className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[1.6rem] border border-orange-100 bg-orange-50 px-6 text-base font-black text-[#f97316] shadow-sm transition hover:border-orange-200 hover:bg-orange-100 active:scale-95 sm:w-auto"
+              >
+                Cardápio digital
+              </Link>
             </div>
 
             <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
               {[
-                'Sem comissão por pedido',
-                'Cliente e link da loja',
-                'Pix com QR Code',
-                'Painel do lojista',
-              ].map((item) => (
+                ['Delivery sem comissão', '/delivery-sem-comissao'],
+                ['Loja online para restaurante', '/loja-online-para-restaurante'],
+                ['Sistema para confeitaria', '/sistema-para-confeitaria'],
+                ['Exemplos oficiais', '/exemplos'],
+                ['Fale com o PratoBy', '/contato'],
+              ].map(([item, to]) => (
                 <span
                   key={item}
                   className="inline-flex items-center gap-2 rounded-full border border-gray-100 bg-white px-3 py-2 text-xs font-black text-[#6b7280] shadow-sm"
                 >
                   <CheckCircle2 size={15} className="text-[#f97316]" />
-                  {item}
+                  <Link to={to} className="hover:text-[#f97316]">
+                    {item}
+                  </Link>
                 </span>
               ))}
             </div>
@@ -184,3 +194,4 @@ export function HeroSection() {
     </section>
   )
 }
+

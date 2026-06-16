@@ -6,7 +6,16 @@ Disallow: /admin/
 Disallow: /login
 Disallow: /cadastro
 Disallow: /onboarding
+Disallow: /auth/
 Disallow: /auth/action
+Disallow: /menu
+Disallow: /settings
+Disallow: /orders
+Disallow: /statistics
+Disallow: /reviews
+Disallow: /qrcodes
+Disallow: /users
+Disallow: /out-screen
 
 Disallow: /pedido/
 Disallow: /order/

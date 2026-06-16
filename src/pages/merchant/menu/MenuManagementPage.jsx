@@ -5,14 +5,12 @@
 // Cada seção visual fica em seu próprio componente.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  FiAlertCircle,
   FiAlertTriangle,
   FiBox,
-  FiCheckCircle,
   FiExternalLink,
   FiGrid,
   FiList,
@@ -37,36 +35,8 @@ import DeliveryAreaEditorDrawer from './components/DeliveryAreaEditorDrawer'
 import { BAIRROS_ARACAJU }   from './utils/deliveryPayloads'
 import DashboardFooter from '../../../components/layouts/DashboardFooter'
 import AnimatedSegmentedControl from '../../../components/ui/AnimatedSegmentedControl'
+import FloatingToast from '../../../components/ui/FloatingToast'
 import { UPGRADE_PROMPT_COPY, getStorePlanLimit, hasPlanFeature } from '../../../utils/planCatalog'
-
-// ── Toast ─────────────────────────────────────────────────────────────────────
-
-function Toast({ toast, onClose }) {
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(onClose, 3500)
-    return () => clearTimeout(t)
-  }, [toast, onClose])
-
-  if (!toast) return null
-  const isError = toast.type === 'error'
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 8 }}
-      className={`fixed left-1/2 top-5 z-[200] flex w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-2xl shadow-gray-900/10 backdrop-blur-xl dark:bg-zinc-900 dark:shadow-black/30 ${
-        isError ? 'border-red-100 text-red-700 dark:border-red-500/30 dark:text-red-300' : 'border-orange-100 text-[#111827] dark:border-orange-500/30 dark:text-zinc-100'
-      }`}
-    >
-      {isError
-        ? <FiAlertCircle className="shrink-0 text-red-500" size={18} />
-        : <FiCheckCircle className="shrink-0 text-[#f97316]" size={18} />}
-      <span className="text-sm font-bold">{toast.message}</span>
-    </motion.div>
-  )
-}
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -215,13 +185,27 @@ export default function MenuManagementPage() {
     try {
       const ok = await handleSaveDeliveryFees(currentFees)
       if (ok) {
-        showToast({ type: 'success', message: originalName ? 'Bairro atualizado!' : 'Bairro adicionado!' })
+        showToast({
+          type: 'success',
+          title: originalName ? 'Area atualizada' : 'Area adicionada',
+          message: originalName ? 'A taxa de entrega foi atualizada.' : 'O bairro foi adicionado a area de entrega.',
+        })
       } else {
-        showToast({ type: 'error', message: 'Erro ao salvar bairro.' })
+        showToast({
+          type: 'error',
+          title: 'Nao foi possivel salvar',
+          message: 'Confira sua permissao na loja e tente novamente.',
+        })
       }
     } catch (err) {
       console.error(err)
-      showToast({ type: 'error', message: 'Erro ao salvar bairro.' })
+      showToast({
+        type: 'error',
+        title: err?.code === 'permission-denied' ? 'Sem permissao para salvar' : 'Nao foi possivel salvar',
+        message: err?.code === 'permission-denied'
+          ? 'Seu usuario nao tem permissao para alterar as taxas desta loja.'
+          : 'A taxa nao foi salva. Tente novamente em instantes.',
+      })
     }
   }, [store, handleSaveDeliveryFees, showToast])
 
@@ -508,7 +492,7 @@ export default function MenuManagementPage() {
 
       {/* ── TOAST ── */}
       <AnimatePresence>
-        {toast && <Toast key="toast" toast={toast} onClose={() => setToast(null)} />}
+        {toast && <FloatingToast key="toast" toast={toast} onClose={() => setToast(null)} />}
       </AnimatePresence>
     </>
   )

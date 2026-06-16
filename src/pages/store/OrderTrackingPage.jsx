@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { Link, useParams } from 'react-router-dom'
+import SEO from '../../components/seo/SEO'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import {
   doc,
@@ -2403,6 +2404,13 @@ const isDelivered = status === 'entregue'
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] px-6">
+        <SEO
+          title="Acompanhamento de pedido | PratoBy"
+          description="Acompanhe o status do seu pedido no PratoBy."
+          path={slug ? `/${slug}/pedido/${orderId || ''}` : `/pedido/${orderId || ''}`}
+          noIndex
+          noFollow
+        />
         <div className="text-center">
           <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-orange-100 border-t-[#f97316]" />
 
@@ -2417,6 +2425,13 @@ const isDelivered = status === 'entregue'
   if (!order || accessError) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] p-6">
+        <SEO
+          title="Pedido nao encontrado | PratoBy"
+          description="Este pedido nao foi encontrado no PratoBy."
+          path={slug ? `/${slug}/pedido/${orderId || ''}` : `/pedido/${orderId || ''}`}
+          noIndex
+          noFollow
+        />
         <div className="w-full max-w-md rounded-[2rem] border border-gray-100 bg-white p-8 text-center shadow-2xl shadow-gray-200/70">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
             <FiXCircle size={32} />
@@ -2444,6 +2459,13 @@ const isDelivered = status === 'entregue'
 
   return (
     <main className="min-h-screen bg-[#f9fafb] text-[#111827]">
+      <SEO
+        title="Acompanhamento de pedido | PratoBy"
+        description="Acompanhe o status do seu pedido no PratoBy."
+        path={slug ? `/${slug}/pedido/${orderId || ''}` : `/pedido/${orderId || ''}`}
+        noIndex
+        noFollow
+      />
       <header className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 py-4 backdrop-blur-xl print:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">

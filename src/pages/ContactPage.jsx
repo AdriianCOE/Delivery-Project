@@ -1,7 +1,12 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import SEO from '../components/seo/SEO'
+import {
+  MARKETING_SEO,
+  buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+} from '../components/seo/seoConfig'
 import MarketingLayout from '../pages/MarketingLayout'
 import {
   FiArrowRight,
@@ -195,9 +200,11 @@ export default function ContactPage() {
   return (
     <>
       <SEO
-        title="Contato do PratoBy | Fale sobre cardápio digital"
-        description="Fale com o PratoBy para tirar dúvidas, começar sua loja online, testar o cardápio digital ou receber ajuda com seu delivery próprio."
-        path="/contato"
+        {...MARKETING_SEO.contact}
+        structuredData={[
+          buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Contato', path: '/contato' }]),
+          buildFaqPageJsonLd(faqs),
+        ]}
       />
 
       <MarketingLayout>
@@ -437,3 +444,4 @@ export default function ContactPage() {
     </>
   )
 }
+

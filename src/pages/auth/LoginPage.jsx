@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────
+﻿// ─────────────────────────────────────────────────────────────
 // src/pages/auth/LoginPage.jsx
 // ─────────────────────────────────────────────────────────────
 
@@ -498,6 +498,8 @@ export default function LoginPage() {
           title="Entrar no PratoBy | Painel do lojista"
           description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio."
           path="/login"
+          noIndex
+          noFollow
         />
         <div className="flex flex-col items-center justify-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-[#f97316]"></div>
@@ -513,6 +515,8 @@ export default function LoginPage() {
         title="Entrar no PratoBy | Painel do lojista"
         description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio."
         path="/login"
+        noIndex
+        noFollow
       />
       <LoginMobileHeader />
 
@@ -905,3 +909,4 @@ export default function LoginPage() {
     </main>
   )
 }
+

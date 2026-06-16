@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import SEO from '../../components/seo/SEO'
 import {
@@ -59,7 +59,11 @@ const BRAND_GREEN = '#f97316'
 const SITE_URL = 'https://pratoby.com'
 
 const NOINDEX_STORE_SLUGS = new Set([
+])
+
+const OFFICIAL_DEMO_STORE_SLUGS = new Set([
   'capivaras-lanches',
+  'doce-capivara-confeitaria',
 ])
 
 function shouldNoIndexStorefront(slugValue, storeData) {
@@ -72,7 +76,26 @@ function shouldNoIndexStorefront(slugValue, storeData) {
     .map((value) => String(value || '').trim().toLowerCase())
     .filter(Boolean)
 
-  return candidates.some((candidate) => NOINDEX_STORE_SLUGS.has(candidate))
+  if (candidates.some((candidate) => NOINDEX_STORE_SLUGS.has(candidate))) {
+    return true
+  }
+
+  if (isStoreUnavailable(storeData)) return true
+
+  const explicitIndexingValue =
+    storeData?.seoIndexingEnabled ??
+    storeData?.allowSearchIndexing ??
+    storeData?.isIndexable ??
+    storeData?.searchIndexingEnabled
+
+  if (explicitIndexingValue === true) return false
+  if (explicitIndexingValue === false) return true
+
+  if (candidates.some((candidate) => OFFICIAL_DEMO_STORE_SLUGS.has(candidate))) {
+    return false
+  }
+
+  return true
 }
 
 function titleFromSlug(value) {
@@ -858,15 +881,13 @@ function buildStoreDescription(store, storeName) {
 
   if (explicitDescription) return explicitDescription
 
-  const city = firstFilled(store?.city, store?.address?.city)
   const segment = firstFilled(store?.segment, store?.category, store?.businessType)
-  const parts = [
-    `Peça online em ${storeName}.`,
-    segment ? `Cardápio de ${segment}.` : 'Veja cardápio, retirada e delivery pelo PratoBy.',
-    city ? `Atendimento em ${city}.` : '',
-  ]
 
-  return parts.filter(Boolean).join(' ')
+  if (segment) {
+    return `Cardápio online de ${segment} da ${storeName}. Escolha seus produtos e faça seu pedido online para entrega ou retirada.`
+  }
+
+  return `Veja o cardápio da ${storeName}, escolha seus produtos e faça seu pedido online para entrega ou retirada.`
 }
 
 function compactObject(value) {
@@ -894,19 +915,13 @@ function buildStoreJsonLd(store, {
     : {}
   const city = firstFilled(store.city, addressData.city, addressData.cidade)
   const state = firstFilled(store.state, addressData.state, addressData.uf)
-  const street = firstFilled(store.street, addressData.street, addressData.rua, addressData.address)
-  const number = firstFilled(String(store.number || ''), String(addressData.number || addressData.numero || ''))
   const neighborhood = firstFilled(store.neighborhood, addressData.neighborhood, addressData.bairro)
-  const postalCode = firstFilled(store.cep, store.zipCode, addressData.cep, addressData.zipCode)
-  const telephone = firstFilled(store.publicPhone, store.whatsapp, store.phone, store.contactPhone)
   const segment = firstFilled(store.segment, store.category, store.businessType)
 
   const address = compactObject({
     '@type': 'PostalAddress',
-    streetAddress: [street, number].filter(Boolean).join(', '),
     addressLocality: city,
     addressRegion: state,
-    postalCode,
     addressCountry: 'BR',
   })
 
@@ -919,7 +934,6 @@ function buildStoreJsonLd(store, {
     menu: canonicalUrl,
     hasMenu: canonicalUrl,
     image: storeImage,
-    telephone,
     servesCuisine: segment,
     address: Object.keys(address).length > 1 ? address : undefined,
     areaServed: city || neighborhood,
@@ -2171,6 +2185,9 @@ const storeImage =
   store?.rawBannerUrl ||
   store?.bannerUrl ||
   store?.coverUrl ||
+  store?.rawBannerMobileUrl ||
+  store?.bannerMobileUrl ||
+  store?.mobileBannerUrl ||
   store?.rawLogoUrl ||
   store?.logoUrl ||
   'https://pratoby.com/icons/android-chrome-192x192.png?v=5'
@@ -2552,7 +2569,7 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-      title={`${storeName} | Cardápio digital`}
+      title={`${storeName} | Cardápio online no PratoBy`}
       description={storeDescription}
       path={`/${storeSlug || store?.slug || store?.storeSlug || slug || ''}`}
       image={storeImage}
@@ -2561,7 +2578,7 @@ return (
       type="website"
       noIndex={noIndexStorefront}
       noFollow={noIndexStorefront}
-      jsonLd={storeJsonLd}
+      jsonLd={noIndexStorefront ? null : storeJsonLd}
       themeColor={themeColor}
     />
 
@@ -2987,3 +3004,5 @@ return (
   </>
 )
 }
+
+

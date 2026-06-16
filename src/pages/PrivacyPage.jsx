@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import SEO from '../components/seo/SEO'
+import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
 import MarketingLayout from './MarketingLayout'
 import { Link } from 'react-router-dom'
 import {
@@ -235,9 +236,8 @@ export default function PrivacyPage() {
   return (
     <MarketingLayout>
       <SEO
-        title="Política de Privacidade | PratoBy"
-        description="Política de privacidade do PratoBy sobre dados de lojistas, clientes, pedidos, notificações, segurança e direitos previstos na LGPD."
-        path="/privacidade"
+        {...MARKETING_SEO.privacy}
+        structuredData={buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Privacidade', path: '/privacidade' }])}
       />
 
       <div className="w-full font-sans text-[#111827] selection:bg-orange-100 selection:text-[#f97316]">
@@ -364,3 +364,4 @@ export default function PrivacyPage() {
     </MarketingLayout>
   )
 }
+

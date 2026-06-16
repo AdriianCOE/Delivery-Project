@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
 import SEO from '../components/seo/SEO'
 import { PLAN_OPTIONS } from '../utils/planCatalog'
+import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
 import {
   FiArrowRight,
   FiCheck,
@@ -541,10 +542,11 @@ export default function PlansPage() {
   return (
     <>
       <SEO
-        title="Planos do PratoBy | Preços do cardápio digital e delivery próprio"
-        description="Compare os planos do PratoBy para vender online com cardápio digital, pedidos, Pix, QR Code, agendamento e painel de pedidos sem comissão por pedido."
-        path="/planos"
-        jsonLd={plansJsonLd}
+        {...MARKETING_SEO.plans}
+        jsonLd={[
+          plansJsonLd,
+          buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Planos', path: '/planos' }]),
+        ]}
       />
 
       <MarketingLayout>
@@ -699,3 +701,4 @@ export default function PlansPage() {
     </>
   )
 }
+

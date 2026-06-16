@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import MarketingLayout from '../pages/MarketingLayout'
 import SEO from '../components/seo/SEO'
+import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
 import {
   FiArrowRight,
   FiCheckCircle,
@@ -141,9 +142,8 @@ export default function AboutPage() {
   return (
     <>
       <SEO
-        title="Sobre o PratoBy | Cardápio digital para restaurantes"
-        description="Conheça o PratoBy, uma plataforma para restaurantes, lanchonetes e confeitarias venderem online com cardápio digital, pedidos e delivery próprio."
-        path="/sobre"
+        {...MARKETING_SEO.about}
+        structuredData={buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Sobre', path: '/sobre' }])}
       />
 
       <MarketingLayout>
@@ -406,3 +406,4 @@ export default function AboutPage() {
     </>
   )
 }
+

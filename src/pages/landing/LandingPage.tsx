@@ -1,4 +1,9 @@
-import SEO from '../../components/seo/SEO'
+﻿import SEO from '../../components/seo/SEO'
+import {
+  MARKETING_SEO,
+  buildFaqPageJsonLd,
+  buildMarketingJsonLd,
+} from '../../components/seo/seoConfig'
 import MarketingLayout from '../MarketingLayout'
 
 import { HeroSection } from './components/HeroSection'
@@ -8,16 +13,20 @@ import { ProductDemoSection } from './components/ProductDemoSection'
 import { TrustSection } from './components/TrustSection'
 import { ComparisonSection } from './components/ComparisonSection'
 import { PricingSection } from './components/PricingSection'
-import { FAQSection } from './components/FAQSection'
+import { FAQSection, landingFaqs } from './components/FAQSection'
 import { FinalCTASection } from './components/FinalCTASection'
 
 export default function LandingPage() {
+  const homeJsonLd = [
+    buildMarketingJsonLd(),
+    buildFaqPageJsonLd(landingFaqs),
+  ].filter(Boolean)
+
   return (
     <MarketingLayout>
       <SEO
-        title="PratoBy | Cardápio digital"
-        description="Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples — sem comissão do PratoBy por pedido."
-        path="/"
+        {...MARKETING_SEO.home}
+        structuredData={homeJsonLd}
       />
 
       <div className="bg-white dark:bg-zinc-950 text-gray-900 dark:text-zinc-50">
@@ -34,3 +43,4 @@ export default function LandingPage() {
     </MarketingLayout>
   )
 }
+

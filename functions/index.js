@@ -1,4 +1,4 @@
-const {
+﻿const {
     onDocumentCreated,
     onDocumentWritten,
     onDocumentUpdated,
@@ -650,6 +650,7 @@ exports.submitPublicOrderReview = onCall(PUBLIC_CALLABLE_OPTIONS, async (request
 const PUBLIC_STORE_FIELDS = [
   'name', 'storeName', 'description', 'publicDescription', 'segment', 'category',
   'logoUrl', 'logo', 'bannerPosition', 'bannerUrl', 'bannerMobileUrl', 'shareImageUrl', 'seoImageUrl', 'ogImageUrl', 'faviconUrl', 'coverUrl', 'mobileBannerUrl',
+  'seoTitle', 'seoDescription', 'seoIndexingEnabled', 'allowSearchIndexing', 'isIndexable', 'searchIndexingEnabled',
   'themeColor', 'primaryColor', 'brandColor', 'whatsapp', 'phone', 'contactPhone',
   'instagram', 'social', 'isOpen', 'isActive', 'activeDays', 'hoursOpen', 'hoursClose',
   'isPublic', 'isVisible',
@@ -3767,43 +3768,82 @@ function publicCatalogEntitlementsChanged(beforeData, afterData) {
 
 const PUBLIC_APP_ORIGIN = 'https://pratoby.com'
 const DEFAULT_OG_IMAGE = `${PUBLIC_APP_ORIGIN}/og/pratoby-cover.png`
+const DEFAULT_OG_IMAGE_ALT = 'PratoBy - cardápio digital e delivery sem comissão'
+const INDEX_ROBOTS = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+const NOINDEX_ROBOTS = 'noindex, follow'
+const NOINDEX_NOFOLLOW_ROBOTS = 'noindex, nofollow'
 const SEO_INDEX_CACHE_MS = 60 * 1000
 const HOME_SEO_DESCRIPTION =
-  'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples, sem comissão por pedido.'
+  'Crie uma loja online para restaurante, lanchonete ou confeitaria. Receba pedidos pelo seu próprio link, organize entregas e venda sem comissão por pedido.'
 const INSTITUTIONAL_SEO_ROUTES = {
   '/': {
     title: 'PratoBy | Cardápio digital e delivery sem comissão',
     description: HOME_SEO_DESCRIPTION,
   },
-  '/sobre': {
-    title: 'Sobre o PratoBy | Cardápio digital para restaurantes',
-    description:
-      'Conheça o PratoBy, uma plataforma de cardápio digital e delivery próprio para restaurantes venderem online com pedidos, pagamentos, entrega e retirada.',
-  },
   '/planos': {
-    title: 'Planos do PratoBy | Cardápio digital sem comissão',
+    title: 'Planos PratoBy | Delivery próprio sem comissão',
     description:
-      'Compare os planos do PratoBy para vender online com cardápio digital, pedidos, Pix, QR Code, agendamento e painel de pedidos sem comissão por pedido.',
+      'Compare os planos do PratoBy para vender online com cardápio digital, pedidos em tempo real, pagamentos e recursos para crescer sem comissão por venda.',
+  },
+  '/sobre': {
+    title: 'Sobre o PratoBy | Cardápio digital para vender direto',
+    description:
+      'Conheça o PratoBy, uma plataforma de cardápio digital e delivery próprio para lojistas venderem pelo próprio link, com pedidos organizados e sem comissão.',
   },
   '/contato': {
-    title: 'Contato PratoBy | Cardápio digital e delivery próprio',
+    title: 'Contato | PratoBy',
     description:
-      'Fale com o PratoBy para tirar dúvidas, começar sua loja online, testar o cardápio digital ou receber ajuda com seu delivery próprio.',
+      'Fale com o PratoBy para criar seu cardápio digital, tirar dúvidas sobre planos ou começar sua loja online com venda direta e sem comissão.',
   },
-  '/login': {
-    title: 'Entrar no PratoBy | Painel do lojista',
+  '/exemplos': {
+    title: 'Exemplos de lojas PratoBy | Cardápio digital na prática',
     description:
-      'Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio.',
+      'Veja exemplos oficiais de lojas no PratoBy para restaurantes, lanchonetes e confeitarias venderem pelo próprio link sem comissão por pedido.',
   },
   '/privacidade': {
-  title: 'Política de Privacidade | PratoBy',
-  description:
-    'Entenda como o PratoBy trata dados de lojistas, clientes, pedidos, pagamentos e informações usadas no cardápio digital.',
+    title: 'Política de Privacidade | PratoBy',
+    description:
+      'Entenda como o PratoBy coleta, usa e protege dados de lojistas e clientes em sua plataforma de cardápio digital e pedidos online.',
   },
   '/termos': {
     title: 'Termos de Uso | PratoBy',
     description:
-      'Confira os termos de uso do PratoBy para lojistas que usam cardápio digital, pedidos online, delivery próprio e recursos da plataforma.',
+      'Consulte as regras de uso do PratoBy para lojistas, pedidos online, assinaturas, lojas públicas e serviços digitais.',
+  },
+  '/cardapio-digital': {
+    title: 'Cardápio digital para vender online | PratoBy',
+    description:
+      'Crie um cardápio digital com link próprio, produtos, categorias, carrinho e pedidos online para vender direto sem comissão por pedido.',
+  },
+  '/delivery-sem-comissao': {
+    title: 'Delivery sem comissão para restaurantes | PratoBy',
+    description:
+      'Receba pedidos online pelo próprio link, organize entregas e venda sem pagar comissão por pedido com o PratoBy.',
+  },
+  '/sistema-para-confeitaria': {
+    title: 'Sistema para confeitaria com encomendas online | PratoBy',
+    description:
+      'Monte uma loja online para confeitaria, receba pedidos e encomendas pelo próprio link e organize tudo em um painel simples.',
+  },
+  '/sistema-para-lanchonete': {
+    title: 'Sistema para lanchonete vender online | PratoBy',
+    description:
+      'Crie uma loja online para lanchonete, receba pedidos pelo próprio link e organize entrega, retirada e pagamentos sem comissão por pedido.',
+  },
+  '/sistema-para-pizzaria': {
+    title: 'Sistema para pizzaria com pedidos online | PratoBy',
+    description:
+      'Venda pizzas pelo próprio link, organize sabores, adicionais, entrega e retirada em uma loja online sem comissão por pedido.',
+  },
+  '/cardapio-digital-para-restaurante': {
+    title: 'Cardápio digital para restaurante | PratoBy',
+    description:
+      'Monte um cardápio digital para restaurante, receba pedidos online e venda direto pelo seu próprio link sem comissão por venda.',
+  },
+  '/loja-online-para-restaurante': {
+    title: 'Loja online para restaurante sem comissão | PratoBy',
+    description:
+      'Crie uma loja online para restaurante com cardápio, carrinho, pedidos e painel de gestão para vender direto sem comissão.',
   },
 }
 let cachedSeoIndexHtml = ''
@@ -3951,6 +3991,10 @@ function getInstitutionalSeoMeta(path) {
     ...route,
     path: cleanPath,
     canonical,
+    image: DEFAULT_OG_IMAGE,
+    imageType: getPreviewImageType(DEFAULT_OG_IMAGE),
+    imageAlt: DEFAULT_OG_IMAGE_ALT,
+    robots: INDEX_ROBOTS,
   }
 }
 
@@ -3972,6 +4016,32 @@ function buildInstitutionalWebPageJsonLd(meta) {
   }
 }
 
+function buildBreadcrumbJsonLd(items) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  }
+}
+
+function buildInstitutionalJsonLd(meta) {
+  const graph = [buildInstitutionalWebPageJsonLd(meta)]
+
+  if (meta.path !== '/') {
+    graph.push(buildBreadcrumbJsonLd([
+      { name: 'Início', url: `${PUBLIC_APP_ORIGIN}/` },
+      { name: meta.title.replace(/\s\|\sPratoBy.*/, ''), url: meta.canonical },
+    ]))
+  }
+
+  return graph
+}
+
 function buildJsonLdScript(jsonLd) {
   const safeJson = JSON.stringify(jsonLd).replace(/</g, '\\u003c')
   return `<script type="application/ld+json" data-pratoby-institutional-seo="true">${safeJson}</script>`
@@ -3986,44 +4056,36 @@ function injectInstitutionalSeo(html, meta) {
   const safeTitle = escapeHtml(meta.title)
   const safeDescription = escapeHtml(meta.description)
   const safeCanonical = escapeHtml(meta.canonical)
+  const safeImage = escapeHtml(meta.image || DEFAULT_OG_IMAGE)
+  const safeImageType = escapeHtml(meta.imageType || getPreviewImageType(meta.image || DEFAULT_OG_IMAGE))
+  const safeImageAlt = escapeHtml(meta.imageAlt || DEFAULT_OG_IMAGE_ALT)
+  const safeRobots = escapeHtml(meta.robots || INDEX_ROBOTS)
 
   const tags = [
-    [
-      /<title\b[^>]*>[\s\S]*?<\/title>/i,
-      `<title>${safeTitle}</title>`,
-    ],
-    [
-      /<meta\b(?=[^>]*\bname=["']description["'])[\s\S]*?>/i,
-      `<meta name="description" content="${safeDescription}">`,
-    ],
-    [
-      /<link\b(?=[^>]*\brel=["']canonical["'])[\s\S]*?>/i,
-      `<link rel="canonical" href="${safeCanonical}">`,
-    ],
-    [
-      /<meta\b(?=[^>]*\bproperty=["']og:url["'])[\s\S]*?>/i,
-      `<meta property="og:url" content="${safeCanonical}">`,
-    ],
-    [
-      /<meta\b(?=[^>]*\bproperty=["']og:title["'])[\s\S]*?>/i,
-      `<meta property="og:title" content="${safeTitle}">`,
-    ],
-    [
-      /<meta\b(?=[^>]*\bproperty=["']og:description["'])[\s\S]*?>/i,
-      `<meta property="og:description" content="${safeDescription}">`,
-    ],
-    [
-      /<meta\b(?=[^>]*\bname=["']twitter:title["'])[\s\S]*?>/i,
-      `<meta name="twitter:title" content="${safeTitle}">`,
-    ],
-    [
-      /<meta\b(?=[^>]*\bname=["']twitter:description["'])[\s\S]*?>/i,
-      `<meta name="twitter:description" content="${safeDescription}">`,
-    ],
-    [
-      /<script\b(?=[^>]*\btype=["']application\/ld\+json["'])(?=[^>]*\bdata-pratoby-institutional-seo=["']true["'])[\s\S]*?<\/script>/i,
-      buildJsonLdScript(buildInstitutionalWebPageJsonLd(meta)),
-    ],
+    [/<title\b[^>]*>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`],
+    [/<meta\b(?=[^>]*\bname=["']description["'])[\s\S]*?>/i, `<meta name="description" content="${safeDescription}">`],
+    [/<meta\b(?=[^>]*\bname=["']robots["'])[\s\S]*?>/i, `<meta name="robots" content="${safeRobots}">`],
+    [/<meta\b(?=[^>]*\bname=["']googlebot["'])[\s\S]*?>/i, `<meta name="googlebot" content="${safeRobots}">`],
+    [/<link\b(?=[^>]*\brel=["']canonical["'])[\s\S]*?>/i, `<link rel="canonical" href="${safeCanonical}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:locale["'])[\s\S]*?>/i, '<meta property="og:locale" content="pt_BR">'],
+    [/<meta\b(?=[^>]*\bproperty=["']og:type["'])[\s\S]*?>/i, '<meta property="og:type" content="website">'],
+    [/<meta\b(?=[^>]*\bproperty=["']og:site_name["'])[\s\S]*?>/i, '<meta property="og:site_name" content="PratoBy">'],
+    [/<meta\b(?=[^>]*\bproperty=["']og:url["'])[\s\S]*?>/i, `<meta property="og:url" content="${safeCanonical}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:title["'])[\s\S]*?>/i, `<meta property="og:title" content="${safeTitle}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:description["'])[\s\S]*?>/i, `<meta property="og:description" content="${safeDescription}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image["'])[\s\S]*?>/i, `<meta property="og:image" content="${safeImage}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image:url["'])[\s\S]*?>/i, `<meta property="og:image:url" content="${safeImage}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image:secure_url["'])[\s\S]*?>/i, `<meta property="og:image:secure_url" content="${safeImage}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image:type["'])[\s\S]*?>/i, `<meta property="og:image:type" content="${safeImageType}">`],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image:width["'])[\s\S]*?>/i, '<meta property="og:image:width" content="1200">'],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image:height["'])[\s\S]*?>/i, '<meta property="og:image:height" content="630">'],
+    [/<meta\b(?=[^>]*\bproperty=["']og:image:alt["'])[\s\S]*?>/i, `<meta property="og:image:alt" content="${safeImageAlt}">`],
+    [/<meta\b(?=[^>]*\bname=["']twitter:card["'])[\s\S]*?>/i, '<meta name="twitter:card" content="summary_large_image">'],
+    [/<meta\b(?=[^>]*\bname=["']twitter:title["'])[\s\S]*?>/i, `<meta name="twitter:title" content="${safeTitle}">`],
+    [/<meta\b(?=[^>]*\bname=["']twitter:description["'])[\s\S]*?>/i, `<meta name="twitter:description" content="${safeDescription}">`],
+    [/<meta\b(?=[^>]*\bname=["']twitter:image["'])[\s\S]*?>/i, `<meta name="twitter:image" content="${safeImage}">`],
+    [/<meta\b(?=[^>]*\bname=["']twitter:image:alt["'])[\s\S]*?>/i, `<meta name="twitter:image:alt" content="${safeImageAlt}">`],
+    [/<script\b(?=[^>]*\btype=["']application\/ld\+json["'])(?=[^>]*\bdata-pratoby-institutional-seo=["']true["'])[\s\S]*?<\/script>/i, buildJsonLdScript(buildInstitutionalJsonLd(meta))],
   ]
 
   for (const [matcher, tag] of tags) {
@@ -4032,7 +4094,6 @@ function injectInstitutionalSeo(html, meta) {
 
   return nextHtml
 }
-
 function injectStorefrontSeo(html, meta) {
   let nextHtml = html
 
@@ -4042,6 +4103,7 @@ function injectStorefrontSeo(html, meta) {
   const safeImageType = escapeHtml(meta.imageType || getPreviewImageType(meta.image))
   const safeImageAlt = escapeHtml(meta.imageAlt || meta.title || 'PratoBy')
   const safeCanonical = escapeHtml(meta.canonical)
+  const safeRobots = escapeHtml(meta.robots || INDEX_ROBOTS)
   const faviconUrl = meta.favicon || `${PUBLIC_APP_ORIGIN}/favicon.ico`
   const safeFavicon = escapeHtml(faviconUrl)
   const safeFaviconType = faviconUrl.toLowerCase().endsWith('.ico') ? 'image/x-icon' : 'image/png'
@@ -4054,6 +4116,14 @@ function injectStorefrontSeo(html, meta) {
     [
       /<meta\b(?=[^>]*\bname=["']description["'])[^>]*>/i,
       `<meta name="description" content="${safeDescription}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']robots["'])[^>]*>/i,
+      `<meta name="robots" content="${safeRobots}">`,
+    ],
+    [
+      /<meta\b(?=[^>]*\bname=["']googlebot["'])[^>]*>/i,
+      `<meta name="googlebot" content="${safeRobots}">`,
     ],
     [
       /<meta\b(?=[^>]*\bproperty=["']og:title["'])[^>]*>/i,
@@ -4097,7 +4167,11 @@ function injectStorefrontSeo(html, meta) {
     ],
     [
       /<meta\b(?=[^>]*\bproperty=["']og:type["'])[^>]*>/i,
-      '<meta property="og:type" content="website">',
+      '<meta property="og:type" content="restaurant">',
+    ],
+    [
+      /<meta\b(?=[^>]*\bproperty=["']og:site_name["'])[^>]*>/i,
+      '<meta property="og:site_name" content="PratoBy">',
     ],
     [
       /<meta\b(?=[^>]*\bname=["']twitter:card["'])[^>]*>/i,
@@ -4135,6 +4209,10 @@ function injectStorefrontSeo(html, meta) {
       /<link\b(?=[^>]*\brel=["']apple-touch-icon["'])[^>]*>/i,
       `<link rel="apple-touch-icon" href="${safeFavicon}" sizes="180x180">`,
     ],
+    [
+      /<script\b(?=[^>]*\btype=["']application\/ld\+json["'])(?=[^>]*\bdata-pratoby-institutional-seo=["']true["'])[\s\S]*?<\/script>/i,
+      meta.jsonLd ? buildJsonLdScript(meta.jsonLd) : '',
+    ],
   ]
 
   for (const [matcher, tag] of tags) {
@@ -4153,18 +4231,100 @@ function truncateSeoText(value, maxLength = 180) {
     .trim()}...`
 }
 
+const OFFICIAL_INDEXABLE_STORE_SLUGS = new Set([
+  'capivaras-lanches',
+  'doce-capivara-confeitaria',
+])
+
+function isStoreUnavailableForSeo(store) {
+  return (
+    !store ||
+    store.isActive === false ||
+    store.isBlocked === true ||
+    store.isBillingBlocked === true ||
+    store.isDeleted === true ||
+    Boolean(store.deletedAt)
+  )
+}
+
+function shouldIndexPublicStore(store) {
+  if (isStoreUnavailableForSeo(store)) return false
+
+  const slug = String(store?.slug || store?.storeSlug || '').trim().toLowerCase()
+  const explicitIndexingValue =
+    store?.seoIndexingEnabled ??
+    store?.allowSearchIndexing ??
+    store?.isIndexable ??
+    store?.searchIndexingEnabled
+
+  if (explicitIndexingValue === true) return true
+  if (explicitIndexingValue === false) return false
+
+  return OFFICIAL_INDEXABLE_STORE_SLUGS.has(slug)
+}
+
+function buildStorefrontDescription(store, storeName) {
+  const explicitDescription = String(
+    store?.seoDescription ||
+      store?.publicDescription ||
+      ''
+  ).trim()
+
+  if (explicitDescription) return truncateSeoText(explicitDescription)
+
+  const segment = String(store?.segment || store?.category || '').trim()
+
+  if (segment) {
+    return truncateSeoText(`Veja o cardápio online de ${segment} da ${storeName} e faça seu pedido pelo PratoBy.`)
+  }
+
+  return truncateSeoText(`Veja o cardápio da ${storeName}, escolha seus produtos e faça seu pedido online para entrega ou retirada.`)
+}
+
+function buildStorefrontJsonLd(store, meta) {
+  const address = store?.address && typeof store.address === 'object' ? store.address : {}
+  const city = String(store?.city || address.city || address.cidade || '').trim()
+  const state = String(store?.state || address.state || address.uf || '').trim()
+  const neighborhood = String(store?.neighborhood || address.neighborhood || address.bairro || '').trim()
+  const segment = String(store?.segment || store?.category || '').trim()
+
+  const postalAddress = {
+    '@type': 'PostalAddress',
+    addressLocality: city || undefined,
+    addressRegion: state || undefined,
+    addressCountry: 'BR',
+  }
+
+  Object.keys(postalAddress).forEach((key) => {
+    if (!postalAddress[key]) delete postalAddress[key]
+  })
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FoodEstablishment',
+    name: meta.storeName,
+    description: meta.description,
+    url: meta.canonical,
+    menu: meta.canonical,
+    hasMenu: meta.canonical,
+    image: meta.image,
+    servesCuisine: segment || undefined,
+    address: Object.keys(postalAddress).length > 1 ? postalAddress : undefined,
+    areaServed: city || neighborhood || undefined,
+  }
+
+  Object.keys(jsonLd).forEach((key) => {
+    if (jsonLd[key] === undefined || jsonLd[key] === '') delete jsonLd[key]
+  })
+
+  return jsonLd
+}
 function buildStorefrontSeoMeta(store) {
   const storeName = String(store?.name || store?.storeName || 'PratoBy').trim()
   const slug = getPublicStoreSlug(store?.storeId || store?.id || '', store)
   const canonical = `${PUBLIC_APP_ORIGIN}/${slug}`
-  
-  const description = truncateSeoText(
-    store?.publicDescription ||
-      store?.description ||
-      `Veja o cardápio digital de ${storeName} no PratoBy.`
-  )
+  const description = buildStorefrontDescription(store, storeName)
 
-  // 1. Prioridade para imagem de compartilhamento/SEO
   const rawImage = absolutePublicUrl(
     store?.shareImageUrl ||
       store?.seoImageUrl ||
@@ -4177,8 +4337,9 @@ function buildStorefrontSeoMeta(store) {
       store?.logo
   ) || DEFAULT_OG_IMAGE
   const image = normalizePreviewImageUrl(rawImage) || DEFAULT_OG_IMAGE
+  const title = `${storeName} | Cardápio online no PratoBy`
+  const indexable = shouldIndexPublicStore(store)
 
-  // 2. Busca do favicon com os fallbacks corretos
   const favicon = buildSeoFaviconUrl(
     store?.faviconUrl ||
       store?.logoIconUrl ||
@@ -4186,17 +4347,23 @@ function buildStorefrontSeoMeta(store) {
       store?.logo
   )
 
-  return {
-    title: `${storeName} | Cardápio digital`, // Título encurtado conforme solicitado
+  const meta = {
+    title,
+    storeName,
     description,
     image,
     imageType: getPreviewImageType(image),
-    imageAlt: storeName,
+    imageAlt: `${storeName} | Cardápio online no PratoBy`,
     canonical,
-    favicon, // Favicon adicionado ao retorno
+    favicon,
+    robots: indexable ? INDEX_ROBOTS : NOINDEX_ROBOTS,
+  }
+
+  return {
+    ...meta,
+    jsonLd: indexable ? buildStorefrontJsonLd(store, meta) : null,
   }
 }
-
 async function loadStaticIndexHtml() {
   const now = Date.now()
   if (cachedSeoIndexHtml && now - cachedSeoIndexLoadedAt < SEO_INDEX_CACHE_MS) {
@@ -4320,7 +4487,16 @@ exports.storefrontSeoPreview = onRequest(
 
       const storeRecord = await findPublicStoreByParam(slug)
       if (!storeRecord || !isStorePubliclyReadable(storeRecord.data)) {
-        response.status(200).send(html)
+        response.status(200).send(injectInstitutionalSeo(html, {
+          title: 'Loja indisponível | PratoBy',
+          description: 'Este cardápio não está disponível para indexação no PratoBy.',
+          canonical: `${PUBLIC_APP_ORIGIN}/${slug}`,
+          image: DEFAULT_OG_IMAGE,
+          imageType: getPreviewImageType(DEFAULT_OG_IMAGE),
+          imageAlt: DEFAULT_OG_IMAGE_ALT,
+          robots: NOINDEX_NOFOLLOW_ROBOTS,
+          path: `/${slug}`,
+        }))
         return
       }
 
@@ -5316,3 +5492,6 @@ exports.archiveStoreTable = onCall(
   STORE_TABLE_CALLABLE_OPTIONS,
   (request) => archiveStoreTableHandler({ db, HttpsError, logger }, request)
 )
+
+
+

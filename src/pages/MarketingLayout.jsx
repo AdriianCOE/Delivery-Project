@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Link, useLocation } from 'react-router-dom'
 import {
@@ -31,11 +31,24 @@ const footerGroups = [
     ],
   },
   {
+    title: 'Soluções',
+    links: [
+      { label: 'Cardápio digital', to: '/cardapio-digital' },
+      { label: 'Delivery sem comissão', to: '/delivery-sem-comissao' },
+      { label: 'Sistema para confeitaria', to: '/sistema-para-confeitaria' },
+      { label: 'Sistema para lanchonete', to: '/sistema-para-lanchonete' },
+      { label: 'Sistema para pizzaria', to: '/sistema-para-pizzaria' },
+      { label: 'Cardápio para restaurante', to: '/cardapio-digital-para-restaurante' },
+      { label: 'Loja online para restaurante', to: '/loja-online-para-restaurante' },
+    ],
+  },
+  {
     title: 'Empresa',
     links: [
       { label: 'Sobre', to: '/sobre' },
+      { label: 'Planos', to: '/planos' },
+      { label: 'Exemplos', to: '/exemplos' },
       { label: 'Contato', to: '/contato' },
-      { label: 'Entrar', to: '/login' },
     ],
   },
   {
@@ -504,7 +517,7 @@ export default function MarketingLayout({ children }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 sm:gap-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-6">
               {footerGroups.map((group) => (
                 <div key={group.title} className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300 sm:text-xs">
@@ -565,3 +578,4 @@ export default function MarketingLayout({ children }) {
     </div>
   )
 }
+

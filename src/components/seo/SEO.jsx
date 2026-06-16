@@ -6,7 +6,7 @@ const SITE_NAME = 'PratoBy'
 
 const DEFAULT_TITLE = 'PratoBy | Cardápio digital e delivery sem comissão'
 const DEFAULT_DESCRIPTION =
-  'Crie seu cardápio digital, receba pedidos online e organize entrega, retirada, pagamentos e encomendas em um painel simples, sem comissão por pedido.'
+  'Crie uma loja online para restaurante, lanchonete ou confeitaria. Receba pedidos pelo seu próprio link, organize entregas e venda sem comissão por pedido.'
 
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
 const DEFAULT_FAVICON = `${SITE_URL}/icons/android-chrome-192x192.png?v=5`
@@ -212,6 +212,8 @@ export default function SEO({
   type = 'website',
   noIndex = false,
   noFollow = false,
+  robots,
+  structuredData,
   jsonLd = null,
   themeColor = DEFAULT_THEME_COLOR,
 }) {
@@ -247,14 +249,18 @@ export default function SEO({
     [favicon]
   )
 
+  const finalJsonLd = jsonLd || structuredData
+
   const serializedJsonLd = useMemo(
-    () => serializeJsonLd(jsonLd),
-    [jsonLd]
+    () => serializeJsonLd(finalJsonLd),
+    [finalJsonLd]
   )
 
-  const robotsContent = noIndex
-    ? `noindex, ${noFollow ? 'nofollow' : 'follow'}`
-    : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+  const robotsContent = robots
+    ? cleanText(robots, '', 180)
+    : noIndex
+      ? `noindex, ${noFollow ? 'nofollow' : 'follow'}`
+      : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
 
   const finalImageAlt = cleanText(
     imageAlt || `${finalTitle} - ${SITE_NAME}`,

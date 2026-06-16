@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import SEO from '../components/seo/SEO'
+import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
 import MarketingLayout from '../pages/MarketingLayout'
 import {
   FiArrowRight,
@@ -262,9 +263,8 @@ export default function RestaurantExamplesPage() {
   return (
     <>
       <SEO
-        title="Exemplos de lojas PratoBy | Cardápio digital na prática"
-        description="Veja dois exemplos oficiais de lojas no PratoBy: Capivaras Lanches para pedidos rápidos e Doce Capivara Confeitaria para encomendas agendadas."
-        path="/exemplos"
+        {...MARKETING_SEO.examples}
+        structuredData={buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Exemplos', path: '/exemplos' }])}
       />
 
       <MarketingLayout>
@@ -422,3 +422,4 @@ export default function RestaurantExamplesPage() {
     </>
   )
 }
+

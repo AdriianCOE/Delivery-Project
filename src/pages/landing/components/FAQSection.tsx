@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 import { FiChevronDown as ChevronDown } from 'react-icons/fi';
 
-const faqs = [
+export const landingFaqs = [
   {
     question: 'Preciso pagar comissão por pedido?',
     answer:
@@ -61,7 +61,7 @@ export function FAQSection() {
         </motion.div>
 
         <div className="space-y-4">
-          {faqs.map((faq, index) => (
+          {landingFaqs.map((faq, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 20 }}

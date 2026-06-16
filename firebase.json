@@ -156,7 +156,7 @@
           },
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self' 'sha256-w0+shNxcYD3/AqpUVSsxkeggq8K8deHgQAN81gdERtM=' 'sha256-JlCzD20OSHu/VP88beUJwxdZ0+1cyZ/2Vh+OzVUp2wk=' https://www.google.com https://www.gstatic.com https://apis.google.com https://www.googletagmanager.com https://googletagmanager.com https://client.crisp.chat; script-src-elem 'self' 'sha256-w0+shNxcYD3/AqpUVSsxkeggq8K8deHgQAN81gdERtM=' 'sha256-JlCzD20OSHu/VP88beUJwxdZ0+1cyZ/2Vh+OzVUp2wk=' https://www.google.com https://www.gstatic.com https://apis.google.com https://www.googletagmanager.com https://googletagmanager.com https://client.crisp.chat; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://client.crisp.chat; img-src 'self' data: blob: https://www.google.com https://www.gstatic.com https://res.cloudinary.com https://*.googleusercontent.com https://*.gstatic.com https://client.crisp.chat https://image.crisp.chat https://storage.crisp.chat; font-src 'self' data: https://fonts.gstatic.com https://client.crisp.chat; connect-src 'self' https://www.google.com https://www.gstatic.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://fcm.googleapis.com https://api.cloudinary.com https://viacep.com.br https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.cloudfunctions.net https://*.run.app https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://client.crisp.chat https://client.relay.crisp.chat wss://client.relay.crisp.chat; frame-src 'self' https://www.google.com https://recaptcha.google.com https://accounts.google.com https://client.crisp.chat; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
+            "value": "default-src 'self'; script-src 'self' 'sha256-LZczC6WlpMMN4ykEyl+bN+Ze/F2xU4YoCyB55nVRqeE=' https://www.google.com https://www.gstatic.com https://apis.google.com https://www.googletagmanager.com https://googletagmanager.com https://client.crisp.chat; script-src-elem 'self' 'sha256-LZczC6WlpMMN4ykEyl+bN+Ze/F2xU4YoCyB55nVRqeE=' https://www.google.com https://www.gstatic.com https://apis.google.com https://www.googletagmanager.com https://googletagmanager.com https://client.crisp.chat; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://client.crisp.chat; img-src 'self' data: blob: https://www.google.com https://www.gstatic.com https://res.cloudinary.com https://*.googleusercontent.com https://*.gstatic.com https://client.crisp.chat https://image.crisp.chat https://storage.crisp.chat; font-src 'self' data: https://fonts.gstatic.com https://client.crisp.chat; connect-src 'self' https://www.google.com https://www.gstatic.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://fcm.googleapis.com https://api.cloudinary.com https://viacep.com.br https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.cloudfunctions.net https://*.run.app https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://client.crisp.chat https://client.relay.crisp.chat wss://client.relay.crisp.chat; frame-src 'self' https://www.google.com https://recaptcha.google.com https://accounts.google.com https://client.crisp.chat; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
           }
         ]
       }
@@ -168,6 +168,16 @@
         "type": 301
       },
       {
+        "source": "/privacy",
+        "destination": "/privacidade",
+        "type": 301
+      },
+      {
+        "source": "/terms",
+        "destination": "/termos",
+        "type": 301
+      },
+      {
         "regex": "^/planos(?:\\]|%5[Dd])/?$",
         "destination": "/planos",
         "type": 301
@@ -176,7 +186,10 @@
     "rewrites": [
       {
         "source": "/",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
 
       {
@@ -277,35 +290,94 @@
 
       {
         "source": "/planos",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/sobre",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/contato",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/exemplos",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/privacidade",
-        "destination": "/index.html"
-      },
-      {
-        "source": "/privacy",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/termos",
-        "destination": "/index.html"
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
       {
-        "source": "/terms",
-        "destination": "/index.html"
+        "source": "/cardapio-digital",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/delivery-sem-comissao",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/sistema-para-confeitaria",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/sistema-para-lanchonete",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/sistema-para-pizzaria",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/cardapio-digital-para-restaurante",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/loja-online-para-restaurante",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
       },
 
       {
@@ -344,3 +416,4 @@
     }
   ]
 }
+

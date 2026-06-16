@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { FiShield } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
+import SEO from '../seo/SEO'
 
 function normalizeRole(role) {
   const normalized = String(role || '').trim().toLowerCase()
@@ -66,7 +67,18 @@ export default function ProtectedRoute({
     auth?.isLoading === true
 
   if (isLoading) {
-    return <LoadingScreen />
+    return (
+      <>
+        <SEO
+          title="Area protegida | PratoBy"
+          description="Area protegida do PratoBy."
+          path={location.pathname}
+          noIndex
+          noFollow
+        />
+        <LoadingScreen />
+      </>
+    )
   }
 
   if (!auth?.user) {
@@ -147,7 +159,18 @@ export default function ProtectedRoute({
     );
   }
 
-  return children || <Outlet />
+  return (
+    <>
+      <SEO
+        title="Area protegida | PratoBy"
+        description="Area protegida do PratoBy."
+        path={location.pathname}
+        noIndex
+        noFollow
+      />
+      {children || <Outlet />}
+    </>
+  )
 }
 
 

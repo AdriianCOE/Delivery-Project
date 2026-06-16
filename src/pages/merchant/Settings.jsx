@@ -51,6 +51,9 @@ import MediaLibraryPicker from '../../components/media/MediaLibraryPicker'
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
 const BRAND_GREEN = '#f97316'
 const DEFAULT_THEME = '#f97316'
+// TODO SEO: adicionar switch "Permitir que minha loja apareça no Google"
+// salvando seoIndexingEnabled=false por padrão para lojas reais e bloqueando
+// ativação quando a loja estiver bloqueada, deletada ou billingBlocked.
 
 import FloatingToast from '../../components/ui/FloatingToast'
 

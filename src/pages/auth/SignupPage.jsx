@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createUserWithEmailAndPassword,
@@ -1157,6 +1157,8 @@ export default function SignupPage() {
         title="Criar conta no PratoBy | Cardápio digital para restaurantes"
         description="Crie sua conta no PratoBy e comece a vender com cardápio digital, pedidos online, Pix, QR Code e painel do lojista sem comissão por pedido."
         path="/cadastro"
+        noIndex
+        noFollow
       />
       <SignupMobileHeader />
 
@@ -1788,3 +1790,4 @@ export default function SignupPage() {
     </main>
   )
 }
+

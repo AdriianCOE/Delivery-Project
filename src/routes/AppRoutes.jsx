@@ -43,6 +43,7 @@ const PlansPage = lazy(() => import('../pages/PlansPage'))
 const RestaurantExamplesPage = lazy(() => import('../pages/RestaurantExamplesPage'))
 const PrivacyPage = lazy(() => import('../pages/PrivacyPage'))
 const TermsPage = lazy(() => import('../pages/TermsPage'))
+const SeoIntentPage = lazy(() => import('../pages/SeoIntentPage'))
 
 const AdminLayout = lazy(() => import('../components/layouts/AdminLayout'))
 const DashboardLayout = lazy(() => import('../components/layouts/DashboardLayout'))
@@ -129,6 +130,13 @@ export default function AppRoutes() {
         <Route path="/exemplos" element={<RestaurantExamplesPage />} />
         <Route path="/privacidade" element={<PrivacyPage />} />
         <Route path="/termos" element={<TermsPage />} />
+        <Route path="/cardapio-digital" element={<SeoIntentPage />} />
+        <Route path="/delivery-sem-comissao" element={<SeoIntentPage />} />
+        <Route path="/sistema-para-confeitaria" element={<SeoIntentPage />} />
+        <Route path="/sistema-para-lanchonete" element={<SeoIntentPage />} />
+        <Route path="/sistema-para-pizzaria" element={<SeoIntentPage />} />
+        <Route path="/cardapio-digital-para-restaurante" element={<SeoIntentPage />} />
+        <Route path="/loja-online-para-restaurante" element={<SeoIntentPage />} />
         <Route path="/privacy" element={<Navigate to="/privacidade" replace />} />
         <Route path="/terms" element={<Navigate to="/termos" replace />} />
 

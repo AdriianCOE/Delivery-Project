@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import SEO from '../components/seo/SEO'
+import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
 import MarketingLayout from './MarketingLayout'
 import { Link } from 'react-router-dom'
 import {
@@ -252,9 +253,8 @@ export default function TermsPage() {
   return (
     <MarketingLayout>
       <SEO
-        title="Termos de Uso | PratoBy"
-        description="Termos de uso do PratoBy para lojistas, restaurantes, clientes e usuários da plataforma."
-        path="/termos"
+        {...MARKETING_SEO.terms}
+        structuredData={buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Termos', path: '/termos' }])}
       />
 
       <div className="w-full font-sans text-[#111827] selection:bg-orange-100 selection:text-[#f97316]">
@@ -381,3 +381,4 @@ export default function TermsPage() {
     </MarketingLayout>
   )
 }
+

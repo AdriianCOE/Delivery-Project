@@ -394,6 +394,14 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('billingType');
     }
 
+    function validStoreDeliveryFeesUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['deliveryFees', 'updatedAt'])
+        && changed.hasAny(['deliveryFees'])
+        && request.resource.data.get('deliveryFees', {}) is map
+        && (!changed.hasAny(['updatedAt']) || request.resource.data.updatedAt is timestamp);
+    }
+
 function ownsOrderData(data) {
   return canManageStoreId(data.get('storeId', ''))
     || canManageStoreId(data.get('storeSlug', ''))
@@ -594,6 +602,7 @@ function validPublicOrderCreate(orderId) {
       allow get, list: if canManageStoreData(resource.data);
       allow create: if isAdmin();
       allow update: if (isAdmin() && storeFieldUnchanged('isOpen'))
+        || (isStoreOwnerData(resource.data) && validStoreDeliveryFeesUpdate())
         || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
       allow delete: if isAdmin();
 
