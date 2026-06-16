@@ -174,12 +174,12 @@ function DashboardScreen() {
               <span className="flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-400/20">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Tempo Real
-              </span>
-              <span className="flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[8px] font-black text-emerald-300 ring-1 ring-emerald-400/20">
-                ÔùÅ Loja Aberta
-              </span>
-              <span className="text-[8px] text-slate-400 font-semibold">­ƒæÑ 16 visitantes agora</span>
-            </div>
+                </span>
+                <span className="flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[8px] font-black text-emerald-300 ring-1 ring-emerald-400/20">
+                  ● Loja Aberta 
+                </span>
+                <span className="text-[8px] text-slate-400 font-semibold">👥 16 visitantes agora</span>
+              </div>
             <button type="button" className="flex items-center gap-1.5 rounded-lg bg-red-500/80 px-2.5 py-1 text-[8px] font-black text-white shadow-md shadow-red-500/30 transition hover:bg-red-600">
               Fechar loja
             </button>
