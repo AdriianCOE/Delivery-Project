@@ -69,6 +69,31 @@ function firstValue(...values) {
   return values.find(hasValue)
 }
 
+function getStoreFulfillmentAvailability(store) {
+  const settings = store?.settings || {}
+  const scheduling =
+    store?.publicScheduling ||
+    store?.scheduling ||
+    settings?.scheduling ||
+    {}
+
+  return {
+    delivery: (
+      store?.acceptDelivery ??
+      settings?.acceptDelivery ??
+      store?.deliveryEnabled ??
+      true
+    ) !== false,
+    pickup: (
+      store?.acceptPickup ??
+      settings?.acceptPickup ??
+      store?.pickupEnabled ??
+      false
+    ) !== false,
+    scheduling: scheduling?.enabled === true,
+  }
+}
+
 function toSafeNumber(value) {
   if (!hasValue(value)) return 0
 
@@ -1708,6 +1733,17 @@ export default function CartDrawer({ isOpen, onClose, store }) {
     fulfillmentType: orderType,
     orderTiming,
   }), [cartItems, orderTiming, orderType, store])
+  const fulfillmentAvailability = useMemo(
+    () => getStoreFulfillmentAvailability(store),
+    [store]
+  )
+  const hasUsableOrderingMethod =
+    fulfillmentAvailability.delivery ||
+    fulfillmentAvailability.pickup ||
+    fulfillmentAvailability.scheduling
+  const hasAsapFulfillmentMethod =
+    fulfillmentAvailability.delivery ||
+    fulfillmentAvailability.pickup
   const schedulingDates = schedulingState.availableDates
   const selectedSchedulingDate = schedulingDates.find((date) => date.dateKey === scheduledDate)
   const selectedSchedulingTimes = selectedSchedulingDate?.slots || []
@@ -1731,6 +1767,31 @@ export default function CartDrawer({ isOpen, onClose, store }) {
       setOrderTiming('scheduled')
     }
   }, [orderTiming, schedulingState.requiresScheduling])
+
+  useEffect(() => {
+    if (!hasAsapFulfillmentMethod && fulfillmentAvailability.scheduling && orderTiming !== 'scheduled') {
+      setOrderTiming('scheduled')
+    }
+  }, [
+    fulfillmentAvailability.scheduling,
+    hasAsapFulfillmentMethod,
+    orderTiming,
+  ])
+
+  useEffect(() => {
+    if (orderType === 'delivery' && !fulfillmentAvailability.delivery && fulfillmentAvailability.pickup) {
+      setOrderType('pickup')
+      return
+    }
+
+    if (orderType === 'pickup' && !fulfillmentAvailability.pickup && fulfillmentAvailability.delivery) {
+      setOrderType('delivery')
+    }
+  }, [
+    fulfillmentAvailability.delivery,
+    fulfillmentAvailability.pickup,
+    orderType,
+  ])
 
   useEffect(() => {
     if (orderTiming !== 'scheduled') {
@@ -2025,6 +2086,15 @@ export default function CartDrawer({ isOpen, onClose, store }) {
   const validateCheckout = useCallback(() => {
     if (!storeIsOpen) return 'A loja está fechada no momento.'
     if (cartItems.length === 0) return 'Seu carrinho está vazio.'
+    if (!hasUsableOrderingMethod) {
+      return 'A loja ainda nao liberou entrega, retirada ou agendamento.'
+    }
+    if (orderTiming !== 'scheduled' && orderType === 'delivery' && !fulfillmentAvailability.delivery) {
+      return 'A loja nao esta aceitando entrega agora.'
+    }
+    if (orderTiming !== 'scheduled' && orderType === 'pickup' && !fulfillmentAvailability.pickup) {
+      return 'A loja nao esta aceitando retirada agora.'
+    }
     if (belowMinimum) return `Faltam ${formatMoney(missingForMin)} para o pedido mínimo.`
     if (!customer.name.trim()) return 'Informe seu nome.'
     // --- VALIDAÇÃO INTELIGENTE DE WHATSAPP ---
@@ -2160,6 +2230,9 @@ if (orderType === 'delivery') {
   customer.phone,
   customer.street,
   deliveryNeighborhoods.length,
+  fulfillmentAvailability.delivery,
+  fulfillmentAvailability.pickup,
+  hasUsableOrderingMethod,
   loadingCep,
   mercadoPagoOptionAvailable,
   mercadoPagoRequiredForSchedule,
@@ -2678,7 +2751,10 @@ if (orderType === 'delivery') {
                       <button
                         type="button"
                         onClick={() => setOrderType('delivery')}
-                        disabled={orderTiming === 'scheduled' && !schedulingState.deliveryAllowed}
+                        disabled={
+                          (!fulfillmentAvailability.delivery && orderTiming !== 'scheduled') ||
+                          (orderTiming === 'scheduled' && !schedulingState.deliveryAllowed)
+                        }
                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderType === 'delivery'
                             ? 'bg-white text-[#f97316] shadow-sm'
@@ -2692,7 +2768,10 @@ if (orderType === 'delivery') {
                       <button
                         type="button"
                         onClick={() => setOrderType('pickup')}
-                        disabled={orderTiming === 'scheduled' && !schedulingState.pickupAllowed}
+                        disabled={
+                          (!fulfillmentAvailability.pickup && orderTiming !== 'scheduled') ||
+                          (orderTiming === 'scheduled' && !schedulingState.pickupAllowed)
+                        }
                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderType === 'pickup'
                             ? 'bg-white text-[#f97316] shadow-sm'
@@ -2703,6 +2782,12 @@ if (orderType === 'delivery') {
                         Retirada
                       </button>
                     </div>
+                    {!hasUsableOrderingMethod && (
+                      <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-700">
+                        <FiAlertCircle className="mt-0.5 shrink-0" />
+                        <span>A loja ainda nao liberou entrega, retirada ou agendamento.</span>
+                      </div>
+                    )}
                   </section>
 
                   <SectionCard title="Quando você quer receber?" icon={FiClock}>
@@ -2710,9 +2795,9 @@ if (orderType === 'delivery') {
                       <button
                         type="button"
                         onClick={() => {
-                          if (schedulingState.canOrderNow) setOrderTiming('asap')
+                          if (schedulingState.canOrderNow && hasAsapFulfillmentMethod) setOrderTiming('asap')
                         }}
-                        disabled={!schedulingState.canOrderNow}
+                        disabled={!schedulingState.canOrderNow || !hasAsapFulfillmentMethod}
                         className={`rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderTiming === 'asap'
                             ? 'bg-white text-[#f97316] shadow-sm'
@@ -3451,13 +3536,23 @@ if (orderType === 'delivery') {
                   </div>
                 )}
 
+                {!hasUsableOrderingMethod && (
+                  <div className="mb-3 flex gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3">
+                    <FiAlertCircle className="mt-0.5 shrink-0 text-amber-600" />
+
+                    <p className="text-xs font-bold leading-5 text-amber-700">
+                      A loja ainda nao liberou entrega, retirada ou agendamento.
+                    </p>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setStep('checkout')}
-                  disabled={belowMinimum || !storeIsOpen}
+                  disabled={belowMinimum || !storeIsOpen || !hasUsableOrderingMethod}
                   className="flex w-full items-center justify-between rounded-2xl px-5 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   style={{
-                    background: belowMinimum || !storeIsOpen ? '#9ca3af' : themeColor,
+                    background: belowMinimum || !storeIsOpen || !hasUsableOrderingMethod ? '#9ca3af' : themeColor,
                   }}
                 >
                   <span className="rounded-xl bg-white/20 px-2 py-1 text-sm">

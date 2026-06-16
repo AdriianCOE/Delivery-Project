@@ -14,14 +14,20 @@ function getPackageName(id) {
 
 function manualChunks(id) {
   const normalized = id.replace(/\\/g, '/')
+
+  if (normalized.endsWith('/src/services/firebaseApp.js')) {
+    return 'firebase-app'
+  }
+
   const packageName = getPackageName(id)
   if (!packageName) return undefined
 
   if (packageName === 'react' || packageName === 'react-dom' || packageName === 'scheduler') {
     return 'vendor-react'
   }
-  if (packageName === 'react-router' || packageName === 'react-router-dom') return 'vendor-router'
+  if (packageName === 'react-router' || packageName === 'react-router-dom') return 'vendor-react'
   if (packageName === 'firebase') {
+    if (normalized.includes('/firebase/app/dist/')) return 'vendor-firebase-core'
     if (normalized.includes('/firebase/app-check')) return 'vendor-firebase-app-check'
     if (normalized.includes('/firebase/auth')) return 'vendor-firebase-auth'
     if (normalized.includes('/firebase/database')) return 'vendor-firebase-database'
@@ -29,16 +35,16 @@ function manualChunks(id) {
     if (normalized.includes('/firebase/functions')) return 'vendor-firebase-functions'
     if (normalized.includes('/firebase/messaging')) return 'vendor-firebase-messaging'
     if (normalized.includes('/firebase/storage')) return 'vendor-firebase-storage'
-    return 'vendor-firebase-app'
+    return 'vendor-firebase-core'
   }
-  if (packageName === '@firebase/app') return 'vendor-firebase-app'
+  if (packageName === '@firebase/app') return 'vendor-firebase-core'
   if (packageName === '@firebase/firestore') return 'vendor-firebase-firestore'
   if (packageName === '@firebase/auth') return 'vendor-firebase-auth'
   if (packageName === '@firebase/messaging') return 'vendor-firebase-messaging'
   if (packageName === '@firebase/functions') return 'vendor-firebase-functions'
   if (packageName === '@firebase/database') return 'vendor-firebase-database'
   if (packageName === '@firebase/storage') return 'vendor-firebase-storage'
-  if (packageName.startsWith('@firebase/')) return 'vendor-firebase'
+  if (packageName.startsWith('@firebase/')) return 'vendor-firebase-core'
   if (packageName.startsWith('@sentry/')) return 'vendor-sentry'
   if (packageName === 'react-icons') return 'vendor-icons'
   if (packageName === 'lucide-react') return 'vendor-lucide'
@@ -47,17 +53,19 @@ function manualChunks(id) {
   if (packageName === 'qrcode.react') return 'vendor-qrcode'
   if (packageName === 'react-helmet-async') return 'vendor-seo'
 
-  return 'vendor'
+  return 'vendor-misc'
 }
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   build: {
+    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     rolldownOptions: {
       output: {
         manualChunks,
       },
     },
+    chunkSizeWarningLimit: 500,
   },
 })

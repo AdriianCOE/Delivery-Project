@@ -27,7 +27,7 @@ const PLAN_LIMITS = {
     users: 3,
     coupons: 20,
     productImagesPerItem: 3,
-    tables: 50,
+    tables: 0,
   },
   [PLAN_IDS.PREMIUM]: {
     products: 1000,
@@ -53,13 +53,13 @@ const FEATURE_MIN_PLANS = {
   basicReports: PLAN_IDS.ESSENTIAL,
 
   pickupDisplay: PLAN_IDS.PROFESSIONAL,
-  tableQrCode: PLAN_IDS.PROFESSIONAL,
   dineInOrdering: PLAN_IDS.PROFESSIONAL,
   scheduling: PLAN_IDS.PROFESSIONAL,
   coupons: PLAN_IDS.PROFESSIONAL,
   deliveryZonesAdvanced: PLAN_IDS.PROFESSIONAL,
   multiUser: PLAN_IDS.PROFESSIONAL,
 
+  tableQrCode: PLAN_IDS.PREMIUM,
   advancedReports: PLAN_IDS.PREMIUM,
   customBranding: PLAN_IDS.PREMIUM,
   removePratoByBranding: PLAN_IDS.PREMIUM,
@@ -76,6 +76,8 @@ const BLOCKED_STATUSES = new Set([
   'billing_pending',
   'billing_pending_payment_method',
   'past_due',
+  'deleted',
+  'trial_ended',
 ])
 
 function normalizePlanId(value, fallback = PLAN_IDS.ESSENTIAL) {
@@ -109,11 +111,11 @@ function getTrialStatus(data = {}) {
  * Nunca lança exceção — em caso de parse inválido retorna false.
  */
 function hasActiveTrial(data = {}) {
+  // Billing/blocked states always win over stale trial fields.
+  if (isPlanAccessBlocked(data)) return false
+
   const subscriptionStatus = getSubscriptionStatus(data)
   if (subscriptionStatus === 'trialing') return true
-
-  // Rejeitar estados bloqueados antes de checar trialStatus
-  if (isPlanAccessBlocked(data)) return false
 
   const trialStatus = getTrialStatus(data)
   if (['trialing', 'trial', 'active'].includes(trialStatus)) return true

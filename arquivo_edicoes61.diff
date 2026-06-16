@@ -1,0 +1,1244 @@
+diff --git a/firebase.json b/firebase.json
+index 6afc3174..778c2bd4 100644
+--- a/firebase.json
++++ b/firebase.json
+@@ -138,6 +138,18 @@
+             "key": "X-Frame-Options",
+             "value": "DENY"
+           },
++          {
++            "key": "Strict-Transport-Security",
++            "value": "max-age=31536000; includeSubDomains; preload"
++          },
++          {
++            "key": "Cross-Origin-Opener-Policy",
++            "value": "same-origin-allow-popups"
++          },
++          {
++            "key": "Cross-Origin-Resource-Policy",
++            "value": "same-site"
++          },
+           {
+             "key": "Permissions-Policy",
+             "value": "camera=(), microphone=(), geolocation=()"
+@@ -331,4 +343,4 @@
+       ]
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/firestore.rules b/firestore.rules
+index b4eff9f3..e50795ca 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -101,7 +101,9 @@ function orderStoreKeys(data) {
+           'checkout_pending',
+           'pending_checkout',
+           'billing_pending',
+-          'billing_pending_payment_method'
++          'billing_pending_payment_method',
++          'deleted',
++          'trial_ended'
+         ])
+         && (
+           data.get('subscriptionStatus', '') == ''
+@@ -114,21 +116,29 @@ function orderStoreKeys(data) {
+     }
+ 
+     function featureRequiredRank(feature) {
+-      return feature in ['advancedReports', 'customBranding', 'removePratoByBranding', 'automationRules', 'prioritySupport']
++      return feature in ['tableQrCode', 'advancedReports', 'customBranding', 'removePratoByBranding', 'automationRules', 'prioritySupport']
+         ? 3
+-        : feature in ['pickupDisplay', 'tableQrCode', 'dineInOrdering', 'scheduling', 'coupons', 'deliveryZonesAdvanced', 'multiUser']
++        : feature in ['pickupDisplay', 'dineInOrdering', 'scheduling', 'coupons', 'deliveryZonesAdvanced', 'multiUser']
+           ? 2
+           : 1;
+     }
+ 
++    function storeHasActiveTrial(data) {
++      return data.get('subscriptionStatus', '') == 'trialing'
++        || data.get('trialStatus', '') in ['trialing', 'trial', 'active']
++        || data.get('trial', {}).get('status', '') in ['trialing', 'trial', 'active']
++        || (data.get('trialEndsAt', null) is timestamp && data.get('trialEndsAt', null) > request.time)
++        || (data.get('trialEndAt', null) is timestamp && data.get('trialEndAt', null) > request.time);
++    }
++
+     function storeEffectivePlan(data) {
+       return data.get('isBillingBlocked', false) == true
+         || data.get('isBlocked', false) == true
+         || data.get('isDeleted', false) == true
+         || data.keys().hasAny(['deletedAt'])
+-        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method', 'past_due']
++        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method', 'past_due', 'deleted', 'trial_ended']
+           ? ''
+-          : data.get('subscriptionStatus', '') == 'trialing'
++          : storeHasActiveTrial(data)
+             ? 'premium'
+             : data.get('effectivePlan', data.get('billingPlan', data.get('selectedPlan', data.get('plan', 'essential'))));
+     }
+diff --git a/functions/index.js b/functions/index.js
+index 14dad816..22e9a401 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -3750,6 +3750,11 @@ const PUBLIC_CATALOG_PLAN_FIELDS = [
+   'selectedPlan',
+   'plan',
+   'planId',
++  'trialStatus',
++  'trial',
++  'trialEndsAt',
++  'trialEndAt',
++  'trialEntitlementsPlan',
+ ]
+ 
+ function publicCatalogEntitlementsChanged(beforeData, afterData) {
+diff --git a/functions/shared/planAccess.js b/functions/shared/planAccess.js
+index 7cdd5042..bd22eb43 100644
+--- a/functions/shared/planAccess.js
++++ b/functions/shared/planAccess.js
+@@ -27,7 +27,7 @@ const PLAN_LIMITS = {
+     users: 3,
+     coupons: 20,
+     productImagesPerItem: 3,
+-    tables: 50,
++    tables: 0,
+   },
+   [PLAN_IDS.PREMIUM]: {
+     products: 1000,
+@@ -53,13 +53,13 @@ const FEATURE_MIN_PLANS = {
+   basicReports: PLAN_IDS.ESSENTIAL,
+ 
+   pickupDisplay: PLAN_IDS.PROFESSIONAL,
+-  tableQrCode: PLAN_IDS.PROFESSIONAL,
+   dineInOrdering: PLAN_IDS.PROFESSIONAL,
+   scheduling: PLAN_IDS.PROFESSIONAL,
+   coupons: PLAN_IDS.PROFESSIONAL,
+   deliveryZonesAdvanced: PLAN_IDS.PROFESSIONAL,
+   multiUser: PLAN_IDS.PROFESSIONAL,
+ 
++  tableQrCode: PLAN_IDS.PREMIUM,
+   advancedReports: PLAN_IDS.PREMIUM,
+   customBranding: PLAN_IDS.PREMIUM,
+   removePratoByBranding: PLAN_IDS.PREMIUM,
+@@ -76,6 +76,8 @@ const BLOCKED_STATUSES = new Set([
+   'billing_pending',
+   'billing_pending_payment_method',
+   'past_due',
++  'deleted',
++  'trial_ended',
+ ])
+ 
+ function normalizePlanId(value, fallback = PLAN_IDS.ESSENTIAL) {
+@@ -109,12 +111,12 @@ function getTrialStatus(data = {}) {
+  * Nunca lança exceção — em caso de parse inválido retorna false.
+  */
+ function hasActiveTrial(data = {}) {
++  // Billing/blocked states always win over stale trial fields.
++  if (isPlanAccessBlocked(data)) return false
++
+   const subscriptionStatus = getSubscriptionStatus(data)
+   if (subscriptionStatus === 'trialing') return true
+ 
+-  // Rejeitar estados bloqueados antes de checar trialStatus
+-  if (isPlanAccessBlocked(data)) return false
+-
+   const trialStatus = getTrialStatus(data)
+   if (['trialing', 'trial', 'active'].includes(trialStatus)) return true
+ 
+diff --git a/functions/storeTables.js b/functions/storeTables.js
+index 796562ba..8b3b24c8 100644
+--- a/functions/storeTables.js
++++ b/functions/storeTables.js
+@@ -78,7 +78,7 @@ async function assertCanManageStore(db, HttpsError, uid, storeId) {
+ 
+ function assertTableQrAllowed(HttpsError, storeData) {
+   if (hasPlanFeature(storeData, 'tableQrCode')) return
+-  throw new HttpsError('failed-precondition', 'QR Code de mesa exige plano Profissional ou Premium.')
++  throw new HttpsError('failed-precondition', 'QR Code de mesa exige plano Premium.')
+ }
+ 
+ /**
+diff --git a/index.html b/index.html
+index eede8f0a..82ef31a2 100644
+--- a/index.html
++++ b/index.html
+@@ -156,15 +156,16 @@
+     <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+ 
+-    <link rel="dns-prefetch" href="https://www.gstatic.com" />
+-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+-
+     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
+     <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
+     <link rel="dns-prefetch" href="https://securetoken.googleapis.com" />
+     <link rel="dns-prefetch" href="https://firebaseinstallations.googleapis.com" />
+     <link rel="dns-prefetch" href="https://fcmregistrations.googleapis.com" />
+     <link rel="dns-prefetch" href="https://viacep.com.br" />
++    <link rel="preconnect" href="https://firestore.googleapis.com" />
++    <link rel="preconnect" href="https://southamerica-east1-borapedir-f529a.cloudfunctions.net" />
++    <link rel="dns-prefetch" href="https://southamerica-east1-borapedir-f529a.cloudfunctions.net" />
++    <link rel="dns-prefetch" href="https://o4511407910092800.ingest.us.sentry.io" />
+ 
+     <!-- Schema.org -->
+     <script type="application/ld+json">
+diff --git a/src/pages/merchant/Settings.jsx b/src/pages/merchant/Settings.jsx
+index 883db5f6..a834bdfc 100644
+--- a/src/pages/merchant/Settings.jsx
++++ b/src/pages/merchant/Settings.jsx
+@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions'
+ 
+ import {
+   FiArrowLeft,
++  FiAlertCircle,
+   FiCalendar,
+   FiCheckCircle,
+   FiClock,
+@@ -417,6 +418,183 @@ function getSchedulingValidationError(scheduling) {
+   return null
+ }
+ 
++function hasStoreAddress(form) {
++  return Boolean(
++    String(form?.street || '').trim()
++    && String(form?.number || '').trim()
++    && String(form?.neighborhood || '').trim()
++    && String(form?.city || '').trim()
++    && String(form?.state || '').trim()
++  )
++}
++
++function hasAnyOpeningHours(openingHours) {
++  return DAYS_OF_WEEK.some((day) => {
++    const hours = openingHours?.[day.id]
++    return hours?.enabled && isValidTime(hours.open) && isValidTime(hours.close)
++  })
++}
++
++function getPaymentSource(store) {
++  return {
++    methods: store?.paymentMethods || store?.settings?.paymentMethods || {},
++    payments: store?.payments || {},
++    pix: store?.pix || store?.settings?.pix || store?.paymentSettings?.pix || {},
++  }
++}
++
++function isPaymentMethodActive(store, method) {
++  const { methods, payments } = getPaymentSource(store)
++  const methodValue = methods?.[method]
++
++  if (methodValue === true) return true
++  if (methodValue === false) return false
++
++  if (method === 'pix') {
++    const pix = getPaymentSource(store).pix
++    return pix?.enabled === true || Boolean(store?.pixKey || pix?.key || pix?.pixKey)
++  }
++
++  if (method === 'card') return true
++  if (method === 'cash') return methods?.cash !== false && methods?.money !== false
++
++  return payments?.[method]?.enabled === true
++}
++
++function hasAnyPaymentMethod(store) {
++  const mercadoPago = store?.payments?.mercadoPago || store?.payments?.mercadopago || {}
++  return (
++    isPaymentMethodActive(store, 'pix')
++    || isPaymentMethodActive(store, 'card')
++    || isPaymentMethodActive(store, 'cash')
++    || mercadoPago.enabled === true
++  )
++}
++
++function hasPixManualProblem(store) {
++  const { methods, pix } = getPaymentSource(store)
++  const pixEnabled = methods?.pix === true || pix?.enabled === true
++  const pixKey = store?.pixKey || pix?.key || pix?.pixKey || store?.settings?.pixKey
++
++  return pixEnabled && !String(pixKey || '').trim()
++}
++
++function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
++  const scheduling = normalizeStoreScheduling(form?.scheduling)
++  const schedulingEnabled = scheduling.enabled === true
++  const schedulingPlanReady = schedulingEnabled && schedulingAllowed
++  const schedulingValidationError = getSchedulingValidationError(scheduling)
++  const schedulingUsable = schedulingPlanReady && !schedulingValidationError
++  const hasOrderingMethod = Boolean(form?.acceptDelivery || form?.acceptPickup || schedulingUsable)
++  const storeOpen = form?.isActive !== false
++  const checks = []
++
++  if (storeOpen && !hasOrderingMethod) {
++    checks.push({
++      status: 'critical',
++      title: 'Nenhum meio de pedido ativo',
++      description: 'Ative delivery, retirada ou um agendamento valido antes de deixar a loja aberta.',
++      saveMessage: 'Ative delivery, retirada ou um agendamento valido antes de salvar a loja aberta.',
++    })
++  } else if (!hasOrderingMethod) {
++    checks.push({
++      status: 'warning',
++      title: 'Sem meio de pedido',
++      description: 'A loja esta fechada, mas ainda nao tem delivery, retirada ou agendamento pronto para uso.',
++    })
++  } else {
++    checks.push({
++      status: 'ok',
++      title: 'Meios de pedido',
++      description: [
++        form?.acceptDelivery ? 'Delivery' : '',
++        form?.acceptPickup ? 'Retirada' : '',
++        schedulingUsable ? 'Agendamento' : '',
++      ].filter(Boolean).join(', '),
++    })
++  }
++
++  if (schedulingEnabled && !schedulingAllowed) {
++    checks.push({
++      status: 'critical',
++      title: 'Agendamento sem plano',
++      description: 'O agendamento esta ativado, mas o plano atual nao libera esse recurso.',
++      saveMessage: 'Seu plano atual nao inclui agendamento. Desative o agendamento ou altere o plano antes de salvar.',
++    })
++  } else if (schedulingValidationError) {
++    checks.push({
++      status: 'critical',
++      title: 'Agendamento incompleto',
++      description: schedulingValidationError,
++      saveMessage: schedulingValidationError,
++    })
++  } else if (schedulingEnabled) {
++    checks.push({
++      status: 'ok',
++      title: 'Agendamento',
++      description: `Disponivel por ate ${scheduling.maxDaysAhead} dias no futuro.`,
++    })
++  }
++
++  if (form?.acceptDelivery && (!String(form?.deliveryTime || '').trim() || !hasStoreAddress(form))) {
++    checks.push({
++      status: 'warning',
++      title: 'Delivery incompleto',
++      description: 'Revise tempo medio e endereco da loja para evitar duvidas no pedido.',
++    })
++  }
++
++  if (form?.acceptPickup && !hasStoreAddress(form)) {
++    checks.push({
++      status: 'warning',
++      title: 'Retirada sem endereco',
++      description: 'Informe o endereco da loja para o cliente saber onde retirar.',
++    })
++  }
++
++  if (!hasAnyPaymentMethod(selectedStore)) {
++    checks.push({
++      status: 'warning',
++      title: 'Pagamento nao configurado',
++      description: 'Revise as formas de pagamento em Pagamentos antes de receber pedidos.',
++    })
++  } else if (hasPixManualProblem(selectedStore)) {
++    checks.push({
++      status: 'warning',
++      title: 'Pix manual sem chave',
++      description: 'O Pix manual parece ativo, mas nao encontrei chave Pix publica configurada.',
++    })
++  } else {
++    checks.push({
++      status: 'ok',
++      title: 'Pagamentos',
++      description: 'Ha pelo menos uma forma de pagamento disponivel.',
++    })
++  }
++
++  if (!String(form?.whatsapp || '').trim()) {
++    checks.push({
++      status: 'warning',
++      title: 'WhatsApp ausente',
++      description: 'Sem WhatsApp, o cliente pode ter dificuldade para falar com a loja.',
++    })
++  }
++
++  if (!hasAnyOpeningHours(form?.openingHours)) {
++    checks.push({
++      status: 'warning',
++      title: 'Horario nao informado',
++      description: 'Configure ao menos um dia de funcionamento para orientar o cliente.',
++    })
++  }
++
++  return {
++    checks,
++    criticalCount: checks.filter((check) => check.status === 'critical').length,
++    warningCount: checks.filter((check) => check.status === 'warning').length,
++  }
++}
++
+ function formatBlockedDate(dateKey) {
+   const [year, month, day] = String(dateKey || '').split('-')
+   if (!year || !month || !day) return dateKey
+@@ -1261,6 +1439,10 @@ const knownStoreIdsKey = useMemo(() => {
+     String(mercadoPagoOrderPayments.status || '').toLowerCase() === 'active'
+   const brandingAllowed = hasPlanFeature(selectedStore || {}, 'customBranding')
+   const schedulingAllowed = hasPlanFeature(selectedStore || {}, 'scheduling')
++  const readiness = useMemo(
++    () => getReadinessChecks({ form, selectedStore, schedulingAllowed }),
++    [form, schedulingAllowed, selectedStore]
++  )
+   const schedulingLeadInput = useMemo(
+     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
+     [form.scheduling?.minLeadMinutes]
+@@ -1579,6 +1761,18 @@ const knownStoreIdsKey = useMemo(() => {
+       return
+     }
+ 
++    const blockingReadinessIssue = getReadinessChecks({
++      form,
++      selectedStore,
++      schedulingAllowed,
++    }).checks.find((check) => check.status === 'critical')
++
++    if (blockingReadinessIssue) {
++      showToast('error', blockingReadinessIssue.saveMessage || blockingReadinessIssue.description)
++      scrollToFirstError()
++      return
++    }
++
+     setSaving(true)
+ 
+     try {
+@@ -1735,7 +1929,7 @@ const knownStoreIdsKey = useMemo(() => {
+     } finally {
+       setSaving(false)
+     }
+-  }, [form, saving, selectedStore, showToast, user])
++  }, [form, saving, schedulingAllowed, selectedStore, showToast, user])
+ 
+   if (loadingStores) {
+     return (
+@@ -1932,6 +2126,80 @@ const knownStoreIdsKey = useMemo(() => {
+               Gerenciar cardápio
+             </Link>
+           </div>
++          <section
++            id="settings-readiness"
++            className={`rounded-[1.8rem] border p-5 shadow-sm ${
++              readiness.criticalCount > 0
++                ? 'border-red-100 bg-red-50/80'
++                : readiness.warningCount > 0
++                  ? 'border-amber-100 bg-amber-50/80'
++                  : 'border-emerald-100 bg-emerald-50/80'
++            }`}
++          >
++            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
++              <div className="min-w-0">
++                <div className="flex items-center gap-2">
++                  {readiness.criticalCount > 0 ? (
++                    <FiAlertCircle className="shrink-0 text-red-600" size={20} />
++                  ) : readiness.warningCount > 0 ? (
++                    <FiAlertCircle className="shrink-0 text-amber-600" size={20} />
++                  ) : (
++                    <FiCheckCircle className="shrink-0 text-emerald-600" size={20} />
++                  )}
++                  <h2 className="text-lg font-black text-[#111827]">
++                    Prontidao da loja
++                  </h2>
++                </div>
++
++                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
++                  {readiness.criticalCount > 0
++                    ? 'Corrija os itens criticos antes de salvar. Eles podem deixar o cardapio aberto sem pedido funcional.'
++                    : readiness.warningCount > 0
++                      ? 'A loja pode salvar, mas estes pontos podem gerar duvida ou atrito no pedido publico.'
++                      : 'As configuracoes principais para receber pedidos estao coerentes.'}
++                </p>
++              </div>
++
++              <div className="flex shrink-0 gap-2">
++                <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-red-600 shadow-sm">
++                  {readiness.criticalCount} critico
++                </span>
++                <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-600 shadow-sm">
++                  {readiness.warningCount} aviso
++                </span>
++              </div>
++            </div>
++
++            <div className="mt-4 grid gap-3 md:grid-cols-2">
++              {readiness.checks.map((check) => {
++                const Icon = check.status === 'ok' ? FiCheckCircle : FiAlertCircle
++                const toneClass =
++                  check.status === 'critical'
++                    ? 'border-red-100 bg-white text-red-600'
++                    : check.status === 'warning'
++                      ? 'border-amber-100 bg-white text-amber-600'
++                      : 'border-emerald-100 bg-white text-emerald-600'
++
++                return (
++                  <div
++                    key={`${check.status}-${check.title}`}
++                    className={`flex items-start gap-3 rounded-2xl border p-4 shadow-sm ${toneClass}`}
++                  >
++                    <Icon className="mt-0.5 shrink-0" size={18} />
++                    <div className="min-w-0">
++                      <p className="text-sm font-black text-[#111827]">
++                        {check.title}
++                      </p>
++                      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
++                        {check.description}
++                      </p>
++                    </div>
++                  </div>
++                )
++              })}
++            </div>
++          </section>
++
+           <Section
+             id="settings-identity"
+             icon={FiGlobe}
+diff --git a/src/pages/store/CartDrawer.jsx b/src/pages/store/CartDrawer.jsx
+index fe766cbc..6366ed63 100644
+--- a/src/pages/store/CartDrawer.jsx
++++ b/src/pages/store/CartDrawer.jsx
+@@ -69,6 +69,31 @@ function firstValue(...values) {
+   return values.find(hasValue)
+ }
+ 
++function getStoreFulfillmentAvailability(store) {
++  const settings = store?.settings || {}
++  const scheduling =
++    store?.publicScheduling ||
++    store?.scheduling ||
++    settings?.scheduling ||
++    {}
++
++  return {
++    delivery: (
++      store?.acceptDelivery ??
++      settings?.acceptDelivery ??
++      store?.deliveryEnabled ??
++      true
++    ) !== false,
++    pickup: (
++      store?.acceptPickup ??
++      settings?.acceptPickup ??
++      store?.pickupEnabled ??
++      false
++    ) !== false,
++    scheduling: scheduling?.enabled === true,
++  }
++}
++
+ function toSafeNumber(value) {
+   if (!hasValue(value)) return 0
+ 
+@@ -1708,6 +1733,17 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+     fulfillmentType: orderType,
+     orderTiming,
+   }), [cartItems, orderTiming, orderType, store])
++  const fulfillmentAvailability = useMemo(
++    () => getStoreFulfillmentAvailability(store),
++    [store]
++  )
++  const hasUsableOrderingMethod =
++    fulfillmentAvailability.delivery ||
++    fulfillmentAvailability.pickup ||
++    fulfillmentAvailability.scheduling
++  const hasAsapFulfillmentMethod =
++    fulfillmentAvailability.delivery ||
++    fulfillmentAvailability.pickup
+   const schedulingDates = schedulingState.availableDates
+   const selectedSchedulingDate = schedulingDates.find((date) => date.dateKey === scheduledDate)
+   const selectedSchedulingTimes = selectedSchedulingDate?.slots || []
+@@ -1732,6 +1768,31 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+     }
+   }, [orderTiming, schedulingState.requiresScheduling])
+ 
++  useEffect(() => {
++    if (!hasAsapFulfillmentMethod && fulfillmentAvailability.scheduling && orderTiming !== 'scheduled') {
++      setOrderTiming('scheduled')
++    }
++  }, [
++    fulfillmentAvailability.scheduling,
++    hasAsapFulfillmentMethod,
++    orderTiming,
++  ])
++
++  useEffect(() => {
++    if (orderType === 'delivery' && !fulfillmentAvailability.delivery && fulfillmentAvailability.pickup) {
++      setOrderType('pickup')
++      return
++    }
++
++    if (orderType === 'pickup' && !fulfillmentAvailability.pickup && fulfillmentAvailability.delivery) {
++      setOrderType('delivery')
++    }
++  }, [
++    fulfillmentAvailability.delivery,
++    fulfillmentAvailability.pickup,
++    orderType,
++  ])
++
+   useEffect(() => {
+     if (orderTiming !== 'scheduled') {
+       setScheduledDate('')
+@@ -2025,6 +2086,15 @@ export default function CartDrawer({ isOpen, onClose, store }) {
+   const validateCheckout = useCallback(() => {
+     if (!storeIsOpen) return 'A loja está fechada no momento.'
+     if (cartItems.length === 0) return 'Seu carrinho está vazio.'
++    if (!hasUsableOrderingMethod) {
++      return 'A loja ainda nao liberou entrega, retirada ou agendamento.'
++    }
++    if (orderTiming !== 'scheduled' && orderType === 'delivery' && !fulfillmentAvailability.delivery) {
++      return 'A loja nao esta aceitando entrega agora.'
++    }
++    if (orderTiming !== 'scheduled' && orderType === 'pickup' && !fulfillmentAvailability.pickup) {
++      return 'A loja nao esta aceitando retirada agora.'
++    }
+     if (belowMinimum) return `Faltam ${formatMoney(missingForMin)} para o pedido mínimo.`
+     if (!customer.name.trim()) return 'Informe seu nome.'
+     // --- VALIDAÇÃO INTELIGENTE DE WHATSAPP ---
+@@ -2160,6 +2230,9 @@ if (orderType === 'delivery') {
+   customer.phone,
+   customer.street,
+   deliveryNeighborhoods.length,
++  fulfillmentAvailability.delivery,
++  fulfillmentAvailability.pickup,
++  hasUsableOrderingMethod,
+   loadingCep,
+   mercadoPagoOptionAvailable,
+   mercadoPagoRequiredForSchedule,
+@@ -2678,7 +2751,10 @@ if (orderType === 'delivery') {
+                       <button
+                         type="button"
+                         onClick={() => setOrderType('delivery')}
+-                        disabled={orderTiming === 'scheduled' && !schedulingState.deliveryAllowed}
++                        disabled={
++                          (!fulfillmentAvailability.delivery && orderTiming !== 'scheduled') ||
++                          (orderTiming === 'scheduled' && !schedulingState.deliveryAllowed)
++                        }
+                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+                           orderType === 'delivery'
+                             ? 'bg-white text-[#f97316] shadow-sm'
+@@ -2692,7 +2768,10 @@ if (orderType === 'delivery') {
+                       <button
+                         type="button"
+                         onClick={() => setOrderType('pickup')}
+-                        disabled={orderTiming === 'scheduled' && !schedulingState.pickupAllowed}
++                        disabled={
++                          (!fulfillmentAvailability.pickup && orderTiming !== 'scheduled') ||
++                          (orderTiming === 'scheduled' && !schedulingState.pickupAllowed)
++                        }
+                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+                           orderType === 'pickup'
+                             ? 'bg-white text-[#f97316] shadow-sm'
+@@ -2703,6 +2782,12 @@ if (orderType === 'delivery') {
+                         Retirada
+                       </button>
+                     </div>
++                    {!hasUsableOrderingMethod && (
++                      <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-700">
++                        <FiAlertCircle className="mt-0.5 shrink-0" />
++                        <span>A loja ainda nao liberou entrega, retirada ou agendamento.</span>
++                      </div>
++                    )}
+                   </section>
+ 
+                   <SectionCard title="Quando você quer receber?" icon={FiClock}>
+@@ -2710,9 +2795,9 @@ if (orderType === 'delivery') {
+                       <button
+                         type="button"
+                         onClick={() => {
+-                          if (schedulingState.canOrderNow) setOrderTiming('asap')
++                          if (schedulingState.canOrderNow && hasAsapFulfillmentMethod) setOrderTiming('asap')
+                         }}
+-                        disabled={!schedulingState.canOrderNow}
++                        disabled={!schedulingState.canOrderNow || !hasAsapFulfillmentMethod}
+                         className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                           orderTiming === 'asap'
+                             ? 'bg-white text-[#f97316] shadow-sm'
+@@ -3451,13 +3536,23 @@ if (orderType === 'delivery') {
+                   </div>
+                 )}
+ 
++                {!hasUsableOrderingMethod && (
++                  <div className="mb-3 flex gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3">
++                    <FiAlertCircle className="mt-0.5 shrink-0 text-amber-600" />
++
++                    <p className="text-xs font-bold leading-5 text-amber-700">
++                      A loja ainda nao liberou entrega, retirada ou agendamento.
++                    </p>
++                  </div>
++                )}
++
+                 <button
+                   type="button"
+                   onClick={() => setStep('checkout')}
+-                  disabled={belowMinimum || !storeIsOpen}
++                  disabled={belowMinimum || !storeIsOpen || !hasUsableOrderingMethod}
+                   className="flex w-full items-center justify-between rounded-2xl px-5 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                   style={{
+-                    background: belowMinimum || !storeIsOpen ? '#9ca3af' : themeColor,
++                    background: belowMinimum || !storeIsOpen || !hasUsableOrderingMethod ? '#9ca3af' : themeColor,
+                   }}
+                 >
+                   <span className="rounded-xl bg-white/20 px-2 py-1 text-sm">
+diff --git a/src/pages/store/ProductCard.jsx b/src/pages/store/ProductCard.jsx
+index f188b275..32f6f5b9 100644
+--- a/src/pages/store/ProductCard.jsx
++++ b/src/pages/store/ProductCard.jsx
+@@ -404,11 +404,10 @@ function ProductCard({
+   const visualBadges = useMemo(() => normalizeVisualBadges(product, 2), [product])
+   const rawImageUrl = getProductImageSource(product)
+   const imageUrl = getCloudinaryImageUrl(rawImageUrl, compact ? 'productCardSmall' : 'productCard')
++  const imageUrlSm = getCloudinaryImageUrl(rawImageUrl, 'productCardMobile')
+   const imageSrcSet = getCloudinaryImageSrcSet(
+     rawImageUrl,
+-    compact
+-      ? ['productCardSmall', 'productCard']
+-      : ['productCardSmall', 'productCardLarge', 'productCard']
++    ['productCardMobile', 'productCard']
+   )
+ 
+   const lowStock =
+@@ -762,13 +761,13 @@ function ProductCard({
+           {imageUrl && !imgError ? (
+             <img
+               src={imageUrl}
+-              srcSet={imageSrcSet || undefined}
+-              sizes={compact ? '112px' : '(max-width: 640px) 128px, 160px'}
++              srcSet={imageSrcSet || (imageUrlSm ? `${imageUrlSm} 128w, ${imageUrl} 196w` : undefined)}
++              sizes="(max-width: 640px) 128px, 196px"
+               alt={`Foto de ${productName}`}
+               loading="lazy"
+               decoding="async"
+-              width={compact ? 112 : 160}
+-              height={compact ? 112 : 160}
++              width={196}
++              height={196}
+               onLoad={() => setImgLoaded(true)}
+               onError={() => setImgError(true)}
+               className={`
+diff --git a/src/pages/store/ProductOptionsModal.jsx b/src/pages/store/ProductOptionsModal.jsx
+index 48aee95a..08d10c75 100644
+--- a/src/pages/store/ProductOptionsModal.jsx
++++ b/src/pages/store/ProductOptionsModal.jsx
+@@ -804,50 +804,51 @@ const modalInfoBadges = useMemo(() => {
+             : 'translate-y-0 scale-100 opacity-100'
+         }`}
+       >
+-        <div className="relative flex h-[230px] shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3 sm:h-[300px] sm:p-5 md:h-[330px]">
+-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,146,60,.14),transparent_62%)]" />
+-
+-          {imageUrl ? (
+-            <div className="relative flex h-full w-full items-center justify-center rounded-[1.6rem] bg-white/45 p-1 ring-1 ring-white/70">
+-              <img
+-                src={imageUrl}
+-                srcSet={imageSrcSet || undefined}
+-                sizes="(max-width: 640px) 100vw, 576px"
+-                alt={product.name}
+-                loading="eager"
+-                fetchPriority="high"
+-                decoding="async"
+-                width={900}
+-                height={900}
+-                className="max-h-full max-w-full object-contain object-center drop-shadow-[0_18px_34px_rgba(15,23,42,0.12)]"
+-              />
+-            </div>
+-          ) : (
+-            <div className="relative flex h-full w-full items-center justify-center rounded-[1.6rem] bg-[#f9fafb] text-gray-300 ring-1 ring-gray-100">
+-              <FiShoppingBag size={52} />
+-            </div>
+-          )}
++        <div className="flex-1 overflow-y-auto bg-[#f9fafb]">
++          <div className="relative flex h-[170px] items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3 sm:h-[260px] sm:p-5 md:h-[320px]">
++            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,146,60,.14),transparent_62%)]" />
++
++            {imageUrl ? (
++              <div className="relative flex h-full w-full items-center justify-center rounded-[1.35rem] bg-white/55 p-1 ring-1 ring-white/70 sm:rounded-[1.6rem]">
++                <img
++                  src={imageUrl}
++                  srcSet={imageSrcSet || undefined}
++                  sizes="(max-width: 640px) 100vw, 576px"
++                  alt={product.name}
++                  loading="eager"
++                  fetchPriority="high"
++                  decoding="async"
++                  width={900}
++                  height={900}
++                  className="max-h-full max-w-full object-contain object-center drop-shadow-[0_18px_34px_rgba(15,23,42,0.12)]"
++                />
++              </div>
++            ) : (
++              <div className="relative flex h-full w-full items-center justify-center rounded-[1.35rem] bg-[#f9fafb] text-gray-300 ring-1 ring-gray-100 sm:rounded-[1.6rem]">
++                <FiShoppingBag size={52} />
++              </div>
++            )}
+ 
+-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-white/10" />
++            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-white/10" />
+ 
+-          <div className="absolute bottom-4 left-4 right-4">
+-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#111827] shadow-lg backdrop-blur">
+-              <FiShoppingBag size={13} />
+-              Monte seu pedido
+-            </span>
+-          </div>
++            <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4">
++              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#111827] shadow-lg backdrop-blur">
++                <FiShoppingBag size={13} />
++                Monte seu pedido
++              </span>
++            </div>
+ 
+-          <button
+-            type="button"
+-            onClick={requestClose}
+-            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 text-[#111827] shadow-lg backdrop-blur transition hover:bg-white"
+-            aria-label="Fechar"
+-          >
+-            <FiX size={22} />
+-          </button>
+-        </div>
++            <button
++              type="button"
++              onClick={requestClose}
++              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/95 text-[#111827] shadow-lg backdrop-blur transition hover:bg-white sm:right-4 sm:top-4 sm:h-11 sm:w-11"
++              aria-label="Fechar"
++            >
++              <FiX size={22} />
++            </button>
++          </div>
+ 
+-        <div className="flex-1 overflow-y-auto bg-[#f9fafb] p-5">
++          <div className="p-4 sm:p-5">
+           <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+             <h2 className="text-2xl font-black tracking-tight text-[#111827]">
+               {product.name}
+@@ -1154,6 +1155,7 @@ const modalInfoBadges = useMemo(() => {
+               <span>{error}</span>
+             </div>
+           )}
++          </div>
+         </div>
+ 
+         <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-18px_40px_rgba(15,23,42,0.08)]">
+diff --git a/src/pages/store/StoreFrontPage.jsx b/src/pages/store/StoreFrontPage.jsx
+index 117a1a15..a67cab32 100644
+--- a/src/pages/store/StoreFrontPage.jsx
++++ b/src/pages/store/StoreFrontPage.jsx
+@@ -6,6 +6,7 @@ import {
+   doc,
+   getDoc,
+   getDocs,
++  onSnapshot,
+   query,
+   where,
+   limit,
+@@ -2351,6 +2352,39 @@ const handleToggleFavorite = useCallback(() => {
+     }
+   }, [store?.id, slug, setStoreKey])
+ 
++  useEffect(() => {
++    const publicStoreId = String(store?.id || '').trim()
++    if (!publicStoreId) return undefined
++
++    const unsubscribe = onSnapshot(
++      doc(db, 'publicStores', publicStoreId),
++      (snapshot) => {
++        if (!snapshot.exists()) return
++
++        setStore((current) => {
++          if (!current || current.id !== publicStoreId) return current
++
++          return normalizeStore({
++            ...current,
++            ...snapshot.data(),
++            id: current.id,
++            docId: current.docId,
++            storeId: current.storeId,
++            storeDocId: current.storeDocId,
++            publicDataSource: 'publicStores',
++          }, slug)
++        })
++      },
++      (error) => {
++        if (import.meta.env.DEV) {
++          console.warn('[StoreFront] publicStores live update ignored:', error)
++        }
++      }
++    )
++
++    return () => unsubscribe()
++  }, [store?.id, slug])
++
+   useEffect(() => {
+   if (!menuStoreContext.hasStore || (menuStoreContext.isUnavailable && !canPreviewUnavailableStore)) {
+   queueMicrotask(() => {
+@@ -2728,7 +2762,11 @@ return (
+         ) : (
+           <>
+             {featuredProducts.length > 0 && activeCategory === 'all' && !searchTerm && (
+-              <section id="category-destaques" className="mb-8 lg:mb-10">
++              <section
++                id="category-destaques"
++                className="mb-8 lg:mb-10"
++                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 520px' }}
++              >
+                 <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
+                   <div>
+                     <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#f97316]">
+@@ -2781,7 +2819,12 @@ return (
+ 
+             {productSections.length > 0 ? (
+               productSections.map((section) => (
+-                <section key={section.id} id={`category-${section.id}`} className="scroll-mt-28 mb-8 lg:mb-10">
++                <section
++                  key={section.id}
++                  id={`category-${section.id}`}
++                  className="scroll-mt-28 mb-8 lg:mb-10"
++                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 520px' }}
++                >
+                   <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
+                     <div>
+                       <h2 className="text-[1.35rem] font-black tracking-tight text-[#111827] sm:text-3xl">
+diff --git a/src/pages/store/StoreHeader.jsx b/src/pages/store/StoreHeader.jsx
+index 993af98d..9e102b1e 100644
+--- a/src/pages/store/StoreHeader.jsx
++++ b/src/pages/store/StoreHeader.jsx
+@@ -1070,22 +1070,6 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+   const bannerDesktopUrl = useMemo(() => getBannerDesktopUrl(store), [store])
+   const bannerMobileUrl = useMemo(() => getBannerMobileUrl(store), [store])
+   const bannerUrl = bannerDesktopUrl || bannerMobileUrl
+-  const bannerDesktopSrcSet = useMemo(
+-    () => getCloudinaryImageSrcSet(
+-      getBannerDesktopSource(store),
+-      ['storeBannerMedium', 'storeBanner'],
+-      { replaceExistingTransform: true }
+-    ),
+-    [store]
+-  )
+-  const bannerMobileSrcSet = useMemo(
+-    () => getCloudinaryImageSrcSet(
+-      getBannerMobileSource(store),
+-      ['storeBannerMobileSmall', 'storeBannerMobile'],
+-      { replaceExistingTransform: true }
+-    ),
+-    [store]
+-  )
+   const logoUrl = useMemo(() => getLogoUrl(store), [store])
+   const logoSrcSet = useMemo(
+     () => getCloudinaryImageSrcSet(
+@@ -1287,22 +1271,22 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+       {bannerMobileUrl && (
+         <source
+           media="(max-width: 640px)"
+-          srcSet={bannerMobileSrcSet || bannerMobileUrl}
++          srcSet={`${bannerMobileUrl} 400w`}
+           sizes="100vw"
+         />
+       )}
+       <img
+         src={bannerUrl}
+-        srcSet={bannerDesktopSrcSet || undefined}
++        srcSet={`${bannerUrl} 1200w`}
+         sizes="100vw"
+         alt=""
+-        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-center"
++        aria-hidden="true"
++        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
+         fetchPriority="high"
+         loading="eager"
+         decoding="async"
+-        width={1600}
+-        height={533}
+-        aria-hidden="true"
++        width={1200}
++        height={480}
+       />
+     </picture>
+   ) : (
+@@ -1694,7 +1678,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+                 value={deliveryTime}
+                 themeColor={themeColor}
+               />
+-{acceptedServiceTypes.length > 0 && (
++{acceptedServiceTypes.length > 0 ? (
+   <section className="rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-sm">
+     <div className="mb-3 flex items-center gap-3">
+       <div
+@@ -1744,6 +1728,27 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+       ))}
+     </div>
+   </section>
++) : (
++  <section className="rounded-[1.25rem] border border-amber-100 bg-amber-50 p-4 shadow-sm">
++    <div className="flex items-start gap-3">
++      <div
++        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm"
++        style={{ color: themeColor }}
++      >
++        <FiShoppingBag size={19} />
++      </div>
++
++      <div>
++        <p className="text-[11px] font-black uppercase tracking-wide text-amber-700">
++          Atendimento indisponivel
++        </p>
++
++        <p className="mt-1 text-sm font-black text-[#111827]">
++          A loja ainda nao liberou entrega, retirada ou agendamento.
++        </p>
++      </div>
++    </div>
++  </section>
+ )}
+ {acceptedPaymentMethods.length > 0 && (
+   <section className="rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-sm">
+diff --git a/src/routes/AppRoutes.jsx b/src/routes/AppRoutes.jsx
+index 179ced5a..f5ec22c5 100644
+--- a/src/routes/AppRoutes.jsx
++++ b/src/routes/AppRoutes.jsx
+@@ -6,6 +6,8 @@ import {
+ } from 'react-router-dom'
+ 
+ import ScrollToTop from '../utils/ScrollToTop'
++import StoreFrontPage from '../pages/store/StoreFrontPage'
++import OrderTrackingPage from '../pages/store/OrderTrackingPage'
+ 
+ // Públicas
+ 
+@@ -37,8 +39,6 @@ const AboutPage = lazy(() => import('../pages/AboutPage'))
+ const ContactPage = lazy(() => import('../pages/ContactPage'))
+ const LandingPage = lazy(() => import('../pages/landing/LandingPage'))
+ const NotFoundPage = lazy(() => import('../pages/NotFoundPage'))
+-const StoreFrontPage = lazy(() => import('../pages/store/StoreFrontPage'))
+-const OrderTrackingPage = lazy(() => import('../pages/store/OrderTrackingPage'))
+ const PlansPage = lazy(() => import('../pages/PlansPage'))
+ const RestaurantExamplesPage = lazy(() => import('../pages/RestaurantExamplesPage'))
+ const PrivacyPage = lazy(() => import('../pages/PrivacyPage'))
+diff --git a/src/utils/cloudinaryImages.js b/src/utils/cloudinaryImages.js
+index 0e040956..2b4d7c0f 100644
+--- a/src/utils/cloudinaryImages.js
++++ b/src/utils/cloudinaryImages.js
+@@ -1,40 +1,42 @@
+ const CLOUDINARY_UPLOAD_MARKER = '/upload/'
+ 
+ export const CLOUDINARY_IMAGE_VARIANTS = {
+-  productCardSmall: 'f_auto,q_auto:eco,c_fit,w_192,h_192',
+-  productCard: 'f_auto,q_auto:eco,c_fit,w_384,h_384',
+-  productCardLarge: 'f_auto,q_auto:good,c_fit,w_320,h_320',
+-  productDetail: 'f_auto,q_auto:good,c_fit,w_900,h_900',
++  productCardSmall: 'f_auto,q_auto,c_fill,g_auto,w_128,h_128',
++  productCardMobile: 'f_auto,q_auto,c_fill,g_auto,w_128,h_128',
++  productCard: 'f_auto,q_auto,c_fill,g_auto,w_196,h_196',
++  productCardLarge: 'f_auto,q_auto,c_fill,g_auto,w_196,h_196',
++  productDetail: 'f_auto,q_auto,c_fit,w_900,h_900',
+   storeLogoTiny: 'f_auto,q_auto,c_fit,w_64,h_64',
+-  storeLogoSmall: 'f_auto,q_auto,c_fit,w_96,h_96',
++  storeLogoSmall: 'f_auto,q_auto,c_fit,w_80,h_80',
+   storeLogo: 'f_auto,q_auto,c_fit,w_160,h_160',
+   storeLogoLarge: 'f_auto,q_auto,c_fit,w_240,h_240',
+-  storeBannerSmall: 'f_auto,q_auto:good,c_fill,w_1024,h_300,g_auto',
+-  storeBannerMedium: 'f_auto,q_auto:good,c_fill,w_1024,h_300,g_auto',
+-  storeBanner: 'f_auto,q_auto:good,c_fill,w_1440,h_420,g_auto',
+-  storeBannerLarge: 'f_auto,q_auto:good,c_fill,w_1440,h_420,g_auto',
+-  storeBannerMobileSmall: 'f_auto,q_auto:good,c_fill,w_480,h_267,g_center',
+-  storeBannerMobile: 'f_auto,q_auto:good,c_fill,w_900,h_500,g_center',
+-  storeBannerMobileLarge: 'f_auto,q_auto:good,c_fill,w_1080,h_600,g_center',
++  storeBannerSmall: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
++  storeBannerMedium: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
++  storeBanner: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
++  storeBannerLarge: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
++  storeBannerMobileSmall: 'f_auto,q_auto:good,c_fill,g_auto,w_400,h_200',
++  storeBannerMobile: 'f_auto,q_auto:good,c_fill,g_auto,w_400,h_200',
++  storeBannerMobileLarge: 'f_auto,q_auto:good,c_fill,g_auto,w_400,h_200',
+   ogImage: 'f_auto,q_auto,c_fill,g_auto,w_1200,h_630',
+ }
+ 
+ export const CLOUDINARY_IMAGE_VARIANT_WIDTHS = {
+-  productCardSmall: 192,
+-  productCard: 384,
+-  productCardLarge: 320,
++  productCardSmall: 128,
++  productCardMobile: 128,
++  productCard: 196,
++  productCardLarge: 196,
+   productDetail: 900,
+   storeLogoTiny: 64,
+-  storeLogoSmall: 96,
++  storeLogoSmall: 80,
+   storeLogo: 160,
+   storeLogoLarge: 240,
+-  storeBannerSmall: 1024,
+-  storeBannerMedium: 1024,
+-  storeBanner: 1440,
+-  storeBannerLarge: 1440,
+-  storeBannerMobileSmall: 480,
+-  storeBannerMobile: 900,
+-  storeBannerMobileLarge: 1080,
++  storeBannerSmall: 1200,
++  storeBannerMedium: 1200,
++  storeBanner: 1200,
++  storeBannerLarge: 1200,
++  storeBannerMobileSmall: 400,
++  storeBannerMobile: 400,
++  storeBannerMobileLarge: 400,
+   ogImage: 1200,
+ }
+ 
+@@ -53,23 +55,23 @@ export function getCloudinaryImageUrl(url, variant = 'productCard', options = {}
+   const uploadIndex = url.indexOf(CLOUDINARY_UPLOAD_MARKER)
+   const afterUpload = url.slice(uploadIndex + CLOUDINARY_UPLOAD_MARKER.length)
+   const firstSegment = afterUpload.split('/')[0] || ''
++  const restOfPath = afterUpload.slice(firstSegment.length).replace(/^\/+/, '')
+ 
+-  const alreadyHasTransform =
+-    firstSegment.includes('f_auto') ||
+-    firstSegment.includes('q_auto') ||
+-    /(^|,)w_\d+($|,)/.test(firstSegment) ||
+-    /(^|,)h_\d+($|,)/.test(firstSegment) ||
+-    firstSegment.includes('c_fill') ||
+-    firstSegment.includes('c_fit') ||
+-    firstSegment.includes('c_limit')
++  const hasWidth = /(^|,)w_\d+($|,)/.test(firstSegment)
++  const hasHeight = /(^|,)h_\d+($|,)/.test(firstSegment)
++  const hasAnyTransformToken =
++    firstSegment.includes('f_') ||
++    firstSegment.includes('q_') ||
++    firstSegment.includes('c_') ||
++    firstSegment.includes('g_') ||
++    hasWidth ||
++    hasHeight
+ 
+-  if (alreadyHasTransform) {
+-    if (!options.replaceExistingTransform) return url
++  if (hasWidth && hasHeight && !options.replaceExistingTransform) return url
+ 
++  if (hasAnyTransformToken) {
+     const beforeTransform = url.slice(0, uploadIndex + CLOUDINARY_UPLOAD_MARKER.length)
+-    const afterTransform = afterUpload.slice(firstSegment.length).replace(/^\/+/, '')
+-
+-    return `${beforeTransform}${transform}/${afterTransform}`
++    return `${beforeTransform}${transform}/${restOfPath}`
+   }
+ 
+   return url.replace(
+diff --git a/src/utils/planCatalog.js b/src/utils/planCatalog.js
+index f0d7a2ec..64e4a776 100644
+--- a/src/utils/planCatalog.js
++++ b/src/utils/planCatalog.js
+@@ -21,6 +21,8 @@ export const BLOCKED_PLAN_STATUSES = [
+   'billing_pending',
+   'billing_pending_payment_method',
+   'past_due',
++  'deleted',
++  'trial_ended',
+ ]
+ 
+ // Limites de quantidade ficam centralizados aqui. O enforcement real para
+@@ -41,7 +43,7 @@ export const PLAN_LIMITS = {
+     users: 3,
+     coupons: 20,
+     productImagesPerItem: 3,
+-    tables: 50,
++    tables: 0,
+   },
+   [PLAN_IDS.PREMIUM]: {
+     products: 1000,
+@@ -66,12 +68,12 @@ export const PLAN_FEATURES = {
+   customerRatings: PLAN_IDS.ESSENTIAL,
+   basicReports: PLAN_IDS.ESSENTIAL,
+   pickupDisplay: PLAN_IDS.PROFESSIONAL,
+-  tableQrCode: PLAN_IDS.PROFESSIONAL,
+   dineInOrdering: PLAN_IDS.PROFESSIONAL,
+   scheduling: PLAN_IDS.PROFESSIONAL,
+   coupons: PLAN_IDS.PROFESSIONAL,
+   deliveryZonesAdvanced: PLAN_IDS.PROFESSIONAL,
+   multiUser: PLAN_IDS.PROFESSIONAL,
++  tableQrCode: PLAN_IDS.PREMIUM,
+   advancedReports: PLAN_IDS.PREMIUM,
+   customBranding: PLAN_IDS.PREMIUM,
+   removePratoByBranding: PLAN_IDS.PREMIUM,
+@@ -95,6 +97,7 @@ export const FEATURE_LABELS = {
+   multiUser: 'Usuários extras',
+   deliveryZonesAdvanced: 'Entrega avançada',
+   onlinePayments: 'Pagamento online',
++  tableQrCode: 'QR por mesa',
+ }
+ 
+ export const PLAN_OPTIONS = [
+@@ -229,7 +232,6 @@ function getSubscriptionStatus(storeData = {}) {
+  */
+ export function hasActiveTrial(storeData = {}) {
+   const subscriptionStatus = getSubscriptionStatus(storeData)
+-  if (subscriptionStatus === 'trialing') return true
+ 
+   // Não liberar trial em estados bloqueados
+   if (
+@@ -240,6 +242,8 @@ export function hasActiveTrial(storeData = {}) {
+     BLOCKED_PLAN_STATUSES.includes(subscriptionStatus)
+   ) return false
+ 
++  if (subscriptionStatus === 'trialing') return true
++
+   const trialStatus = getTrialStatus(storeData)
+   if (['trialing', 'trial', 'active'].includes(trialStatus)) return true
+ 
+diff --git a/vite.config.js b/vite.config.js
+index 56050168..1d3bf68f 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -20,7 +20,7 @@ function manualChunks(id) {
+   if (packageName === 'react' || packageName === 'react-dom' || packageName === 'scheduler') {
+     return 'vendor-react'
+   }
+-  if (packageName === 'react-router' || packageName === 'react-router-dom') return 'vendor-router'
++  if (packageName === 'react-router' || packageName === 'react-router-dom') return 'vendor-react'
+   if (packageName === 'firebase') {
+     if (normalized.includes('/firebase/app-check')) return 'vendor-firebase-app-check'
+     if (normalized.includes('/firebase/auth')) return 'vendor-firebase-auth'
+@@ -29,16 +29,16 @@ function manualChunks(id) {
+     if (normalized.includes('/firebase/functions')) return 'vendor-firebase-functions'
+     if (normalized.includes('/firebase/messaging')) return 'vendor-firebase-messaging'
+     if (normalized.includes('/firebase/storage')) return 'vendor-firebase-storage'
+-    return 'vendor-firebase-app'
++    return 'vendor-firebase-core'
+   }
+-  if (packageName === '@firebase/app') return 'vendor-firebase-app'
++  if (packageName === '@firebase/app') return 'vendor-firebase-core'
+   if (packageName === '@firebase/firestore') return 'vendor-firebase-firestore'
+   if (packageName === '@firebase/auth') return 'vendor-firebase-auth'
+   if (packageName === '@firebase/messaging') return 'vendor-firebase-messaging'
+   if (packageName === '@firebase/functions') return 'vendor-firebase-functions'
+   if (packageName === '@firebase/database') return 'vendor-firebase-database'
+   if (packageName === '@firebase/storage') return 'vendor-firebase-storage'
+-  if (packageName.startsWith('@firebase/')) return 'vendor-firebase'
++  if (packageName.startsWith('@firebase/')) return 'vendor-firebase-core'
+   if (packageName.startsWith('@sentry/')) return 'vendor-sentry'
+   if (packageName === 'react-icons') return 'vendor-icons'
+   if (packageName === 'lucide-react') return 'vendor-lucide'
+@@ -47,17 +47,19 @@ function manualChunks(id) {
+   if (packageName === 'qrcode.react') return 'vendor-qrcode'
+   if (packageName === 'react-helmet-async') return 'vendor-seo'
+ 
+-  return 'vendor'
++  return 'vendor-misc'
+ }
+ 
+ // https://vite.dev/config/
+ export default defineConfig({
+   plugins: [react()],
+   build: {
++    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+     rolldownOptions: {
+       output: {
+         manualChunks,
+       },
+     },
++    chunkSizeWarningLimit: 500,
+   },
+ })

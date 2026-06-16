@@ -101,7 +101,9 @@ function orderStoreKeys(data) {
           'checkout_pending',
           'pending_checkout',
           'billing_pending',
-          'billing_pending_payment_method'
+          'billing_pending_payment_method',
+          'deleted',
+          'trial_ended'
         ])
         && (
           data.get('subscriptionStatus', '') == ''
@@ -114,11 +116,19 @@ function orderStoreKeys(data) {
     }
 
     function featureRequiredRank(feature) {
-      return feature in ['advancedReports', 'customBranding', 'removePratoByBranding', 'automationRules', 'prioritySupport']
+      return feature in ['tableQrCode', 'advancedReports', 'customBranding', 'removePratoByBranding', 'automationRules', 'prioritySupport']
         ? 3
-        : feature in ['pickupDisplay', 'tableQrCode', 'dineInOrdering', 'scheduling', 'coupons', 'deliveryZonesAdvanced', 'multiUser']
+        : feature in ['pickupDisplay', 'dineInOrdering', 'scheduling', 'coupons', 'deliveryZonesAdvanced', 'multiUser']
           ? 2
           : 1;
+    }
+
+    function storeHasActiveTrial(data) {
+      return data.get('subscriptionStatus', '') == 'trialing'
+        || data.get('trialStatus', '') in ['trialing', 'trial', 'active']
+        || data.get('trial', {}).get('status', '') in ['trialing', 'trial', 'active']
+        || (data.get('trialEndsAt', null) is timestamp && data.get('trialEndsAt', null) > request.time)
+        || (data.get('trialEndAt', null) is timestamp && data.get('trialEndAt', null) > request.time);
     }
 
     function storeEffectivePlan(data) {
@@ -126,9 +136,9 @@ function orderStoreKeys(data) {
         || data.get('isBlocked', false) == true
         || data.get('isDeleted', false) == true
         || data.keys().hasAny(['deletedAt'])
-        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method', 'past_due']
+        || data.get('subscriptionStatus', '') in ['blocked', 'canceled', 'cancelled', 'checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method', 'past_due', 'deleted', 'trial_ended']
           ? ''
-          : data.get('subscriptionStatus', '') == 'trialing'
+          : storeHasActiveTrial(data)
             ? 'premium'
             : data.get('effectivePlan', data.get('billingPlan', data.get('selectedPlan', data.get('plan', 'essential'))));
     }
@@ -343,6 +353,9 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('billingCycle')
         && storeFieldUnchanged('trialStartedAt')
         && storeFieldUnchanged('trialEndsAt')
+        && storeFieldUnchanged('trialEndAt')
+        && storeFieldUnchanged('trialStatus')
+        && storeFieldUnchanged('trial')
         && storeFieldUnchanged('trialEndedAt')
         && storeFieldUnchanged('firstChargeAt')
         && storeFieldUnchanged('nextChargeAt')

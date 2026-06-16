@@ -1,40 +1,42 @@
 const CLOUDINARY_UPLOAD_MARKER = '/upload/'
 
 export const CLOUDINARY_IMAGE_VARIANTS = {
-  productCardSmall: 'f_auto,q_auto:eco,c_fit,w_192,h_192',
-  productCard: 'f_auto,q_auto:eco,c_fit,w_384,h_384',
-  productCardLarge: 'f_auto,q_auto:good,c_fit,w_320,h_320',
-  productDetail: 'f_auto,q_auto:good,c_fit,w_900,h_900',
+  productCardSmall: 'f_auto,q_auto,c_fill,g_auto,w_128,h_128',
+  productCardMobile: 'f_auto,q_auto,c_fill,g_auto,w_128,h_128',
+  productCard: 'f_auto,q_auto,c_fill,g_auto,w_196,h_196',
+  productCardLarge: 'f_auto,q_auto,c_fill,g_auto,w_196,h_196',
+  productDetail: 'f_auto,q_auto,c_fit,w_900,h_900',
   storeLogoTiny: 'f_auto,q_auto,c_fit,w_64,h_64',
-  storeLogoSmall: 'f_auto,q_auto,c_fit,w_96,h_96',
+  storeLogoSmall: 'f_auto,q_auto,c_fit,w_80,h_80',
   storeLogo: 'f_auto,q_auto,c_fit,w_160,h_160',
   storeLogoLarge: 'f_auto,q_auto,c_fit,w_240,h_240',
-  storeBannerSmall: 'f_auto,q_auto:good,c_fill,w_1024,h_300,g_auto',
-  storeBannerMedium: 'f_auto,q_auto:good,c_fill,w_1024,h_300,g_auto',
-  storeBanner: 'f_auto,q_auto:good,c_fill,w_1440,h_420,g_auto',
-  storeBannerLarge: 'f_auto,q_auto:good,c_fill,w_1440,h_420,g_auto',
-  storeBannerMobileSmall: 'f_auto,q_auto:good,c_fill,w_480,h_267,g_center',
-  storeBannerMobile: 'f_auto,q_auto:good,c_fill,w_900,h_500,g_center',
-  storeBannerMobileLarge: 'f_auto,q_auto:good,c_fill,w_1080,h_600,g_center',
+  storeBannerSmall: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
+  storeBannerMedium: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
+  storeBanner: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
+  storeBannerLarge: 'f_auto,q_auto:good,c_fill,g_auto,w_1200,h_480',
+  storeBannerMobileSmall: 'f_auto,q_auto:good,c_fill,g_auto,w_400,h_200',
+  storeBannerMobile: 'f_auto,q_auto:good,c_fill,g_auto,w_400,h_200',
+  storeBannerMobileLarge: 'f_auto,q_auto:good,c_fill,g_auto,w_400,h_200',
   ogImage: 'f_auto,q_auto,c_fill,g_auto,w_1200,h_630',
 }
 
 export const CLOUDINARY_IMAGE_VARIANT_WIDTHS = {
-  productCardSmall: 192,
-  productCard: 384,
-  productCardLarge: 320,
+  productCardSmall: 128,
+  productCardMobile: 128,
+  productCard: 196,
+  productCardLarge: 196,
   productDetail: 900,
   storeLogoTiny: 64,
-  storeLogoSmall: 96,
+  storeLogoSmall: 80,
   storeLogo: 160,
   storeLogoLarge: 240,
-  storeBannerSmall: 1024,
-  storeBannerMedium: 1024,
-  storeBanner: 1440,
-  storeBannerLarge: 1440,
-  storeBannerMobileSmall: 480,
-  storeBannerMobile: 900,
-  storeBannerMobileLarge: 1080,
+  storeBannerSmall: 1200,
+  storeBannerMedium: 1200,
+  storeBanner: 1200,
+  storeBannerLarge: 1200,
+  storeBannerMobileSmall: 400,
+  storeBannerMobile: 400,
+  storeBannerMobileLarge: 400,
   ogImage: 1200,
 }
 
@@ -53,23 +55,23 @@ export function getCloudinaryImageUrl(url, variant = 'productCard', options = {}
   const uploadIndex = url.indexOf(CLOUDINARY_UPLOAD_MARKER)
   const afterUpload = url.slice(uploadIndex + CLOUDINARY_UPLOAD_MARKER.length)
   const firstSegment = afterUpload.split('/')[0] || ''
+  const restOfPath = afterUpload.slice(firstSegment.length).replace(/^\/+/, '')
 
-  const alreadyHasTransform =
-    firstSegment.includes('f_auto') ||
-    firstSegment.includes('q_auto') ||
-    /(^|,)w_\d+($|,)/.test(firstSegment) ||
-    /(^|,)h_\d+($|,)/.test(firstSegment) ||
-    firstSegment.includes('c_fill') ||
-    firstSegment.includes('c_fit') ||
-    firstSegment.includes('c_limit')
+  const hasWidth = /(^|,)w_\d+($|,)/.test(firstSegment)
+  const hasHeight = /(^|,)h_\d+($|,)/.test(firstSegment)
+  const hasAnyTransformToken =
+    firstSegment.includes('f_') ||
+    firstSegment.includes('q_') ||
+    firstSegment.includes('c_') ||
+    firstSegment.includes('g_') ||
+    hasWidth ||
+    hasHeight
 
-  if (alreadyHasTransform) {
-    if (!options.replaceExistingTransform) return url
+  if (hasWidth && hasHeight && !options.replaceExistingTransform) return url
 
+  if (hasAnyTransformToken) {
     const beforeTransform = url.slice(0, uploadIndex + CLOUDINARY_UPLOAD_MARKER.length)
-    const afterTransform = afterUpload.slice(firstSegment.length).replace(/^\/+/, '')
-
-    return `${beforeTransform}${transform}/${afterTransform}`
+    return `${beforeTransform}${transform}/${restOfPath}`
   }
 
   return url.replace(

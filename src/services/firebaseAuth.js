@@ -1,6 +1,6 @@
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 
-import app from './firebase'
+import app from './firebaseApp'
 
 export const auth = getAuth(app)
 

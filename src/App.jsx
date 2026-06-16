@@ -22,87 +22,22 @@ const AUTH_ROUTE_PREFIXES = [
   '/dashboard',
 ]
 
-const AUTH_SESSION_MARKER = 'pratoby:auth:session'
-const FIREBASE_AUTH_STORAGE_PREFIX = 'firebase:authUser:'
-
 function matchesRoutePrefix(pathname = '', prefixes = []) {
   return prefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   )
 }
 
-function storageHasFirebaseAuth(storage) {
-  if (!storage) return false
-
-  try {
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index)
-
-      if (key?.startsWith(FIREBASE_AUTH_STORAGE_PREFIX)) {
-        return true
-      }
-    }
-  } catch {
-    return false
-  }
-
-  return false
-}
-
-function hasStoredAuthSession() {
-  if (typeof window === 'undefined') return false
-
-  try {
-    if (window.localStorage.getItem(AUTH_SESSION_MARKER) === '1') {
-      return true
-    }
-
-    return (
-      storageHasFirebaseAuth(window.localStorage) ||
-      storageHasFirebaseAuth(window.sessionStorage)
-    )
-  } catch {
-    return false
-  }
-}
-
 function shouldLoadAuthProvider(pathname = '') {
-  if (matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)) {
-    return true
-  }
-
-  return hasStoredAuthSession()
+  return matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)
 }
 
 function AuthBoundary({ children }) {
   const { pathname } = useLocation()
-  const [hasSession, setHasSession] = useState(() => hasStoredAuthSession())
-
-  useEffect(() => {
-    setHasSession(hasStoredAuthSession())
-  }, [pathname])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const handleStorageChange = () => {
-      setHasSession(hasStoredAuthSession())
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-    }
-  }, [])
-
-  const shouldLoadAuth = useMemo(() => {
-    if (matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)) {
-      return true
-    }
-
-    return hasSession
-  }, [pathname, hasSession])
+  const shouldLoadAuth = useMemo(
+    () => shouldLoadAuthProvider(pathname),
+    [pathname]
+  )
 
   if (!shouldLoadAuth) {
     return children

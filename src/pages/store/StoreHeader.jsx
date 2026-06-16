@@ -1070,22 +1070,6 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const bannerDesktopUrl = useMemo(() => getBannerDesktopUrl(store), [store])
   const bannerMobileUrl = useMemo(() => getBannerMobileUrl(store), [store])
   const bannerUrl = bannerDesktopUrl || bannerMobileUrl
-  const bannerDesktopSrcSet = useMemo(
-    () => getCloudinaryImageSrcSet(
-      getBannerDesktopSource(store),
-      ['storeBannerMedium', 'storeBanner'],
-      { replaceExistingTransform: true }
-    ),
-    [store]
-  )
-  const bannerMobileSrcSet = useMemo(
-    () => getCloudinaryImageSrcSet(
-      getBannerMobileSource(store),
-      ['storeBannerMobileSmall', 'storeBannerMobile'],
-      { replaceExistingTransform: true }
-    ),
-    [store]
-  )
   const logoUrl = useMemo(() => getLogoUrl(store), [store])
   const logoSrcSet = useMemo(
     () => getCloudinaryImageSrcSet(
@@ -1287,22 +1271,22 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       {bannerMobileUrl && (
         <source
           media="(max-width: 640px)"
-          srcSet={bannerMobileSrcSet || bannerMobileUrl}
+          srcSet={`${bannerMobileUrl} 400w`}
           sizes="100vw"
         />
       )}
       <img
         src={bannerUrl}
-        srcSet={bannerDesktopSrcSet || undefined}
+        srcSet={`${bannerUrl} 1200w`}
         sizes="100vw"
         alt=""
-        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-center"
+        aria-hidden="true"
+        className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
         fetchPriority="high"
         loading="eager"
         decoding="async"
-        width={1600}
-        height={533}
-        aria-hidden="true"
+        width={1200}
+        height={480}
       />
     </picture>
   ) : (
@@ -1694,7 +1678,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
                 value={deliveryTime}
                 themeColor={themeColor}
               />
-{acceptedServiceTypes.length > 0 && (
+{acceptedServiceTypes.length > 0 ? (
   <section className="rounded-[1.25rem] border border-gray-100 bg-[#f9fafb] p-4 shadow-sm">
     <div className="mb-3 flex items-center gap-3">
       <div
@@ -1742,6 +1726,27 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
           </p>
         </div>
       ))}
+    </div>
+  </section>
+) : (
+  <section className="rounded-[1.25rem] border border-amber-100 bg-amber-50 p-4 shadow-sm">
+    <div className="flex items-start gap-3">
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm"
+        style={{ color: themeColor }}
+      >
+        <FiShoppingBag size={19} />
+      </div>
+
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-wide text-amber-700">
+          Atendimento indisponivel
+        </p>
+
+        <p className="mt-1 text-sm font-black text-[#111827]">
+          A loja ainda nao liberou entrega, retirada ou agendamento.
+        </p>
+      </div>
     </div>
   </section>
 )}

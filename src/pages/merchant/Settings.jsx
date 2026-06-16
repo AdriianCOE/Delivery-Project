@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions'
 
 import {
   FiArrowLeft,
+  FiAlertCircle,
   FiCalendar,
   FiCheckCircle,
   FiClock,
@@ -415,6 +416,185 @@ function getSchedulingValidationError(scheduling) {
   }
 
   return null
+}
+
+function hasStoreAddress(form) {
+  return Boolean(
+    String(form?.street || '').trim()
+    && String(form?.number || '').trim()
+    && String(form?.neighborhood || '').trim()
+    && String(form?.city || '').trim()
+    && String(form?.state || '').trim()
+  )
+}
+
+function hasAnyOpeningHours(openingHours) {
+  return DAYS_OF_WEEK.some((day) => {
+    const hours = openingHours?.[day.id]
+    return hours?.enabled && isValidTime(hours.open) && isValidTime(hours.close)
+  })
+}
+
+function getPaymentSource(store) {
+  return {
+    methods: store?.paymentMethods || store?.settings?.paymentMethods || {},
+    payments: store?.payments || {},
+    pix: store?.pix || store?.settings?.pix || store?.paymentSettings?.pix || {},
+  }
+}
+
+function isPaymentMethodActive(store, method) {
+  const { methods, payments } = getPaymentSource(store)
+  const methodValue = methods?.[method]
+
+  if (methodValue === true) return true
+  if (methodValue === false) return false
+
+  if (method === 'pix') {
+    const pix = getPaymentSource(store).pix
+    return pix?.enabled === true || Boolean(store?.pixKey || pix?.key || pix?.pixKey)
+  }
+
+  if (method === 'card') {
+    return methods?.card !== false && methods?.credit !== false
+  }
+  if (method === 'cash') return methods?.cash !== false && methods?.money !== false
+
+  return payments?.[method]?.enabled === true
+}
+
+function hasAnyPaymentMethod(store) {
+  const mercadoPago = store?.payments?.mercadoPago || store?.payments?.mercadopago || {}
+  return (
+    isPaymentMethodActive(store, 'pix')
+    || isPaymentMethodActive(store, 'card')
+    || isPaymentMethodActive(store, 'cash')
+    || mercadoPago.enabled === true
+  )
+}
+
+function hasPixManualProblem(store) {
+  const { methods, pix } = getPaymentSource(store)
+  const pixEnabled = methods?.pix === true || pix?.enabled === true
+  const pixKey = store?.pixKey || pix?.key || pix?.pixKey || store?.settings?.pixKey
+
+  return pixEnabled && !String(pixKey || '').trim()
+}
+
+function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
+  const scheduling = normalizeStoreScheduling(form?.scheduling)
+  const schedulingEnabled = scheduling.enabled === true
+  const schedulingPlanReady = schedulingEnabled && schedulingAllowed
+  const schedulingValidationError = getSchedulingValidationError(scheduling)
+  const schedulingUsable = schedulingPlanReady && !schedulingValidationError
+  const hasOrderingMethod = Boolean(form?.acceptDelivery || form?.acceptPickup || schedulingUsable)
+  const storeOpen = form?.isActive !== false
+  const checks = []
+
+  if (storeOpen && !hasOrderingMethod) {
+    checks.push({
+      status: 'critical',
+      title: 'Nenhum meio de pedido ativo',
+      description: 'Ative delivery, retirada ou um agendamento valido antes de deixar a loja aberta.',
+      saveMessage: 'Ative delivery, retirada ou um agendamento valido antes de salvar a loja aberta.',
+    })
+  } else if (!hasOrderingMethod) {
+    checks.push({
+      status: 'warning',
+      title: 'Sem meio de pedido',
+      description: 'A loja esta fechada, mas ainda nao tem delivery, retirada ou agendamento pronto para uso.',
+    })
+  } else {
+    checks.push({
+      status: 'ok',
+      title: 'Meios de pedido',
+      description: [
+        form?.acceptDelivery ? 'Delivery' : '',
+        form?.acceptPickup ? 'Retirada' : '',
+        schedulingUsable ? 'Agendamento' : '',
+      ].filter(Boolean).join(', '),
+    })
+  }
+
+  if (schedulingEnabled && !schedulingAllowed) {
+    checks.push({
+      status: 'critical',
+      title: 'Agendamento sem plano',
+      description: 'O agendamento esta ativado, mas o plano atual nao libera esse recurso.',
+      saveMessage: 'Seu plano atual nao inclui agendamento. Desative o agendamento ou altere o plano antes de salvar.',
+    })
+  } else if (schedulingValidationError) {
+    checks.push({
+      status: 'critical',
+      title: 'Agendamento incompleto',
+      description: schedulingValidationError,
+      saveMessage: schedulingValidationError,
+    })
+  } else if (schedulingEnabled) {
+    checks.push({
+      status: 'ok',
+      title: 'Agendamento',
+      description: `Disponivel por ate ${scheduling.maxDaysAhead} dias no futuro.`,
+    })
+  }
+
+  if (form?.acceptDelivery && (!String(form?.deliveryTime || '').trim() || !hasStoreAddress(form))) {
+    checks.push({
+      status: 'warning',
+      title: 'Delivery incompleto',
+      description: 'Revise tempo medio e endereco da loja para evitar duvidas no pedido.',
+    })
+  }
+
+  if (form?.acceptPickup && !hasStoreAddress(form)) {
+    checks.push({
+      status: 'warning',
+      title: 'Retirada sem endereco',
+      description: 'Informe o endereco da loja para o cliente saber onde retirar.',
+    })
+  }
+
+  if (!hasAnyPaymentMethod(selectedStore)) {
+    checks.push({
+      status: 'warning',
+      title: 'Pagamento nao configurado',
+      description: 'Revise as formas de pagamento em Pagamentos antes de receber pedidos.',
+    })
+  } else if (hasPixManualProblem(selectedStore)) {
+    checks.push({
+      status: 'warning',
+      title: 'Pix manual sem chave',
+      description: 'O Pix manual parece ativo, mas nao encontrei chave Pix publica configurada.',
+    })
+  } else {
+    checks.push({
+      status: 'ok',
+      title: 'Pagamentos',
+      description: 'Ha pelo menos uma forma de pagamento disponivel.',
+    })
+  }
+
+  if (!String(form?.whatsapp || '').trim()) {
+    checks.push({
+      status: 'warning',
+      title: 'WhatsApp ausente',
+      description: 'Sem WhatsApp, o cliente pode ter dificuldade para falar com a loja.',
+    })
+  }
+
+  if (!hasAnyOpeningHours(form?.openingHours)) {
+    checks.push({
+      status: 'warning',
+      title: 'Horario nao informado',
+      description: 'Configure ao menos um dia de funcionamento para orientar o cliente.',
+    })
+  }
+
+  return {
+    checks,
+    criticalCount: checks.filter((check) => check.status === 'critical').length,
+    warningCount: checks.filter((check) => check.status === 'warning').length,
+  }
 }
 
 function formatBlockedDate(dateKey) {
@@ -1261,6 +1441,10 @@ const knownStoreIdsKey = useMemo(() => {
     String(mercadoPagoOrderPayments.status || '').toLowerCase() === 'active'
   const brandingAllowed = hasPlanFeature(selectedStore || {}, 'customBranding')
   const schedulingAllowed = hasPlanFeature(selectedStore || {}, 'scheduling')
+  const readiness = useMemo(
+    () => getReadinessChecks({ form, selectedStore, schedulingAllowed }),
+    [form, schedulingAllowed, selectedStore]
+  )
   const schedulingLeadInput = useMemo(
     () => splitMinutesForInput(form.scheduling?.minLeadMinutes),
     [form.scheduling?.minLeadMinutes]
@@ -1579,6 +1763,18 @@ const knownStoreIdsKey = useMemo(() => {
       return
     }
 
+    const blockingReadinessIssue = getReadinessChecks({
+      form,
+      selectedStore,
+      schedulingAllowed,
+    }).checks.find((check) => check.status === 'critical')
+
+    if (blockingReadinessIssue) {
+      showToast('error', blockingReadinessIssue.saveMessage || blockingReadinessIssue.description)
+      scrollToFirstError()
+      return
+    }
+
     setSaving(true)
 
     try {
@@ -1735,7 +1931,7 @@ const knownStoreIdsKey = useMemo(() => {
     } finally {
       setSaving(false)
     }
-  }, [form, saving, selectedStore, showToast, user])
+  }, [form, saving, schedulingAllowed, selectedStore, showToast, user])
 
   if (loadingStores) {
     return (
@@ -1932,6 +2128,85 @@ const knownStoreIdsKey = useMemo(() => {
               Gerenciar cardápio
             </Link>
           </div>
+          <section
+            id="settings-readiness"
+            className={`rounded-[1.8rem] border p-5 shadow-sm transition-colors ${
+              readiness.criticalCount > 0
+                ? 'border-red-200 bg-red-50/90 dark:border-red-500/25 dark:bg-red-950/25'
+                : readiness.warningCount > 0
+                  ? 'border-amber-200 bg-amber-50/90 dark:border-amber-500/25 dark:bg-amber-950/25'
+                  : 'border-emerald-200 bg-emerald-50/90 dark:border-emerald-500/25 dark:bg-emerald-950/25'
+            }`}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  {readiness.criticalCount > 0 ? (
+                    <FiAlertCircle className="shrink-0 text-red-600 dark:text-red-300" size={20} />
+                  ) : readiness.warningCount > 0 ? (
+                    <FiAlertCircle className="shrink-0 text-amber-600 dark:text-amber-300" size={20} />
+                  ) : (
+                    <FiCheckCircle className="shrink-0 text-emerald-600 dark:text-emerald-300" size={20} />
+                  )}
+
+                  <h2 className="text-lg font-black text-[#111827] dark:text-white">
+                    Prontidão da loja
+                  </h2>
+                </div>
+
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280] dark:text-gray-300">
+                  {readiness.criticalCount > 0
+                    ? 'Corrija os itens críticos antes de salvar. Eles podem deixar o cardápio aberto sem pedido funcional.'
+                    : readiness.warningCount > 0
+                      ? 'A loja pode salvar, mas estes pontos podem gerar dúvida ou atrito no pedido público.'
+                      : 'As configurações principais para receber pedidos estão coerentes.'}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 gap-2">
+                <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-red-600 shadow-sm ring-1 ring-red-100 dark:bg-white/10 dark:text-red-200 dark:ring-red-400/20">
+                  {readiness.criticalCount} crítico
+                </span>
+
+                <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-600 shadow-sm ring-1 ring-amber-100 dark:bg-white/10 dark:text-amber-200 dark:ring-amber-400/20">
+                  {readiness.warningCount} aviso
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {readiness.checks.map((check) => {
+                const Icon = check.status === 'ok' ? FiCheckCircle : FiAlertCircle
+
+                const toneClass =
+                  check.status === 'critical'
+                    ? 'border-red-100 bg-white text-red-600 dark:border-red-500/25 dark:bg-red-950/35 dark:text-red-300'
+                    : check.status === 'warning'
+                      ? 'border-amber-100 bg-white text-amber-600 dark:border-amber-500/25 dark:bg-amber-950/35 dark:text-amber-300'
+                      : 'border-emerald-100 bg-white text-emerald-600 dark:border-emerald-500/25 dark:bg-emerald-950/35 dark:text-emerald-300'
+
+                return (
+                  <div
+                    key={`${check.status}-${check.title}`}
+                    className={`flex items-start gap-3 rounded-2xl border p-4 shadow-sm transition-colors ${toneClass}`}
+                  >
+                    <Icon className="mt-0.5 shrink-0" size={18} />
+
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-[#111827] dark:text-white">
+                        {check.title}
+                      </p>
+
+                      <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-gray-300">
+                        {check.description}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
           <Section
             id="settings-identity"
             icon={FiGlobe}

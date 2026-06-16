@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   where,
   limit,
@@ -37,7 +38,6 @@ import {
 } from 'react-icons/fi'
 
 import { db, functions } from '../../services/firebase'
-import { useAuth } from '../../contexts/AuthContext'
 import { useCart } from '../../contexts/CartContext'
 
 import ProductCard from './ProductCard'
@@ -1762,7 +1762,6 @@ function HeaderIconButton({ icon: Icon, label, onClick, active = false }) {
 export default function StoreFrontPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const { user, userData, loading: authLoading, hasRole } = useAuth()
   const { cartItems, cartTotal, setStoreKey } = useCart()
 
   const [isFavorite, setIsFavorite] = useState(false)
@@ -1823,14 +1822,8 @@ export default function StoreFrontPage() {
     }
   }, [])
 
-  const combinedUser = useMemo(() => {
-    if (!user && !userData) return null
-    return { ...user, ...userData }
-  }, [user, userData])
-
-  const isOwner = authLoading ? false : canEditStorefront(combinedUser, store, slug)
-  const isAdminPreview = Boolean(hasRole?.(['admin', 'developer']))
-  const canPreviewUnavailableStore = isOwner || isAdminPreview
+  const isOwner = false
+  const canPreviewUnavailableStore = false
   const hasMenuStore = Boolean(store)
   const menuTargetStoreId = getStoreDocId(store)
   const menuTargetStoreSlug = getStoreSlug(store, slug)
@@ -2352,6 +2345,39 @@ const handleToggleFavorite = useCallback(() => {
   }, [store?.id, slug, setStoreKey])
 
   useEffect(() => {
+    const publicStoreId = String(store?.id || '').trim()
+    if (!publicStoreId) return undefined
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'publicStores', publicStoreId),
+      (snapshot) => {
+        if (!snapshot.exists()) return
+
+        setStore((current) => {
+          if (!current || current.id !== publicStoreId) return current
+
+          return normalizeStore({
+            ...current,
+            ...snapshot.data(),
+            id: current.id,
+            docId: current.docId,
+            storeId: current.storeId,
+            storeDocId: current.storeDocId,
+            publicDataSource: 'publicStores',
+          }, slug)
+        })
+      },
+      (error) => {
+        if (import.meta.env.DEV) {
+          console.warn('[StoreFront] publicStores live update ignored:', error)
+        }
+      }
+    )
+
+    return () => unsubscribe()
+  }, [store?.id, slug])
+
+  useEffect(() => {
   if (!menuStoreContext.hasStore || (menuStoreContext.isUnavailable && !canPreviewUnavailableStore)) {
   queueMicrotask(() => {
     setCategories([])
@@ -2728,7 +2754,11 @@ return (
         ) : (
           <>
             {featuredProducts.length > 0 && activeCategory === 'all' && !searchTerm && (
-              <section id="category-destaques" className="mb-8 lg:mb-10">
+              <section
+                id="category-destaques"
+                className="mb-8 lg:mb-10"
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 520px' }}
+              >
                 <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                   <div>
                     <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#f97316]">
@@ -2781,7 +2811,12 @@ return (
 
             {productSections.length > 0 ? (
               productSections.map((section) => (
-                <section key={section.id} id={`category-${section.id}`} className="scroll-mt-28 mb-8 lg:mb-10">
+                <section
+                  key={section.id}
+                  id={`category-${section.id}`}
+                  className="scroll-mt-28 mb-8 lg:mb-10"
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 520px' }}
+                >
                   <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                     <div>
                       <h2 className="text-[1.35rem] font-black tracking-tight text-[#111827] sm:text-3xl">

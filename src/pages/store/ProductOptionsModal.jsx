@@ -804,50 +804,51 @@ const modalInfoBadges = useMemo(() => {
             : 'translate-y-0 scale-100 opacity-100'
         }`}
       >
-        <div className="relative flex h-[230px] shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3 sm:h-[300px] sm:p-5 md:h-[330px]">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,146,60,.14),transparent_62%)]" />
+        <div className="flex-1 overflow-y-auto bg-[#f9fafb]">
+          <div className="relative flex h-[170px] items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 p-3 sm:h-[260px] sm:p-5 md:h-[320px]">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,146,60,.14),transparent_62%)]" />
 
-          {imageUrl ? (
-            <div className="relative flex h-full w-full items-center justify-center rounded-[1.6rem] bg-white/45 p-1 ring-1 ring-white/70">
-              <img
-                src={imageUrl}
-                srcSet={imageSrcSet || undefined}
-                sizes="(max-width: 640px) 100vw, 576px"
-                alt={product.name}
-                loading="eager"
-                fetchPriority="high"
-                decoding="async"
-                width={900}
-                height={900}
-                className="max-h-full max-w-full object-contain object-center drop-shadow-[0_18px_34px_rgba(15,23,42,0.12)]"
-              />
+            {imageUrl ? (
+              <div className="relative flex h-full w-full items-center justify-center rounded-[1.35rem] bg-white/55 p-1 ring-1 ring-white/70 sm:rounded-[1.6rem]">
+                <img
+                  src={imageUrl}
+                  srcSet={imageSrcSet || undefined}
+                  sizes="(max-width: 640px) 100vw, 576px"
+                  alt={product.name}
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  width={900}
+                  height={900}
+                  className="max-h-full max-w-full object-contain object-center drop-shadow-[0_18px_34px_rgba(15,23,42,0.12)]"
+                />
+              </div>
+            ) : (
+              <div className="relative flex h-full w-full items-center justify-center rounded-[1.35rem] bg-[#f9fafb] text-gray-300 ring-1 ring-gray-100 sm:rounded-[1.6rem]">
+                <FiShoppingBag size={52} />
+              </div>
+            )}
+
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-white/10" />
+
+            <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#111827] shadow-lg backdrop-blur">
+                <FiShoppingBag size={13} />
+                Monte seu pedido
+              </span>
             </div>
-          ) : (
-            <div className="relative flex h-full w-full items-center justify-center rounded-[1.6rem] bg-[#f9fafb] text-gray-300 ring-1 ring-gray-100">
-              <FiShoppingBag size={52} />
-            </div>
-          )}
 
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-white/10" />
-
-          <div className="absolute bottom-4 left-4 right-4">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#111827] shadow-lg backdrop-blur">
-              <FiShoppingBag size={13} />
-              Monte seu pedido
-            </span>
+            <button
+              type="button"
+              onClick={requestClose}
+              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/95 text-[#111827] shadow-lg backdrop-blur transition hover:bg-white sm:right-4 sm:top-4 sm:h-11 sm:w-11"
+              aria-label="Fechar"
+            >
+              <FiX size={22} />
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={requestClose}
-            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 text-[#111827] shadow-lg backdrop-blur transition hover:bg-white"
-            aria-label="Fechar"
-          >
-            <FiX size={22} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto bg-[#f9fafb] p-5">
+          <div className="p-4 sm:p-5">
           <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
             <h2 className="text-2xl font-black tracking-tight text-[#111827]">
               {product.name}
@@ -1154,6 +1155,7 @@ const modalInfoBadges = useMemo(() => {
               <span>{error}</span>
             </div>
           )}
+          </div>
         </div>
 
         <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-18px_40px_rgba(15,23,42,0.08)]">

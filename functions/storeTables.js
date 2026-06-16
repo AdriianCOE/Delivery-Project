@@ -78,7 +78,7 @@ async function assertCanManageStore(db, HttpsError, uid, storeId) {
 
 function assertTableQrAllowed(HttpsError, storeData) {
   if (hasPlanFeature(storeData, 'tableQrCode')) return
-  throw new HttpsError('failed-precondition', 'QR Code de mesa exige plano Profissional ou Premium.')
+  throw new HttpsError('failed-precondition', 'QR Code de mesa exige plano Premium.')
 }
 
 /**

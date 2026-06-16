@@ -3750,6 +3750,11 @@ const PUBLIC_CATALOG_PLAN_FIELDS = [
   'selectedPlan',
   'plan',
   'planId',
+  'trialStatus',
+  'trial',
+  'trialEndsAt',
+  'trialEndAt',
+  'trialEntitlementsPlan',
 ]
 
 function publicCatalogEntitlementsChanged(beforeData, afterData) {

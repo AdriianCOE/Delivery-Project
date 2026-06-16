@@ -404,11 +404,10 @@ function ProductCard({
   const visualBadges = useMemo(() => normalizeVisualBadges(product, 2), [product])
   const rawImageUrl = getProductImageSource(product)
   const imageUrl = getCloudinaryImageUrl(rawImageUrl, compact ? 'productCardSmall' : 'productCard')
+  const imageUrlSm = getCloudinaryImageUrl(rawImageUrl, 'productCardMobile')
   const imageSrcSet = getCloudinaryImageSrcSet(
     rawImageUrl,
-    compact
-      ? ['productCardSmall', 'productCard']
-      : ['productCardSmall', 'productCardLarge', 'productCard']
+    ['productCardMobile', 'productCard']
   )
 
   const lowStock =
@@ -762,13 +761,13 @@ function ProductCard({
           {imageUrl && !imgError ? (
             <img
               src={imageUrl}
-              srcSet={imageSrcSet || undefined}
-              sizes={compact ? '112px' : '(max-width: 640px) 128px, 160px'}
+              srcSet={imageSrcSet || (imageUrlSm ? `${imageUrlSm} 128w, ${imageUrl} 196w` : undefined)}
+              sizes="(max-width: 640px) 128px, 196px"
               alt={`Foto de ${productName}`}
               loading="lazy"
               decoding="async"
-              width={compact ? 112 : 160}
-              height={compact ? 112 : 160}
+              width={196}
+              height={196}
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
               className={`

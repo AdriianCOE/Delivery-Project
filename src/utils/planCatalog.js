@@ -21,6 +21,8 @@ export const BLOCKED_PLAN_STATUSES = [
   'billing_pending',
   'billing_pending_payment_method',
   'past_due',
+  'deleted',
+  'trial_ended',
 ]
 
 // Limites de quantidade ficam centralizados aqui. O enforcement real para
@@ -41,7 +43,7 @@ export const PLAN_LIMITS = {
     users: 3,
     coupons: 20,
     productImagesPerItem: 3,
-    tables: 50,
+    tables: 0,
   },
   [PLAN_IDS.PREMIUM]: {
     products: 1000,
@@ -66,12 +68,12 @@ export const PLAN_FEATURES = {
   customerRatings: PLAN_IDS.ESSENTIAL,
   basicReports: PLAN_IDS.ESSENTIAL,
   pickupDisplay: PLAN_IDS.PROFESSIONAL,
-  tableQrCode: PLAN_IDS.PROFESSIONAL,
   dineInOrdering: PLAN_IDS.PROFESSIONAL,
   scheduling: PLAN_IDS.PROFESSIONAL,
   coupons: PLAN_IDS.PROFESSIONAL,
   deliveryZonesAdvanced: PLAN_IDS.PROFESSIONAL,
   multiUser: PLAN_IDS.PROFESSIONAL,
+  tableQrCode: PLAN_IDS.PREMIUM,
   advancedReports: PLAN_IDS.PREMIUM,
   customBranding: PLAN_IDS.PREMIUM,
   removePratoByBranding: PLAN_IDS.PREMIUM,
@@ -95,6 +97,7 @@ export const FEATURE_LABELS = {
   multiUser: 'Usuários extras',
   deliveryZonesAdvanced: 'Entrega avançada',
   onlinePayments: 'Pagamento online',
+  tableQrCode: 'QR por mesa',
 }
 
 export const PLAN_OPTIONS = [
@@ -229,7 +232,6 @@ function getSubscriptionStatus(storeData = {}) {
  */
 export function hasActiveTrial(storeData = {}) {
   const subscriptionStatus = getSubscriptionStatus(storeData)
-  if (subscriptionStatus === 'trialing') return true
 
   // Não liberar trial em estados bloqueados
   if (
@@ -239,6 +241,8 @@ export function hasActiveTrial(storeData = {}) {
     Boolean(storeData.deletedAt) ||
     BLOCKED_PLAN_STATUSES.includes(subscriptionStatus)
   ) return false
+
+  if (subscriptionStatus === 'trialing') return true
 
   const trialStatus = getTrialStatus(storeData)
   if (['trialing', 'trial', 'active'].includes(trialStatus)) return true
