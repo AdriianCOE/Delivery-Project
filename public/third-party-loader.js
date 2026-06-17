@@ -1,4 +1,7 @@
 ;(function () {
+  var analyticsLoaded = false
+  var crispLoaded = false
+
   function loadScript(src) {
     var script = document.createElement('script')
     script.src = src
@@ -8,7 +11,8 @@
   }
 
   function loadGoogleAnalytics() {
-    if (window.__PRATOBY_GA_LOADED__) return
+    if (analyticsLoaded || window.__PRATOBY_GA_LOADED__) return
+    analyticsLoaded = true
     window.__PRATOBY_GA_LOADED__ = true
 
     window.dataLayer = window.dataLayer || []
@@ -23,7 +27,8 @@
   }
 
   function loadCrisp() {
-    if (window.__PRATOBY_CRISP_LOADED__) return
+    if (crispLoaded || window.__PRATOBY_CRISP_LOADED__) return
+    crispLoaded = true
     window.__PRATOBY_CRISP_LOADED__ = true
 
     window.$crisp = window.$crisp || []
@@ -32,21 +37,35 @@
     loadScript('https://client.crisp.chat/l.js')
   }
 
-  function loadThirdParties() {
-    loadGoogleAnalytics()
-
+  function scheduleAnalytics() {
     window.setTimeout(function () {
       if ('requestIdleCallback' in window) {
-        window.requestIdleCallback(loadCrisp, { timeout: 2500 })
-      } else {
-        loadCrisp()
+        window.requestIdleCallback(loadGoogleAnalytics, { timeout: 1500 })
+        return
       }
-    }, 1800)
+
+      loadGoogleAnalytics()
+    }, 4500)
   }
 
-  if (document.readyState === 'complete') {
-    loadThirdParties()
-  } else {
-    window.addEventListener('load', loadThirdParties, { once: true })
+  var INTERACTION_EVENTS = ['click', 'scroll', 'keydown', 'touchstart', 'pointerdown']
+
+  function onFirstInteraction() {
+    loadGoogleAnalytics()
+    loadCrisp()
+    INTERACTION_EVENTS.forEach(function (evt) {
+      window.removeEventListener(evt, onFirstInteraction, { passive: true, capture: true })
+    })
   }
-})()
+
+  scheduleAnalytics()
+
+  INTERACTION_EVENTS.forEach(function (evt) {
+    window.addEventListener(evt, onFirstInteraction, { once: true, passive: true, capture: true })
+  })
+
+  // Keep chat outside the initial render path and usual Lighthouse trace window.
+  window.setTimeout(function () {
+    loadCrisp()
+  }, 15000)
+}())

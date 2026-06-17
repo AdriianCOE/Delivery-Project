@@ -49,9 +49,15 @@ function manualChunks(id) {
   if (packageName === 'react-icons') return 'vendor-icons'
   if (packageName === 'lucide-react') return 'vendor-lucide'
   if (packageName === 'framer-motion' || packageName === 'motion') return 'vendor-motion'
-  if (packageName === '@dnd-kit/core' || packageName === '@dnd-kit/sortable') return 'vendor-dnd'
+  if (packageName.startsWith('@dnd-kit/')) return 'vendor-dnd'
   if (packageName === 'qrcode.react') return 'vendor-qrcode'
-  if (packageName === 'react-helmet-async') return 'vendor-seo'
+  if (packageName === 'react-helmet-async' || packageName === 'helmet-async') return 'vendor-seo'
+  // Firebase transitive deps
+  if (packageName === 'idb') return 'vendor-firebase-core'
+  if (packageName === 'tslib') return 'vendor-firebase-core'
+  if (packageName === 'undici-types') return 'vendor-misc'
+  // React Router transitive deps
+  if (packageName === 'history' || packageName.startsWith('@remix-run/')) return 'vendor-react'
 
   return 'vendor-misc'
 }
@@ -60,7 +66,9 @@ function manualChunks(id) {
 export default defineConfig({
   plugins: [react()],
   build: {
-    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+    target: 'es2022',
+    cssMinify: true,
+    cssCodeSplit: true,
     rolldownOptions: {
       output: {
         manualChunks,

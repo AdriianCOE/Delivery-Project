@@ -62,7 +62,7 @@ function DeferredCookieConsent() {
       let idleId = null
       const timeoutId = window.setTimeout(() => {
         idleId = window.requestIdleCallback(showConsent, { timeout: 1000 })
-      }, 1400)
+      }, 2200)
 
       return () => {
         window.clearTimeout(timeoutId)
@@ -72,7 +72,7 @@ function DeferredCookieConsent() {
       }
     }
 
-    const timeoutId = window.setTimeout(showConsent, 1800)
+    const timeoutId = window.setTimeout(showConsent, 2500)
 
     return () => {
       window.clearTimeout(timeoutId)

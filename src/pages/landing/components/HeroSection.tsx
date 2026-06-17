@@ -159,8 +159,6 @@ export function HeroSection() {
               {[
                 ['Delivery sem comissão', '/delivery-sem-comissao'],
                 ['Loja online para restaurante', '/loja-online-para-restaurante'],
-                ['Sistema para confeitaria', '/sistema-para-confeitaria'],
-                ['Exemplos oficiais', '/exemplos'],
                 ['Fale com o PratoBy', '/contato'],
               ].map(([item, to]) => (
                 <span

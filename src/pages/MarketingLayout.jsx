@@ -97,10 +97,11 @@ function Logo({ compact = false, inverted = false, mobile = false }) {
         <span className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-amber-50" />
         <span className="absolute -right-4 -top-4 h-12 w-12 rounded-full bg-orange-200/45 blur-xl" />
         <img
-          src="/icons/android-chrome-192x192.png"
+          src="/icons/pratoby-mark-96.png"
           alt="PratoBy"
-          width="192"
-          height="192"
+          width="96"
+          height="96"
+          decoding="async"
           className={[
             'relative z-10 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-105',
             markSize,

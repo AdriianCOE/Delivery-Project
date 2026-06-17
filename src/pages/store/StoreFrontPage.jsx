@@ -2365,33 +2365,39 @@ const handleToggleFavorite = useCallback(() => {
     const publicStoreId = String(store?.id || '').trim()
     if (!publicStoreId) return undefined
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'publicStores', publicStoreId),
-      (snapshot) => {
-        if (!snapshot.exists()) return
+    let unsubscribe = null
+    const liveUpdateTimer = window.setTimeout(() => {
+      unsubscribe = onSnapshot(
+        doc(db, 'publicStores', publicStoreId),
+        (snapshot) => {
+          if (!snapshot.exists()) return
 
-        setStore((current) => {
-          if (!current || current.id !== publicStoreId) return current
+          setStore((current) => {
+            if (!current || current.id !== publicStoreId) return current
 
-          return normalizeStore({
-            ...current,
-            ...snapshot.data(),
-            id: current.id,
-            docId: current.docId,
-            storeId: current.storeId,
-            storeDocId: current.storeDocId,
-            publicDataSource: 'publicStores',
-          }, slug)
-        })
-      },
-      (error) => {
-        if (import.meta.env.DEV) {
-          console.warn('[StoreFront] publicStores live update ignored:', error)
+            return normalizeStore({
+              ...current,
+              ...snapshot.data(),
+              id: current.id,
+              docId: current.docId,
+              storeId: current.storeId,
+              storeDocId: current.storeDocId,
+              publicDataSource: 'publicStores',
+            }, slug)
+          })
+        },
+        (error) => {
+          if (import.meta.env.DEV) {
+            console.warn('[StoreFront] publicStores live update ignored:', error)
+          }
         }
-      }
-    )
+      )
+    }, 15000)
 
-    return () => unsubscribe()
+    return () => {
+      window.clearTimeout(liveUpdateTimer)
+      if (unsubscribe) unsubscribe()
+    }
   }, [store?.id, slug])
 
   useEffect(() => {
@@ -2774,7 +2780,6 @@ return (
               <section
                 id="category-destaques"
                 className="mb-8 lg:mb-10"
-                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 520px' }}
               >
                 <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                   <div>
@@ -2827,12 +2832,18 @@ return (
             )}
 
             {productSections.length > 0 ? (
-              productSections.map((section) => (
+              productSections.map((section, sectionIndex) => {
+                const visibleSectionsBeforeCategory =
+                  (featuredProducts.length > 0 && activeCategory === 'all' && !searchTerm ? 1 : 0) +
+                  sectionIndex
+                const deferSectionRendering = visibleSectionsBeforeCategory >= 2
+
+                return (
                 <section
                   key={section.id}
                   id={`category-${section.id}`}
                   className="scroll-mt-28 mb-8 lg:mb-10"
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 520px' }}
+                  style={deferSectionRendering ? { contentVisibility: 'auto', containIntrinsicSize: '0 520px' } : undefined}
                 >
                   <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                     <div>
@@ -2882,7 +2893,8 @@ return (
                     ))}
                   </div>
                 </section>
-              ))
+                )
+              })
             ) : (
               <EmptyProducts
                 searchTerm={searchTerm}

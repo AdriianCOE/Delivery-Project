@@ -15,6 +15,8 @@ const EXAMPLE_LABEL = 'pratoby.com/capivaras-lanches'
 const CAPIVARA_LOGO =
   'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto,w_64,h_64,c_fill/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
 
+const DEMO_IMAGE_TRANSFORM = 'f_auto,q_auto:eco,c_fit,w_112,h_112'
+
 const menuItems = [
   {
     name: 'Capivara Clássico',
@@ -22,7 +24,7 @@ const menuItems = [
     price: 'R$ 28,00',
     oldPrice: 'R$ 32,00',
     badge: 'Popular',
-    image: 'https://res.cloudinary.com/dsionrn26/image/upload/q_auto/f_auto/v1779426519/burguer_srbdst.png',
+    image: `https://res.cloudinary.com/dsionrn26/image/upload/${DEMO_IMAGE_TRANSFORM}/v1779426519/burguer_srbdst.png`,
   },
   {
     name: 'Batata Rústica',
@@ -30,8 +32,7 @@ const menuItems = [
     price: 'R$ 16,00',
     oldPrice: '',
     badge: 'Destaque',
-    image:
-      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2EIlmcWfSfEeLI19XjB-n1mLnjc0gVWSpmw&s',
+    image: `https://res.cloudinary.com/dsionrn26/image/upload/${DEMO_IMAGE_TRANSFORM}/v1779426519/burguer_srbdst.png`,
   },
   {
     name: 'Refrigerante lata',
@@ -39,7 +40,7 @@ const menuItems = [
     price: 'R$ 6,00',
     oldPrice: '',
     badge: 'Opções',
-    image: 'https://res.cloudinary.com/dsionrn26/image/upload/q_auto/f_auto/v1779426519/refri_ueqyna.png',
+    image: `https://res.cloudinary.com/dsionrn26/image/upload/${DEMO_IMAGE_TRANSFORM}/v1779426519/refri_ueqyna.png`,
   },
 ]
 
@@ -178,6 +179,9 @@ export function PhoneMockup() {
                       src={CAPIVARA_LOGO}
                       alt="Capivara's Lanches"
                       className="h-full w-full object-cover"
+                      width={64}
+                      height={64}
+                      decoding="async"
                     />
                   </div>
 
@@ -250,6 +254,9 @@ export function PhoneMockup() {
                         src={item.image}
                         alt={item.name}
                         loading="lazy"
+                        decoding="async"
+                        width={112}
+                        height={112}
                         className="h-full w-full object-contain p-1"
                       />
                       {index === 0 && (

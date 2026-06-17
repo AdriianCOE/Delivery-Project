@@ -1271,20 +1271,20 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       {bannerMobileUrl && (
         <source
           media="(max-width: 640px)"
-          srcSet={`${bannerMobileUrl} 400w`}
+          srcSet={`${bannerMobileUrl} 640w`}
           sizes="100vw"
         />
       )}
       <img
         src={bannerUrl}
-        srcSet={`${bannerUrl} 1200w`}
+        srcSet={`${bannerUrl} 1200w${bannerMobileUrl ? `, ${bannerMobileUrl} 640w` : ''}`}
         sizes="100vw"
         alt=""
         aria-hidden="true"
         className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
         fetchPriority="high"
         loading="eager"
-        decoding="async"
+        decoding="sync"
         width={1200}
         height={480}
       />
