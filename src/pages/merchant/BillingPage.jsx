@@ -681,25 +681,20 @@ export default function BillingPage() {
   }, [currentPeriodEnd, hasAsaasBillingSetup, isActive, isPastDue, isPending, isTrial, store?.createdAt, trialEndsAt])
 
   function openBillingModal(targetPlan, targetCycle) {
-    if (!store?.id) {
-      setToast({ type: 'error', message: 'Nenhuma loja selecionada para faturamento.' })
-      return
-    }
-
     setPendingPlan(targetPlan)
     setPendingCycle(normalizeCycleId(targetCycle))
 
-    const addr = typeof store.address === 'object' ? store.address : {}
-    const street = typeof store.address === 'string' ? store.address : (addr?.street || addr?.rua || store.street || store.logradouro || '')
-    const number = addr?.number || addr?.numero || store.addressNumber || store.number || store.numero || ''
-    const neighborhood = addr?.neighborhood || addr?.bairro || store.province || store.neighborhood || store.bairro || ''
-    const complement = addr?.complement || addr?.complemento || store.complement || store.complemento || ''
-    const cep = addr?.cep || store.postalCode || store.cep || store.zipCode || ''
+    const addr = store && typeof store.address === 'object' ? store.address : {}
+    const street = store && typeof store.address === 'string' ? store.address : (addr?.street || addr?.rua || store?.street || store?.logradouro || userData?.signup?.address || '')
+    const number = addr?.number || addr?.numero || store?.addressNumber || store?.number || store?.numero || userData?.signup?.addressNumber || ''
+    const neighborhood = addr?.neighborhood || addr?.bairro || store?.province || store?.neighborhood || store?.bairro || userData?.signup?.neighborhood || ''
+    const complement = addr?.complement || addr?.complemento || store?.complement || store?.complemento || userData?.signup?.complement || ''
+    const cep = addr?.cep || store?.postalCode || store?.cep || store?.zipCode || userData?.signup?.postalCode || ''
 
-    if (!billingName) setBillingName(store.name || store.storeName || user?.displayName || userData?.name || '')
-    if (!billingEmail) setBillingEmail(store.ownerEmail || user?.email || userData?.email || '')
-    if (!billingPhone) setBillingPhone(formatPhoneBR(store.whatsapp || store.whatsapp1 || store.phone || userData?.phone || user?.phoneNumber || ''))
-    if (!billingCpfCnpj) setBillingCpfCnpj(formatBrazilianDocument(store.cnpj || store.cpf || ''))
+    if (!billingName) setBillingName(store?.name || store?.storeName || userData?.signup?.storeName || user?.displayName || userData?.name || '')
+    if (!billingEmail) setBillingEmail(store?.ownerEmail || user?.email || userData?.email || '')
+    if (!billingPhone) setBillingPhone(formatPhoneBR(store?.whatsapp || store?.whatsapp1 || store?.phone || userData?.phone || userData?.signup?.phone || user?.phoneNumber || ''))
+    if (!billingCpfCnpj) setBillingCpfCnpj(formatBrazilianDocument(store?.cnpj || store?.cpf || userData?.cpfCnpj || ''))
     if (!billingPostalCode) setBillingPostalCode(formatCep(cep))
     if (!billingAddress) setBillingAddress(street)
     if (!billingAddressNumber) setBillingAddressNumber(number)
@@ -866,8 +861,7 @@ export default function BillingPage() {
     try {
       const documentDigits = cleanBrazilianDocument(billingCpfCnpj)
       const startSubscriptionFn = httpsCallable(functions, 'startAsaasSubscription')
-      const response = await startSubscriptionFn({
-        storeId: store.id,
+      const subscriptionPayload = {
         plan: pendingPlan,
         billingCycle: pendingCycle,
         billingData: {
@@ -881,7 +875,13 @@ export default function BillingPage() {
           province: billingProvince.trim(),
           complement: billingComplement.trim() || undefined,
         },
-      })
+      }
+
+      if (store?.id) {
+        subscriptionPayload.storeId = store.id
+      }
+
+      const response = await startSubscriptionFn(subscriptionPayload)
 
       const checkoutUrl =
         response?.data?.checkoutUrl ||
@@ -901,8 +901,11 @@ export default function BillingPage() {
         setLastCheckoutExpiresAt(checkoutExpiresAt)
 
         try {
+          const checkoutStoreId = response?.data?.storeId || store?.id
+          if (!checkoutStoreId) throw new Error('storeId indisponivel para cache local')
+
           localStorage.setItem(
-            `pratoby:billingCheckout:${store.id}`,
+            `pratoby:billingCheckout:${checkoutStoreId}`,
             JSON.stringify({
               url: checkoutUrl,
               expiresAt: checkoutExpiresAt,
@@ -938,6 +941,7 @@ export default function BillingPage() {
       if (auth.refreshUserData) {
         await auth.refreshUserData()
       }
+      setStoreRefreshNonce((value) => value + 1)
     } catch (error) {
       console.error('[BillingPage] error starting subscription:', error)
       setToast({
@@ -978,22 +982,6 @@ export default function BillingPage() {
       <div className="flex min-h-[50vh] flex-col items-center justify-center p-8 text-center">
         <FiLoader className="h-10 w-10 animate-spin text-[#f97316]" />
         <p className="mt-4 text-sm font-bold text-[#6b7280]">Carregando dados da assinatura...</p>
-      </div>
-    )
-  }
-
-  if (!store) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="rounded-lg border border-dashed border-gray-200 bg-white p-8 text-center dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/20 text-[#f97316]">
-            <FiAlertTriangle size={22} />
-          </div>
-          <h3 className="mt-4 text-lg font-black text-[#111827] dark:text-white">Nenhuma loja ativa</h3>
-          <p className="mt-2 text-sm text-[#6b7280] dark:text-zinc-400">
-            Não encontramos nenhuma loja ativa associada ao seu painel. Se acabou de criar a sua loja, tente recarregar ou contate o suporte.
-          </p>
-        </div>
       </div>
     )
   }
@@ -1050,10 +1038,18 @@ export default function BillingPage() {
                 <div>
                   <h2 className="text-sm font-black text-gray-900 dark:text-white">Nenhuma loja vinculada à sua conta</h2>
                   <p className="mt-1 text-xs font-semibold leading-relaxed text-gray-700 dark:text-zinc-300">
-                    Conclua o onboarding para criar a sua loja ou fale com o suporte se acredita que isso é um erro.
+                    Informe os dados de faturamento para criar sua loja em modo pendente e abrir o checkout seguro do Asaas.
                   </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => openBillingModal(plan, billingCycle)}
+                className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#f97316] px-5 text-xs font-black text-white shadow-lg shadow-orange-600/10 transition hover:bg-[#ea580c] sm:w-auto"
+              >
+                <FiCreditCard size={14} />
+                Configurar faturamento
+              </button>
             </div>
           </motion.section>
         )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { FiAlertCircle, FiAlertTriangle, FiBell, FiCheck, FiInfo, FiSettings, FiX } from 'react-icons/fi'
@@ -204,7 +204,52 @@ export default function DashboardNotificationBell({ notificationState, storeId }
   const [pushLoading, setPushLoading] = useState(false)
   const dropdownRef = useRef(null)
   const supportsBrowserNotifications = isBrowserNotificationsSupported()
-  const preferences = normalizeNotificationPreferences(rawPreferences)
+  const rawChannelBrowser = rawPreferences?.channels?.browser
+  const rawChannelFcm = rawPreferences?.channels?.fcm
+  const rawChannelInternal = rawPreferences?.channels?.internal
+  const rawChannelSound = rawPreferences?.channels?.sound
+  const rawChannelTitle = rawPreferences?.channels?.title
+  const rawChannelToast = rawPreferences?.channels?.toast
+  const rawEventBilling = rawPreferences?.events?.billing
+  const rawEventNewOrder = rawPreferences?.events?.newOrder
+  const rawEventReports = rawPreferences?.events?.reports
+  const rawEventReviews = rawPreferences?.events?.reviews
+  const rawEventSettings = rawPreferences?.events?.settings
+  const rawPreferencesUpdatedAt = rawPreferences?.updatedAt
+  const preferences = useMemo(
+    () => normalizeNotificationPreferences({
+      channels: {
+        browser: rawChannelBrowser,
+        fcm: rawChannelFcm,
+        internal: rawChannelInternal,
+        sound: rawChannelSound,
+        title: rawChannelTitle,
+        toast: rawChannelToast,
+      },
+      events: {
+        billing: rawEventBilling,
+        newOrder: rawEventNewOrder,
+        reports: rawEventReports,
+        reviews: rawEventReviews,
+        settings: rawEventSettings,
+      },
+      updatedAt: rawPreferencesUpdatedAt,
+    }),
+    [
+      rawChannelBrowser,
+      rawChannelFcm,
+      rawChannelInternal,
+      rawChannelSound,
+      rawChannelTitle,
+      rawChannelToast,
+      rawEventBilling,
+      rawEventNewOrder,
+      rawEventReports,
+      rawEventReviews,
+      rawEventSettings,
+      rawPreferencesUpdatedAt,
+    ]
+  )
   const filteredNotifications = notifications.filter((notification) => {
     if (filter === 'unread') return !notification.read
     if (filter === 'orders') return notification.area === 'orders'
@@ -257,7 +302,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     return () => {
       mounted = false
     }
-  }, [storeId])
+  }, [preferences, storeId])
 
   useEffect(() => {
     if (pushStatus !== 'enabled') return undefined

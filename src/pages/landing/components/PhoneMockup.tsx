@@ -17,7 +17,7 @@ const STORE_PATH = '/capivaras-lanches'
 const STORE_URL_LABEL = 'pratoby.com/capivaras-lanches'
 
 const BANNER_IMAGE =
-  'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto:eco,c_fill,w_720,h_460/v1781491524/PratoBy/doce-capivara-confeitaria/branding/bannerMobileUrl/ktl4xzd0l3yjlmkrryie.png'
+  'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto:eco,c_fill,w_720,h_460/v1781724006/download_qsopxa.png'
 
 const STORE_LOGO =
   'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto:eco,c_fill,w_96,h_96/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
