@@ -306,17 +306,17 @@ export const SEO_INTENT_PAGES = {
       },
     ],
   },
-  '/loja-online-para-restaurante': {
-    title: 'Loja online para restaurante sem comissão | PratoBy',
+  '/Cardapio-Digital': {
+    title: 'Cardápio digital para restaurante sem comissão | PratoBy',
     description:
-      'Crie uma loja online para restaurante com cardápio, carrinho, pedidos e painel de gestão para vender direto sem comissão.',
-    h1: 'Loja online para restaurante vender sem comissão',
-    eyebrow: 'Loja online',
+      'Crie um cardápio digital para restaurante com categorias, produtos, carrinho e pedidos para vender direto sem comissão.',
+    h1: 'Cardápio digital para restaurante vender sem comissão',
+    eyebrow: 'Cardápio digital',
     subtitle:
       'Tenha um canal próprio de pedidos com cardápio, carrinho, link público e painel para acompanhar a operação.',
     intro:
       'A loja online do PratoBy ajuda restaurantes a venderem direto, sem depender apenas de WhatsApp ou marketplaces para receber pedidos.',
-    path: '/loja-online-para-restaurante',
+    path: '/Cardapio-Digital',
     benefits: [
       'Loja online com URL própria no PratoBy',
       'Cardápio, carrinho e pedidos em uma experiência mobile-first',

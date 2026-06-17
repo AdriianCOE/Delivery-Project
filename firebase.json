@@ -382,7 +382,7 @@
         }
       },
       {
-        "source": "/loja-online-para-restaurante",
+        "source": "/Cardapio-Digital",
         "function": {
           "functionId": "storefrontSeoPreview",
           "region": "southamerica-east1"

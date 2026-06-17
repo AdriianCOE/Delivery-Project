@@ -3840,7 +3840,7 @@ const INSTITUTIONAL_SEO_ROUTES = {
     description:
       'Monte um cardápio digital para restaurante, receba pedidos online e venda direto pelo seu próprio link sem comissão por venda.',
   },
-  '/loja-online-para-restaurante': {
+  '/Cardapio-Digital': {
     title: 'Loja online para restaurante sem comissão | PratoBy',
     description:
       'Crie uma loja online para restaurante com cardápio, carrinho, pedidos e painel de gestão para vender direto sem comissão.',
@@ -4337,7 +4337,7 @@ function buildStorefrontSeoMeta(store) {
       store?.logo
   ) || DEFAULT_OG_IMAGE
   const image = normalizePreviewImageUrl(rawImage) || DEFAULT_OG_IMAGE
-  const title = `${storeName} | Cardápio online no PratoBy`
+  const title = `${storeName} | Cardápio digital - PratoBy`
   const indexable = shouldIndexPublicStore(store)
 
   const favicon = buildSeoFaviconUrl(
@@ -4353,7 +4353,7 @@ function buildStorefrontSeoMeta(store) {
     description,
     image,
     imageType: getPreviewImageType(image),
-    imageAlt: `${storeName} | Cardápio online no PratoBy`,
+    imageAlt: `${storeName} | Cardápio digital - PratoBy`,
     canonical,
     favicon,
     robots: indexable ? INDEX_ROBOTS : NOINDEX_ROBOTS,

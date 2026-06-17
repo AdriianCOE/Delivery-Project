@@ -136,7 +136,7 @@ export default function AppRoutes() {
         <Route path="/sistema-para-lanchonete" element={<SeoIntentPage />} />
         <Route path="/sistema-para-pizzaria" element={<SeoIntentPage />} />
         <Route path="/cardapio-digital-para-restaurante" element={<SeoIntentPage />} />
-        <Route path="/loja-online-para-restaurante" element={<SeoIntentPage />} />
+        <Route path="/Cardapio-Digital" element={<SeoIntentPage />} />
         <Route path="/privacy" element={<Navigate to="/privacidade" replace />} />
         <Route path="/terms" element={<Navigate to="/termos" replace />} />
 

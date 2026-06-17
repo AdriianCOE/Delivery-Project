@@ -20,7 +20,7 @@ O PratoBy ajuda lojistas de alimentação a criar uma loja online com cardápio 
 - [Sistema para lanchonete](https://pratoby.com/sistema-para-lanchonete): loja online para lanchonetes venderem com entrega e retirada.
 - [Sistema para pizzaria](https://pratoby.com/sistema-para-pizzaria): pedidos online para pizzarias com sabores, adicionais, entrega e retirada.
 - [Cardápio digital para restaurante](https://pratoby.com/cardapio-digital-para-restaurante): cardápio digital para restaurantes venderem direto.
-- [Loja online para restaurante](https://pratoby.com/loja-online-para-restaurante): loja online com cardápio, carrinho, pedidos e painel de gestão.
+- [Loja online para restaurante](https://pratoby.com/Cardapio-Digital): loja online com cardápio, carrinho, pedidos e painel de gestão.
 
 ## Lojas demo
 

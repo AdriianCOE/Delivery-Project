@@ -1,53 +1,41 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
-import MarketingLayout from '../pages/MarketingLayout'
-import SEO from '../components/seo/SEO'
-import { PLAN_OPTIONS } from '../utils/planCatalog'
-import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
 import {
   FiArrowRight,
   FiCheck,
   FiClock,
+  FiCreditCard,
+  FiHelpCircle,
   FiLink,
   FiMessageCircle,
-  FiShield,
-  FiShoppingBag,
-  FiTrendingUp,
-  FiUsers,
   FiMinus,
   FiMonitor,
+  FiShield,
+  FiShoppingBag,
+  FiStar,
+  FiTrendingUp,
+  FiUsers,
+  FiZap,
 } from 'react-icons/fi'
-import AnimatedSegmentedControl from '../components/ui/AnimatedSegmentedControl'
 
-function formatPriceBR(val) {
-  const parts = Number(val || 0).toFixed(2).split('.')
+import MarketingLayout from '../pages/MarketingLayout'
+import SEO from '../components/seo/SEO'
+import AnimatedSegmentedControl from '../components/ui/AnimatedSegmentedControl'
+import { PLAN_OPTIONS } from '../utils/planCatalog'
+import {
+  MARKETING_SEO,
+  buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+} from '../components/seo/seoConfig'
+
+function formatPriceBR(value) {
+  const parts = Number(value || 0).toFixed(2).split('.')
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return parts.join(',')
 }
 
-const planShortDescriptions = {
-  essential: 'Para começar com loja própria, cardápio digital e pedidos organizados.',
-  professional: 'Para lojas que querem vender por encomenda, usar cupons e organizar uma operação mais completa.',
-  premium: 'Para operações que precisam de limites altos, personalização avançada e suporte prioritário.',
-}
-
 const plans = PLAN_OPTIONS
-
-const benefits = [
-  {
-    icon: FiShield,
-    label: 'Sem comissão do PratoBy por pedido',
-  },
-  {
-    icon: FiClock,
-    label: 'Pedidos em tempo real',
-  },
-  {
-    icon: FiLink,
-    label: 'Link próprio da loja',
-  },
-]
 
 const planLabels = {
   essential: 'Essencial',
@@ -55,12 +43,44 @@ const planLabels = {
   premium: 'Premium',
 }
 
+const planShortDescriptions = {
+  essential: 'Para começar com loja própria, cardápio digital e pedidos organizados.',
+  professional:
+    'Para lojas que querem vender mais com cupons, encomendas e operação mais completa.',
+  premium:
+    'Para operações que precisam de limites altos, personalização avançada e suporte prioritário.',
+}
+
+const planBestFor = {
+  essential: 'Ideal para começar',
+  professional: 'Mais indicado para piloto',
+  premium: 'Para operação avançada',
+}
+
+const benefits = [
+  {
+    icon: FiShield,
+    label: 'Sem comissão por pedido',
+  },
+  {
+    icon: FiClock,
+    label: 'Pedidos em tempo real',
+  },
+  {
+    icon: FiCreditCard,
+    label: 'Pagamento online nos planos',
+  },
+  {
+    icon: FiLink,
+    label: 'Link próprio da loja',
+  },
+]
+
 const planOptionsForComparison = [
   { label: 'Essencial', value: 'essential' },
   { label: 'Profissional', value: 'professional' },
   { label: 'Premium', value: 'premium' },
 ]
-
 
 const planFeatures = [
   {
@@ -86,6 +106,12 @@ const planFeatures = [
         premium: true,
       },
       {
+        name: 'Loja pública por link',
+        essential: true,
+        professional: true,
+        premium: true,
+      },
+      {
         name: 'Sem comissão do PratoBy por pedido',
         essential: true,
         professional: true,
@@ -104,7 +130,7 @@ const planFeatures = [
     icon: FiTrendingUp,
     items: [
       {
-        name: 'Painel em tempo real',
+        name: 'Painel de pedidos em tempo real',
         essential: true,
         professional: true,
         premium: true,
@@ -116,7 +142,7 @@ const planFeatures = [
         premium: true,
       },
       {
-        name: 'Agendamento/encomendas',
+        name: 'Agendamento e encomendas',
         essential: false,
         professional: true,
         premium: true,
@@ -158,6 +184,24 @@ const planFeatures = [
         premium: true,
       },
       {
+        name: 'QR Code do cardápio',
+        essential: true,
+        professional: true,
+        premium: true,
+      },
+      {
+        name: 'QR Code por mesa',
+        essential: false,
+        professional: true,
+        premium: true,
+      },
+      {
+        name: 'Painel de retirada',
+        essential: false,
+        professional: true,
+        premium: true,
+      },
+      {
         name: 'Personalização avançada',
         essential: false,
         professional: false,
@@ -173,19 +217,86 @@ const planFeatures = [
   },
 ]
 
+const choosingCards = [
+  {
+    icon: FiZap,
+    title: 'Escolha o Essencial se...',
+    text:
+      'você quer começar com uma loja online simples, cardápio digital, pedidos organizados e pagamento online, sem recursos avançados.',
+    plan: 'Essencial',
+    to: '/cadastro?plan=essential&cycle=monthly',
+  },
+  {
+    icon: FiStar,
+    title: 'Escolha o Profissional se...',
+    text:
+      'você vende com mais frequência, usa encomendas, quer cupons, QR por mesa, mais fotos e uma operação mais preparada para crescer.',
+    plan: 'Profissional',
+    to: '/cadastro?plan=professional&cycle=monthly',
+    highlight: true,
+  },
+  {
+    icon: FiTrendingUp,
+    title: 'Escolha o Premium se...',
+    text:
+      'sua loja precisa de limites altos, mais usuários, personalização avançada, suporte prioritário e uma operação mais robusta.',
+    plan: 'Premium',
+    to: '/cadastro?plan=premium&cycle=monthly',
+  },
+]
+
+const faqs = [
+  {
+    q: 'O PratoBy cobra comissão por pedido?',
+    a:
+      'Não. O PratoBy trabalha com assinatura. A loja vende pelo próprio link e não paga comissão do PratoBy por cada pedido recebido.',
+  },
+  {
+    q: 'Todos os planos têm pagamento online?',
+    a:
+      'Sim. Pagamento online faz parte da proposta principal do PratoBy e está presente nos planos para não limitar a venda da loja.',
+  },
+  {
+    q: 'Posso começar no plano Essencial e mudar depois?',
+    a:
+      'Sim. A ideia é começar com o plano que faz sentido para sua fase atual e evoluir quando precisar de recursos como cupons, encomendas, QR por mesa ou limites maiores.',
+  },
+  {
+    q: 'O teste grátis já libera recursos premium?',
+    a:
+      'Durante o teste grátis, a experiência pode liberar recursos avançados para você testar melhor a plataforma. Depois, a loja continua no plano escolhido.',
+  },
+  {
+    q: 'Qual plano é melhor para confeitaria?',
+    a:
+      'Na maioria dos casos, o Profissional é o melhor começo para confeitaria, porque inclui agendamento/encomendas, cupons e mais recursos de operação.',
+  },
+  {
+    q: 'Preciso pagar para criar a loja?',
+    a:
+      'Você pode iniciar o teste grátis e configurar sua loja. A cobrança real fica vinculada à etapa de pagamento e ao plano selecionado.',
+  },
+]
+
 function FeatureValue({ value, highlight = false }) {
   if (typeof value === 'boolean') {
     return value ? (
       <span
         className={[
           'inline-flex h-7 w-7 items-center justify-center rounded-full',
-          highlight ? 'bg-orange-100 text-[#f97316]' : 'bg-emerald-50 text-emerald-600',
+          highlight
+            ? 'bg-orange-100 text-[#f97316] dark:bg-orange-500/15'
+            : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
         ].join(' ')}
+        aria-label="Incluído"
       >
         <FiCheck size={16} className="stroke-[3]" />
       </span>
     ) : (
-      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-50 text-gray-300">
+      <span
+        className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-50 text-gray-300 dark:bg-zinc-800 dark:text-zinc-600"
+        aria-label="Não incluído"
+      >
         <FiMinus size={16} className="stroke-[3]" />
       </span>
     )
@@ -195,7 +306,7 @@ function FeatureValue({ value, highlight = false }) {
     <span
       className={[
         'text-center text-xs font-black leading-5 sm:text-sm',
-        highlight ? 'text-[#ea580c]' : 'text-gray-600',
+        highlight ? 'text-[#ea580c] dark:text-orange-300' : 'text-gray-600 dark:text-zinc-300',
       ].join(' ')}
     >
       {value}
@@ -213,7 +324,7 @@ function PlanCard({ plan, index, cycle }) {
       initial={{ opacity: 0, y: 28 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.5, delay: index * 0.1 }}
+      transition={{ duration: 0.5, delay: index * 0.08 }}
       className={[
         'group relative flex h-full flex-col rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl dark:bg-zinc-900 sm:p-7',
         plan.highlight
@@ -239,7 +350,11 @@ function PlanCard({ plan, index, cycle }) {
       </div>
 
       <div className="mt-5">
-        <h2 className="text-2xl font-black tracking-tight text-[#111827] dark:text-white">
+        <p className="text-xs font-black uppercase tracking-wide text-[#f97316]">
+          {planBestFor[plan.id] || 'Plano PratoBy'}
+        </p>
+
+        <h2 className="mt-1 text-2xl font-black tracking-tight text-[#111827] dark:text-white">
           {plan.name}
         </h2>
 
@@ -265,7 +380,7 @@ function PlanCard({ plan, index, cycle }) {
           </span>
         </div>
 
-        {isAnnual && (
+        {isAnnual ? (
           <motion.div
             key={`${plan.id}-annual-details`}
             initial={{ opacity: 0, height: 0 }}
@@ -274,16 +389,20 @@ function PlanCard({ plan, index, cycle }) {
             className="mt-1"
           >
             <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-green-700 ring-1 ring-green-100/50 dark:bg-green-500/10 dark:text-green-300 dark:ring-green-500/20">
-              2 meses grátis
+              2 meses grátis no anual
             </span>
             <p className="mt-1.5 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
               R$ {formatPriceBR(plan.priceAnnual)} cobrados ao ano
             </p>
           </motion.div>
+        ) : (
+          <p className="mt-1.5 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
+            Pagamento mensal. Você pode evoluir de plano quando precisar.
+          </p>
         )}
 
         <p className="mt-2 text-xs font-black text-[#43A047] dark:text-emerald-400">
-          {plan.commission}
+          {plan.commission || 'Sem comissão do PratoBy por pedido'}
         </p>
       </div>
 
@@ -296,7 +415,7 @@ function PlanCard({ plan, index, cycle }) {
             : 'bg-[#111827] text-white shadow-md hover:bg-black dark:bg-white dark:text-zinc-950 dark:hover:bg-orange-50',
         ].join(' ')}
       >
-        {plan.cta}
+        {plan.cta || 'Começar teste grátis'}
         <FiArrowRight size={17} />
       </Link>
 
@@ -320,7 +439,6 @@ function PlanCard({ plan, index, cycle }) {
   )
 }
 
-
 function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scrollToPlans }) {
   return (
     <motion.section
@@ -335,54 +453,60 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
         <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10">
           Recursos em detalhe
         </span>
+
         <h3 className="text-2xl font-black tracking-tight text-[#111827] dark:text-white md:text-3xl lg:text-4xl">
           Compare os planos PratoBy
         </h3>
+
         <p className="mt-4 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400 md:text-base">
-          Comece no plano certo para sua rotina. Depois, evolua quando sua operação pedir encomendas, cupons, limites maiores ou suporte prioritário.
+          Comece no plano certo para sua rotina. Depois, evolua quando sua operação pedir
+          encomendas, cupons, QR por mesa, limites maiores ou suporte prioritário.
         </p>
       </div>
 
       <div className="hidden overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-xl shadow-gray-200/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/20 lg:block">
         <div className="grid grid-cols-[1.25fr_1fr_1fr_1fr] border-b border-gray-100 bg-gray-50/80 dark:border-zinc-800 dark:bg-zinc-950/70">
-          <div className="p-6 text-xs font-black uppercase tracking-widest text-gray-400">Recurso</div>
+          <div className="p-6 text-xs font-black uppercase tracking-widest text-gray-400">
+            Recurso
+          </div>
+
           {planOptionsForComparison.map((plan) => {
-  const isRecommended = plan.value === 'professional'
+            const isRecommended = plan.value === 'professional'
 
-  return (
-    <div
-      key={plan.value}
-      className={[
-        'relative p-6 text-center',
-        isRecommended ? 'bg-orange-50/80 dark:bg-orange-500/10' : '',
-      ].join(' ')}
-    >
-      {isRecommended ? (
-        <span className="mb-3 inline-flex rounded-full bg-[#f97316] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-lg shadow-orange-600/20">
-          Recomendado
-        </span>
-      ) : (
-        <span className="mb-3 inline-flex h-[24px]" aria-hidden="true" />
-      )}
+            return (
+              <div
+                key={plan.value}
+                className={[
+                  'relative p-6 text-center',
+                  isRecommended ? 'bg-orange-50/80 dark:bg-orange-500/10' : '',
+                ].join(' ')}
+              >
+                {isRecommended ? (
+                  <span className="mb-3 inline-flex rounded-full bg-[#f97316] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-lg shadow-orange-600/20">
+                    Recomendado
+                  </span>
+                ) : (
+                  <span className="mb-3 inline-flex h-[24px]" aria-hidden="true" />
+                )}
 
-      <p
-        className={[
-          'text-lg font-black',
-          isRecommended ? 'text-[#f97316]' : 'text-[#111827] dark:text-white',
-        ].join(' ')}
-      >
-        {plan.label}
-      </p>
+                <p
+                  className={[
+                    'text-lg font-black',
+                    isRecommended ? 'text-[#f97316]' : 'text-[#111827] dark:text-white',
+                  ].join(' ')}
+                >
+                  {plan.label}
+                </p>
 
-      <p className="mx-auto mt-2 max-w-[180px] text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
-        {planShortDescriptions[plan.value]}
-      </p>
-    </div>
-  )
-})}
-</div>
+                <p className="mx-auto mt-2 max-w-[180px] text-xs font-semibold leading-5 text-gray-500 dark:text-zinc-400">
+                  {planShortDescriptions[plan.value]}
+                </p>
+              </div>
+            )
+          })}
+        </div>
 
-{planFeatures.map((category) => {
+        {planFeatures.map((category) => {
           const Icon = category.icon
 
           return (
@@ -394,19 +518,28 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
 
               <div className="divide-y divide-gray-100 dark:divide-zinc-800">
                 {category.items.map((item) => (
-                  <div key={item.name} className="grid grid-cols-[1.25fr_1fr_1fr_1fr] transition-colors hover:bg-orange-50/20 dark:hover:bg-orange-500/5">
+                  <div
+                    key={item.name}
+                    className="grid grid-cols-[1.25fr_1fr_1fr_1fr] transition-colors hover:bg-orange-50/20 dark:hover:bg-orange-500/5"
+                  >
                     <div className="flex items-center px-6 py-4 text-sm font-bold text-gray-700 dark:text-zinc-200">
                       {item.name}
                     </div>
+
                     {planOptionsForComparison.map((plan) => (
                       <div
                         key={plan.value}
                         className={[
                           'flex items-center justify-center px-5 py-4',
-                          plan.value === 'professional' ? 'bg-orange-50/70 dark:bg-orange-500/10' : '',
+                          plan.value === 'professional'
+                            ? 'bg-orange-50/70 dark:bg-orange-500/10'
+                            : '',
                         ].join(' ')}
                       >
-                        <FeatureValue value={item[plan.value]} highlight={plan.value === 'professional'} />
+                        <FeatureValue
+                          value={item[plan.value]}
+                          highlight={plan.value === 'professional'}
+                        />
                       </div>
                     ))}
                   </div>
@@ -417,9 +550,20 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
         })}
 
         <div className="grid grid-cols-[1.25fr_1fr_1fr_1fr] items-center border-t border-gray-100 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="text-sm font-bold text-gray-500 dark:text-zinc-400">Quer começar agora?</div>
+          <div className="text-sm font-bold text-gray-500 dark:text-zinc-400">
+            Quer começar agora?
+          </div>
+
           {planOptionsForComparison.map((plan) => (
-            <div key={plan.value} className={['flex justify-center', plan.value === 'professional' ? 'rounded-2xl bg-orange-50 py-3 dark:bg-orange-500/10' : ''].join(' ')}>
+            <div
+              key={plan.value}
+              className={[
+                'flex justify-center',
+                plan.value === 'professional'
+                  ? 'rounded-2xl bg-orange-50 py-3 dark:bg-orange-500/10'
+                  : '',
+              ].join(' ')}
+            >
               <button
                 type="button"
                 onClick={scrollToPlans}
@@ -448,10 +592,14 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
 
         <div className="mt-5 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-xl shadow-gray-200/50 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/20">
           <div className="rounded-[1.5rem] bg-orange-50 p-5 dark:bg-orange-500/10">
-            <p className="text-xs font-black uppercase tracking-wide text-[#f97316]">Plano selecionado</p>
+            <p className="text-xs font-black uppercase tracking-wide text-[#f97316]">
+              Plano selecionado
+            </p>
+
             <h4 className="mt-2 text-2xl font-black text-[#111827] dark:text-white">
               {planLabels[selectedMobilePlan]}
             </h4>
+
             <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280] dark:text-zinc-400">
               {planShortDescriptions[selectedMobilePlan]}
             </p>
@@ -462,7 +610,10 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
               const Icon = category.icon
 
               return (
-                <div key={category.category} className="rounded-[1.5rem] border border-gray-100 p-4 dark:border-zinc-800">
+                <div
+                  key={category.category}
+                  className="rounded-[1.5rem] border border-gray-100 p-4 dark:border-zinc-800"
+                >
                   <h5 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#111827] dark:text-white">
                     <Icon size={15} className="text-[#f97316]" />
                     {category.category}
@@ -470,8 +621,14 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
 
                   <div className="mt-4 space-y-3">
                     {category.items.map((item) => (
-                      <div key={item.name} className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 p-3 dark:bg-zinc-950/70">
-                        <span className="text-sm font-bold leading-5 text-gray-700 dark:text-zinc-200">{item.name}</span>
+                      <div
+                        key={item.name}
+                        className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 p-3 dark:bg-zinc-950/70"
+                      >
+                        <span className="text-sm font-bold leading-5 text-gray-700 dark:text-zinc-200">
+                          {item.name}
+                        </span>
+
                         <FeatureValue value={item[selectedMobilePlan]} highlight />
                       </div>
                     ))}
@@ -498,28 +655,33 @@ function PlanComparisonSection({ selectedMobilePlan, setSelectedMobilePlan, scro
 export default function PlansPage() {
   const [billingCycle, setBillingCycle] = useState('monthly')
   const [selectedMobilePlan, setSelectedMobilePlan] = useState('professional')
-  const plansJsonLd = useMemo(() => ({
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'PratoBy',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web',
-    url: 'https://pratoby.com/planos',
-    description: 'Cardápio digital próprio para restaurantes, lanchonetes e confeitarias sem comissão por pedido.',
-    offers: {
-      '@type': 'OfferCatalog',
-      name: 'Planos do PratoBy',
-      itemListElement: PLAN_OPTIONS.map((plan) => ({
-        '@type': 'Offer',
-        name: `Plano ${plan.name}`,
-        description: plan.description || plan.subtitle,
-        price: Number(plan.priceMonthly || 0).toFixed(2),
-        priceCurrency: 'BRL',
-        url: `https://pratoby.com/cadastro?plan=${plan.id}&cycle=monthly`,
-        availability: 'https://schema.org/InStock',
-      })),
-    },
-  }), [])
+
+  const plansJsonLd = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'PratoBy',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      url: 'https://pratoby.com/planos',
+      description:
+        'Cardápio digital próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online sem comissão por pedido.',
+      offers: {
+        '@type': 'OfferCatalog',
+        name: 'Planos do PratoBy',
+        itemListElement: PLAN_OPTIONS.map((plan) => ({
+          '@type': 'Offer',
+          name: `Plano ${plan.name}`,
+          description: plan.description || plan.subtitle,
+          price: Number(plan.priceMonthly || 0).toFixed(2),
+          priceCurrency: 'BRL',
+          url: `https://pratoby.com/cadastro?plan=${plan.id}&cycle=monthly`,
+          availability: 'https://schema.org/InStock',
+        })),
+      },
+    }),
+    []
+  )
 
   useEffect(() => {
     if (window.location.hash !== '#comparacao') return
@@ -543,9 +705,13 @@ export default function PlansPage() {
     <>
       <SEO
         {...MARKETING_SEO.plans}
-        jsonLd={[
+        structuredData={[
           plansJsonLd,
-          buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Planos', path: '/planos' }]),
+          buildBreadcrumbJsonLd([
+            { name: 'Início', path: '/' },
+            { name: 'Planos', path: '/planos' },
+          ]),
+          buildFaqPageJsonLd(faqs),
         ]}
       />
 
@@ -554,6 +720,7 @@ export default function PlansPage() {
           <section className="relative overflow-hidden border-b border-gray-100 bg-white dark:border-zinc-800 dark:bg-zinc-950">
             <div className="pointer-events-none absolute -left-28 top-20 h-80 w-80 rounded-full bg-orange-100/70 blur-3xl dark:bg-orange-500/10" />
             <div className="pointer-events-none absolute -right-28 -top-20 h-80 w-80 rounded-full bg-amber-100/70 blur-3xl dark:bg-amber-500/10" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-[#f9fafb] dark:to-zinc-950" />
 
             <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
               <motion.div
@@ -564,7 +731,7 @@ export default function PlansPage() {
               >
                 <span className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10">
                   <FiShield size={15} />
-                  Planos simples e sem comissão do PratoBy
+                  Planos simples, teste grátis e zero comissão por pedido
                 </span>
 
                 <h1 className="mt-6 text-4xl font-black tracking-tight text-[#111827] dark:text-white sm:text-5xl lg:text-6xl">
@@ -572,8 +739,28 @@ export default function PlansPage() {
                 </h1>
 
                 <p className="mx-auto mt-5 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] dark:text-zinc-400 sm:text-lg">
-                  Loja própria, pedidos em tempo real e sem comissão do PratoBy por pedido. Comece com 14 dias grátis e evolua quando sua operação pedir mais recursos.
+                  Crie sua loja própria, receba pedidos em tempo real e venda sem comissão do
+                  PratoBy por pedido. Comece com teste grátis e evolua quando sua operação pedir
+                  mais recursos.
                 </p>
+
+                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={scrollToPlans}
+                    className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 text-base font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c] sm:w-auto"
+                  >
+                    Ver planos
+                    <FiArrowRight size={20} />
+                  </button>
+
+                  <Link
+                    to="/contato"
+                    className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-gray-200 bg-white px-8 text-base font-black text-[#111827] transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500/40 sm:w-auto"
+                  >
+                    Preciso de ajuda
+                  </Link>
+                </div>
 
                 <div className="mt-7 flex flex-wrap justify-center gap-2">
                   {benefits.map((item) => {
@@ -611,8 +798,9 @@ export default function PlansPage() {
                   Comece simples. Evolua quando precisar.
                 </h2>
 
-                <p className="mt-4 max-w-md text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
-                  Todos os planos mantêm a proposta principal do PratoBy: vender direto, com loja própria e sem comissão do PratoBy por pedido.
+                <p className="mt-4 max-w-xl text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
+                  Todos os planos mantêm a proposta principal do PratoBy: vender direto, com loja
+                  própria, pedidos online e sem comissão do PratoBy por pedido.
                 </p>
               </div>
 
@@ -625,9 +813,13 @@ export default function PlansPage() {
                         <span className="flex items-center gap-1.5">
                           Anual
                           {billingCycle === 'annual' ? (
-                            <span className="inline-block shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white">-17%</span>
+                            <span className="inline-block shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white">
+                              -17%
+                            </span>
                           ) : (
-                            <span className="inline-block shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700">-17%</span>
+                            <span className="inline-block shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700">
+                              -17%
+                            </span>
                           )}
                         </span>
                       ),
@@ -635,7 +827,7 @@ export default function PlansPage() {
                     },
                   ]}
                   value={billingCycle}
-                  onChange={(newCycle) => setBillingCycle(newCycle)}
+                  onChange={setBillingCycle}
                   size="md"
                   variant="primary"
                 />
@@ -648,19 +840,144 @@ export default function PlansPage() {
               ))}
             </div>
 
-            <div className="mt-10 rounded-[1.5rem] border border-gray-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <p className="text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
-                <strong className="text-[#374151] dark:text-zinc-100">Nesta etapa, você pode criar sua loja e iniciar o teste grátis.</strong>
-                <br />
-                Após 14 dias, você escolhe continuar no plano selecionado. A cobrança real só é configurada na etapa de pagamento.
-              </p>
+            <div className="mt-10 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="flex items-center gap-2 text-sm font-black text-[#111827] dark:text-zinc-100">
+                  <FiCheck className="text-[#f97316]" />
+                  Teste grátis
+                </p>
+                <p className="mt-2 text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
+                  Crie sua loja, configure o cardápio e valide o fluxo antes de operar em escala.
+                </p>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="flex items-center gap-2 text-sm font-black text-[#111827] dark:text-zinc-100">
+                  <FiShield className="text-[#f97316]" />
+                  Sem comissão
+                </p>
+                <p className="mt-2 text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
+                  A venda é da sua loja. O PratoBy não fica com percentual sobre cada pedido.
+                </p>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="flex items-center gap-2 text-sm font-black text-[#111827] dark:text-zinc-100">
+                  <FiCreditCard className="text-[#f97316]" />
+                  Cobrança clara
+                </p>
+                <p className="mt-2 text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
+                  Após o teste, a continuidade segue o plano e ciclo escolhidos pela loja.
+                </p>
+              </div>
             </div>
+
+            <section className="mt-16">
+              <div className="mx-auto max-w-3xl text-center">
+                <span className="text-xs font-black uppercase tracking-[0.22em] text-[#f97316]">
+                  Qual plano escolher?
+                </span>
+
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-[#111827] dark:text-white sm:text-4xl">
+                  Um começo para cada fase da loja
+                </h2>
+
+                <p className="mt-3 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
+                  A escolha não precisa ser definitiva. Comece com o que faz sentido hoje e evolua
+                  conforme sua operação pedir mais recursos.
+                </p>
+              </div>
+
+              <div className="mt-8 grid gap-5 lg:grid-cols-3">
+                {choosingCards.map((card, index) => {
+                  const Icon = card.icon
+
+                  return (
+                    <motion.article
+                      key={card.title}
+                      initial={{ opacity: 0, y: 18 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: '-80px' }}
+                      transition={{ duration: 0.45, delay: index * 0.06 }}
+                      className={[
+                        'rounded-[2rem] border p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:bg-zinc-900',
+                        card.highlight
+                          ? 'border-orange-200 bg-orange-50/80 dark:border-orange-500/30 dark:bg-orange-500/10'
+                          : 'border-gray-100 bg-white dark:border-zinc-800',
+                      ].join(' ')}
+                    >
+                      <div
+                        className={[
+                          'grid h-12 w-12 place-items-center rounded-2xl',
+                          card.highlight
+                            ? 'bg-[#f97316] text-white shadow-lg shadow-orange-600/20'
+                            : 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10',
+                        ].join(' ')}
+                      >
+                        <Icon size={21} />
+                      </div>
+
+                      <h3 className="mt-5 text-lg font-black text-[#111827] dark:text-zinc-100">
+                        {card.title}
+                      </h3>
+
+                      <p className="mt-2 text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
+                        {card.text}
+                      </p>
+
+                      <Link
+                        to={card.to}
+                        className="mt-5 inline-flex items-center gap-2 text-sm font-black text-[#f97316] transition hover:text-[#ea580c]"
+                      >
+                        Começar no {card.plan}
+                        <FiArrowRight />
+                      </Link>
+                    </motion.article>
+                  )
+                })}
+              </div>
+            </section>
 
             <PlanComparisonSection
               selectedMobilePlan={selectedMobilePlan}
               setSelectedMobilePlan={setSelectedMobilePlan}
               scrollToPlans={scrollToPlans}
             />
+
+            <motion.section
+              initial={{ opacity: 0, y: 22 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.55 }}
+              className="mt-16 rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-8"
+            >
+              <div className="mx-auto max-w-3xl text-center">
+                <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#f97316] dark:bg-orange-500/10">
+                  <FiHelpCircle size={14} />
+                  Dúvidas comuns
+                </span>
+
+                <h2 className="mt-4 text-3xl font-black tracking-tight text-[#111827] dark:text-white">
+                  Perguntas sobre planos
+                </h2>
+              </div>
+
+              <div className="mt-8 grid gap-4 lg:grid-cols-2">
+                {faqs.map((faq) => (
+                  <article
+                    key={faq.q}
+                    className="rounded-[1.5rem] border border-gray-100 bg-[#f9fafb] p-5 dark:border-zinc-800 dark:bg-zinc-950/60"
+                  >
+                    <h3 className="text-base font-black text-[#111827] dark:text-zinc-100">
+                      {faq.q}
+                    </h3>
+                    <p className="mt-2 text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
+                      {faq.a}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </motion.section>
 
             <motion.div
               initial={{ opacity: 0, y: 22 }}
@@ -675,12 +992,14 @@ export default function PlansPage() {
                     <FiUsers size={14} />
                     Ajuda na escolha
                   </span>
+
                   <h3 className="mt-4 text-2xl font-black text-[#111827] dark:text-white">
                     Não sabe qual plano escolher?
                   </h3>
 
                   <p className="mt-2 max-w-2xl text-sm font-semibold leading-7 text-[#6b7280] dark:text-zinc-400">
-                    Fale sobre sua loja, volume de pedidos e rotina de entrega. A gente te ajuda a escolher o melhor começo, sem empurrar recurso que você ainda não precisa.
+                    Fale sobre sua loja, volume de pedidos e rotina de entrega. A gente te ajuda a
+                    escolher o melhor começo, sem empurrar recurso que você ainda não precisa.
                   </p>
                 </div>
 
@@ -701,4 +1020,3 @@ export default function PlansPage() {
     </>
   )
 }
-

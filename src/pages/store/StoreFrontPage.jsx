@@ -2575,7 +2575,7 @@ if (shouldBlockStorefront) {
 return (
   <>
     <SEO
-      title={`${storeName} | Cardápio online no PratoBy`}
+      title={`${storeName} | Cardápio digital - PratoBy`}
       description={storeDescription}
       path={`/${storeSlug || store?.slug || store?.storeSlug || slug || ''}`}
       image={storeImage}

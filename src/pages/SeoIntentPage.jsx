@@ -286,7 +286,7 @@ export default function SeoIntentPage() {
                   ['Sistema para lanchonete', '/sistema-para-lanchonete'],
                   ['Sistema para pizzaria', '/sistema-para-pizzaria'],
                   ['Cardápio para restaurante', '/cardapio-digital-para-restaurante'],
-                  ['Loja online para restaurante', '/loja-online-para-restaurante'],
+                  ['Loja online para restaurante', '/Cardapio-Digital'],
                   ['Exemplos', '/exemplos'],
                 ]
                   .filter(([, to]) => to !== page.path)
