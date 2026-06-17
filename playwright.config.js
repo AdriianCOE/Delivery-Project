@@ -1,6 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173'
+const e2ePort = process.env.PLAYWRIGHT_PORT || '5174'
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${e2ePort}`
+const shouldStartWebServer =
+  process.env.PLAYWRIGHT_USE_WEBSERVER &&
+  !process.env.PLAYWRIGHT_BASE_URL &&
+  !process.env.PLAYWRIGHT_SKIP_WEBSERVER
+process.env.VITE_PLAYWRIGHT_FIXTURES = process.env.VITE_PLAYWRIGHT_FIXTURES || 'true'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -29,12 +35,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER
-    ? undefined
-    : {
-        command: 'npm run dev -- --host 127.0.0.1',
-        url: 'http://127.0.0.1:5173',
-        reuseExistingServer: true,
+  webServer: shouldStartWebServer
+    ? {
+        command: 'node scripts/playwright-vite-server.mjs',
+        url: `http://127.0.0.1:${e2ePort}`,
+        reuseExistingServer: false,
         timeout: 120_000,
-      },
+        gracefulShutdown: { signal: 'SIGTERM', timeout: 1_000 },
+      }
+    : undefined,
 })

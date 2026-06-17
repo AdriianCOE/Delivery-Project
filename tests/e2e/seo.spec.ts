@@ -8,6 +8,10 @@ async function getPropertyMeta(page: any, property: string) {
   return page.locator(`meta[property="${property}"]`).getAttribute('content')
 }
 
+async function getCanonical(page: any) {
+  return page.locator('link[rel="canonical"]').getAttribute('href')
+}
+
 test('homepage tem SEO básico correto', async ({ page }) => {
   await page.goto('/')
 
@@ -18,7 +22,7 @@ test('homepage tem SEO básico correto', async ({ page }) => {
   expect(description!.length).toBeGreaterThan(40)
   expect(description).not.toMatch(/carregando|undefined|null/i)
 
-  const canonical = await page.locator('link[rel="canonical"]').getAttribute('href')
+  const canonical = await getCanonical(page)
   expect(canonical).toBeTruthy()
   expect(canonical).toMatch(/https?:\/\/.+/)
 })
@@ -26,15 +30,16 @@ test('homepage tem SEO básico correto', async ({ page }) => {
 test('/planos tem SEO único e não aponta canonical para homepage pura', async ({ page }) => {
   await page.goto('/planos')
 
+  await expect(page.getByRole('heading', { name: /Escolha o plano ideal/i })).toBeVisible({
+    timeout: 15_000,
+  })
   await expect(page).toHaveTitle(/planos|PratoBy/i)
 
   const description = await getMeta(page, 'description')
   expect(description).toBeTruthy()
   expect(description).not.toMatch(/carregando|undefined|null/i)
 
-  const canonical = await page.locator('link[rel="canonical"]').getAttribute('href')
-  expect(canonical).toBeTruthy()
-  expect(canonical).toContain('/planos')
+  await expect.poll(() => getCanonical(page)).toContain('/planos')
 })
 
 test('Open Graph básico existe', async ({ page }) => {

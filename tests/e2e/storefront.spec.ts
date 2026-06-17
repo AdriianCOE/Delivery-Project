@@ -2,10 +2,22 @@ import { expect, test } from '@playwright/test'
 
 const STORE_SLUG = process.env.PLAYWRIGHT_STORE_SLUG || 'capivaras-lanches'
 
+async function waitForStorefrontReady(page: any) {
+  await expect(page.getByText(/Capivaras Lanches|Capivara Burger|Hamb|Card/i).first()).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByText(/carregando/i)).not.toBeVisible()
+}
+
+async function getCanonical(page: any) {
+  return page.locator('link[rel="canonical"]').getAttribute('href')
+}
+
 test('loja pública abre por slug e não fica presa no loading', async ({ page }) => {
   await page.goto(`/${STORE_SLUG}`)
 
   await expect(page.locator('body')).toBeVisible()
+  await waitForStorefrontReady(page)
 
   await expect(page.getByText(/carregando cardápio/i)).not.toBeVisible({
     timeout: 15_000,
@@ -19,6 +31,7 @@ test('loja pública abre por slug e não fica presa no loading', async ({ page }
 test('loja pública tem SEO dinâmico e canonical do slug', async ({ page }) => {
   await page.goto(`/${STORE_SLUG}`)
 
+  await waitForStorefrontReady(page)
   await expect(page).not.toHaveTitle(/carregando/i)
 
   const title = await page.title()
@@ -29,9 +42,7 @@ test('loja pública tem SEO dinâmico e canonical do slug', async ({ page }) => 
   expect(description).toBeTruthy()
   expect(description).not.toMatch(/carregando|undefined|null/i)
 
-  const canonical = await page.locator('link[rel="canonical"]').getAttribute('href')
-  expect(canonical).toBeTruthy()
-  expect(canonical).toContain(STORE_SLUG)
+  await expect.poll(() => getCanonical(page)).toContain(STORE_SLUG)
 })
 
 test('loja pública tem produtos ou estado vazio amigável', async ({ page }) => {
@@ -41,6 +52,7 @@ test('loja pública tem produtos ou estado vazio amigável', async ({ page }) =>
     timeout: 15_000,
   })
 
+  await waitForStorefrontReady(page)
   const bodyText = await page.locator('body').innerText()
 
   expect(bodyText).not.toMatch(/erro inesperado|undefined|null/i)

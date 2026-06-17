@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Helmet } from 'react-helmet-async'
 
 const SITE_URL = 'https://pratoby.com'
@@ -203,6 +203,21 @@ function normalizeOgType(type) {
   return 'website'
 }
 
+function dedupeHeadElements(selector, isCurrent) {
+  if (typeof document === 'undefined') return
+
+  const nodes = Array.from(document.head.querySelectorAll(selector))
+  if (nodes.length <= 1) return
+
+  const preferred = [...nodes].reverse().find(isCurrent) || nodes[nodes.length - 1]
+
+  nodes.forEach((node) => {
+    if (node !== preferred) {
+      node.parentNode?.removeChild(node)
+    }
+  })
+}
+
 export default function SEO({
   title = DEFAULT_TITLE,
   description = DEFAULT_DESCRIPTION,
@@ -273,6 +288,60 @@ export default function SEO({
   const imageType = getImageType(absoluteImage)
   const faviconType = getImageType(faviconUrl)
   const finalThemeColor = cleanText(themeColor, DEFAULT_THEME_COLOR, 20)
+
+  useEffect(() => {
+    const dedupeRouteSeoTags = () => {
+      dedupeHeadElements(
+        'meta[name="description"]',
+        (node) => node.getAttribute('content') === finalDescription
+      )
+      dedupeHeadElements(
+        'meta[name="robots"]',
+        (node) => node.getAttribute('content') === robotsContent
+      )
+      dedupeHeadElements(
+        'meta[name="googlebot"]',
+        (node) => node.getAttribute('content') === robotsContent
+      )
+      dedupeHeadElements(
+        'meta[name="theme-color"]',
+        (node) => node.getAttribute('content') === finalThemeColor
+      )
+      dedupeHeadElements(
+        'link[rel="canonical"]',
+        (node) => node.getAttribute('href') === canonicalUrl
+      )
+      dedupeHeadElements(
+        'meta[property="og:url"]',
+        (node) => node.getAttribute('content') === canonicalUrl
+      )
+      dedupeHeadElements(
+        'meta[property="og:title"]',
+        (node) => node.getAttribute('content') === finalTitle
+      )
+      dedupeHeadElements(
+        'meta[property="og:description"]',
+        (node) => node.getAttribute('content') === finalDescription
+      )
+      dedupeHeadElements(
+        'meta[name="twitter:title"]',
+        (node) => node.getAttribute('content') === finalTitle
+      )
+      dedupeHeadElements(
+        'meta[name="twitter:description"]',
+        (node) => node.getAttribute('content') === finalDescription
+      )
+    }
+
+    dedupeRouteSeoTags()
+
+    const frame = window.requestAnimationFrame?.(dedupeRouteSeoTags)
+    return () => {
+      if (typeof frame === 'number') {
+        window.cancelAnimationFrame?.(frame)
+      }
+    }
+  }, [canonicalUrl, finalDescription, finalThemeColor, finalTitle, robotsContent])
 
   return (
     <Helmet prioritizeSeoTags>

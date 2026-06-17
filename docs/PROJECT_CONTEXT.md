@@ -21,7 +21,7 @@ O sistema está em fase de fechamento de MVP. Já existem:
 - Painel de Retirada estilo fast-food.
 - Billing com Asaas.
 - E-mails com Brevo.
-- Notificações internas.
+- Notificações internas e FCM/Web Push para alertas críticos do lojista.
 - Regras Firestore robustas.
 
 Principais riscos ainda conhecidos:
@@ -40,7 +40,7 @@ Decisões operacionais atuais:
 - Billing/Asaas deve ser tratado como área sensível e alterado em passos pequenos.
 - Webhooks e envios de e-mail precisam ser idempotentes.
 - Falhas em Brevo/notificações não devem derrubar cadastro, pedido ou billing.
-- WhatsApp Cloud API, FCM/Web Push, SSR/Next.js e permissões avançadas ficam fora do MVP salvo aprovação explícita.
+- WhatsApp Cloud API, SSR/Next.js e permissões avançadas ficam fora do MVP salvo aprovação explícita. FCM/Web Push já faz parte do MVP para notificações críticas do lojista, sem PII no payload.
 
 ---
 
@@ -74,7 +74,7 @@ Decisões operacionais atuais:
 - Asaas: billing/assinatura/checkout/webhook.
 - Brevo: e-mails transacionais.
 - WhatsApp Cloud API: planejado, não usado no MVP.
-- FCM: planejado, não usado ainda.
+- FCM/Web Push: usado no MVP para alertas críticos do lojista; payload sem PII (`type`, `orderId`, `storeId`, `url`). Fluxos de cliente continuam futuros.
 
 ### Regiões de Functions
 
@@ -692,7 +692,7 @@ Recomendação operacional:
 
 ### P2
 
-- FCM lojista/cliente.
+- FCM para cliente e expansões de notificação.
 - Storefront SSR/SEO.
 - TypeScript gradual.
 - Cardápio por dia/horário.

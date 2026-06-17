@@ -17,7 +17,6 @@ import { ComingSoon } from '../pages/merchant/ComingSoon'
 // Ícones dos placeholders
 import {
   FiCreditCard,
-  FiGrid,
   FiLayers,
   FiPieChart,
   FiTruck,
@@ -127,6 +126,7 @@ export default function AppRoutes() {
         <Route path="/sobre" element={<AboutPage />} />
         <Route path="/contato" element={<ContactPage />} />
         <Route path="/planos" element={<PlansPage />} />
+        <Route path="/planos]" element={<Navigate to="/planos" replace />} />
         <Route path="/exemplos" element={<RestaurantExamplesPage />} />
         <Route path="/privacidade" element={<PrivacyPage />} />
         <Route path="/termos" element={<TermsPage />} />

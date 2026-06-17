@@ -110,5 +110,5 @@ Pendências ainda relevantes
 
 Cloudinary deve usar assinatura via `createCloudinaryUploadSignature`; fallback unsigned so deve ser habilitado temporariamente com `VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK=true`.
 App Check ainda precisa ser ativado/configurado no Firebase Console e no client para endurecer de verdade.
-npm audit tinha vulnerabilidades moderadas em dependências; não atualizei pacotes nesta rodada.
+npm audit raiz deve retornar zero vulnerabilidades. Em `functions`, pode restar alerta moderado de `uuid <11.1.1` via `firebase-admin`/Google Cloud SDK; nao usar `npm audit fix --force` enquanto isso exigir `firebase-admin@14`, pois `firebase-functions@7.2.5` suporta `firebase-admin` apenas em `^11 || ^12 || ^13`.
 presence no Realtime Database ainda pode ser poluído por usuários autenticados/anonymous, embora o impacto seja baixo.

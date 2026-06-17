@@ -6,13 +6,16 @@ test('cliente consegue abrir produto ou card do cardápio sem quebrar UI', async
   await page.goto(`/${STORE_SLUG}`)
 
   await expect(page.locator('body')).toBeVisible()
+  await expect(page.getByText(/Capivaras Lanches|Capivara Burger|Hamb|Card/i).first()).toBeVisible({
+    timeout: 15_000,
+  })
   await expect(page.getByText(/carregando cardápio/i)).not.toBeVisible({
     timeout: 15_000,
   })
 
   const possibleProductButtons = page
     .locator('button, article, [role="button"]')
-    .filter({ hasText: /R\$|adicionar|ver|escolher/i })
+    .filter({ hasText: /Capivara Burger|R\$|adicionar|ver|escolher/i })
 
   const count = await possibleProductButtons.count()
 

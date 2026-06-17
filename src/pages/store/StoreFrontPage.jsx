@@ -66,6 +66,125 @@ const OFFICIAL_DEMO_STORE_SLUGS = new Set([
   'doce-capivara-confeitaria',
 ])
 
+const PLAYWRIGHT_FIXTURES_ENABLED =
+  import.meta.env.DEV &&
+  String(import.meta.env.VITE_PLAYWRIGHT_FIXTURES || '').toLowerCase() === 'true'
+
+const PLAYWRIGHT_STORE_FIXTURES = {
+  'capivaras-lanches': {
+    store: {
+      id: 'e2e-capivaras-lanches',
+      docId: 'e2e-capivaras-lanches',
+      storeId: 'e2e-capivaras-lanches',
+      storeDocId: 'e2e-capivaras-lanches',
+      slug: 'capivaras-lanches',
+      storeSlug: 'capivaras-lanches',
+      name: 'Capivaras Lanches',
+      description: 'Hamburgueria demo do PratoBy com cardápio público, pedidos online e retirada.',
+      segment: 'Lanchonete',
+      themeColor: BRAND_GREEN,
+      isActive: true,
+      isOpen: true,
+      isBlocked: false,
+      isBillingBlocked: false,
+      isDeleted: false,
+      seoIndexingEnabled: true,
+      paymentMethods: {
+        pix: true,
+        cash: true,
+        card: true,
+      },
+      pix: {
+        enabled: true,
+        key: 'demo@pratoby.com',
+        keyType: 'email',
+        merchantName: 'Capivaras Lanches',
+        merchantCity: 'Sao Paulo',
+      },
+      delivery: {
+        enabled: true,
+        pickupEnabled: true,
+        minOrderCents: 1000,
+      },
+      openingHours: {
+        mon: { isOpen: true, open: '10:00', close: '22:00' },
+        tue: { isOpen: true, open: '10:00', close: '22:00' },
+        wed: { isOpen: true, open: '10:00', close: '22:00' },
+        thu: { isOpen: true, open: '10:00', close: '22:00' },
+        fri: { isOpen: true, open: '10:00', close: '23:00' },
+        sat: { isOpen: true, open: '10:00', close: '23:00' },
+        sun: { isOpen: true, open: '11:00', close: '21:00' },
+      },
+      publicDataSource: 'playwright-fixture',
+    },
+    categories: [
+      {
+        id: 'burgers',
+        name: 'Hambúrgueres',
+        order: 1,
+        isActive: true,
+        isVisible: true,
+      },
+      {
+        id: 'drinks',
+        name: 'Bebidas',
+        order: 2,
+        isActive: true,
+        isVisible: true,
+      },
+    ],
+    products: [
+      {
+        id: 'classic-burger',
+        productId: 'classic-burger',
+        categoryId: 'burgers',
+        name: 'Capivara Burger',
+        description: 'Pão brioche, blend da casa, queijo e molho especial.',
+        price: 29.9,
+        priceCents: 2990,
+        order: 1,
+        isActive: true,
+        available: true,
+        isVisible: true,
+      },
+      {
+        id: 'orange-juice',
+        productId: 'orange-juice',
+        categoryId: 'drinks',
+        name: 'Suco de Laranja',
+        description: 'Natural e gelado.',
+        price: 9.9,
+        priceCents: 990,
+        order: 2,
+        isActive: true,
+        available: true,
+        isVisible: true,
+      },
+    ],
+  },
+}
+
+function getPlaywrightStoreFixture(slugParam) {
+  if (!PLAYWRIGHT_FIXTURES_ENABLED) return null
+
+  const cleanSlug = String(slugParam || '').trim().replace(/^\/+|\/+$/g, '')
+  const normalizedSlug = normalizeText(cleanSlug)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  const fixture = PLAYWRIGHT_STORE_FIXTURES[cleanSlug] || PLAYWRIGHT_STORE_FIXTURES[normalizedSlug]
+  if (!fixture) return null
+
+  return {
+    ...fixture,
+    store: {
+      ...fixture.store,
+      slug: fixture.store.slug || cleanSlug,
+      storeSlug: fixture.store.storeSlug || cleanSlug,
+    },
+  }
+}
+
 function shouldNoIndexStorefront(slugValue, storeData) {
   const candidates = [
     slugValue,
@@ -228,6 +347,11 @@ async function findStoreBySlug(db, functionsInstance, slugParam) {
     .replace(/^-+|-+$/g, '')
 
   if (!cleanSlug) return null
+
+  const playwrightFixture = getPlaywrightStoreFixture(cleanSlug)
+  if (playwrightFixture) {
+    return playwrightFixture.store
+  }
 
   if (import.meta.env.DEV) {
     console.log('[StoreFront] slug recebido:', slugParam)
@@ -2421,6 +2545,17 @@ const handleToggleFavorite = useCallback(() => {
     }
 
     const targetStoreSlug = menuStoreContext.targetStoreSlug
+    const playwrightFixture = getPlaywrightStoreFixture(targetStoreSlug)
+    if (playwrightFixture?.store?.storeId === targetStoreId || playwrightFixture?.store?.id === targetStoreId) {
+      queueMicrotask(() => {
+        setCategories(playwrightFixture.categories)
+        setProducts(playwrightFixture.products.map(normalizeProduct).filter(isProductAvailable))
+        setMenuError('')
+        setLoadingMenu(false)
+      })
+      return undefined
+    }
+
     const categoriesQuery = query(collection(db, 'publicStores', targetStoreId, 'categories'))
     const productsQuery = query(collection(db, 'publicStores', targetStoreId, 'products'))
 
