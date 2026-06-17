@@ -2247,6 +2247,119 @@ function LegacyToast({ toast, onClose }) {
   )
 }
 
+function ActionDecisionModal({ dialog, onCancel, onConfirm }) {
+  const [text, setText] = useState(() => dialog?.textInitialValue || '')
+  const [error, setError] = useState('')
+
+  if (!dialog || typeof window === 'undefined') return null
+
+  const tone = dialog.tone || 'orange'
+  const toneClasses = {
+    orange: {
+      icon: 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300',
+      button: 'bg-[#f97316] text-white hover:bg-orange-600',
+      ring: 'focus:ring-orange-100 dark:focus:ring-orange-500/10',
+    },
+    red: {
+      icon: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300',
+      button: 'bg-red-600 text-white hover:bg-red-700',
+      ring: 'focus:ring-red-100 dark:focus:ring-red-500/10',
+    },
+    green: {
+      icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
+      button: 'bg-emerald-600 text-white hover:bg-emerald-700',
+      ring: 'focus:ring-emerald-100 dark:focus:ring-emerald-500/10',
+    },
+  }
+  const classes = toneClasses[tone] || toneClasses.orange
+  const Icon = dialog.icon || (tone === 'red' ? FiAlertTriangle : FiCheckCircle)
+
+  const handleConfirm = () => {
+    const normalizedText = String(text || '').trim()
+
+    if (dialog.textRequired && normalizedText.length < (dialog.minTextLength || 1)) {
+      setError(dialog.textError || 'Preencha o campo para continuar.')
+      return
+    }
+
+    onConfirm({ confirmed: true, text: normalizedText })
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-lg rounded-t-3xl border border-gray-100 bg-white p-4 shadow-2xl shadow-black/20 dark:border-white/10 dark:bg-[#151518] sm:rounded-3xl sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${classes.icon}`}>
+            <Icon size={19} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h3 className="text-lg font-black text-gray-900 dark:text-zinc-50">
+              {dialog.title}
+            </h3>
+            {dialog.description && (
+              <p className="mt-1 text-sm font-semibold leading-5 text-gray-500 dark:text-zinc-400">
+                {dialog.description}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+            aria-label="Fechar"
+          >
+            <FiX size={17} />
+          </button>
+        </div>
+
+        {dialog.textRequired && (
+          <label className="mt-4 block">
+            <span className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+              {dialog.textLabel || 'Motivo'}
+            </span>
+            <textarea
+              value={text}
+              onChange={(event) => {
+                setText(event.target.value)
+                if (error) setError('')
+              }}
+              rows={3}
+              autoFocus
+              placeholder={dialog.textPlaceholder || ''}
+              className={`mt-2 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 outline-none transition focus:border-[#f97316] focus:ring-2 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 ${classes.ring}`}
+            />
+            {error && (
+              <p className="mt-2 text-xs font-bold text-red-600 dark:text-red-300">
+                {error}
+              </p>
+            )}
+          </label>
+        )}
+
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:bg-white/[0.08]"
+          >
+            {dialog.cancelLabel || 'Voltar'}
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${classes.button}`}
+          >
+            {dialog.confirmLabel || 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 function StatCard({ icon: Icon, label, value, description, tone = 'green' }) {
   const tones = {
     green: 'bg-orange-50 text-[#f97316] dark:bg-orange-500/10 dark:text-orange-300',
@@ -2448,7 +2561,7 @@ function OrderContactTimeline({ order, now = new Date() }) {
 }
 
 
-function OrderCard({ order, now, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
+function OrderCard({ order, now, onOpen, onQuickStatus, onOpenWhatsApp, onOpenTracking, onCopyOrder, updatingStatus, isNew, isLatestNew }) {
   const status = normalizeStatus(order.status)
   const meta = STATUS_META[status] || STATUS_META.pendente
   const nextStatus = getNextStatus(status, order)
@@ -2489,8 +2602,10 @@ function OrderCard({ order, now, onOpen, onQuickStatus, onOpenWhatsApp, onCopyOr
 
   const isFinished = isFinalStatus
   const isCancelled = status === 'cancelado'
+  const isNewOrder = Boolean(isNew)
   const isLatest = Boolean(isLatestNew)
   const hasWhatsApp = Boolean(canOpenWhatsApp)
+  const hasTracking = Boolean(order?.trackingToken)
 
   const orderCode =
     order.shortCode ||
@@ -2726,6 +2841,25 @@ const scheduledNoticeTone =
       ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
       : 'border-orange-100 bg-orange-50 text-[#9a3412] dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200'
 
+const nextStatusLabel = getNextStatusLabel(status, order)
+const isWaitingScheduledFuture = scheduledState === 'scheduled_future' && nextStatus === 'preparando'
+const quickStatusBlocked =
+  Boolean(updatingStatus) ||
+  !nextStatus ||
+  isFinalStatus ||
+  isWaitingScheduledFuture ||
+  (nextStatus === 'preparando' && shouldBlockPreparationUntilPayment(order))
+const paymentOperationLabel = paymentNeedsAttention
+  ? (paymentStatusLabel || 'Pagamento pendente')
+  : isPaymentValidated
+    ? 'Pagamento validado'
+    : getPaymentStatus(order)
+const fulfillmentDetail = address.isPickup
+  ? 'Retirada no balcão'
+  : address.full && address.full !== 'Endereço não informado' && address.full !== 'Endereço não informado'
+    ? (neighborhood || address.full)
+    : 'Endereço não informado'
+
   return (
   <motion.article
     layout
@@ -2738,7 +2872,7 @@ const scheduledNoticeTone =
         ? 'border-gray-100 bg-white/75 opacity-80 hover:opacity-95 dark:border-white/6 dark:bg-[#0d0d11]/85'
         : 'border-gray-100 bg-white dark:border-white/10 dark:bg-[#101015]'
     } ${
-      isLatest && !isOverdue
+      (isLatest || isNewOrder) && !isOverdue
         ? 'ring-1 ring-orange-400/60 shadow-[0_0_0_1px_rgba(249,115,22,0.12),0_18px_40px_-24px_rgba(249,115,22,0.5)] dark:ring-orange-500/50'
         : 'shadow-sm shadow-gray-200/50 dark:shadow-black/20'
     }`}
@@ -2755,7 +2889,13 @@ const scheduledNoticeTone =
       }`}
     />
 
-    <div className="grid gap-4 px-5 py-4 xl:grid-cols-[84px_minmax(0,2.2fr)_1.1fr_0.95fr_0.95fr_auto] xl:items-center">
+    {isNewOrder && !isOverdue && (
+      <div className="pointer-events-none absolute right-4 top-3 hidden rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-lg shadow-orange-500/20 sm:block">
+        Novo pedido
+      </div>
+    )}
+
+    <div className="grid gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4 xl:grid-cols-[84px_minmax(0,2.2fr)_1.1fr_0.95fr_0.95fr_auto] xl:items-center">
       {/* Coluna 1: ID */}
       <div className="flex flex-col justify-center">
         <span className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
@@ -2796,10 +2936,10 @@ const scheduledNoticeTone =
             </span>
           )}
 
-          {isLatest && (
+          {isNewOrder && (
             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
               <FiZap size={11} />
-              Mais recente
+              Novo pedido
             </span>
           )}
 
@@ -2857,6 +2997,36 @@ const scheduledNoticeTone =
         <p className="mt-2 truncate text-[14px] font-semibold text-gray-700 dark:text-zinc-300">
           {itemSummary}
         </p>
+
+        <div className="mt-3 grid gap-2 sm:hidden">
+          <div className="flex items-start gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/8 dark:bg-white/[0.04]">
+            <OrderTypeIcon size={14} className="mt-0.5 shrink-0 text-[#f97316]" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-zinc-500">
+                {orderTypeLabel}
+              </p>
+              <p className="mt-0.5 truncate text-xs font-bold text-gray-800 dark:text-zinc-200">
+                {fulfillmentDetail}
+              </p>
+            </div>
+          </div>
+
+          <div className={`flex items-start gap-2 rounded-2xl border px-3 py-2 ${
+            paymentNeedsAttention
+              ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
+              : 'border-gray-100 bg-gray-50 text-gray-700 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-200'
+          }`}>
+            <PaymentMethodIcon size={14} className="mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-wide opacity-70">
+                Pagamento
+              </p>
+              <p className="mt-0.5 truncate text-xs font-bold">
+                {paymentMethodLabel} - {paymentOperationLabel}
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-medium text-gray-500 dark:text-zinc-500">
           {itemCount > 0 && (
@@ -2922,6 +3092,15 @@ const scheduledNoticeTone =
             <PaymentMethodIcon size={13} />
             {paymentMethodLabel}
           </p>
+          <p className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+            paymentNeedsAttention
+              ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+              : isPaymentValidated
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400'
+          }`}>
+            {paymentOperationLabel}
+          </p>
           {savingsLabel && (
             <p className="text-[12px] font-black text-orange-400">
               Economia {savingsLabel}
@@ -2945,24 +3124,51 @@ const scheduledNoticeTone =
       </div>
 
       {/* Coluna 6: ações */}
-      <div className="grid gap-2 sm:flex sm:items-center xl:justify-end">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center xl:justify-end">
+        {nextStatus && !isFinalStatus && (
+          <button
+            type="button"
+            onClick={() => !quickStatusBlocked && onQuickStatus(order, nextStatus)}
+            disabled={quickStatusBlocked}
+            className="col-span-2 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-[13px] font-black text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-55 sm:col-span-1 sm:h-11 sm:flex-none"
+            title={isWaitingScheduledFuture ? 'Aguarde a janela de preparo' : undefined}
+          >
+            {updatingStatus === order.id ? <FiLoader size={16} className="animate-spin" /> : <FiPlay size={16} />}
+            {updatingStatus === order.id ? 'Atualizando...' : nextStatusLabel}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => onOpen(order)}
           className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-4 text-[13px] font-black text-[#111827] transition hover:bg-gray-100 dark:border-white/8 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.09] sm:flex-none"
         >
-          Abrir
+          Detalhes
         </button>
 
         {hasWhatsApp && (
           <button
             type="button"
             onClick={() => onOpenWhatsApp(order)}
-            className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 transition hover:bg-emerald-500/15 sm:w-11"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-[13px] font-black text-emerald-700 transition hover:bg-emerald-500/15 dark:text-emerald-300 sm:w-11 sm:px-0"
             aria-label="Abrir WhatsApp"
             title="Abrir WhatsApp"
           >
             <FiMessageCircle size={16} />
+            <span className="sm:hidden">WhatsApp</span>
+          </button>
+        )}
+
+        {hasTracking && (
+          <button
+            type="button"
+            onClick={() => onOpenTracking(order)}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-sky-500/20 bg-sky-500/10 px-3 text-[13px] font-black text-sky-700 transition hover:bg-sky-500/15 dark:text-sky-300 sm:w-11 sm:px-0"
+            aria-label="Abrir acompanhamento"
+            title="Acompanhar pedido"
+          >
+            <FiExternalLink size={15} />
+            <span className="sm:hidden">Acompanhar</span>
           </button>
         )}
 
@@ -3231,6 +3437,7 @@ function OrderModal({
   onSendCustomerThanks,
   onCopyOrder,
   onOpenWhatsApp,
+  onOpenTracking,
   onOpenMaps,
   updatingStatus,
 }) {
@@ -3265,6 +3472,7 @@ function OrderModal({
   const showCustomerThanksAction = shouldShowCustomerThanksAction(order)
   const cancellationReason = getCancellationReason(order)
   const canOpenWhatsApp = hasValidOrderWhatsAppPhone(order)
+  const canOpenTracking = Boolean(getOrderTrackingLink(order, store))
   const scheduled = isScheduledOrder(order)
   const scheduledState = scheduled ? getScheduledOperationalState(order, { now }) : 'asap'
   const scheduledDateLabel = scheduled ? formatScheduledDate(order) : ''
@@ -3564,6 +3772,16 @@ function OrderModal({
                   >
                     <FiMessageCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
                     WhatsApp
+                  </button>
+                )}
+
+                {canOpenTracking && (
+                  <button
+                    onClick={() => onOpenTracking(order)}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition-all hover:bg-sky-100 active:scale-[0.98] dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
+                  >
+                    <FiExternalLink size={17} />
+                    Abrir acompanhamento
                   </button>
                 )}
 
@@ -4177,6 +4395,7 @@ export default function OrdersPage() {
   const [storeActionLoading, setStoreActionLoading] = useState(false)
   const [slaNow, setSlaNow] = useState(() => Date.now())
   const [toast, setToast] = useState(null)
+  const [actionDialog, setActionDialog] = useState(null)
   const [newOrderIds, setNewOrderIds] = useState(() => new Set())
   const [latestNewOrderId, setLatestNewOrderId] = useState('')
   const [counterOrderOpen, setCounterOrderOpen] = useState(false)
@@ -4184,6 +4403,7 @@ export default function OrdersPage() {
   const firstOrdersSnapshotRef = useRef(true)
   const newOrderTimersRef = useRef({})
   const moreFiltersRef = useRef(null)
+  const actionDialogResolverRef = useRef(null)
 
   const selectedStore = useMemo(() => {
     if (!stores.length) return null
@@ -4208,6 +4428,38 @@ export default function OrdersPage() {
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
+  }, [])
+
+  const resolveActionDialog = useCallback((result) => {
+    if (actionDialogResolverRef.current) {
+      actionDialogResolverRef.current(result)
+      actionDialogResolverRef.current = null
+    }
+    setActionDialog(null)
+  }, [])
+
+  const requestActionDialog = useCallback((config) => {
+    if (actionDialogResolverRef.current) {
+      actionDialogResolverRef.current({ confirmed: false, text: '' })
+      actionDialogResolverRef.current = null
+    }
+
+    return new Promise((resolve) => {
+      actionDialogResolverRef.current = resolve
+      setActionDialog({
+        id: `${Date.now()}-${Math.random()}`,
+        ...config,
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (actionDialogResolverRef.current) {
+        actionDialogResolverRef.current({ confirmed: false, text: '' })
+        actionDialogResolverRef.current = null
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -4299,11 +4551,16 @@ if (isMeaningfulStatusChange && shouldBlockOrderAcceptance(order)) {
 }
 
 if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
-  const confirmed = window.confirm(
-    'O PratoBy marcou este pedido para revisão de valor. Deseja avançar mesmo assim?'
-  )
+  const confirmed = await requestActionDialog({
+    title: 'Revisar valor antes de avançar',
+    description: 'O PratoBy marcou este pedido para revisão de valor. Confira o total antes de aceitar ou avançar.',
+    confirmLabel: 'Avançar mesmo assim',
+    cancelLabel: 'Voltar',
+    tone: 'orange',
+    icon: FiAlertTriangle,
+  })
 
-  if (!confirmed) return
+  if (!confirmed.confirmed) return
 }
 
     if (nextStatus === 'preparando' && shouldBlockPreparationUntilPayment(order)) {
@@ -4325,19 +4582,25 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       let normalizedReason = String(options?.cancellationReason || '').trim()
 
       if (!normalizedReason) {
-        const confirmed = options?.skipCancellationPrompt
-          ? true
-          : window.confirm(
-              'Tem certeza que deseja cancelar este pedido? O motivo será exibido para o cliente.'
-            )
+        const cancellationDecision = options?.skipCancellationPrompt
+          ? { confirmed: true, text: normalizedReason }
+          : await requestActionDialog({
+              title: 'Cancelar pedido',
+              description: 'Informe o motivo do cancelamento. Esse motivo fica salvo no pedido e pode aparecer para o cliente.',
+              confirmLabel: 'Cancelar pedido',
+              cancelLabel: 'Voltar',
+              tone: 'red',
+              icon: FiAlertTriangle,
+              textRequired: true,
+              minTextLength: 5,
+              textLabel: 'Motivo do cancelamento',
+              textPlaceholder: 'Ex: Produto indisponível, endereço fora da área, loja fechando, pagamento não confirmado...',
+              textError: 'Informe um motivo com pelo menos 5 caracteres.',
+            })
 
-        if (!confirmed) return
+        if (!cancellationDecision.confirmed) return
 
-        const reason = window.prompt(
-          'Informe o motivo do cancelamento. Ex: Produto indisponível, endereço fora da área, loja fechando, pagamento não confirmado...'
-        )
-
-        normalizedReason = String(reason || '').trim()
+        normalizedReason = String(cancellationDecision.text || '').trim()
       }
 
       if (normalizedReason.length < 5) {
@@ -4374,13 +4637,20 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
         if (!phone) {
           showToast('error', 'Cliente sem WhatsApp válido para receber aviso.')
         } else {
-          shouldNotify = window.confirm(
-            nextStatus === 'preparando'
-              ? 'Deseja enviar a confirmação completa do pedido para o cliente?'
+          const notifyDecision = await requestActionDialog({
+            title: 'Avisar cliente no WhatsApp?',
+            description: nextStatus === 'preparando'
+              ? 'Abrir a confirmação completa do pedido no WhatsApp do cliente.'
               : nextStatus === 'cancelado'
-                ? 'Deseja avisar o cliente no WhatsApp com o motivo do cancelamento?'
-                : 'Deseja enviar uma atualização rápida no WhatsApp?'
-          )
+                ? 'Abrir uma mensagem de cancelamento com o motivo informado.'
+                : 'Abrir uma atualização rápida do status no WhatsApp do cliente.',
+            confirmLabel: 'Abrir WhatsApp',
+            cancelLabel: 'Não avisar',
+            tone: nextStatus === 'cancelado' ? 'red' : 'green',
+            icon: FiMessageCircle,
+          })
+
+          shouldNotify = notifyDecision.confirmed
         }
       }
 
@@ -4474,7 +4744,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       setUpdatingStatus('')
     }
   },
-  [selectedStore, showToast, updatingStatus, user?.uid]
+  [requestActionDialog, selectedStore, showToast, updatingStatus, user?.uid]
 )
 
   const handleConfirmPixPayment = useCallback(
@@ -4500,18 +4770,28 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
     }
 
     if (shouldWarnOrderAcceptance(order)) {
-      const confirmedReview = window.confirm(
-        'O PratoBy marcou este pedido para revisão de valor. Deseja confirmar o Pix e aceitar o pedido mesmo assim?'
-      )
+      const confirmedReview = await requestActionDialog({
+        title: 'Revisar valor antes de confirmar Pix',
+        description: 'O PratoBy marcou este pedido para revisão de valor. Confirme o Pix apenas se o total estiver correto.',
+        confirmLabel: 'Confirmar mesmo assim',
+        cancelLabel: 'Voltar',
+        tone: 'orange',
+        icon: FiAlertTriangle,
+      })
 
-      if (!confirmedReview) return
+      if (!confirmedReview.confirmed) return
     }
 
-    const confirmed = window.confirm(
-      'Confirmar pagamento Pix e aceitar o pedido?'
-    )
+    const confirmed = await requestActionDialog({
+      title: 'Confirmar pagamento Pix?',
+      description: 'Isso marca o Pix como pago e aceita o pedido quando ele ainda estiver pendente.',
+      confirmLabel: 'Confirmar Pix',
+      cancelLabel: 'Voltar',
+      tone: 'green',
+      icon: FiCheckCircle,
+    })
 
-    if (!confirmed) return
+    if (!confirmed.confirmed) return
 
     const now = Timestamp.now()
     const currentStatus = normalizeStatus(order.status)
@@ -4553,11 +4833,16 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       const phone = normalizeBrazilianPhoneForWhatsApp(getCustomerPhone(order))
 
       if (phone && shouldConfirmOrder) {
-        const shouldNotify = window.confirm(
-          'Deseja enviar a confirmação do pedido para o cliente?'
-        )
+        const shouldNotify = await requestActionDialog({
+          title: 'Avisar cliente no WhatsApp?',
+          description: 'Abrir uma mensagem de confirmação do pedido no WhatsApp do cliente.',
+          confirmLabel: 'Abrir WhatsApp',
+          cancelLabel: 'Não avisar',
+          tone: 'green',
+          icon: FiMessageCircle,
+        })
 
-        if (shouldNotify) {
+        if (shouldNotify.confirmed) {
           const message = buildWhatsAppMessage(nextOrder, selectedStore)
 
           window.open(
@@ -4584,7 +4869,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
       setUpdatingStatus('')
     }
   },
-  [selectedStore, showToast, updatingStatus, user?.uid]
+  [requestActionDialog, selectedStore, showToast, updatingStatus, user?.uid]
 )
 
   const handleSendCustomerThanks = useCallback(
@@ -4635,6 +4920,20 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
 
       if (!url) {
         showToast('error', 'Este pedido não possui telefone válido.')
+        return
+      }
+
+      window.open(url, '_blank', 'noopener,noreferrer')
+    },
+    [selectedStore, showToast]
+  )
+
+  const handleOpenTracking = useCallback(
+    (order) => {
+      const url = getOrderTrackingLink(order, selectedStore)
+
+      if (!url) {
+        showToast('error', 'Acompanhamento indisponível para este pedido.')
         return
       }
 
@@ -5588,6 +5887,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
                         onOpen={(nextOrder) => setSelectedOrderId(nextOrder.id)}
                         onQuickStatus={handleUpdateStatus}
                         onOpenWhatsApp={handleOpenWhatsApp}
+                        onOpenTracking={handleOpenTracking}
                         onCopyOrder={handleCopyOrder}
                         updatingStatus={updatingStatus}
                         isNew={newOrderIds.has(order.id)}
@@ -5615,6 +5915,7 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
             onSendCustomerThanks={handleSendCustomerThanks}
             onCopyOrder={handleCopyOrder}
             onOpenWhatsApp={handleOpenWhatsApp}
+            onOpenTracking={handleOpenTracking}
             onOpenMaps={handleOpenMaps}
             updatingStatus={updatingStatus}
           />
@@ -5640,6 +5941,13 @@ if (isMeaningfulStatusChange && shouldWarnOrderAcceptance(order)) {
           }}
         />
       )}
+
+      <ActionDecisionModal
+        key={actionDialog?.id || 'action-dialog-empty'}
+        dialog={actionDialog}
+        onCancel={() => resolveActionDialog({ confirmed: false, text: '' })}
+        onConfirm={resolveActionDialog}
+      />
 
       <Toast toast={toast} onClose={() => setToast(null)} />
         <DashboardFooter store={selectedStore} />
