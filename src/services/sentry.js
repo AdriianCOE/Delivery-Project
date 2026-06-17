@@ -3,10 +3,27 @@ import * as Sentry from '@sentry/react'
 const isProduction = import.meta.env.PROD
 const dsn = import.meta.env.VITE_SENTRY_DSN
 
+const PUBLIC_MARKETING_PATHS = new Set([
+  '/',
+  '/planos',
+  '/sobre',
+  '/contato',
+  '/exemplos',
+  '/cardapio-digital',
+  '/delivery-sem-comissao',
+  '/sistema-para-confeitaria',
+  '/sistema-para-lanchonete',
+  '/sistema-para-pizzaria',
+  '/cardapio-digital-para-restaurante',
+  '/Cardapio-Digital',
+])
+
 function isPublicStorefrontPath() {
   if (typeof window === 'undefined') return false
 
   const pathname = window.location?.pathname || '/'
+  if (PUBLIC_MARKETING_PATHS.has(pathname)) return false
+
   const privatePrefixes = [
     '/admin',
     '/dashboard',
@@ -26,9 +43,11 @@ export function initSentry() {
   if (!dsn) return
 
   const isPublicStorefront = isPublicStorefrontPath()
-  const integrations = [
-    Sentry.browserTracingIntegration(),
-  ]
+  const integrations = []
+
+  if (!isPublicStorefront) {
+    integrations.push(Sentry.browserTracingIntegration())
+  }
 
   if (!isPublicStorefront) {
     integrations.push(
@@ -46,7 +65,7 @@ export function initSentry() {
 
     integrations,
 
-    tracesSampleRate: isProduction ? (isPublicStorefront ? 0.01 : 0.05) : 1.0,
+    tracesSampleRate: isProduction ? (isPublicStorefront ? 0 : 0.05) : 1.0,
 
     replaysSessionSampleRate: isProduction && !isPublicStorefront ? 0.01 : 0,
     replaysOnErrorSampleRate: isProduction && !isPublicStorefront ? 0.05 : 0,

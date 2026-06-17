@@ -3875,8 +3875,9 @@ function absolutePublicUrl(value) {
   try {
     const parsed = new URL(rawUrl)
 
-    if (parsed.protocol !== 'https:') return ''
     if (!ALLOWED_PUBLIC_IMAGE_HOSTS.has(parsed.hostname)) return ''
+    if (parsed.protocol === 'http:') parsed.protocol = 'https:'
+    if (parsed.protocol !== 'https:') return ''
 
     return parsed.toString()
   } catch (_error) {
@@ -3934,7 +3935,7 @@ function normalizePreviewImageUrl(url) {
     return imageUrl
   }
 
-  if (/\/image\/upload\/[^/]*c_fill,w_1200,h_630/.test(imageUrl)) {
+  if (/\/image\/upload\/[^/]*(?:c_fill,w_1200,h_630|w_1200,h_630,c_fill)/.test(imageUrl)) {
     return imageUrl
   }
 
@@ -4167,7 +4168,7 @@ function injectStorefrontSeo(html, meta) {
     ],
     [
       /<meta\b(?=[^>]*\bproperty=["']og:type["'])[^>]*>/i,
-      '<meta property="og:type" content="restaurant">',
+      '<meta property="og:type" content="website">',
     ],
     [
       /<meta\b(?=[^>]*\bproperty=["']og:site_name["'])[^>]*>/i,
@@ -4319,9 +4320,14 @@ function buildStorefrontJsonLd(store, meta) {
 
   return jsonLd
 }
-function buildStorefrontSeoMeta(store) {
+function buildStorefrontSeoMeta(store, requestedSlug = '') {
   const storeName = String(store?.name || store?.storeName || 'PratoBy').trim()
-  const slug = getPublicStoreSlug(store?.storeId || store?.id || '', store)
+  const safeRequestedSlug = normalizePublicStoreLookupParam(requestedSlug)
+  const slug =
+    normalizePublicStoreLookupParam(getPublicStoreSlug('', store)) ||
+    slugifyPublicStoreName(storeName) ||
+    safeRequestedSlug ||
+    'loja'
   const canonical = `${PUBLIC_APP_ORIGIN}/${slug}`
   const description = buildStorefrontDescription(store, storeName)
 
@@ -4397,6 +4403,7 @@ function buildMinimalSeoHtml(meta = {}) {
     imageType: getPreviewImageType(previewImage),
     imageAlt: meta.imageAlt || meta.title || 'PratoBy',
     canonical: absolutePublicUrl(meta.canonical) || `${PUBLIC_APP_ORIGIN}/`,
+    robots: meta.robots || INDEX_ROBOTS,
   }
   const jsonLd = meta.jsonLd ? buildJsonLdScript(meta.jsonLd) : ''
 
@@ -4408,8 +4415,17 @@ function buildMinimalSeoHtml(meta = {}) {
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
     `<title>${escapeHtml(safeMeta.title)}</title>`,
     `<meta name="description" content="${escapeHtml(safeMeta.description)}">`,
+    `<meta name="robots" content="${escapeHtml(safeMeta.robots)}">`,
+    `<meta name="googlebot" content="${escapeHtml(safeMeta.robots)}">`,
+    '<meta name="theme-color" content="#f97316">',
+    '<meta name="application-name" content="PratoBy">',
     `<link rel="canonical" href="${escapeHtml(safeMeta.canonical)}">`,
+    '<link rel="icon" href="https://pratoby.com/icons/android-chrome-192x192.png?v=5" type="image/png" sizes="192x192">',
+    '<link rel="shortcut icon" href="https://pratoby.com/icons/android-chrome-192x192.png?v=5" type="image/png">',
+    '<link rel="apple-touch-icon" href="https://pratoby.com/icons/apple-touch-icon.png?v=5" sizes="180x180">',
+    '<meta property="og:locale" content="pt_BR">',
     '<meta property="og:type" content="website">',
+    '<meta property="og:site_name" content="PratoBy">',
     `<meta property="og:title" content="${escapeHtml(safeMeta.title)}">`,
     `<meta property="og:description" content="${escapeHtml(safeMeta.description)}">`,
     `<meta property="og:image" content="${escapeHtml(safeMeta.image)}">`,
@@ -4421,6 +4437,8 @@ function buildMinimalSeoHtml(meta = {}) {
     `<meta property="og:image:alt" content="${escapeHtml(safeMeta.imageAlt)}">`,
     `<meta property="og:url" content="${escapeHtml(safeMeta.canonical)}">`,
     '<meta name="twitter:card" content="summary_large_image">',
+    '<meta name="twitter:site" content="@pratobybr">',
+    '<meta name="twitter:creator" content="@pratobybr">',
     `<meta name="twitter:title" content="${escapeHtml(safeMeta.title)}">`,
     `<meta name="twitter:description" content="${escapeHtml(safeMeta.description)}">`,
     `<meta name="twitter:image" content="${escapeHtml(safeMeta.image)}">`,
@@ -4501,7 +4519,7 @@ exports.storefrontSeoPreview = onRequest(
       }
 
       const publicStore = buildPublicStoreProfile(storeRecord.id, storeRecord.data, storeRecord.collectionName)
-      response.status(200).send(injectStorefrontSeo(html, buildStorefrontSeoMeta(publicStore)))
+      response.status(200).send(injectStorefrontSeo(html, buildStorefrontSeoMeta(publicStore, slug)))
     } catch (error) {
       logger.warn('[storefrontSeoPreview] seo injection failed, returning static index', {
         path: requestPath,

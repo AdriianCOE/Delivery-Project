@@ -1937,9 +1937,17 @@ function createPublicOrderHandler({
 
       if (shouldNotifyNewOrder && typeof sendNewOrderPushToStore === 'function') {
         try {
-          await sendNewOrderPushToStore({
+          const pushResult = await sendNewOrderPushToStore({
             storeId: storeDocId,
             orderId: result.orderId,
+          })
+          logger.info('Public order new order push completed.', {
+            orderId: result.orderId,
+            storeId: storeDocId,
+            tokenCount: Number(pushResult?.tokenCount || 0),
+            successCount: Number(pushResult?.successCount || pushResult?.sent || 0),
+            failureCount: Number(pushResult?.failureCount || pushResult?.failed || 0),
+            invalidated: Number(pushResult?.invalidated || 0),
           })
         } catch (pushError) {
           logger.warn('Public order created but new order push failed.', {

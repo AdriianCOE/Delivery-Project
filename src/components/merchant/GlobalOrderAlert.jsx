@@ -413,6 +413,12 @@ export function GlobalOrderAlert() {
     document.title = titleAlertText
   }, [titleAlertActive, titleAlertText])
 
+  const goToActiveOrder = useCallback(() => {
+    const orderId = getOrderId(latestOrder)
+    clearLatestOrder(false)
+    navigate(orderId ? `/dashboard/orders?orderId=${encodeURIComponent(orderId)}` : '/dashboard/orders')
+  }, [clearLatestOrder, latestOrder, navigate])
+
   const goToOrders = useCallback(() => {
     clearLatestOrder(false)
     navigate('/dashboard/orders')
@@ -585,7 +591,7 @@ export function GlobalOrderAlert() {
       showNewOrderBrowserNotification(order, {
         orderId,
         body: publicBody,
-        onClick: () => navigate('/dashboard/orders'),
+        onClick: () => navigate(`/dashboard/orders?orderId=${encodeURIComponent(orderId)}`),
       })
     }
   }, [addLocalNotification, navigate, preferences])
@@ -747,7 +753,7 @@ export function GlobalOrderAlert() {
         <NewOrderToast
           order={latestOrder}
           copied={copied}
-          onOpenOrder={goToOrders}
+          onOpenOrder={goToActiveOrder}
           onViewOrders={goToOrders}
           onCopy={handleCopySummary}
           onWhatsApp={handleWhatsApp}

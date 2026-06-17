@@ -191,7 +191,9 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     preferences: rawPreferences = {},
     setNotificationPreference = () => {},
     loading = false,
+    activeStoreId = '',
   } = notificationState || {}
+  const targetStoreId = String(storeId || activeStoreId || '').trim()
 
   const [isOpen, setIsOpen] = useState(false)
   const [view, setView] = useState('list')
@@ -278,7 +280,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
 
       if (support.permission === 'granted') {
         try {
-          const saved = localStorage.getItem(`pratoby:fcm-enabled:${storeId || 'none'}`)
+          const saved = localStorage.getItem(`pratoby:fcm-enabled:${targetStoreId || 'none'}`)
           setPushStatus(saved === 'true' ? 'enabled' : 'disabled')
           setPushStatusReason(saved === 'true' ? 'token-saved' : 'permission-granted')
           if (saved === 'true') {
@@ -302,7 +304,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
     return () => {
       mounted = false
     }
-  }, [preferences, storeId])
+  }, [preferences, targetStoreId])
 
   useEffect(() => {
     if (pushStatus !== 'enabled') return undefined
@@ -351,7 +353,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
   }
 
   const handleEnablePushNotifications = async () => {
-    if (!storeId || pushLoading) return
+    if (!targetStoreId || pushLoading) return
 
     try {
       setPushLoading(true)
@@ -386,14 +388,14 @@ export default function DashboardNotificationBell({ notificationState, storeId }
       }
 
       await saveMerchantFcmToken({
-        storeId,
+        storeId: targetStoreId,
         token: result.token,
         tokenHash: result.tokenHash,
       })
       setNotificationPreference('channels', 'fcm', true)
 
       try {
-        localStorage.setItem(`pratoby:fcm-enabled:${storeId}`, 'true')
+        localStorage.setItem(`pratoby:fcm-enabled:${targetStoreId}`, 'true')
       } catch (storageError) {
         console.warn('[FCM] Nao foi possivel salvar preferencia local.', storageError)
       }
@@ -415,15 +417,15 @@ export default function DashboardNotificationBell({ notificationState, storeId }
   }
 
   const handleDisablePushNotifications = async () => {
-    if (!storeId || pushLoading) return
+    if (!targetStoreId || pushLoading) return
 
     try {
       setPushLoading(true)
-      await disableMerchantFcmToken({ storeId })
+      await disableMerchantFcmToken({ storeId: targetStoreId })
       setNotificationPreference('channels', 'fcm', false)
 
       try {
-        localStorage.removeItem(`pratoby:fcm-enabled:${storeId}`)
+        localStorage.removeItem(`pratoby:fcm-enabled:${targetStoreId}`)
       } catch (storageError) {
         console.warn('[FCM] Nao foi possivel remover preferencia local.', storageError)
       }
@@ -455,12 +457,12 @@ export default function DashboardNotificationBell({ notificationState, storeId }
   }
 
   const handleSendRealPushTest = async () => {
-    if (!storeId || pushLoading || pushStatus !== 'enabled') return
+    if (!targetStoreId || pushLoading || pushStatus !== 'enabled') return
 
     try {
       setPushLoading(true)
 
-      const result = await sendMerchantTestPush({ storeId })
+      const result = await sendMerchantTestPush({ storeId: targetStoreId })
       const data = result?.data || result || {}
 
       const tokenCount = Number(data.tokenCount || 0)
@@ -523,7 +525,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
 
   const pushToggleDisabled =
     pushLoading ||
-    !storeId ||
+    !targetStoreId ||
     pushStatus === 'unsupported' ||
     pushStatus === 'denied' ||
     pushStatus === 'missing-vapid-key' ||
@@ -741,7 +743,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                       <button
                         type="button"
                         onClick={handleSendPushTest}
-                        disabled={pushLoading || !storeId || !pushEnabled}
+                        disabled={pushLoading || !targetStoreId || !pushEnabled}
                         title={
                           !pushEnabled
                             ? 'Ative o push primeiro.'
@@ -755,7 +757,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                       <button
                         type="button"
                         onClick={handleSendRealPushTest}
-                        disabled={pushLoading || !storeId || !pushEnabled}
+                        disabled={pushLoading || !targetStoreId || !pushEnabled}
                         title={
                           !pushEnabled
                             ? 'Ative as notificações push primeiro.'
@@ -916,7 +918,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     <button
                       type="button"
                       onClick={handleSendPushTest}
-                      disabled={pushLoading || !storeId}
+                      disabled={pushLoading || !targetStoreId}
                       className="inline-flex h-8 items-center justify-center rounded-xl bg-emerald-600 px-3 text-[11px] font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Teste local
@@ -924,7 +926,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     <button
                       type="button"
                       onClick={handleSendRealPushTest}
-                      disabled={pushLoading || !storeId || pushStatus !== 'enabled'}
+                      disabled={pushLoading || !targetStoreId || pushStatus !== 'enabled'}
                       title={
                         pushStatus !== 'enabled'
                           ? 'Ative as notificações push primeiro.'
@@ -937,7 +939,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                     <button
                       type="button"
                       onClick={handleDisablePushNotifications}
-                      disabled={pushLoading || !storeId}
+                      disabled={pushLoading || !targetStoreId}
                       className="inline-flex h-8 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     >
                       Desativar push
@@ -947,7 +949,7 @@ export default function DashboardNotificationBell({ notificationState, storeId }
                   <button
                     type="button"
                     onClick={handleEnablePushNotifications}
-                    disabled={pushLoading || !storeId || pushStatus === 'unsupported' || pushStatus === 'denied'}
+                    disabled={pushLoading || !targetStoreId || pushStatus === 'unsupported' || pushStatus === 'denied'}
                     className="mt-3 inline-flex h-8 items-center justify-center rounded-xl bg-[#f97316] px-3 text-[11px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#ea580c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Ativar notificacoes push

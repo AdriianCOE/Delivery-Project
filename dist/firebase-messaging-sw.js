@@ -16,6 +16,24 @@ function getFirebaseConfigFromSearch() {
 
 const firebaseConfig = getFirebaseConfigFromSearch()
 
+function getNotificationTargetUrl(data = {}) {
+  const explicitUrl = String(data.url || data.link || '').trim()
+  if (explicitUrl) return explicitUrl
+
+  const type = String(data.type || '').trim()
+  const orderId = String(data.orderId || '').trim()
+
+  if (type === 'order_status_update') {
+    return '/'
+  }
+
+  if (orderId) {
+    return `/dashboard/orders?orderId=${encodeURIComponent(orderId)}`
+  }
+
+  return '/dashboard/orders'
+}
+
 if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messagingSenderId) {
   firebase.initializeApp(firebaseConfig)
 
@@ -59,7 +77,7 @@ if (firebaseConfig?.apiKey && firebaseConfig?.projectId && firebaseConfig?.messa
         orderId: data.orderId || '',
         storeId: data.storeId || '',
         status: data.status || '',
-        url: data.url || '/dashboard/orders',
+        url: getNotificationTargetUrl(data),
       },
     }
 
@@ -73,7 +91,10 @@ self.addEventListener('notificationclick', (event) => {
   let targetUrl = new URL('/dashboard/orders', self.location.origin)
 
   try {
-    const candidateUrl = new URL(event.notification?.data?.url || '/dashboard/orders', self.location.origin)
+    const notificationData = event.notification?.data || {}
+    const fcmData = notificationData?.FCM_MSG?.data || {}
+    const candidateTarget = notificationData.url || getNotificationTargetUrl(fcmData)
+    const candidateUrl = new URL(candidateTarget || '/dashboard/orders', self.location.origin)
 
     if (
       candidateUrl.origin === self.location.origin &&

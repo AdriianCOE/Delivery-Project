@@ -16,6 +16,7 @@ Disallow: /reviews
 Disallow: /qrcodes
 Disallow: /users
 Disallow: /out-screen
+Disallow: /motoboy
 
 Disallow: /pedido/
 Disallow: /order/

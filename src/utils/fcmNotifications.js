@@ -182,6 +182,11 @@ function getFcmNotificationUrl(data = {}, type = 'new_order') {
     return data.url || data.trackingUrl || data.trackingPath || '/'
   }
 
+  const orderId = String(data.orderId || '').trim()
+  if (orderId) {
+    return data.url || `/dashboard/orders?orderId=${encodeURIComponent(orderId)}`
+  }
+
   return data.url || '/dashboard/orders'
 }
 
@@ -632,7 +637,9 @@ async function ensureForegroundFcmListener() {
         type,
         shown: result?.shown,
         reason: result?.reason,
-        data,
+        orderId: data.orderId || '',
+        storeId: data.storeId || '',
+        status: data.status || '',
       })
     } catch (error) {
       console.warn('[FCM] Não foi possível mostrar push em primeiro plano.', error)

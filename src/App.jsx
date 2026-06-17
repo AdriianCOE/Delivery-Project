@@ -13,6 +13,8 @@ const AuthProvider = lazy(() =>
 
 const CookieConsent = lazy(() => import('./components/privacy/CookieConsent'))
 
+const COOKIE_CONSENT_KEY = 'pratoby_cookie_consent'
+
 const AUTH_ROUTE_PREFIXES = [
   '/login',
   '/cadastro',
@@ -20,6 +22,14 @@ const AUTH_ROUTE_PREFIXES = [
   '/auth/action',
   '/admin',
   '/dashboard',
+]
+
+const COOKIE_PRIVATE_ROUTE_PREFIXES = [
+  ...AUTH_ROUTE_PREFIXES,
+  '/pedido',
+  '/order',
+  '/tracking',
+  '/store',
 ]
 
 function matchesRoutePrefix(pathname = '', prefixes = []) {
@@ -51,18 +61,26 @@ function AuthBoundary({ children }) {
 }
 
 function DeferredCookieConsent() {
+  const { pathname } = useLocation()
   const [shouldRender, setShouldRender] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
+    if (matchesRoutePrefix(pathname, COOKIE_PRIVATE_ROUTE_PREFIXES)) return undefined
+
+    try {
+      if (window.localStorage.getItem(COOKIE_CONSENT_KEY)) return undefined
+    } catch {
+      // Se o storage estiver bloqueado, o componente lida com o fallback depois.
+    }
 
     const showConsent = () => setShouldRender(true)
 
     if ('requestIdleCallback' in window) {
       let idleId = null
       const timeoutId = window.setTimeout(() => {
-        idleId = window.requestIdleCallback(showConsent, { timeout: 1000 })
-      }, 2200)
+        idleId = window.requestIdleCallback(showConsent, { timeout: 1800 })
+      }, 5200)
 
       return () => {
         window.clearTimeout(timeoutId)
@@ -72,12 +90,12 @@ function DeferredCookieConsent() {
       }
     }
 
-    const timeoutId = window.setTimeout(showConsent, 2500)
+    const timeoutId = window.setTimeout(showConsent, 6000)
 
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [])
+  }, [pathname])
 
   if (!shouldRender) {
     return null

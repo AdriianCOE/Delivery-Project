@@ -37,6 +37,18 @@ function getOrderShortCode(orderId) {
   return String(orderId || '').trim().slice(-4).toUpperCase() || '----'
 }
 
+function getMerchantOrderDashboardPath(orderId) {
+  const normalizedOrderId = String(orderId || '').trim()
+  const params = new URLSearchParams()
+
+  if (normalizedOrderId) {
+    params.set('orderId', normalizedOrderId)
+  }
+
+  const query = params.toString()
+  return query ? `${MERCHANT_DASHBOARD_PATH}?${query}` : MERCHANT_DASHBOARD_PATH
+}
+
 function isDeliveryOrder(orderData) {
   const type = String(
     orderData?.orderType ||
@@ -257,13 +269,15 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
   const title = 'Novo pedido recebido'
   const body = 'Toque para abrir o painel de pedidos.'
   const tag = `pratoby-new-order-${normalizedOrderId}`
+  const dashboardPath = getMerchantOrderDashboardPath(normalizedOrderId)
+  const dashboardUrl = `${MERCHANT_DASHBOARD_URL}${dashboardPath.slice(MERCHANT_DASHBOARD_PATH.length)}`
   const response = await admin.messaging().sendEachForMulticast({
     tokens: tokenDocs.map((entry) => entry.data.token),
     data: {
       type: 'new_order',
       orderId: normalizedOrderId,
       storeId: normalizedStoreId,
-      url: MERCHANT_DASHBOARD_PATH,
+      url: dashboardPath,
       title,
       body,
     },
@@ -278,7 +292,7 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
         requireInteraction: true,
       },
       fcmOptions: {
-        link: MERCHANT_DASHBOARD_URL,
+        link: dashboardUrl,
       },
     },
   })
@@ -314,6 +328,7 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
   logger.info('[fcm] New order push sent.', {
     storeId: normalizedStoreId,
     orderId: normalizedOrderId,
+    tokenCount: tokenDocs.length,
     successCount: response.successCount,
     failureCount: response.failureCount,
     invalidated,

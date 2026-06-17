@@ -10,6 +10,7 @@ const DEFAULT_DESCRIPTION =
 
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
 const DEFAULT_FAVICON = `${SITE_URL}/icons/android-chrome-192x192.png?v=5`
+const DEFAULT_APPLE_TOUCH_ICON = `${SITE_URL}/icons/apple-touch-icon.png?v=5`
 
 const TWITTER_HANDLE = '@pratobybr'
 const DEFAULT_THEME_COLOR = '#F97316'
@@ -245,7 +246,7 @@ export default function SEO({
   )
 
   const appleTouchIconUrl = useMemo(
-    () => buildAppleTouchIcon(favicon),
+    () => favicon === DEFAULT_FAVICON ? DEFAULT_APPLE_TOUCH_ICON : buildAppleTouchIcon(favicon),
     [favicon]
   )
 

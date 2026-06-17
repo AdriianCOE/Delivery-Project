@@ -4474,6 +4474,16 @@ export default function OrdersPage() {
   }, [location.search])
 
   useEffect(() => {
+    const queryOrderId = new URLSearchParams(location.search).get('orderId')
+    if (!queryOrderId || !orders.length || selectedOrderId === queryOrderId) return
+
+    const targetOrder = orders.find((order) => order.id === queryOrderId || order.firestoreId === queryOrderId)
+    if (targetOrder) {
+      setSelectedOrderId(targetOrder.id)
+    }
+  }, [location.search, orders, selectedOrderId])
+
+  useEffect(() => {
     const allowedDateFilters = new Set(dateFilterOptions.map((filter) => filter.key))
     if (!allowedDateFilters.has(dateFilter)) {
       setDateFilter('hoje')

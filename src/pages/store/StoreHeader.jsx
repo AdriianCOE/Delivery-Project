@@ -1070,6 +1070,22 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const bannerDesktopUrl = useMemo(() => getBannerDesktopUrl(store), [store])
   const bannerMobileUrl = useMemo(() => getBannerMobileUrl(store), [store])
   const bannerUrl = bannerDesktopUrl || bannerMobileUrl
+  const bannerDesktopSrcSet = useMemo(
+    () => getCloudinaryImageSrcSet(
+      getBannerDesktopSource(store),
+      ['storeBannerSmall', 'storeBanner', 'storeBannerLarge'],
+      { replaceExistingTransform: true }
+    ),
+    [store]
+  )
+  const bannerMobileSrcSet = useMemo(
+    () => getCloudinaryImageSrcSet(
+      getBannerMobileSource(store),
+      ['storeBannerMobileSmall', 'storeBannerMobile', 'storeBannerMobileLarge'],
+      { replaceExistingTransform: true }
+    ),
+    [store]
+  )
   const logoUrl = useMemo(() => getLogoUrl(store), [store])
   const logoSrcSet = useMemo(
     () => getCloudinaryImageSrcSet(
@@ -1271,20 +1287,20 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       {bannerMobileUrl && (
         <source
           media="(max-width: 640px)"
-          srcSet={`${bannerMobileUrl} 640w`}
+          srcSet={bannerMobileSrcSet || `${bannerMobileUrl} 640w`}
           sizes="100vw"
         />
       )}
       <img
         src={bannerUrl}
-        srcSet={`${bannerUrl} 1200w${bannerMobileUrl ? `, ${bannerMobileUrl} 640w` : ''}`}
+        srcSet={bannerDesktopSrcSet || `${bannerUrl} 1200w${bannerMobileUrl ? `, ${bannerMobileUrl} 640w` : ''}`}
         sizes="100vw"
         alt=""
         aria-hidden="true"
         className="store-banner-bg absolute inset-0 h-full w-full object-cover object-[70%_center] sm:object-[64%_center] lg:object-[62%_center]"
         fetchPriority="high"
         loading="eager"
-        decoding="sync"
+        decoding="async"
         width={1200}
         height={480}
       />

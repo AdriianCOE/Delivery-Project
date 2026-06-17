@@ -44,6 +44,19 @@
         ]
       },
       {
+        "regex": "^/(dashboard|admin|login|cadastro|onboarding|auth|menu|settings|orders|statistics|reviews|qrcodes|users|out-screen|motoboy|pedido|order|tracking)(/.*)?$",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate, no-transform"
+          }
+        ]
+      },
+      {
         "source": "/.well-known/security.txt",
         "headers": [
           {
