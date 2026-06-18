@@ -3523,7 +3523,7 @@ function OrderModal({
     : (asaasOnline || mercadoPagoOnline)
       ? paymentPaid
         ? 'Pagamento online aprovado'
-        : 'Pagamento online aguardando pagamento'
+        : 'Pagamento online pendente'
       : `${getPaymentMethod(order)} · ${getPaymentStatus(order)}`
   const paymentSummaryClass = paymentPaid
     ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
@@ -3761,16 +3761,16 @@ function OrderModal({
               </div>
             </section>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end">
-                <span className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-3 py-2 text-center text-xs font-black sm:col-span-2 lg:col-span-1 ${paymentSummaryClass}`}>
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <span className={`inline-flex h-9 max-w-full items-center justify-center rounded-xl border px-2.5 text-center text-[11px] font-black ${paymentSummaryClass}`}>
                   {paymentSummary}
                 </span>
                 {canOpenWhatsApp && (
                   <button
                     onClick={() => onOpenWhatsApp(order)}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-black text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <FiMessageCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
+                    <FiMessageCircle size={15} className="text-emerald-600 dark:text-emerald-400" />
                     WhatsApp
                   </button>
                 )}
@@ -3778,10 +3778,10 @@ function OrderModal({
                 {canOpenTracking && (
                   <button
                     onClick={() => onOpenTracking(order)}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition-all hover:bg-sky-100 active:scale-[0.98] dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 text-xs font-black text-sky-700 transition-all hover:bg-sky-100 active:scale-[0.98] dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
                   >
-                    <FiExternalLink size={17} />
-                    Abrir acompanhamento
+                    <FiExternalLink size={15} />
+                    Acompanhamento
                   </button>
                 )}
 
@@ -3789,9 +3789,9 @@ function OrderModal({
                   <button
                     onClick={() => onConfirmPixPayment(order)}
                     disabled={Boolean(updatingStatus)}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-3 text-xs font-black text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <FiCheckCircle size={18} className={updatingStatus === order.id ? "animate-spin" : ""} />
+                    <FiCheckCircle size={15} className={updatingStatus === order.id ? "animate-spin" : ""} />
                     {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
                   </button>
                 ) : asaasPending && asaasPaymentUrl ? (
@@ -3799,9 +3799,9 @@ function OrderModal({
                     href={asaasPaymentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-3 text-xs font-black text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
-                    <FiCreditCard size={18} />
+                    <FiCreditCard size={15} />
                     Abrir pagamento
                   </a>
                 ) : mercadoPagoPending && mercadoPagoPaymentUrl ? (
@@ -3809,51 +3809,48 @@ function OrderModal({
                     href={mercadoPagoPaymentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-3 text-xs font-black text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
-                    <FiCreditCard size={18} />
+                    <FiCreditCard size={15} />
                     Abrir pagamento
                   </a>
                 ) : isWaitingScheduledFuture ? (
-                  <div className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
-                    <FiClock size={18} />
+                  <div className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-orange-100 bg-orange-50 px-3 text-xs font-black text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+                    <FiClock size={15} />
                     <span>Agendamento confirmado</span>
                   </div>
                 ) : nextStatus ? (
                   <button
                     onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null}
                     disabled={Boolean(updatingStatus) || !canRunPrimaryStatusAction}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 text-xs font-black text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
                   >
-                    <FiZap size={18}/>
+                    <FiZap size={15}/>
                     {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
                   </button>
                 ) : null}
 
                 <button
                   onClick={() => printComanda(order, store)}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-900 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-gray-900 bg-white px-3 text-xs font-black text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
                 >
-                  <FiPrinter size={18}/> Imprimir comanda
+                  <FiPrinter size={15}/> Imprimir
                 </button>
 
                 <button
                   onClick={() => onCopyOrder(order)}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                 >
-                  <FiCopy size={18}/> Copiar resumo
+                  <FiCopy size={15}/> Copiar
                 </button>
             </div>
           </div>
           {sla.overdue && (
-            <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-              <FiAlertTriangle size={17} className="mt-0.5 shrink-0 animate-pulse" />
-              <div>
-                <p className="text-sm font-black">Este pedido ultrapassou o tempo esperado da etapa.</p>
-                <p className="mt-0.5 text-xs font-bold">
-                  {sla.elapsedMinutes}min nesta etapa · limite {sla.thresholdMinutes}min
-                </p>
-              </div>
+            <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-black text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              <FiAlertTriangle size={13} className="shrink-0" />
+              <span className="min-w-0 truncate">
+                Atrasado nesta etapa: {sla.elapsedMinutes}min - limite {sla.thresholdMinutes}min
+              </span>
             </div>
           )}
           <OrderContactTimeline order={order} now={now} />
@@ -4065,6 +4062,34 @@ function OrderModal({
                     <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
                       {getPaymentStatus(order)}
                     </p>
+                    {mercadoPagoOnline && (
+                      <div className={`mt-3 rounded-2xl border px-3 py-2 ${
+                        paymentPaid
+                          ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
+                          : 'border-amber-100 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200'
+                      }`}>
+                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+                          <FiCreditCard size={13} />
+                          Mercado Pago
+                        </p>
+                        <p className="mt-1 text-xs font-semibold leading-5">
+                          {paymentPaid
+                            ? 'Pagamento aprovado automaticamente pelo provedor.'
+                            : 'Aguarde a confirmação automática antes de iniciar o preparo.'}
+                        </p>
+                        {mercadoPagoPaymentUrl && !paymentPaid && (
+                          <a
+                            href={mercadoPagoPaymentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-white px-3 text-xs font-black text-amber-800 shadow-sm ring-1 ring-amber-100 transition hover:bg-amber-100 dark:bg-black/10 dark:text-amber-100 dark:ring-white/10"
+                          >
+                            <FiExternalLink size={13} />
+                            Abrir checkout
+                          </a>
+                        )}
+                      </div>
+                    )}
                     {changeForLabel && (
                       <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 dark:border-orange-950 dark:bg-orange-950/20">
                         <p className="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-400">

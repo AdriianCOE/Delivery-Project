@@ -386,6 +386,19 @@ function buildWebhookUrl({ storeId, orderId }) {
 
 function buildPreferencePayload({ orderData, storeData }) {
   const totalCents = Math.max(0, toCents(orderData.totalCents || orderData.payment?.amountCents))
+  if (totalCents <= 0) {
+    const error = new Error('Valor do pedido invalido para Mercado Pago.')
+    error.code = 'failed-precondition'
+    throw error
+  }
+
+  const paymentAmountCents = toCents(orderData.payment?.amountCents)
+  if (paymentAmountCents > 0 && paymentAmountCents !== totalCents) {
+    const error = new Error('Valor do pagamento diverge do total do pedido.')
+    error.code = 'failed-precondition'
+    throw error
+  }
+
   const config = normalizeMercadoPagoPublicConfig(storeData)
   const storeId = orderData.storeId || orderData.storeDocId
   const orderId = orderData.trackingToken || orderData.id
@@ -1240,6 +1253,7 @@ module.exports = {
   ONLINE_MODE,
   PROVIDER,
   buildMercadoPagoExternalReference,
+  buildMercadoPagoPreferencePayload: buildPreferencePayload,
   buildMercadoPagoPendingPaymentSnapshot,
   buildMercadoPagoPreferenceFailurePatch,
   createMercadoPagoOrderFunctions,

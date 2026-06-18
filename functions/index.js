@@ -683,6 +683,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'name', 'storeName', 'description', 'segment', 'category',
   'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'shareImageUrl', 'seoImageUrl', 'ogImageUrl', 'faviconUrl', 'themeColor', 'whatsapp', 'whatsapp1',
   'phone', 'instagram', 'social', 'isOpen', 'isActive', 'activeDays',
+  'newOrderSoundEnabled', 'printAfterConfirm', 'autoCloseEnabled', 'autoCloseGraceMinutes',
   'hoursOpen', 'hoursClose', 'openingHours', 'settings', 'deliveryTime',
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
@@ -712,6 +713,17 @@ const STORE_ACTIVE_ORDER_STATUSES = [
   'pronto', 'pronta', 'ready', 'ready_for_pickup', 'aguardando_retirada',
   'em_rota', 'out_for_delivery', 'entregando', 'saiu_para_entrega', 'saiu_entrega', 'em_entrega',
 ]
+
+const STORE_OPERATION_MODES = new Set(['manual', 'opening_hours'])
+
+const STORE_OPERATIONAL_SETTINGS_ALLOWED_FIELDS = new Set([
+  'availabilityMode',
+  'operatingMode',
+  'timeZone',
+  'temporaryPauseUntil',
+  'temporaryPauseReason',
+  'allowScheduledOrdersWhenClosed',
+])
 
 function uniqueTruthy(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
@@ -934,6 +946,12 @@ function sanitizePublicStore(data) {
     primaryColor: String(settings.primaryColor || data.primaryColor || '').trim().slice(0, 30),
     openingHours: settings.openingHours || data.openingHours || null,
     businessHours: settings.businessHours || data.businessHours || null,
+    availabilityMode: String(settings.availabilityMode || data.availabilityMode || 'manual').trim().slice(0, 30),
+    operatingMode: String(settings.operatingMode || settings.availabilityMode || data.operatingMode || '').trim().slice(0, 30),
+    timeZone: String(settings.timeZone || data.timeZone || 'America/Sao_Paulo').trim().slice(0, 80),
+    temporaryPauseUntil: settings.temporaryPauseUntil || data.temporaryPauseUntil || null,
+    temporaryPauseReason: String(settings.temporaryPauseReason || data.temporaryPauseReason || '').trim().slice(0, 120),
+    allowScheduledOrdersWhenClosed: settings.allowScheduledOrdersWhenClosed === true || data.allowScheduledOrdersWhenClosed === true,
     acceptDelivery: settings.acceptDelivery !== false && data.acceptDelivery !== false,
     acceptPickup: settings.acceptPickup !== false && data.acceptPickup !== false,
     acceptDineIn: settings.acceptDineIn !== false && data.acceptDineIn !== false,
@@ -1609,6 +1627,94 @@ function sanitizeStorePaymentsSettingsPatch(value, currentPayments = {}) {
   })
 }
 
+function normalizeStoreOperationMode(value) {
+  const rawMode = String(value || '').trim().toLowerCase()
+  if (['opening_hours', 'business_hours', 'automatic', 'auto', 'scheduled'].includes(rawMode)) {
+    return 'opening_hours'
+  }
+  return STORE_OPERATION_MODES.has(rawMode) ? rawMode : 'manual'
+}
+
+function sanitizeStoreTimeZone(value) {
+  const timeZone = String(value || 'America/Sao_Paulo').trim().slice(0, 80) || 'America/Sao_Paulo'
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date())
+    return timeZone
+  } catch (_) {
+    throw new HttpsError('invalid-argument', 'Fuso horario invalido.')
+  }
+}
+
+function sanitizeTemporaryPauseUntil(value) {
+  if (!value) return null
+  const date = typeof value.toDate === 'function'
+    ? value.toDate()
+    : typeof value.toMillis === 'function'
+      ? new Date(value.toMillis())
+      : value.seconds
+        ? new Date(Number(value.seconds) * 1000)
+        : new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    throw new HttpsError('invalid-argument', 'Pausa temporaria invalida.')
+  }
+
+  return date.toISOString()
+}
+
+function sanitizeStoreOperationalSettings(value, currentSettings = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpsError('invalid-argument', 'Configuracao operacional invalida.')
+  }
+
+  const nextSettings = {}
+  for (const field of STORE_OPERATIONAL_SETTINGS_ALLOWED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(currentSettings || {}, field)) {
+      const cleanValue = cleanCallableFirestoreValue(currentSettings[field])
+      if (cleanValue !== undefined) nextSettings[field] = cleanValue
+    }
+  }
+
+  for (const field of Object.keys(value)) {
+    if (!STORE_OPERATIONAL_SETTINGS_ALLOWED_FIELDS.has(field)) {
+      throw new HttpsError('permission-denied', `Campo "settings.${field}" nao pode ser alterado por esta funcao.`)
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'availabilityMode') ||
+      Object.prototype.hasOwnProperty.call(value, 'operatingMode')) {
+    const mode = normalizeStoreOperationMode(value.availabilityMode || value.operatingMode)
+    nextSettings.availabilityMode = mode
+    nextSettings.operatingMode = mode
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'timeZone')) {
+    nextSettings.timeZone = sanitizeStoreTimeZone(value.timeZone)
+  } else if (!nextSettings.timeZone) {
+    nextSettings.timeZone = 'America/Sao_Paulo'
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'temporaryPauseUntil')) {
+    nextSettings.temporaryPauseUntil = sanitizeTemporaryPauseUntil(value.temporaryPauseUntil)
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'temporaryPauseReason')) {
+    nextSettings.temporaryPauseReason = sanitizePublicText(value.temporaryPauseReason, 120)
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'allowScheduledOrdersWhenClosed')) {
+    nextSettings.allowScheduledOrdersWhenClosed = value.allowScheduledOrdersWhenClosed === true
+  }
+
+  return cleanCallableFirestoreValue(nextSettings)
+}
+
+function patchClearsTemporaryPause(patch) {
+  return Object.prototype.hasOwnProperty.call(patch || {}, 'settings') &&
+    Object.prototype.hasOwnProperty.call(patch.settings || {}, 'temporaryPauseUntil') &&
+    patch.settings.temporaryPauseUntil === null
+}
+
 function sanitizeStoreSettingsPayload(payload, currentStoreData = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new HttpsError('invalid-argument', 'Payload de configurações inválido.')
@@ -1633,6 +1739,11 @@ function sanitizeStoreSettingsPayload(payload, currentStoreData = {}) {
 
     if (key === 'payments') {
       acc.payments = sanitizeStorePaymentsSettingsPatch(value, currentStoreData.payments)
+      return acc
+    }
+
+    if (key === 'settings') {
+      acc.settings = sanitizeStoreOperationalSettings(value, currentStoreData.settings)
       return acc
     }
 
@@ -2074,11 +2185,19 @@ exports.updateStoreSettings = onCall(
         settingsValueChanged(storeData.scheduling || {}, patch.scheduling || {})
       const paymentsChanged = Object.prototype.hasOwnProperty.call(patch, 'payments') &&
         settingsValueChanged(storeData.payments || {}, patch.payments || {})
+      const closedHoursSchedulingChanged = Object.prototype.hasOwnProperty.call(patch, 'settings') &&
+        settingsValueChanged(
+          storeData.settings?.allowScheduledOrdersWhenClosed === true,
+          patch.settings?.allowScheduledOrdersWhenClosed === true
+        )
+      const closedHoursSchedulingEnabled =
+        closedHoursSchedulingChanged && patch.settings?.allowScheduledOrdersWhenClosed === true
       const schedulingEnabled = patch.scheduling?.enabled === true
       const preorderMode = String(patch.payments?.preorderPolicy?.mode || '').trim()
       const requiresScheduledPayment = patch.payments?.mercadoPago?.requireForScheduled === true
       if (
         (schedulingChanged && schedulingEnabled) ||
+        closedHoursSchedulingEnabled ||
         (paymentsChanged && requiresScheduledPayment) ||
         (paymentsChanged && preorderMode && preorderMode !== 'manual')
       ) {
@@ -2091,6 +2210,11 @@ exports.updateStoreSettings = onCall(
 
     if (patch.isOpen === false && storeData.isOpen !== false) {
       await assertStoreHasNoActiveOrders(storeId, storeData)
+    }
+
+    if (patchClearsTemporaryPause(patch)) {
+      patch.temporaryPauseUntil = admin.firestore.FieldValue.delete()
+      patch.temporaryPauseReason = admin.firestore.FieldValue.delete()
     }
 
     patch.updatedAt = admin.firestore.FieldValue.serverTimestamp()

@@ -2,6 +2,10 @@ const crypto = require('crypto')
 const { normalizeBrazilianPhone } = require('./shared/phone')
 const { buildOrderSchedulingDecision } = require('./shared/orderScheduling')
 const {
+  getStoreOperationalStatus,
+  storeAllowsScheduledOrdersWhenClosed,
+} = require('./shared/storeOperationalStatus')
+const {
   buildAsaasLinkCreationFailurePatch,
   buildAsaasPendingPaymentSnapshot,
   createOrderPaymentLink,
@@ -230,7 +234,22 @@ function isPublicStoreActive(store) {
     && store.public !== false
     && store.isVisible !== false
     && store.hidden !== true
-    && store.isOpen !== false
+}
+
+function assertStoreAcceptsOrderNow(store, schedulingDecision = null, options = {}) {
+  const operationalStatus = getStoreOperationalStatus(store)
+  if (operationalStatus.isOpen) return operationalStatus
+
+  const isScheduledOrder = schedulingDecision?.orderTiming === 'scheduled'
+  if (
+    isScheduledOrder &&
+    options.hasSchedulingPlan === true &&
+    storeAllowsScheduledOrdersWhenClosed(store)
+  ) {
+    return operationalStatus
+  }
+
+  fail('failed-precondition', operationalStatus.label || 'Loja fechada no momento.')
 }
 
 function toDate(value) {
@@ -1549,9 +1568,11 @@ function createPublicOrderHandler({
           now: new Date(),
           fail,
         })
-        if (schedulingDecision?.orderTiming === 'scheduled' && !hasPlanFeature(liveStore, 'scheduling')) {
+        const hasSchedulingPlan = hasPlanFeature(liveStore, 'scheduling')
+        if (schedulingDecision?.orderTiming === 'scheduled' && !hasSchedulingPlan) {
           fail('failed-precondition', 'Agendamento exige plano Profissional ou Premium.')
         }
+        assertStoreAcceptsOrderNow(liveStore, schedulingDecision, { hasSchedulingPlan })
         const schedulingFields = buildFirestoreSchedulingFields(admin, schedulingDecision)
 
         // 1. Check phone rate limit

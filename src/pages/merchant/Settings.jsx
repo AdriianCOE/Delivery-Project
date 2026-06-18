@@ -46,6 +46,7 @@ import { registerStoreMediaAsset } from '../../services/storeMediaLibrary'
 import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
 import { hasPlanFeature } from '../../utils/planCatalog'
 import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
+import { getStoreOperationalStatus } from '../../utils/storeOperationalStatus'
 import MediaLibraryPicker from '../../components/media/MediaLibraryPicker'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -140,6 +141,10 @@ const DEFAULT_FORM = {
   instagram: '',
   isOpen: true,
   isActive: true,
+  availabilityMode: 'manual',
+  temporaryPauseUntil: '',
+  temporaryPauseReason: '',
+  allowScheduledOrdersWhenClosed: false,
   openingHours: {
   sun: { enabled: false, open: '18:00', close: '22:00' },
   mon: { enabled: false, open: '18:00', close: '22:00' },
@@ -176,6 +181,22 @@ function uniqueArray(values) {
 
 function getTodayKey() {
   return DAYS_OF_WEEK[new Date().getDay()]?.id || 'sun'
+}
+
+function getFutureIso(minutes) {
+  const amount = Number.parseInt(minutes, 10)
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  return new Date(Date.now() + amount * 60 * 1000).toISOString()
+}
+
+function formatDateTimePtBr(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
 }
 
 function slugify(text = '') {
@@ -491,25 +512,48 @@ function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
   const schedulingValidationError = getSchedulingValidationError(scheduling)
   const schedulingUsable = schedulingPlanReady && !schedulingValidationError
   const hasOrderingMethod = Boolean(form?.acceptDelivery || form?.acceptPickup || schedulingUsable)
-  const storeOpen = form?.isActive !== false
+  const storeActive = form?.isActive !== false
+  const manuallyClosed = form?.availabilityMode !== 'opening_hours' && form?.isOpen === false
   const checks = []
 
-  if (storeOpen && !hasOrderingMethod) {
+  if (!storeActive || manuallyClosed) {
     checks.push({
       status: 'critical',
+      label: 'Bloqueante',
+      title: !storeActive ? 'Loja inativa' : 'Loja fechada manualmente',
+      description: !storeActive
+        ? 'A vitrine pode existir, mas a loja nao esta pronta para vender enquanto estiver inativa.'
+        : 'Pedidos imediatos ficam bloqueados ate voce abrir a loja ou usar horario automatico.',
+      actionLabel: 'Ajustar funcionamento',
+      href: '#settings-operation',
+      blocksSave: false,
+    })
+  }
+
+  if (storeActive && !hasOrderingMethod) {
+    checks.push({
+      status: 'critical',
+      label: 'Bloqueante',
       title: 'Nenhum meio de pedido ativo',
       description: 'Ative delivery, retirada ou um agendamento valido antes de deixar a loja aberta.',
       saveMessage: 'Ative delivery, retirada ou um agendamento valido antes de salvar a loja aberta.',
+      actionLabel: 'Configurar entrega',
+      href: '#settings-operation',
+      blocksSave: true,
     })
   } else if (!hasOrderingMethod) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'Sem meio de pedido',
       description: 'A loja esta fechada, mas ainda nao tem delivery, retirada ou agendamento pronto para uso.',
+      actionLabel: 'Configurar entrega',
+      href: '#settings-operation',
     })
   } else {
     checks.push({
       status: 'ok',
+      label: 'Tudo certo',
       title: 'Meios de pedido',
       description: [
         form?.acceptDelivery ? 'Delivery' : '',
@@ -522,20 +566,29 @@ function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
   if (schedulingEnabled && !schedulingAllowed) {
     checks.push({
       status: 'critical',
+      label: 'Bloqueante',
       title: 'Agendamento sem plano',
       description: 'O agendamento esta ativado, mas o plano atual nao libera esse recurso.',
       saveMessage: 'Seu plano atual nao inclui agendamento. Desative o agendamento ou altere o plano antes de salvar.',
+      actionLabel: 'Revisar agendamento',
+      href: '#settings-scheduling',
+      blocksSave: true,
     })
   } else if (schedulingValidationError) {
     checks.push({
       status: 'critical',
+      label: 'Bloqueante',
       title: 'Agendamento incompleto',
       description: schedulingValidationError,
       saveMessage: schedulingValidationError,
+      actionLabel: 'Corrigir agendamento',
+      href: '#settings-scheduling',
+      blocksSave: true,
     })
   } else if (schedulingEnabled) {
     checks.push({
       status: 'ok',
+      label: 'Tudo certo',
       title: 'Agendamento',
       description: `Disponivel por ate ${scheduling.maxDaysAhead} dias no futuro.`,
     })
@@ -544,34 +597,47 @@ function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
   if (form?.acceptDelivery && (!String(form?.deliveryTime || '').trim() || !hasStoreAddress(form))) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'Delivery incompleto',
       description: 'Revise tempo medio e endereco da loja para evitar duvidas no pedido.',
+      actionLabel: 'Completar endereco',
+      href: '#settings-address',
     })
   }
 
   if (form?.acceptPickup && !hasStoreAddress(form)) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'Retirada sem endereco',
       description: 'Informe o endereco da loja para o cliente saber onde retirar.',
+      actionLabel: 'Completar endereco',
+      href: '#settings-address',
     })
   }
 
   if (!hasAnyPaymentMethod(selectedStore)) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'Pagamento nao configurado',
       description: 'Revise as formas de pagamento em Pagamentos antes de receber pedidos.',
+      actionLabel: 'Ir para pagamentos',
+      to: '/dashboard/pagamentos',
     })
   } else if (hasPixManualProblem(selectedStore)) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'Pix manual sem chave',
       description: 'O Pix manual parece ativo, mas nao encontrei chave Pix publica configurada.',
+      actionLabel: 'Ir para pagamentos',
+      to: '/dashboard/pagamentos',
     })
   } else {
     checks.push({
       status: 'ok',
+      label: 'Tudo certo',
       title: 'Pagamentos',
       description: 'Ha pelo menos uma forma de pagamento disponivel.',
     })
@@ -580,16 +646,55 @@ function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
   if (!String(form?.whatsapp || '').trim()) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'WhatsApp ausente',
       description: 'Sem WhatsApp, o cliente pode ter dificuldade para falar com a loja.',
+      actionLabel: 'Adicionar WhatsApp',
+      href: '#settings-contact',
     })
   }
 
   if (!hasAnyOpeningHours(form?.openingHours)) {
     checks.push({
       status: 'warning',
+      label: 'Atenção',
       title: 'Horario nao informado',
       description: 'Configure ao menos um dia de funcionamento para orientar o cliente.',
+      actionLabel: 'Configurar horarios',
+      href: '#settings-operation',
+    })
+  }
+
+  if (!String(form?.description || '').trim()) {
+    checks.push({
+      status: 'recommended',
+      label: 'Recomendado',
+      title: 'Descricao da loja',
+      description: 'Uma descricao curta ajuda o cliente a entender sua especialidade.',
+      actionLabel: 'Melhorar identidade',
+      href: '#settings-identity',
+    })
+  }
+
+  if (!String(form?.logoUrl || '').trim()) {
+    checks.push({
+      status: 'recommended',
+      label: 'Recomendado',
+      title: 'Logo da loja',
+      description: 'Logo melhora reconhecimento, mas nao impede a loja de vender.',
+      actionLabel: 'Enviar logo',
+      href: '#settings-identity',
+    })
+  }
+
+  if (!String(form?.bannerUrl || '').trim()) {
+    checks.push({
+      status: 'recommended',
+      label: 'Recomendado',
+      title: 'Banner principal',
+      description: 'Banner deixa a vitrine mais profissional, mas e opcional para operar.',
+      actionLabel: 'Enviar banner',
+      href: '#settings-identity',
     })
   }
 
@@ -597,6 +702,7 @@ function getReadinessChecks({ form, selectedStore, schedulingAllowed }) {
     checks,
     criticalCount: checks.filter((check) => check.status === 'critical').length,
     warningCount: checks.filter((check) => check.status === 'warning').length,
+    recommendedCount: checks.filter((check) => check.status === 'recommended').length,
   }
 }
 
@@ -842,6 +948,17 @@ function mapStoreToForm(store) {
       '',
     isOpen: store?.isOpen ?? true,
     isActive: store?.isActive ?? true,
+    availabilityMode:
+      ['opening_hours', 'manual'].includes(settings?.availabilityMode)
+        ? settings.availabilityMode
+        : settings?.autoOpenCloseEnabled === true
+          ? 'opening_hours'
+          : 'manual',
+    temporaryPauseUntil: settings?.temporaryPauseUntil || store?.temporaryPauseUntil || '',
+    temporaryPauseReason: settings?.temporaryPauseReason || store?.temporaryPauseReason || '',
+    allowScheduledOrdersWhenClosed:
+      settings?.allowScheduledOrdersWhenClosed === true ||
+      store?.allowScheduledOrdersWhenClosed === true,
     openingHours: normalizeOpeningHours(store),
     deliveryTime: store?.deliveryTime || settings?.deliveryTime || DEFAULT_FORM.deliveryTime,
     minOrder: moneyToInput(store?.minOrder, store?.minOrderCents),
@@ -1433,6 +1550,29 @@ const knownStoreIdsKey = useMemo(() => {
 
   const publicSlug = slugify(form.slug || form.name)
   const publicUrl = getStorePublicUrl(publicSlug)
+  const settingsOperationalPreview = useMemo(() => {
+    return getStoreOperationalStatus({
+      ...(selectedStore || {}),
+      isOpen: form.isOpen,
+      isActive: form.isActive,
+      openingHours: form.openingHours,
+      settings: {
+        ...(selectedStore?.settings || {}),
+        availabilityMode: form.availabilityMode,
+        openingHours: form.openingHours,
+        temporaryPauseUntil: form.temporaryPauseUntil || null,
+        temporaryPauseReason: form.temporaryPauseReason || '',
+      },
+    })
+  }, [
+    form.availabilityMode,
+    form.isActive,
+    form.isOpen,
+    form.openingHours,
+    form.temporaryPauseReason,
+    form.temporaryPauseUntil,
+    selectedStore,
+  ])
 
   const themeVars = useMemo(() => ({
     '--store-theme': form.themeColor || BRAND_GREEN,
@@ -1770,7 +1910,7 @@ const knownStoreIdsKey = useMemo(() => {
       form,
       selectedStore,
       schedulingAllowed,
-    }).checks.find((check) => check.status === 'critical')
+    }).checks.find((check) => check.blocksSave === true || Boolean(check.saveMessage))
 
     if (blockingReadinessIssue) {
       showToast('error', blockingReadinessIssue.saveMessage || blockingReadinessIssue.description)
@@ -1828,19 +1968,12 @@ const knownStoreIdsKey = useMemo(() => {
         : '23:30'
 
       const settings = {
-        ...(selectedStore.settings || {}),
-        themeColor,
-        acceptDelivery: Boolean(form.acceptDelivery),
-        acceptPickup: Boolean(form.acceptPickup),
-        acceptDineIn: Boolean(form.acceptDineIn),
-        deliveryTime,
-        newOrderSoundEnabled: Boolean(form.newOrderSoundEnabled),
-        printAfterConfirm: Boolean(form.printAfterConfirm),
-        autoCloseEnabled: Boolean(form.autoCloseEnabled),
-        autoCloseGraceMinutes,
-        openingHours,
-        whatsapp,
-        instagram,
+        availabilityMode: form.availabilityMode === 'opening_hours' ? 'opening_hours' : 'manual',
+        operatingMode: form.availabilityMode === 'opening_hours' ? 'opening_hours' : 'manual',
+        timeZone: 'America/Sao_Paulo',
+        temporaryPauseUntil: form.temporaryPauseUntil || null,
+        temporaryPauseReason: sanitizeTextField(form.temporaryPauseReason, 120),
+        allowScheduledOrdersWhenClosed: Boolean(form.allowScheduledOrdersWhenClosed),
       }
 
       const payload = {
@@ -1853,7 +1986,7 @@ const knownStoreIdsKey = useMemo(() => {
         logoUrl,
         bannerUrl,
         bannerMobileUrl,
-        shareImageUrl,
+        ...(brandingAllowed ? { shareImageUrl } : {}),
         themeColor,
 
         whatsapp,
@@ -1866,6 +1999,10 @@ const knownStoreIdsKey = useMemo(() => {
         },
 
         isActive: Boolean(form.isActive),
+        newOrderSoundEnabled: Boolean(form.newOrderSoundEnabled),
+        printAfterConfirm: Boolean(form.printAfterConfirm),
+        autoCloseEnabled: Boolean(form.autoCloseEnabled),
+        autoCloseGraceMinutes,
 
         activeDays,
         hoursOpen,
@@ -1906,6 +2043,7 @@ const knownStoreIdsKey = useMemo(() => {
         'name', 'storeName', 'description', 'segment', 'category',
         'logoUrl', 'bannerUrl', 'bannerMobileUrl', 'shareImageUrl', 'themeColor', 'whatsapp', 'whatsapp1',
         'phone', 'instagram', 'social', 'isActive', 'activeDays',
+        'newOrderSoundEnabled', 'printAfterConfirm', 'autoCloseEnabled', 'autoCloseGraceMinutes',
         'hoursOpen', 'hoursClose', 'openingHours', 'scheduling', 'settings', 'deliveryTime',
         'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
         'acceptDineIn', 'address', 'cep', 'street',
@@ -1934,7 +2072,7 @@ const knownStoreIdsKey = useMemo(() => {
     } finally {
       setSaving(false)
     }
-  }, [form, saving, schedulingAllowed, selectedStore, showToast, user])
+  }, [brandingAllowed, form, saving, schedulingAllowed, selectedStore, showToast, user])
 
   if (loadingStores) {
     return (
@@ -2159,20 +2297,24 @@ const knownStoreIdsKey = useMemo(() => {
 
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280] dark:text-gray-300">
                   {readiness.criticalCount > 0
-                    ? 'Corrija os itens críticos antes de salvar. Eles podem deixar o cardápio aberto sem pedido funcional.'
+                    ? 'Bloqueantes mostram o que impede vender agora. Avisos e recomendacoes ajudam a reduzir atrito sem travar a operacao.'
                     : readiness.warningCount > 0
-                      ? 'A loja pode salvar, mas estes pontos podem gerar dúvida ou atrito no pedido público.'
-                      : 'As configurações principais para receber pedidos estão coerentes.'}
+                      ? 'A loja pode salvar, mas estes pontos podem gerar duvida ou atrito no pedido publico.'
+                      : 'As configuracoes principais para receber pedidos estao coerentes.'}
                 </p>
               </div>
 
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap gap-2">
                 <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-red-600 shadow-sm ring-1 ring-red-100 dark:bg-white/10 dark:text-red-200 dark:ring-red-400/20">
-                  {readiness.criticalCount} crítico
+                  {readiness.criticalCount} bloqueante
                 </span>
 
                 <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-600 shadow-sm ring-1 ring-amber-100 dark:bg-white/10 dark:text-amber-200 dark:ring-amber-400/20">
                   {readiness.warningCount} aviso
+                </span>
+
+                <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-white/10 dark:text-sky-200 dark:ring-sky-400/20">
+                  {readiness.recommendedCount} recomendado
                 </span>
               </div>
             </div>
@@ -2186,7 +2328,11 @@ const knownStoreIdsKey = useMemo(() => {
                     ? 'border-red-100 bg-white text-red-600 dark:border-red-500/25 dark:bg-red-950/35 dark:text-red-300'
                     : check.status === 'warning'
                       ? 'border-amber-100 bg-white text-amber-600 dark:border-amber-500/25 dark:bg-amber-950/35 dark:text-amber-300'
-                      : 'border-emerald-100 bg-white text-emerald-600 dark:border-emerald-500/25 dark:bg-emerald-950/35 dark:text-emerald-300'
+                      : check.status === 'recommended'
+                        ? 'border-sky-100 bg-white text-sky-600 dark:border-sky-500/25 dark:bg-sky-950/35 dark:text-sky-300'
+                        : 'border-emerald-100 bg-white text-emerald-600 dark:border-emerald-500/25 dark:bg-emerald-950/35 dark:text-emerald-300'
+
+                const actionClass = 'mt-3 inline-flex h-8 items-center justify-center rounded-xl bg-white px-3 text-[11px] font-black text-[#111827] shadow-sm ring-1 ring-gray-100 transition hover:text-[#f97316] dark:bg-white/10 dark:text-zinc-100 dark:ring-white/10'
 
                 return (
                   <div
@@ -2196,6 +2342,10 @@ const knownStoreIdsKey = useMemo(() => {
                     <Icon className="mt-0.5 shrink-0" size={18} />
 
                     <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wide opacity-70">
+                        {check.label || 'Status'}
+                      </span>
+
                       <p className="text-sm font-black text-[#111827] dark:text-white">
                         {check.title}
                       </p>
@@ -2203,6 +2353,16 @@ const knownStoreIdsKey = useMemo(() => {
                       <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-gray-300">
                         {check.description}
                       </p>
+
+                      {check.to && check.actionLabel ? (
+                        <Link to={check.to} className={actionClass}>
+                          {check.actionLabel}
+                        </Link>
+                      ) : check.href && check.actionLabel ? (
+                        <a href={check.href} className={actionClass}>
+                          {check.actionLabel}
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -2299,15 +2459,6 @@ const knownStoreIdsKey = useMemo(() => {
             title="Logo e banner"
             description="Imagens usadas no cabeçalho do cardápio público."
           >
-            {!brandingAllowed && (
-              <div className="mb-4">
-                <LockedFeatureCard
-                  featureKey="customBranding"
-                  featureName="Logo e personalização avançada"
-                  description="Logo e banner ficam salvos, mas a personalização avançada só aparece publicamente no trial Premium ou no plano Premium."
-                />
-              </div>
-            )}
             <div className="grid gap-4">
               <ImageUploadField
                 label="Logo da loja"
@@ -2347,18 +2498,26 @@ const knownStoreIdsKey = useMemo(() => {
                 onRemove={() => updateField('bannerMobileUrl', '')}
               />
 
-              <ImageUploadField
-                label="Imagem de compartilhamento"
-                description="Usada quando o link da loja é compartilhado no WhatsApp, Instagram, Google e redes sociais. Recomendado: 1200 x 630 px. Mantenha textos e elementos importantes no centro."
-                aspect="share"
-                value={form.shareImageUrl}
-                uploading={uploadingImage === 'shareImageUrl'}
-                storeId={selectedStore.id}
-                mediaType="banner"
-                onUpload={(file) => handleUploadStoreImage(file, 'shareImageUrl')}
-                onSelectFromLibrary={(url) => updateField('shareImageUrl', url)}
-                onRemove={() => updateField('shareImageUrl', '')}
-              />
+              {brandingAllowed ? (
+                <ImageUploadField
+                  label="Imagem de compartilhamento"
+                  description="Usada quando o link da loja é compartilhado no WhatsApp, Instagram, Google e redes sociais. Recomendado: 1200 x 630 px. Mantenha textos e elementos importantes no centro."
+                  aspect="share"
+                  value={form.shareImageUrl}
+                  uploading={uploadingImage === 'shareImageUrl'}
+                  storeId={selectedStore.id}
+                  mediaType="banner"
+                  onUpload={(file) => handleUploadStoreImage(file, 'shareImageUrl')}
+                  onSelectFromLibrary={(url) => updateField('shareImageUrl', url)}
+                  onRemove={() => updateField('shareImageUrl', '')}
+                />
+              ) : (
+                <LockedFeatureCard
+                  featureKey="customBranding"
+                  featureName="Imagem de compartilhamento"
+                  description="Logo e banners podem ser usados em qualquer plano. A imagem personalizada para WhatsApp, Google e redes sociais fica no Premium."
+                />
+              )}
             </div>
           </Section>
 
@@ -2393,7 +2552,127 @@ const knownStoreIdsKey = useMemo(() => {
   title="Horário de funcionamento"
   description="Defina dias e horários diferentes para cada dia da semana."
 >
-  <div className="space-y-3">
+  <div className="space-y-5">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+      <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
+              Abertura e fechamento
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+              No modo automático, o PratoBy calcula se a loja aceita pedidos usando os horários abaixo, sem precisar de cron ou ação manual.
+            </p>
+          </div>
+
+          <span
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-xs font-black ${
+              settingsOperationalPreview.isOpen
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${settingsOperationalPreview.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            {settingsOperationalPreview.isOpen ? 'Aberta agora' : 'Fechada agora'}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {[
+            {
+              value: 'manual',
+              title: 'Manual',
+              description: 'Usa o botão abrir/fechar do dashboard.',
+            },
+            {
+              value: 'opening_hours',
+              title: 'Automático',
+              description: 'Abre e fecha pelos horários cadastrados.',
+            },
+          ].map((mode) => {
+            const active = form.availabilityMode === mode.value
+            return (
+              <button
+                key={mode.value}
+                type="button"
+                onClick={() => updateField('availabilityMode', mode.value)}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  active
+                    ? 'border-[#f97316] bg-white shadow-sm ring-4 ring-orange-100 dark:bg-zinc-950 dark:ring-orange-500/15'
+                    : 'border-orange-100 bg-white/70 hover:bg-white dark:border-orange-500/20 dark:bg-zinc-950/30'
+                }`}
+              >
+                <span className="text-sm font-black text-[#111827] dark:text-zinc-50">
+                  {mode.title}
+                </span>
+                <span className="mt-1 block text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+                  {mode.description}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <p className="text-sm font-black text-[#111827] dark:text-zinc-50">
+          Pausa temporária
+        </p>
+        <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280] dark:text-zinc-400">
+          Fecha pedidos por um período e reabre automaticamente.
+        </p>
+
+        <div className="mt-4 grid gap-3">
+          <select
+            value=""
+            onChange={(event) => {
+              const nextUntil = getFutureIso(event.target.value)
+              if (!nextUntil) return
+              updateField('temporaryPauseUntil', nextUntil)
+              updateField('temporaryPauseReason', 'Pausa operacional')
+            }}
+            className="h-11 rounded-2xl border border-gray-100 bg-white px-3 text-sm font-bold text-[#111827] outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+          >
+            <option value="">Pausar agora...</option>
+            <option value="15">Por 15 minutos</option>
+            <option value="30">Por 30 minutos</option>
+            <option value="60">Por 1 hora</option>
+            <option value="120">Por 2 horas</option>
+          </select>
+
+          {form.temporaryPauseUntil ? (
+            <div className="rounded-2xl bg-white p-3 text-xs font-bold text-[#6b7280] dark:bg-zinc-950 dark:text-zinc-300">
+              Pausada até {formatDateTimePtBr(form.temporaryPauseUntil)}
+              <button
+                type="button"
+                onClick={() => {
+                  updateField('temporaryPauseUntil', '')
+                  updateField('temporaryPauseReason', '')
+                }}
+                className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-3 text-xs font-black text-white transition hover:bg-black dark:bg-zinc-100 dark:text-zinc-950"
+              >
+                Encerrar pausa
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+
+    <Toggle
+      checked={Boolean(form.allowScheduledOrdersWhenClosed)}
+      onChange={(value) => {
+        if (value && !schedulingAllowed) {
+          showToast('error', 'Agendamento fora do horário exige plano Profissional ou Premium.')
+          return
+        }
+        updateField('allowScheduledOrdersWhenClosed', value)
+      }}
+      label="Aceitar pedidos agendados quando a loja estiver fechada"
+      description="Mantém pedidos imediatos bloqueados fora do horário, mas permite encomendas ou agendamentos para uma janela válida."
+    />
+
+    <div className="space-y-3">
     {DAYS_OF_WEEK.map((day) => {
       const dayHours = form.openingHours?.[day.id] || {
         enabled: false,
@@ -2466,6 +2745,7 @@ const knownStoreIdsKey = useMemo(() => {
         </div>
       )
     })}
+    </div>
   </div>
 </Section>
 

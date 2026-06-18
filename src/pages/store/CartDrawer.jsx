@@ -26,7 +26,6 @@ import {
   FiSmartphone,
   FiZap,
 } from 'react-icons/fi'
-import { FaPix, FaCreditCard } from "react-icons/fa6";
 import { useCart } from '../../contexts/CartContext'
 import { scrollToFirstError } from '../../utils/scroll'
 import { getCartSchedulingState } from '../../utils/publicScheduling'
@@ -1620,7 +1619,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'pix_manual',
         legacyLabel: 'Pix',
         label: 'Pix com comprovante',
-        Icon: FaPix,
+        Icon: FiZap,
         iconLabel: 'Pix',
         description: 'Copie o Pix na próxima tela, envie o comprovante pelo WhatsApp e aguarde a confirmação da loja.',
         paymentStatus: 'pending',
@@ -1629,7 +1628,7 @@ export default function CartDrawer({ isOpen, onClose, store }) {
         value: 'card_on_delivery',
         legacyLabel: 'Cartão',
         label: 'Cartão na entrega',
-        Icon: FaCreditCard,
+        Icon: FiCreditCard,
         iconLabel: 'Cartão',
         description: 'Débito ou crédito na maquininha.',
         paymentStatus: 'pay_on_delivery',
@@ -2265,6 +2264,18 @@ if (orderType === 'delivery') {
       return
     }
 
+    const shouldOpenMercadoPagoCheckout = paymentMethod === 'mercadopago_online'
+    let mercadoPagoWindow = null
+
+    if (shouldOpenMercadoPagoCheckout) {
+      mercadoPagoWindow = window.open('about:blank', '_blank')
+      if (mercadoPagoWindow) {
+        mercadoPagoWindow.opener = null
+        mercadoPagoWindow.document.title = 'Abrindo Mercado Pago...'
+        mercadoPagoWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Abrindo checkout Mercado Pago...</p>'
+      }
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -2330,10 +2341,10 @@ if (orderType === 'delivery') {
       })
 
       const createdOrder = result?.data || {}
-      const trackingToken = createdOrder.trackingToken
+      const trackingToken = String(createdOrder.trackingToken || createdOrder.orderId || createdOrder.id || '').trim()
       const orderId = String(createdOrder.orderId || createdOrder.id || trackingToken || '').trim()
 
-      if (!trackingToken) {
+      if (!orderId) {
         throw new Error('Pedido criado sem código de acompanhamento.')
       }
 
@@ -2342,7 +2353,7 @@ if (orderType === 'delivery') {
         trackingToken,
         storeId: finalStoreId,
         storeSlug,
-        trackingUrl: createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`,
+        trackingUrl: createdOrder.trackingUrl || `/${storeSlug}/pedido/${orderId}`,
         paymentUrl: createdOrder.paymentUrl || '',
         createdAt: new Date().toISOString(),
       }
@@ -2364,10 +2375,20 @@ if (orderType === 'delivery') {
       clearCart()
       onClose?.()
       if (createdOrder.paymentUrl && paymentMethod === 'mercadopago_online') {
-        window.open(createdOrder.paymentUrl, '_blank', 'noopener,noreferrer')
+        if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
+          mercadoPagoWindow.location.href = createdOrder.paymentUrl
+        } else {
+          window.location.assign(createdOrder.paymentUrl)
+          return
+        }
+      } else if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
+        mercadoPagoWindow.close()
       }
-      navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${trackingToken}`)
+      navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${orderId}`)
     } catch (error) {
+      if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
+        mercadoPagoWindow.close()
+      }
       console.error(error)
       const message = error?.message || 'Erro ao enviar pedido. Tente novamente.'
       setCheckoutError(message)
@@ -3227,7 +3248,7 @@ if (orderType === 'delivery') {
                     {paymentMethod === 'pix_manual' && (
                       <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
                         <div className="flex gap-3">
-                          <FiShield className="mt-0.5 shrink-0 text-[#f97316]" />
+                          <FiZap className="mt-0.5 shrink-0 text-[#f97316]" />
 
                           <div>
                             <p className="text-sm font-black text-[#111827]">
@@ -3256,6 +3277,25 @@ if (orderType === 'delivery') {
                             <p className="mt-1 text-xs font-bold leading-5 text-green-800">
                               Você será redirecionado para pagar em ambiente seguro. O PratoBy não armazena dados do cartão.
                               Seu pedido será confirmado após a aprovação do pagamento.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === 'card_on_delivery' && (
+                      <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                        <div className="flex gap-3">
+                          <FiCreditCard className="mt-0.5 shrink-0 text-orange-700" />
+
+                          <div>
+                            <p className="text-sm font-black text-[#111827]">
+                              Maquininha na Entrega
+                            </p>
+
+                            <p className="mt-1 text-xs font-bold leading-5 text-orange-800">
+                              O Entregador da loja possui uma maquininha de cartão de credito ou debito para processar seu pagamento com segurança no momento da entrega.
+                              O PratoBy não armazena dados do cartão.
                             </p>
                           </div>
                         </div>

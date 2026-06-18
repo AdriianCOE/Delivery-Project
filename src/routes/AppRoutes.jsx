@@ -6,6 +6,7 @@ import {
 } from 'react-router-dom'
 
 import ScrollToTop from '../utils/ScrollToTop'
+import { DashboardPageSkeleton } from '../components/shared/Skeletons'
 
 // Públicas
 
@@ -70,7 +71,7 @@ const QRCodePage = lazy(() => import('../pages/merchant/QRCodePage'))
 const KitchenDisplayPage = lazy(() => import('../pages/merchant/KitchenDisplayPage'))
 const CustomerDisplayPage = lazy(() => import('../pages/merchant/CustomerDisplayPage'))
 
-function RouteFallback() {
+function PublicRouteFallback() {
   return (
     <div
       className="grid min-h-screen place-items-center bg-[#f9fafb] px-6 text-[#111827] transition-colors dark:bg-zinc-950 dark:text-zinc-50"
@@ -78,26 +79,38 @@ function RouteFallback() {
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="flex w-full max-w-[16rem] flex-col items-center text-center">
-        <div className="relative grid h-14 w-14 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-zinc-800">
-          <div className="absolute inset-0 rounded-2xl bg-orange-500/10 dark:bg-orange-500/15" />
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-orange-100 border-t-[#f97316] dark:border-zinc-700 dark:border-t-orange-400" />
+      <div className="w-full max-w-sm space-y-4">
+        <div className="h-10 w-36 animate-pulse rounded-xl bg-gray-200 dark:bg-zinc-800" />
+        <div className="h-44 animate-pulse rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+        <div className="space-y-2">
+          <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200 dark:bg-zinc-800" />
+          <div className="h-4 w-8/12 animate-pulse rounded bg-gray-200 dark:bg-zinc-800" />
         </div>
-
-        <p className="mt-4 text-sm font-black text-[#111827] dark:text-zinc-100">
-          PratoBy
-        </p>
-        <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
-          Carregando...
-        </p>
-        <div className="mt-4 h-1.5 w-32 overflow-hidden rounded-full bg-orange-100 dark:bg-zinc-800">
-          <div className="h-full w-1/2 animate-pulse rounded-full bg-[#f97316]" />
-        </div>
-        <span className="sr-only">
-          Carregando...
-        </span>
       </div>
+      <span className="sr-only">Carregando.</span>
     </div>
+  )
+}
+
+function DashboardRouteFallback() {
+  return (
+    <div
+      className="min-h-screen bg-[#f9fafb] text-[#111827] transition-colors dark:bg-zinc-950 dark:text-zinc-50"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <DashboardPageSkeleton />
+      <span className="sr-only">Carregando painel.</span>
+    </div>
+  )
+}
+
+function DashboardSuspense({ children }) {
+  return (
+    <Suspense fallback={<DashboardRouteFallback />}>
+      {children}
+    </Suspense>
   )
 }
 
@@ -115,7 +128,7 @@ export default function AppRoutes() {
     <>
       <ScrollToTop />
 
-      <Suspense fallback={<RouteFallback />}>
+      <Suspense fallback={<PublicRouteFallback />}>
         <Routes>
         {/* Públicas */}
         <Route path="/" element={<LandingPage />} />
@@ -158,9 +171,11 @@ export default function AppRoutes() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'developer']}>
-              <AdminLayout />
-            </ProtectedRoute>
+            <DashboardSuspense>
+              <ProtectedRoute allowedRoles={['admin', 'developer']}>
+                <AdminLayout />
+              </ProtectedRoute>
+            </DashboardSuspense>
           }
         >
           <Route index element={<AdminDashboard />} />
@@ -191,9 +206,11 @@ export default function AppRoutes() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
-              <MerchantDashboardShell />
-            </ProtectedRoute>
+            <DashboardSuspense>
+              <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+                <MerchantDashboardShell />
+              </ProtectedRoute>
+            </DashboardSuspense>
           }
         >
           <Route index element={<MerchantDashboard />} />
@@ -226,17 +243,21 @@ export default function AppRoutes() {
         <Route
           path="/dashboard/out-screen"
           element={
-            <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
-              <KitchenDisplayPage />
-            </ProtectedRoute>
+            <DashboardSuspense>
+              <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+                <KitchenDisplayPage />
+              </ProtectedRoute>
+            </DashboardSuspense>
           }
         />
         <Route
           path="/dashboard/out-screen/customer"
           element={
-            <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
-              <CustomerDisplayPage />
-            </ProtectedRoute>
+            <DashboardSuspense>
+              <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+                <CustomerDisplayPage />
+              </ProtectedRoute>
+            </DashboardSuspense>
           }
         />
 

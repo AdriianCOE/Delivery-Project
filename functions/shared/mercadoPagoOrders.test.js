@@ -4,6 +4,7 @@ const test = require('node:test')
 const {
   buildMercadoPagoExternalReference,
   buildMercadoPagoPendingPaymentSnapshot,
+  buildMercadoPagoPreferencePayload,
   isMercadoPagoOnlinePaymentRequest,
   mapMercadoPagoPaymentStatus,
   normalizeMercadoPagoPublicConfig,
@@ -137,6 +138,54 @@ test('buildMercadoPagoPendingPaymentSnapshot stores pending online state', () =>
   assert.equal(snapshot.operationalBlockedReason, 'awaiting_online_payment')
   assert.equal(snapshot.payment.amount, 123.45)
   assert.equal(snapshot.payment.externalReference, 'pratoby:order:store1:order1')
+})
+
+test('buildMercadoPagoPreferencePayload sends cents as BRL money', () => {
+  const previousWebhookUrl = process.env.MERCADOPAGO_ORDER_WEBHOOK_URL
+  const previousPublicUrl = process.env.PUBLIC_APP_URL
+  process.env.MERCADOPAGO_ORDER_WEBHOOK_URL = 'https://example.com/mp/webhook'
+  process.env.PUBLIC_APP_URL = 'https://example.com'
+
+  try {
+    const payload = buildMercadoPagoPreferencePayload({
+      orderData: {
+        id: 'order1',
+        trackingToken: 'track1',
+        storeId: 'store1',
+        storeDocId: 'store1',
+        storeSlug: 'minha-loja',
+        trackingUrlPath: '/minha-loja/pedido/track1',
+        totalCents: 12345,
+        payment: {
+          amountCents: 12345,
+        },
+      },
+      storeData: {
+        name: 'Minha loja',
+        payments: {
+          mercadoPago: {
+            enabled: true,
+            status: 'active',
+          },
+        },
+      },
+    })
+
+    assert.equal(payload.items[0].unit_price, 123.45)
+    assert.equal(payload.back_urls.success, 'https://example.com/minha-loja/pedido/track1')
+  } finally {
+    if (previousWebhookUrl === undefined) {
+      delete process.env.MERCADOPAGO_ORDER_WEBHOOK_URL
+    } else {
+      process.env.MERCADOPAGO_ORDER_WEBHOOK_URL = previousWebhookUrl
+    }
+
+    if (previousPublicUrl === undefined) {
+      delete process.env.PUBLIC_APP_URL
+    } else {
+      process.env.PUBLIC_APP_URL = previousPublicUrl
+    }
+  }
 })
 
 test('mapMercadoPagoPaymentStatus keeps paid pending and failure states explicit', () => {

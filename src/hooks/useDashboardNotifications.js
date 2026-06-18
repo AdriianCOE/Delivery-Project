@@ -28,6 +28,157 @@ import {
 } from '../utils/notificationPreferences'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
+const RECENT_ORDER_NOTIFICATIONS_LIMIT = 30
+
+const ACTIONABLE_ORDER_STATUSES = new Set([
+  '',
+  'novo',
+  'new',
+  'pendente',
+  'pending',
+  'recebido',
+  'received',
+  'aguardando_pagamento',
+  'payment_pending',
+])
+
+function toNotificationDate(value) {
+  if (!value) return Date.now()
+  if (typeof value === 'number') return value
+  if (value instanceof Date) return value.getTime()
+  if (typeof value.toMillis === 'function') return value.toMillis()
+  if (typeof value.toDate === 'function') return value.toDate().getTime()
+
+  const parsed = new Date(value).getTime()
+  return Number.isNaN(parsed) ? Date.now() : parsed
+}
+
+function formatMoneyFromOrder(order) {
+  const cents = Number(order?.totalCents ?? order?.totals?.totalCents ?? order?.payment?.amountCents)
+  if (Number.isFinite(cents) && cents > 0) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(cents / 100)
+  }
+
+  const total = Number(order?.total ?? order?.payment?.amount)
+  if (Number.isFinite(total) && total > 0) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(total)
+  }
+
+  return 'valor pendente'
+}
+
+function getOrderCustomerName(order) {
+  return String(
+    order?.customerName ||
+    order?.customer?.name ||
+    order?.clientName ||
+    'Cliente'
+  ).trim()
+}
+
+function getOrderDisplayNumber(order, fallbackId) {
+  const value =
+    order?.orderNumber ||
+    order?.displayNumber ||
+    order?.shortId ||
+    String(fallbackId || '').slice(0, 8)
+
+  return value ? `#${String(value).replace(/^#/, '')}` : 'Pedido'
+}
+
+function isOnlinePaymentPending(order) {
+  const paymentType = String(order?.paymentType || order?.payment?.type || '').toLowerCase()
+  const paymentProvider = String(order?.paymentProvider || order?.payment?.provider || '').toLowerCase()
+  const paymentStatus = String(order?.paymentStatus || order?.payment?.status || '').toLowerCase()
+
+  return (
+    ['asaas', 'mercadopago', 'mercado_pago'].some((provider) =>
+      paymentProvider.includes(provider) || paymentType.includes(provider)
+    ) &&
+    !['paid', 'approved', 'confirmado', 'pago'].includes(paymentStatus)
+  )
+}
+
+function shouldNotifyOrder(order) {
+  const normalizedStatus = String(order?.status || '').toLowerCase()
+  return ACTIONABLE_ORDER_STATUSES.has(normalizedStatus) || isOnlinePaymentPending(order)
+}
+
+function createOrderNotification(order, orderId) {
+  const orderNumber = getOrderDisplayNumber(order, orderId)
+  const customerName = getOrderCustomerName(order)
+  const amount = formatMoneyFromOrder(order)
+  const onlinePaymentPending = isOnlinePaymentPending(order)
+
+  return {
+    id: `order:${orderId}`,
+    area: 'orders',
+    channel: 'firestore',
+    title: onlinePaymentPending ? 'Pagamento online pendente' : 'Novo pedido recebido',
+    message: `${orderNumber} - ${customerName} - ${amount}`,
+    severity: onlinePaymentPending ? 'warning' : 'success',
+    href: `/dashboard/orders?orderId=${encodeURIComponent(orderId)}`,
+    createdAt: toNotificationDate(order?.createdAt || order?.updatedAt),
+    sourceType: 'order',
+    sourceId: orderId,
+    critical: !onlinePaymentPending,
+  }
+}
+
+function getStoreSlug(store) {
+  return String(
+    store?.storeSlug ||
+    store?.slug ||
+    store?.publicSlug ||
+    store?.store?.slug ||
+    ''
+  ).trim()
+}
+
+function createOrderQuerySpecs(activeStoreId, store) {
+  const storeId = String(activeStoreId || '').trim()
+  const storeSlug = getStoreSlug(store)
+  const specs = []
+  const seen = new Set()
+
+  function add(field, operator, value) {
+    const cleanValue = String(value || '').trim()
+    if (!cleanValue) return
+
+    const key = `${field}:${operator}:${cleanValue}`
+    if (seen.has(key)) return
+
+    seen.add(key)
+    specs.push({ key, field, operator, value: cleanValue })
+  }
+
+  add('storeId', '==', storeId)
+  add('storeDocId', '==', storeId)
+  add('storeSlug', '==', storeSlug)
+
+  return specs
+}
+
+function dedupeNotifications(notifications) {
+  const byId = new Map()
+
+  notifications.forEach((notification) => {
+    const normalized = normalizeDashboardNotification(notification)
+    const current = byId.get(normalized.id)
+
+    if (!current || normalized.createdAt >= current.createdAt) {
+      byId.set(normalized.id, normalized)
+    }
+  })
+
+  return [...byId.values()]
+}
 
 function resolveActiveStoreId(userData) {
   if (!userData) return null
@@ -84,10 +235,15 @@ export function useDashboardNotifications() {
   const [store, setStore] = useState(null)
   const [loading, setLoading] = useState(true)
   const [localNotifications, setLocalNotifications] = useState([])
+  const [orderNotifications, setOrderNotifications] = useState([])
   const [reviewNotifications, setReviewNotifications] = useState([])
   const [readState, setReadState] = useState(() => loadNotificationReadState(null, null))
 
   const activeStoreId = useMemo(() => resolveActiveStoreId(userData), [userData])
+  const orderQuerySpecs = useMemo(
+    () => createOrderQuerySpecs(activeStoreId, store),
+    [activeStoreId, store]
+  )
 
   useEffect(() => {
     if (!uid || !activeStoreId) {
@@ -102,7 +258,79 @@ export function useDashboardNotifications() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalNotifications([])
+    setOrderNotifications([])
   }, [activeStoreId])
+
+  useEffect(() => {
+    if (!uid || !activeStoreId || !orderQuerySpecs.length || user?.isAnonymous) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOrderNotifications([])
+      return undefined
+    }
+
+    const ordersByQuery = new Map()
+    const unsubscribers = []
+
+    function publishOrderNotifications() {
+      const ordersById = new Map()
+
+      ordersByQuery.forEach((orders) => {
+        orders.forEach((order) => {
+          ordersById.set(order.id, order)
+        })
+      })
+
+      setOrderNotifications(
+        [...ordersById.values()]
+          .filter(shouldNotifyOrder)
+          .sort((a, b) => toNotificationDate(b.createdAt || b.updatedAt) - toNotificationDate(a.createdAt || a.updatedAt))
+          .slice(0, RECENT_ORDER_NOTIFICATIONS_LIMIT)
+          .map((order) => createOrderNotification(order, order.id))
+      )
+    }
+
+    orderQuerySpecs.forEach((spec) => {
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where(spec.field, spec.operator, spec.value),
+        orderBy('createdAt', 'desc'),
+        limit(RECENT_ORDER_NOTIFICATIONS_LIMIT)
+      )
+
+      const unsubscribe = onSnapshot(
+        ordersQuery,
+        (snapshot) => {
+          ordersByQuery.set(
+            spec.key,
+            snapshot.docs.map((orderDoc) => ({
+              id: orderDoc.id,
+              firestoreId: orderDoc.id,
+              ...(orderDoc.data() || {}),
+            }))
+          )
+          publishOrderNotifications()
+        },
+        (error) => {
+          ordersByQuery.delete(spec.key)
+          if (error?.code === 'permission-denied') {
+            console.warn('[useDashboardNotifications] orders listener denied for active store:', {
+              activeStoreId,
+              field: spec.field,
+            })
+          } else {
+            console.error('[useDashboardNotifications] error fetching recent orders:', error)
+          }
+          publishOrderNotifications()
+        }
+      )
+
+      unsubscribers.push(unsubscribe)
+    })
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe())
+    }
+  }, [activeStoreId, orderQuerySpecs, uid, user?.isAnonymous])
 
   useEffect(() => {
     if (!uid || !activeStoreId || user?.isAnonymous) {
@@ -390,17 +618,16 @@ export function useDashboardNotifications() {
       })
     }
 
-    return [...list, ...reviewNotifications, ...localNotifications]
+    return dedupeNotifications([...list, ...reviewNotifications, ...orderNotifications, ...localNotifications])
       .map((notification) => {
-        const normalized = normalizeDashboardNotification(notification)
         return {
-          ...normalized,
-          read: readIds.has(normalized.id),
+          ...notification,
+          read: readIds.has(notification.id),
         }
       })
       .filter((notification) => shouldShowInternalNotification(notification, preferences))
       .sort((a, b) => b.createdAt - a.createdAt)
-  }, [activeStoreId, loading, localNotifications, preferences, readIds, reviewNotifications, store, uid, userData])
+  }, [activeStoreId, loading, localNotifications, orderNotifications, preferences, readIds, reviewNotifications, store, uid, userData])
 
   const unreadNotifications = useMemo(() => {
     return notifications.filter((notification) => !notification.read)

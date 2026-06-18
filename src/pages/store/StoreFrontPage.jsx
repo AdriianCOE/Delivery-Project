@@ -46,6 +46,10 @@ import {
   getStorePublicSlug,
 } from '../../utils/storeIdentity'
 import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
+import {
+  getStoreOperationalStatus,
+  storeAllowsScheduledOrdersWhenClosed,
+} from '../../utils/storeOperationalStatus'
 import { shouldShowProductInStorefront } from '../../utils/productStatus'
 import StoreHeader from './StoreHeader'
 import StoreFooter from '../../components/layouts/StoreFooter'
@@ -1904,7 +1908,7 @@ export default function StoreFrontPage() {
 
   const [isFavorite, setIsFavorite] = useState(false)
   const [isInfoOpen, setIsInfoOpen] = useState(false)
-  const [store, setStore] = useState(null)
+  const [storeData, setStoreData] = useState(null)
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
 
@@ -1929,6 +1933,44 @@ export default function StoreFrontPage() {
   const isManualCategoryScrollRef = useRef(false)
   const manualCategoryScrollTimeoutRef = useRef(null)
   const [copyMessage, setCopyMessage] = useState('')
+
+  const isOwner = false
+  const canPreviewUnavailableStore = false
+
+  const [statusTick, setStatusTick] = useState(() => Date.now())
+
+  const operationalStatus = useMemo(
+    () => getStoreOperationalStatus(storeData, { now: new Date(statusTick) }),
+    [statusTick, storeData]
+  )
+
+  const store = useMemo(() => {
+    if (!storeData) return null
+
+    return {
+      ...storeData,
+      isOpen: operationalStatus.isOpen,
+      operationalStatus,
+    }
+  }, [operationalStatus, storeData])
+
+  const canOrderWhileClosed = useMemo(() => {
+    if (!store) return false
+
+    const schedulingEnabled =
+      store.scheduling?.enabled === true ||
+      store.settings?.scheduling?.enabled === true ||
+      store.scheduledOrders?.enabled === true ||
+      store.settings?.scheduledOrders?.enabled === true ||
+      store.preorders?.enabled === true ||
+      store.settings?.preorders?.enabled === true
+
+    return storeAllowsScheduledOrdersWhenClosed(store) && schedulingEnabled
+  }, [store])
+
+  const orderingBlockedOnStorefront = !store?.isOpen && !isOwner && !canOrderWhileClosed
+  const showPausedOverlay = !store?.isOpen && !canOrderWhileClosed
+  const hasMenuStore = Boolean(store)
 
   const themeColor = store?.themeColor || BRAND_GREEN
   const storeSlug = getStoreSlug(store, slug)
@@ -1960,9 +2002,14 @@ export default function StoreFrontPage() {
     }
   }, [])
 
-  const isOwner = false
-  const canPreviewUnavailableStore = false
-  const hasMenuStore = Boolean(store)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setStatusTick(Date.now())
+    }, 60_000)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
   const menuTargetStoreId = getStoreDocId(store)
   const menuTargetStoreSlug = getStoreSlug(store, slug)
   const menuStoreUnavailable = Boolean(store && isStoreUnavailable(store))
@@ -2143,6 +2190,17 @@ export default function StoreFrontPage() {
       behavior: 'smooth',
     })
   }, [])
+
+  useEffect(() => {
+    const element = categoryScrollRef.current
+    if (!element) return undefined
+
+    element.addEventListener('wheel', handleCategoryWheel, { passive: false })
+
+    return () => {
+      element.removeEventListener('wheel', handleCategoryWheel)
+    }
+  }, [handleCategoryWheel])
 
   useEffect(() => {
     const element = categoryScrollRef.current
@@ -2408,7 +2466,7 @@ const handleToggleFavorite = useCallback(() => {
   useEffect(() => {
     if (!slug) {
       queueMicrotask(() => {
-        setStore(null)
+        setStoreData(null)
         setLoadingStore(false)
       })
       return undefined
@@ -2444,9 +2502,9 @@ const handleToggleFavorite = useCallback(() => {
             return
           }
 
-          setStore(normalizeStore(foundStore, slug))
+          setStoreData(normalizeStore(foundStore, slug))
         } else {
-          setStore(null)
+          setStoreData(null)
         }
         
         setLoadingStore(false)
@@ -2455,7 +2513,7 @@ const handleToggleFavorite = useCallback(() => {
           console.error('[StoreFront] erro ao buscar loja:', error)
         }
         if (isMounted) {
-          setStore(null)
+          setStoreData(null)
           setLoadingStore(false)
         }
       }
@@ -2496,7 +2554,7 @@ const handleToggleFavorite = useCallback(() => {
         (snapshot) => {
           if (!snapshot.exists()) return
 
-          setStore((current) => {
+          setStoreData((current) => {
             if (!current || current.id !== publicStoreId) return current
 
             return normalizeStore({
@@ -2836,7 +2894,6 @@ return (
 
             <div
               ref={categoryScrollRef}
-              onWheel={handleCategoryWheel}
               className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
@@ -2937,25 +2994,25 @@ return (
                   {featuredProducts.map((product) => (
                     <div key={`featured-${product.id}`} className="relative">
                       <div
-                        className={
-                          !store.isOpen && !isOwner
+                        className={`h-full ${
+                          orderingBlockedOnStorefront
                             ? 'pointer-events-none opacity-70'
-                            : !store.isOpen
-                              ? 'opacity-70'
+                            : !store?.isOpen
+                              ? 'opacity-80'
                               : ''
-                        }
+                        }`}
                       >
                         <ProductCard
                           product={product}
                           store={store}
-                          disabled={!store?.isOpen && !isOwner}
+                          disabled={orderingBlockedOnStorefront}
                           isOwner={isOwner}
                           onClick={handleOpenProduct}
                           onQuickEdit={handleQuickEditProduct}
                         />
                       </div>
 
-                      {!store.isOpen && (
+                      {showPausedOverlay && (
                         <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-red-50 px-4 py-2 text-center text-xs font-black text-red-600 shadow-sm">
                           Pedidos pausados
                         </div>
@@ -3002,24 +3059,24 @@ return (
                       <div key={product.id} className="relative h-full">
                         <div
                           className={`h-full ${
-                            !store.isOpen && !isOwner
+                            orderingBlockedOnStorefront
                               ? 'pointer-events-none opacity-70'
-                              : !store.isOpen
-                                ? 'opacity-70'
+                              : !store?.isOpen
+                                ? 'opacity-80'
                                 : ''
                           }`}
                         >
                           <ProductCard
                             product={product}
                             store={store}
-                            disabled={!store?.isOpen && !isOwner}
+                            disabled={orderingBlockedOnStorefront}
                             isOwner={isOwner}
                             onQuickEdit={handleQuickEditProduct}
                             onClick={handleOpenProduct}
                           />
                         </div>
 
-                        {!store.isOpen && (
+                        {showPausedOverlay && (
                           <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-red-50 px-4 py-2 text-center text-xs font-black text-red-600 shadow-sm">
                             Pedidos pausados
                           </div>
@@ -3052,7 +3109,7 @@ return (
 <StoreFooter store={store} todayHoursLabel={todayHoursLabel} />
 
       <AnimatePresence>
-        {totalItemsCount > 0 && store?.isOpen && (
+        {totalItemsCount > 0 && !orderingBlockedOnStorefront && (
         <motion.button
           type="button"
           onClick={() => setIsCartOpen(true)}

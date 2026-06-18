@@ -20,6 +20,7 @@ import { useDashboardNotifications } from '../../hooks/useDashboardNotifications
 import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
 import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
 import { getCallableErrorMessage } from '../../utils/callableError'
+import { getStoreOperationalStatus } from '../../utils/storeOperationalStatus'
 
 import {
   FiBarChart2,
@@ -1356,6 +1357,12 @@ export default function DashboardLayout() {
   const [storeError, setStoreError] = useState(null)
   const [storeToggleLoading, setStoreToggleLoading] = useState(false)
   const [confirmStatusModalOpen, setConfirmStatusModalOpen] = useState(false)
+  const storeOperationalStatus = useMemo(
+    () => getStoreOperationalStatus(storeData || {}),
+    [storeData]
+  )
+  const storeCurrentlyOpen = storeOperationalStatus.isOpen
+  const storeUsesAutomaticHours = storeOperationalStatus.mode === 'opening_hours'
 
   useEffect(() => {
     if (!currentStoreId) {
@@ -1397,17 +1404,50 @@ export default function DashboardLayout() {
   const handleToggleStoreOpen = async () => {
     if (!currentStoreId || !storeData || storeToggleLoading) return
 
-    const nextStatus = !storeData.isOpen
+    const nextStatus = !storeCurrentlyOpen
 
     try {
       setStoreToggleLoading(true)
       setStoreError(null)
       const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      const nextSettings = {
+        availabilityMode: storeOperationalStatus.mode,
+        operatingMode: storeOperationalStatus.mode,
+        timeZone: storeOperationalStatus.timeZone || storeData.settings?.timeZone || 'America/Sao_Paulo',
+        temporaryPauseUntil: storeData.settings?.temporaryPauseUntil || null,
+        temporaryPauseReason: storeData.settings?.temporaryPauseReason || '',
+        allowScheduledOrdersWhenClosed: storeData.settings?.allowScheduledOrdersWhenClosed === true,
+      }
+      let payload
+
+      if (storeUsesAutomaticHours) {
+        if (storeCurrentlyOpen) {
+          nextSettings.temporaryPauseUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+          nextSettings.temporaryPauseReason = 'Pausa pelo dashboard'
+          payload = { settings: nextSettings }
+        } else if (storeOperationalStatus.reason === 'temporary-pause') {
+          nextSettings.temporaryPauseUntil = null
+          nextSettings.temporaryPauseReason = ''
+          payload = { settings: nextSettings }
+        } else {
+          nextSettings.availabilityMode = 'manual'
+          nextSettings.operatingMode = 'manual'
+          nextSettings.temporaryPauseUntil = null
+          nextSettings.temporaryPauseReason = ''
+          payload = {
+            isOpen: true,
+            settings: nextSettings,
+          }
+        }
+      } else {
+        payload = {
+          isOpen: nextStatus,
+        }
+      }
+
       await updateStoreSettings({
         storeId: currentStoreId,
-        payload: {
-          isOpen: nextStatus,
-        },
+        payload,
       })
       setConfirmStatusModalOpen(false)
     } catch (err) {
@@ -1694,16 +1734,16 @@ export default function DashboardLayout() {
                         onClick={() => setConfirmStatusModalOpen(true)}
                         className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition hover:scale-105 active:scale-95 cursor-pointer shadow-sm shrink-0',
-                          storeData.isOpen
+                          storeCurrentlyOpen
                             ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-950/25 dark:text-emerald-400 dark:ring-emerald-900/30'
                             : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/25 dark:text-red-400 dark:ring-red-900/30'
                         )}
                       >
                         <span className={cn(
                           'h-1.5 w-1.5 rounded-full shrink-0',
-                          storeData.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                          storeCurrentlyOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
                         )} />
-                        <span className="hidden xs:inline">{storeData.isOpen ? 'Aberta' : 'Fechada'}</span>
+                        <span className="hidden xs:inline">{storeCurrentlyOpen ? 'Aberta' : 'Fechada'}</span>
                       </button>
                     ) : null}
                   </div>
@@ -1925,21 +1965,31 @@ export default function DashboardLayout() {
                 <div className="flex flex-col items-center text-center">
                   <div className={cn(
                     'grid h-16 w-16 place-items-center rounded-full mb-4 shadow-lg',
-                    storeData.isOpen
+                    storeCurrentlyOpen
                       ? 'bg-red-50 text-red-500 shadow-red-500/10 dark:bg-red-950/20'
                       : 'bg-emerald-50 text-emerald-500 shadow-emerald-500/10 dark:bg-emerald-950/20'
                   )}>
-                    {storeData.isOpen ? <FiX size={28} /> : <FiZap size={28} />}
+                    {storeCurrentlyOpen ? <FiX size={28} /> : <FiZap size={28} />}
                   </div>
 
                   <h3 className="text-lg font-black text-[#111827] dark:text-white">
-                    {storeData.isOpen ? 'Fechar Loja?' : 'Abrir Loja?'}
+                    {storeCurrentlyOpen
+                      ? storeUsesAutomaticHours ? 'Pausar pedidos?' : 'Fechar Loja?'
+                      : storeUsesAutomaticHours && storeOperationalStatus.reason !== 'temporary-pause'
+                        ? 'Abrir manualmente?'
+                        : 'Abrir Loja?'}
                   </h3>
 
                   <p className="mt-2 text-xs font-semibold leading-relaxed text-gray-500 dark:text-zinc-400">
-                    {storeData.isOpen
-                      ? 'Finalize ou cancele os pedidos ativos antes de fechar. Depois disso, novos pedidos ficarão pausados.'
-                      : 'Ao abrir a loja, novos pedidos começarão a chegar no painel.'}
+                    {storeCurrentlyOpen
+                      ? storeUsesAutomaticHours
+                        ? 'A loja ficará pausada por 1 hora e depois voltará a seguir o horário automático.'
+                        : 'Finalize ou cancele os pedidos ativos antes de fechar. Depois disso, novos pedidos ficarão pausados.'
+                      : storeUsesAutomaticHours && storeOperationalStatus.reason === 'temporary-pause'
+                        ? 'A pausa temporária será encerrada e a loja voltará a seguir o horário automático.'
+                        : storeUsesAutomaticHours
+                          ? 'A loja está fechada pelo horário automático. Para abrir agora, ela será alterada para modo manual.'
+                          : 'Ao abrir a loja, novos pedidos começarão a chegar no painel.'}
                   </p>
 
                   {storeError && (
@@ -1963,15 +2013,17 @@ export default function DashboardLayout() {
                       onClick={handleToggleStoreOpen}
                       className={cn(
                         'flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black text-white transition active:scale-98 cursor-pointer disabled:opacity-50',
-                        storeData.isOpen
+                        storeCurrentlyOpen
                           ? 'bg-red-500 shadow-lg shadow-red-500/15 hover:bg-red-600'
                           : 'bg-emerald-500 shadow-lg shadow-emerald-500/15 hover:bg-emerald-600'
                       )}
                     >
                       {storeToggleLoading ? (
                         <FiLoader className="animate-spin" size={14} />
-                      ) : storeData.isOpen ? (
-                        'Sim, Fechar'
+                      ) : storeCurrentlyOpen ? (
+                        storeUsesAutomaticHours ? 'Pausar 1h' : 'Sim, Fechar'
+                      ) : storeUsesAutomaticHours && storeOperationalStatus.reason !== 'temporary-pause' ? (
+                        'Abrir em modo manual'
                       ) : (
                         'Sim, Abrir'
                       )}

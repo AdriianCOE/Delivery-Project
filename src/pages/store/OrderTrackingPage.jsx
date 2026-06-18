@@ -1849,6 +1849,31 @@ export default function OrderTrackingPage() {
     }
 
     setLoading(true)
+    function applyOrderSnapshot(snapshot) {
+      const data = {
+        ...snapshot.data(),
+        id: snapshot.id,
+        firestoreId: snapshot.id,
+      }
+
+      const storeKeys = getOrderStoreKeys(data)
+
+      const shouldBlockAccess =
+        slug &&
+        storeKeys.length > 0 &&
+        !storeKeys.includes(slug)
+
+      if (shouldBlockAccess) {
+        setOrder(null)
+        setAccessError(true)
+        setLoading(false)
+        return
+      }
+
+      setOrder(data)
+      setAccessError(false)
+      setLoading(false)
+    }
 
     const unsubscribe = onSnapshot(
       doc(db, 'orders', orderId),
@@ -1860,29 +1885,7 @@ export default function OrderTrackingPage() {
           return
         }
 
-        const data = {
-          ...snapshot.data(),
-          id: snapshot.id,
-          firestoreId: snapshot.id,
-        }
-
-        const storeKeys = getOrderStoreKeys(data)
-
-        const shouldBlockAccess =
-          slug &&
-          storeKeys.length > 0 &&
-          !storeKeys.includes(slug)
-
-        if (shouldBlockAccess) {
-          setOrder(null)
-          setAccessError(true)
-          setLoading(false)
-          return
-        }
-
-        setOrder(data)
-        setAccessError(false)
-        setLoading(false)
+        applyOrderSnapshot(snapshot)
       },
       () => {
         setOrder(null)
@@ -1891,7 +1894,9 @@ export default function OrderTrackingPage() {
       }
     )
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribe()
+    }
   }, [orderId, slug])
 
   useEffect(() => {
