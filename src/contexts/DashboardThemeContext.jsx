@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
 const DashboardThemeContext = createContext(null)
+const THEMED_ROUTE_PREFIXES = ['/dashboard', '/admin']
+
+function isThemedRoute(pathname = '') {
+  return THEMED_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
 
 export function DashboardThemeProvider({ children }) {
   const location = useLocation()
@@ -14,8 +19,14 @@ export function DashboardThemeProvider({ children }) {
   })
 
   useEffect(() => {
+    return () => {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [])
+
+  useEffect(() => {
     const root = document.documentElement
-    const isDashboard = location.pathname.startsWith('/dashboard')
+    const isDashboard = isThemedRoute(location.pathname)
 
     if (!isDashboard) {
       root.classList.remove('dark')
@@ -45,7 +56,7 @@ export function DashboardThemeProvider({ children }) {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
       const listener = (e) => {
         // double check we are still on a dashboard route before applying
-        const currentIsDashboard = window.location.pathname.startsWith('/dashboard')
+        const currentIsDashboard = isThemedRoute(window.location.pathname)
         if (currentIsDashboard) {
           if (e.matches) {
             root.classList.add('dark')
