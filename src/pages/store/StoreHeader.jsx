@@ -6,10 +6,8 @@ import {
   FiCheck,
   FiClock,
   FiCopy,
-  FiCreditCard,
   FiDollarSign,
   FiExternalLink,
-  FiZap,
   FiHeart,
   FiInfo,
   FiInstagram,
@@ -1336,7 +1334,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       )}
       <img
         src={bannerUrl}
-        srcSet={bannerDesktopSrcSet || `${bannerUrl} 1200w${bannerMobileUrl ? `, ${bannerMobileUrl} 640w` : ''}`}
+        srcSet={bannerDesktopSrcSet || `${bannerUrl} 1440w${bannerMobileUrl ? `, ${bannerMobileUrl} 640w` : ''}`}
         sizes="100vw"
         alt=""
         aria-hidden="true"
@@ -1344,7 +1342,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         fetchPriority="high"
         loading="eager"
         decoding="async"
-        width={1200}
+        width={1440}
         height={480}
       />
     </picture>

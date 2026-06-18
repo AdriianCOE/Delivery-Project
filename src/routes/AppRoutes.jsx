@@ -9,7 +9,6 @@ import ScrollToTop from '../utils/ScrollToTop'
 import {
   DashboardPageSkeleton,
   LandingFallback,
-  StorefrontSkeleton,
 } from '../components/shared/Skeletons'
 
 // Públicas
@@ -83,15 +82,23 @@ function PublicRouteFallback() {
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="w-full max-w-sm space-y-4">
-        <div className="h-10 w-36 animate-pulse rounded-xl bg-gray-200 dark:bg-zinc-800" />
-        <div className="h-44 animate-pulse rounded-2xl bg-gray-200 dark:bg-zinc-800" />
-        <div className="space-y-2">
-          <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200 dark:bg-zinc-800" />
-          <div className="h-4 w-8/12 animate-pulse rounded bg-gray-200 dark:bg-zinc-800" />
+      <div className="flex w-full max-w-[17rem] flex-col items-center text-center">
+        <div className="relative grid h-16 w-16 place-items-center rounded-[1.35rem] bg-white shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-zinc-800">
+          <div className="absolute inset-1 rounded-[1.1rem] bg-orange-500/10 dark:bg-orange-500/15" />
+          <div className="relative h-8 w-8 animate-spin rounded-full border-[3px] border-orange-100 border-t-[#f97316] dark:border-zinc-700 dark:border-t-orange-400" />
+        </div>
+
+        <p className="mt-4 text-sm font-black text-[#111827] dark:text-zinc-100">
+          PratoBy
+        </p>
+        <p className="mt-1 text-xs font-semibold text-[#6b7280] dark:text-zinc-400">
+          Carregando cardapio...
+        </p>
+        <div className="mt-4 h-1.5 w-32 overflow-hidden rounded-full bg-orange-100 dark:bg-zinc-800">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-[#f97316]" />
         </div>
       </div>
-      <span className="sr-only">Carregando.</span>
+      <span className="sr-only">Carregando cardapio.</span>
     </div>
   )
 }
@@ -179,7 +186,7 @@ export default function AppRoutes() {
         <Route
           path="/store/:slug"
           element={
-            <RouteSuspense fallback={<StorefrontSkeleton />}>
+            <RouteSuspense fallback={<PublicRouteFallback />}>
               <StoreFrontPage />
             </RouteSuspense>
           }
@@ -306,7 +313,7 @@ export default function AppRoutes() {
         <Route
           path="/:slug"
           element={
-            <RouteSuspense fallback={<StorefrontSkeleton />}>
+            <RouteSuspense fallback={<PublicRouteFallback />}>
               <StoreFrontPage />
             </RouteSuspense>
           }

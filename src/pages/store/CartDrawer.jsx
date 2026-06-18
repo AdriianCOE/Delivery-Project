@@ -23,7 +23,6 @@ import {
   FiUser,
   FiX,
   FiDollarSign,
-  FiSmartphone,
   FiZap,
 } from 'react-icons/fi'
 import { useCart } from '../../contexts/CartContext'
@@ -2402,16 +2401,13 @@ if (orderType === 'delivery') {
         // O pedido ja foi criado; falha de storage local nao deve bloquear o tracking.
       }
 
-      if (
+      const mercadoPagoCheckoutFailed =
         paymentMethod === 'mercadopago_online' &&
         (!createdOrder.paymentUrl || isMercadoPagoCheckoutCreationFailed(createdOrder))
-      ) {
-        throw new Error(MERCADO_PAGO_CHECKOUT_ERROR)
-      }
 
       clearCart()
       onClose?.()
-      if (createdOrder.paymentUrl && paymentMethod === 'mercadopago_online') {
+      if (!mercadoPagoCheckoutFailed && createdOrder.paymentUrl && paymentMethod === 'mercadopago_online') {
         if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
           mercadoPagoWindow.location.href = createdOrder.paymentUrl
         } else {

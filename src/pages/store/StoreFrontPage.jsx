@@ -1,7 +1,6 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import SEO from '../../components/seo/SEO'
-import { StorefrontSkeleton } from '../../components/shared/Skeletons'
 import {
   collection,
   doc,
@@ -971,13 +970,27 @@ function sortByOrderThenName(a, b) {
 }
 
 function LoadingScreen({ timedOut = false, onRetry = null }) {
-  if (!timedOut) return <StorefrontSkeleton />
-
   return (
-    <div className="relative min-h-screen bg-[#fff7ed]">
-      <StorefrontSkeleton />
-      {typeof onRetry === 'function' && (
-        <div className="fixed inset-x-4 bottom-6 z-50 mx-auto max-w-md rounded-3xl border border-orange-100 bg-white p-4 text-center shadow-2xl shadow-orange-200/60">
+    <div
+      className="grid min-h-screen place-items-center bg-[#fff7ed] px-6 text-[#111827]"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="flex w-full max-w-md flex-col items-center text-center">
+        <div className="relative grid h-16 w-16 place-items-center rounded-[1.35rem] bg-white shadow-sm ring-1 ring-orange-100">
+          <div className="absolute inset-1 rounded-[1.1rem] bg-orange-500/10" />
+          <div className="relative h-8 w-8 animate-spin rounded-full border-[3px] border-orange-100 border-t-[#f97316]" />
+        </div>
+
+        <p className="mt-4 text-sm font-black">PratoBy</p>
+        <p className="mt-1 text-xs font-semibold text-[#6b7280]">Carregando cardapio...</p>
+        <div className="mt-4 h-1.5 w-32 overflow-hidden rounded-full bg-orange-100">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-[#f97316]" />
+        </div>
+
+        {timedOut && typeof onRetry === 'function' && (
+          <div className="mt-6 w-full rounded-3xl border border-orange-100 bg-white p-4 text-center shadow-2xl shadow-orange-200/60">
           <p className="text-sm font-black text-[#111827]">A conexao parece instavel.</p>
           <p className="mt-1 text-xs font-semibold text-[#6b7280]">Tente carregar o cardapio novamente.</p>
           <button
@@ -989,7 +1002,9 @@ function LoadingScreen({ timedOut = false, onRetry = null }) {
             Tentar novamente
           </button>
         </div>
-      )}
+        )}
+      </div>
+      <span className="sr-only">Carregando cardapio.</span>
     </div>
   )
 }

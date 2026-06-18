@@ -2482,7 +2482,7 @@ function PricingValidationAlert({ order }) {
   )
 }
 
-function OrderContactTimeline({ order, now = new Date() }) {
+function OrderContactTimeline({ order, now = new Date(), className = '' }) {
   const status = normalizeStatus(order.status)
   const statusIndex = STATUS_FLOW.indexOf(status)
   const nextStatus = getNextStatus(status, order)
@@ -2520,7 +2520,7 @@ function OrderContactTimeline({ order, now = new Date() }) {
   ]
 
   return (
-    <div className="mt-2 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+    <div className={`rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.03] ${className}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-black">
         <span className="inline-flex items-center gap-1.5 text-gray-900 dark:text-zinc-100">
           <span className={`h-2 w-2 rounded-full ${currentMeta.dotClass}`} />
@@ -2916,7 +2916,7 @@ const fulfillmentDetail = address.isPickup
       </div>
     )}
 
-    <div className="grid gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4 xl:grid-cols-[84px_minmax(0,2.2fr)_1.1fr_0.95fr_0.95fr_auto] xl:items-center">
+    <div className="grid gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4 xl:grid-cols-[84px_minmax(0,2.2fr)_1.1fr_0.95fr_0.95fr_220px] xl:items-center">
       {/* Coluna 1: ID */}
       <div className="flex flex-col justify-center">
         <span className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
@@ -3145,13 +3145,13 @@ const fulfillmentDetail = address.isPickup
       </div>
 
       {/* Coluna 6: ações */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center xl:justify-end">
+      <div className="grid grid-cols-3 gap-2 xl:justify-self-end">
         {nextStatus && !isFinalStatus && (
           <button
             type="button"
             onClick={() => !quickStatusBlocked && onQuickStatus(order, nextStatus)}
             disabled={quickStatusBlocked}
-            className="col-span-2 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-[13px] font-black text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-55 sm:col-span-1 sm:h-11 sm:flex-none"
+            className="col-span-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 text-[13px] font-black text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-55"
             title={isWaitingScheduledFuture ? 'Aguarde a janela de preparo' : undefined}
           >
             {updatingStatus === order.id ? <FiLoader size={16} className="animate-spin" /> : <FiPlay size={16} />}
@@ -3162,7 +3162,7 @@ const fulfillmentDetail = address.isPickup
         <button
           type="button"
           onClick={() => onOpen(order)}
-          className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-4 text-[13px] font-black text-[#111827] transition hover:bg-gray-100 dark:border-white/8 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.09] sm:flex-none"
+          className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-3 text-[12px] font-black text-[#111827] transition hover:bg-gray-100 dark:border-white/8 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.09]"
         >
           Detalhes
         </button>
@@ -3171,32 +3171,19 @@ const fulfillmentDetail = address.isPickup
           <button
             type="button"
             onClick={() => onOpenWhatsApp(order)}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-[13px] font-black text-emerald-700 transition hover:bg-emerald-500/15 dark:text-emerald-300 sm:w-11 sm:px-0"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-[12px] font-black text-emerald-700 transition hover:bg-emerald-500/15 dark:text-emerald-300 xl:px-0"
             aria-label="Abrir WhatsApp"
             title="Abrir WhatsApp"
           >
             <FiMessageCircle size={16} />
-            <span className="sm:hidden">WhatsApp</span>
-          </button>
-        )}
-
-        {hasTracking && (
-          <button
-            type="button"
-            onClick={() => onOpenTracking(order)}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-sky-500/20 bg-sky-500/10 px-3 text-[13px] font-black text-sky-700 transition hover:bg-sky-500/15 dark:text-sky-300 sm:w-11 sm:px-0"
-            aria-label="Abrir acompanhamento"
-            title="Acompanhar pedido"
-          >
-            <FiExternalLink size={15} />
-            <span className="sm:hidden">Acompanhar</span>
+            <span className="xl:hidden">WhatsApp</span>
           </button>
         )}
 
         <button
           type="button"
           onClick={() => onCopyOrder(order)}
-          className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-gray-100 bg-white px-3 text-[13px] font-black text-gray-500 transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:bg-orange-500/10 sm:w-11"
+          className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-gray-100 bg-white px-3 text-[12px] font-black text-gray-500 transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:bg-orange-500/10"
           aria-label="Copiar resumo do pedido"
           title="Copiar resumo do pedido"
         >
@@ -3536,26 +3523,6 @@ function OrderModal({
         : 'border-orange-100 bg-orange-50 text-orange-900 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-100'
   const orderNumberLabel = getOrderDisplayNumber(order)
   const paymentPaid = pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order))
-  const paymentSummary = isPixManualOrder(order)
-    ? pixPaid
-      ? 'Pix com comprovante confirmado'
-      : paymentProofUrl
-        ? 'Comprovante recebido para conferência'
-        : 'Aguardando comprovante Pix'
-    : (asaasOnline || mercadoPagoOnline)
-      ? paymentPaid
-        ? 'Pagamento online aprovado'
-        : mercadoPagoFailed
-          ? 'Checkout indisponivel'
-          : 'Pagamento online pendente'
-      : `${getPaymentMethod(order)} · ${getPaymentStatus(order)}`
-  const paymentSummaryClass = paymentPaid
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
-    : mercadoPagoFailed
-      ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
-      : paymentBlocked || pixPending || asaasPending || mercadoPagoPending
-      ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200'
-      : 'border-gray-100 bg-white text-gray-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-300'
   const nextAction = pixPending
     ? {
         title: 'Conferir Pix',
@@ -3630,7 +3597,7 @@ function OrderModal({
   }
   const modalAlerts = [
     sla.overdue && {
-      label: `Atrasado ${sla.overdueMinutes || sla.elapsedMinutes}min`,
+      label: `Atrasado nesta etapa: ${sla.elapsedMinutes}min · limite ${sla.thresholdMinutes}min`,
       icon: FiAlertTriangle,
       className: 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200',
     },
@@ -3733,7 +3700,7 @@ function OrderModal({
                 <PricingValidationBadge order={order} />
               </div>
 
-              <div className="mt-2 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="mt-2 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(360px,auto)] lg:items-center">
                 <div className="min-w-0">
                   <h2 className="truncate text-xl font-black tracking-tight text-gray-900 dark:text-zinc-50 sm:text-2xl">
                     {customerName}
@@ -3747,11 +3714,28 @@ function OrderModal({
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-left dark:border-orange-500/20 dark:bg-orange-500/10 lg:text-right">
-                  <p className="text-xs font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Total</p>
-                  <p className="text-xl font-black text-[#f97316] sm:text-2xl">
-                    {formatMoney(getOrderTotal(order))}
-                  </p>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-stretch">
+                  <section className={`rounded-xl border px-3 py-2 ${nextAction.tone}`}>
+                    <div className="flex h-full items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 shadow-sm dark:bg-black/10">
+                        <NextActionIcon size={15} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-wide opacity-70">Próxima ação</p>
+                        <p className="mt-0.5 truncate text-sm font-black">{nextAction.title}</p>
+                        <p className="mt-0.5 line-clamp-2 text-xs font-semibold leading-5 opacity-85">
+                          {nextAction.description}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <div className="flex min-w-[8.75rem] flex-col justify-center rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-left dark:border-orange-500/20 dark:bg-orange-500/10 sm:text-right">
+                    <p className="text-xs font-black uppercase tracking-wide text-gray-400 dark:text-zinc-500">Total</p>
+                    <p className="text-xl font-black text-[#f97316] sm:text-2xl">
+                      {formatMoney(getOrderTotal(order))}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -3781,50 +3765,27 @@ function OrderModal({
 
         <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-4 py-2.5 dark:border-white/10 dark:bg-[#151518] sm:px-5">
           <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(300px,auto)] lg:items-center">
-            <section className={`rounded-xl border px-3 py-2 ${nextAction.tone}`}>
-              <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 shadow-sm dark:bg-black/10">
-                  <NextActionIcon size={15} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-wide opacity-70">Próxima ação</p>
-                  <p className="mt-0.5 text-sm font-black">{nextAction.title}</p>
-                  <p className="mt-0.5 text-xs font-semibold leading-5 opacity-85 sm:line-clamp-1">{nextAction.description}</p>
-                </div>
-              </div>
-            </section>
+            <OrderContactTimeline order={order} now={now} className="mt-0 lg:col-start-1 lg:row-start-1" />
 
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
-                <span className={`inline-flex h-9 max-w-full items-center justify-center rounded-xl border px-2.5 text-center text-[11px] font-black ${paymentSummaryClass}`}>
-                  {paymentSummary}
-                </span>
+              <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                 {canOpenWhatsApp && (
                   <button
                     onClick={() => onOpenWhatsApp(order)}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-black text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-black text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <FiMessageCircle size={15} className="text-emerald-600 dark:text-emerald-400" />
+                    <FiMessageCircle size={14} className="text-emerald-600 dark:text-emerald-400" />
                     WhatsApp
                   </button>
                 )}
 
-                {canOpenTracking && (
-                  <button
-                    onClick={() => onOpenTracking(order)}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 text-xs font-black text-sky-700 transition-all hover:bg-sky-100 active:scale-[0.98] dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
-                  >
-                    <FiExternalLink size={15} />
-                    Acompanhamento
-                  </button>
-                )}
 
                 {pixPending ? (
                   <button
                     onClick={() => onConfirmPixPayment(order)}
                     disabled={Boolean(updatingStatus)}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-3 text-xs font-black text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-2.5 text-[11px] font-black text-white shadow-sm shadow-teal-100 transition-all hover:bg-teal-700 active:scale-[0.98] dark:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <FiCheckCircle size={15} className={updatingStatus === order.id ? "animate-spin" : ""} />
+                    <FiCheckCircle size={14} className={updatingStatus === order.id ? "animate-spin" : ""} />
                     {updatingStatus === order.id ? 'Confirmando...' : 'Confirmar Pix'}
                   </button>
                 ) : asaasPending && asaasPaymentUrl ? (
@@ -3832,9 +3793,9 @@ function OrderModal({
                     href={asaasPaymentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-3 text-xs font-black text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-2.5 text-[11px] font-black text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
-                    <FiCreditCard size={15} />
+                    <FiCreditCard size={14} />
                     Abrir pagamento
                   </a>
                 ) : mercadoPagoPending && mercadoPagoPaymentUrl ? (
@@ -3842,51 +3803,42 @@ function OrderModal({
                     href={mercadoPagoPaymentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-3 text-xs font-black text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-2.5 text-[11px] font-black text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.98]"
                   >
-                    <FiCreditCard size={15} />
+                    <FiCreditCard size={14} />
                     Abrir pagamento
                   </a>
                 ) : isWaitingScheduledFuture ? (
-                  <div className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-orange-100 bg-orange-50 px-3 text-xs font-black text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
-                    <FiClock size={15} />
+                  <div className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-orange-100 bg-orange-50 px-2.5 text-[11px] font-black text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-200">
+                    <FiClock size={14} />
                     <span>Agendamento confirmado</span>
                   </div>
                 ) : nextStatus ? (
                   <button
                     onClick={() => canRunPrimaryStatusAction ? onUpdateStatus(order, nextStatus) : null}
                     disabled={Boolean(updatingStatus) || !canRunPrimaryStatusAction}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 text-xs font-black text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-2.5 text-[11px] font-black text-white shadow-sm shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-[0.98] dark:shadow-none disabled:opacity-60 animate-pulse-slow"
                   >
-                    <FiZap size={15}/>
+                    <FiZap size={14}/>
                     {updatingStatus === order.id ? 'Atualizando...' : updatingStatus ? 'Aguarde...' : getNextStatusLabel(status, order)}
                   </button>
                 ) : null}
 
                 <button
                   onClick={() => printComanda(order, store)}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-gray-900 bg-white px-3 text-xs font-black text-gray-900 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2.5 text-[11px] font-black text-gray-800 shadow-sm transition-all hover:bg-gray-900 hover:text-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-white"
                 >
-                  <FiPrinter size={15}/> Imprimir
+                  <FiPrinter size={14}/> Imprimir
                 </button>
 
                 <button
                   onClick={() => onCopyOrder(order)}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2.5 text-[11px] font-black text-gray-800 shadow-sm transition-all hover:border-orange-200 hover:text-[#f97316] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                 >
-                  <FiCopy size={15}/> Copiar
+                  <FiCopy size={14}/> Copiar
                 </button>
             </div>
           </div>
-          {sla.overdue && (
-            <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-black text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-              <FiAlertTriangle size={13} className="shrink-0" />
-              <span className="min-w-0 truncate">
-                Atrasado nesta etapa: {sla.elapsedMinutes}min · limite {sla.thresholdMinutes}min
-              </span>
-            </div>
-          )}
-          <OrderContactTimeline order={order} now={now} />
           {showCustomerThanksAction && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
               <div>
@@ -4083,59 +4035,104 @@ function OrderModal({
 
 
               {/* Payment details card */}
-              <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                      <FiCreditCard className="text-orange-500" /> Meio de pagamento
-                    </p>
-                    <p className="mt-3 text-base font-black text-gray-900 dark:text-zinc-100">
-                      {getPaymentMethod(order)}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
-                      {getPaymentStatus(order)}
-                    </p>
+                <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/20 dark:ring-white/[0.03]">
+                  <div className="flex flex-col gap-4">
+                    {/* Header */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                          <FiCreditCard className="text-orange-500" />
+                          Meio de pagamento
+                        </p>
+
+                        <p className="mt-2 text-lg font-black leading-tight text-gray-900 dark:text-zinc-100">
+                          {getPaymentMethod(order)}
+                        </p>
+
+                        <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-zinc-400">
+                          {getPaymentStatus(order)}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-flex shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-black ${
+                          pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order))
+                            ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400'
+                            : mercadoPagoFailed
+                              ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400'
+                              : paymentBlocked
+                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                                : status === 'cancelado'
+                                  ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400'
+                                  : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400'
+                        }`}
+                      >
+                        {status === 'cancelado'
+                          ? 'Cancelado'
+                          : isPixManualOrder(order)
+                            ? (pixPaid ? 'Pix confirmado' : 'Comprovante pendente')
+                            : (mercadoPagoOnline || asaasOnline)
+                              ? (isPaymentPaid(order)
+                                  ? 'Pagamento online pago'
+                                  : mercadoPagoFailed
+                                    ? 'Checkout indisponível'
+                                    : 'Pagamento online pendente')
+                              : getPaymentMethod(order)}
+                      </span>
+                    </div>
+
+                    {/* Mercado Pago details */}
                     {mercadoPagoOnline && (
-                      <div className={`mt-3 rounded-2xl border px-3 py-2 ${
-                        paymentPaid
-                          ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
-                          : mercadoPagoFailed
-                            ? 'border-red-100 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200'
-                            : 'border-amber-100 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200'
-                      }`}>
-                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide">
-                          <FiCreditCard size={13} />
-                          Pagamento online / Mercado Pago
-                        </p>
-                        <p className="mt-1 text-xs font-black">
-                          {paymentPaid
-                            ? 'Pagamento aprovado'
+                      <div
+                        className={`w-full rounded-2xl border p-4 ${
+                          paymentPaid
+                            ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200'
                             : mercadoPagoFailed
-                              ? 'Checkout indisponivel'
-                              : 'Pagamento online pendente'}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold leading-5">
-                          {paymentPaid
-                            ? 'Pagamento aprovado automaticamente pelo provedor.'
-                            : mercadoPagoFailed
-                              ? 'Oriente o cliente a tentar novamente pelo acompanhamento ou escolha outra forma de pagamento.'
-                              : 'Aguardando confirmacao do pagamento antes de iniciar o preparo.'}
-                        </p>
-                        {mercadoPagoPaymentUrl && !paymentPaid && (
-                          <a
-                            href={mercadoPagoPaymentUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-white px-3 text-xs font-black text-amber-800 shadow-sm ring-1 ring-amber-100 transition hover:bg-amber-100 dark:bg-black/10 dark:text-amber-100 dark:ring-white/10"
-                          >
-                            <FiExternalLink size={13} />
-                            Abrir pagamento
-                          </a>
-                        )}
+                              ? 'border-red-100 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200'
+                              : 'border-amber-100 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200'
+                        }`}
+                      >
+                        <div className="flex flex-col gap-2">
+                          <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide">
+                            <FiCreditCard size={13} />
+                            Pagamento online / Mercado Pago
+                          </p>
+
+                          <p className="text-sm font-black">
+                            {paymentPaid
+                              ? 'Pagamento aprovado'
+                              : mercadoPagoFailed
+                                ? 'Checkout indisponível'
+                                : 'Pagamento online pendente'}
+                          </p>
+
+                          <p className="text-sm leading-6 opacity-90">
+                            {paymentPaid
+                              ? 'Pagamento aprovado automaticamente pelo provedor.'
+                              : mercadoPagoFailed
+                                ? 'Oriente o cliente a tentar novamente pelo acompanhamento ou escolha outra forma de pagamento.'
+                                : 'Aguardando confirmação do pagamento antes de iniciar o preparo.'}
+                          </p>
+
+                          {mercadoPagoPaymentUrl && !paymentPaid && (
+                            <div className="pt-1">
+                              <a
+                                href={mercadoPagoPaymentUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-amber-800 shadow-sm ring-1 ring-amber-100 transition hover:bg-amber-100 dark:bg-black/10 dark:text-amber-100 dark:ring-white/10"
+                              >
+                                <FiExternalLink size={14} />
+                                Abrir pagamento
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
+
                     {changeForLabel && (
-                      <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 dark:border-orange-950 dark:bg-orange-950/20">
+                      <div className="rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 dark:border-orange-950 dark:bg-orange-950/20">
                         <p className="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-400">
                           Troco
                         </p>
@@ -4144,22 +4141,20 @@ function OrderModal({
                         </p>
                       </div>
                     )}
+
+                    {status === 'cancelado' && (
+                      <div className="rounded-2xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
+                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-red-700 dark:text-red-400">
+                          <FiAlertTriangle />
+                          Motivo do cancelamento
+                        </p>
+                        <p className="mt-2 text-sm font-bold leading-6 text-red-800 dark:text-red-300">
+                          {cancellationReason || 'Motivo não informado.'}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${ pixPaid || (asaasOnline && isPaymentPaid(order)) || (mercadoPagoOnline && isPaymentPaid(order)) ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : mercadoPagoFailed ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : paymentBlocked ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : status === 'cancelado' ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-zinc-400' }`}>
-                    {status === 'cancelado' ? 'Cancelado' : isPixManualOrder(order) ? (pixPaid ? 'Pix confirmado' : 'Comprovante pendente') : (mercadoPagoOnline || asaasOnline) ? (isPaymentPaid(order) ? 'Pagamento online pago' : mercadoPagoFailed ? 'Checkout indisponivel' : 'Pagamento online pendente') : getPaymentMethod(order)}
-                  </span>
-                </div>
-                {status === 'cancelado' && (
-                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
-                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-red-700 dark:text-red-400">
-                      <FiAlertTriangle /> Motivo do cancelamento
-                    </p>
-                    <p className="mt-2 text-sm font-bold leading-6 text-red-800 dark:text-red-300">
-                      {cancellationReason || 'Motivo não informado.'}
-                    </p>
-                  </div>
-                )}
-              </section>
+                </section>
 
               {!isFinalStatus && (
                 <section className="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm dark:border-red-500/25 dark:bg-red-500/10">
