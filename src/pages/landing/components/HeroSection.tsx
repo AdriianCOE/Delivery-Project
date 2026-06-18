@@ -1,5 +1,4 @@
 ﻿import { Link } from 'react-router-dom'
-import { motion, useReducedMotion } from 'motion/react'
 import { FaPercent as BadgePercent } from 'react-icons/fa6'
 import {
   FiArrowRight as ArrowRight,
@@ -95,24 +94,6 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 export function HeroSection() {
-  const prefersReducedMotion = useReducedMotion()
-
-  const contentAnimation = prefersReducedMotion
-    ? {}
-    : {
-        initial: { opacity: 0, y: 18 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.55, ease: 'easeOut' },
-      }
-
-  const phoneAnimation = prefersReducedMotion
-    ? {}
-    : {
-        initial: { opacity: 0, x: 22 },
-        animate: { opacity: 1, x: 0 },
-        transition: { duration: 0.65, delay: 0.12, ease: 'easeOut' },
-      }
-
   return (
     <section className="relative isolate overflow-hidden bg-white pb-8 pt-8 text-[#111827] dark:bg-zinc-950 dark:text-white sm:pt-15 lg:pb-15 lg:pt-15">
       <div
@@ -130,7 +111,7 @@ export function HeroSection() {
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(390px,470px)] lg:gap-14">
-          <motion.div {...contentAnimation} className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
+          <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
             <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-orange-100 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 sm:text-xs">
               <TrendingUp size={15} className="shrink-0" aria-hidden="true" />
               <span className="truncate">Chega de pagar 27% de comissão</span>
@@ -144,7 +125,7 @@ export function HeroSection() {
               <span className="relative inline-block whitespace-nowrap pb-4 text-[#f97316]">
                 Zero comissão.
 
-                <motion.svg
+                <svg
                   className="pointer-events-none absolute -bottom-1 left-[-4%] h-6 w-[108%]"
                   viewBox="0 0 320 28"
                   fill="none"
@@ -152,52 +133,14 @@ export function HeroSection() {
                   xmlns="http://www.w3.org/2000/svg"
                   aria-hidden="true"
                   focusable="false"
-                  animate={
-                    prefersReducedMotion
-                      ? undefined
-                      : {
-                          y: [0, -1, 0],
-                        }
-                  }
-                  transition={
-                    prefersReducedMotion
-                      ? undefined
-                      : {
-                          y: {
-                            duration: 2.8,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                          },
-                        }
-                  }
                 >
-                  <motion.path
+                  <path
                     d="M8 17C52 11 94 10 136 12C180 14 224 20 312 13"
                     stroke="currentColor"
                     strokeWidth="4.5"
                     strokeLinecap="round"
-                    initial={prefersReducedMotion ? false : { pathLength: 0, opacity: 0 }}
-                    animate={
-                      prefersReducedMotion
-                        ? { pathLength: 1, opacity: 1 }
-                        : {
-                            pathLength: [0, 1, 1],
-                            opacity: [0, 1, 1],
-                          }
-                    }
-                    transition={
-                      prefersReducedMotion
-                        ? { duration: 0.2 }
-                        : {
-                            duration: 1.8,
-                            times: [0, 0.55, 1],
-                            repeat: Infinity,
-                            repeatDelay: 2.4,
-                            ease: 'easeInOut',
-                          }
-                    }
                   />
-                </motion.svg>
+                </svg>
               </span>
             </h1>
 
@@ -207,19 +150,12 @@ export function HeroSection() {
             </p>
 
             <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
-              {heroBadges.map((item, index) => {
+              {heroBadges.map((item) => {
                 const Icon = item.icon
 
                 return (
-                  <motion.article
+                  <article
                     key={item.title}
-                    initial={prefersReducedMotion ? undefined : { opacity: 0, y: 12 }}
-                    animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
-                    transition={
-                      prefersReducedMotion
-                        ? undefined
-                        : { duration: 0.35, delay: 0.12 + index * 0.07, ease: 'easeOut' }
-                    }
                     className={cx(
                       'min-h-[82px] rounded-[1.15rem] border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:min-h-[116px] sm:rounded-[1.5rem] sm:p-4',
                       item.featured
@@ -256,7 +192,7 @@ export function HeroSection() {
                     >
                       {item.subtitle}
                     </p>
-                  </motion.article>
+                  </article>
                 )
               })}
             </div>
@@ -322,12 +258,9 @@ export function HeroSection() {
                 )
               })}
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            {...phoneAnimation}
-            className="relative mx-auto flex min-h-[520px] w-full max-w-[470px] items-start justify-center lg:mx-0 lg:min-h-[690px] lg:justify-end"
-          >
+          <div className="relative mx-auto flex min-h-[520px] w-full max-w-[470px] items-start justify-center lg:mx-0 lg:min-h-[690px] lg:justify-end">
             <div
               aria-hidden="true"
               className="absolute inset-x-8 top-10 h-72 rounded-full bg-orange-200/35 blur-3xl dark:bg-orange-500/10"
@@ -336,7 +269,7 @@ export function HeroSection() {
             <div className="relative w-full">
               <PhoneMockup />
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
 

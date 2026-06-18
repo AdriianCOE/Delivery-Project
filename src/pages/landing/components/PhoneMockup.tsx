@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import { motion, useReducedMotion } from 'motion/react'
 import {
   FiArrowRight as ArrowRight,
   FiClock,
@@ -188,50 +187,21 @@ function ProductCard({ product, priority = false }: { product: Product; priority
 function FloatingInsightCard({
   children,
   className,
-  delay = 0,
-  prefersReducedMotion,
 }: {
   children: ReactNode
   className: string
-  delay?: number
-  prefersReducedMotion: boolean
 }) {
   return (
-    <motion.div
-      initial={prefersReducedMotion ? false : { opacity: 1, y: 0, scale: 0.98 }}
-      animate={
-        prefersReducedMotion
-          ? { opacity: 1 }
-          : { opacity: 1, y: [0, -7, 0], scale: 1 }
-      }
-      transition={
-        prefersReducedMotion
-          ? { duration: 0.15 }
-          : {
-              scale: { duration: 0.35, delay },
-              y: {
-                duration: 4.8,
-                delay,
-                repeat: Infinity,
-                repeatType: 'mirror',
-                ease: 'easeInOut',
-              },
-            }
-      }
-      className={className}
-      style={{ willChange: prefersReducedMotion ? undefined : 'transform' }}
-    >
+    <div className={className}>
       {children}
-    </motion.div>
+    </div>
   )
 }
 
-function FloatingInsights({ prefersReducedMotion }: { prefersReducedMotion: boolean }) {
+function FloatingInsights() {
   return (
     <div className="pointer-events-none hidden md:block">
       <FloatingInsightCard
-        prefersReducedMotion={prefersReducedMotion}
-        delay={0.25}
         className="absolute left-0 top-8 z-30 max-w-[240px] rounded-[1.15rem] border border-orange-100 bg-white/95 px-4 py-3 shadow-xl shadow-orange-100/70 backdrop-blur-xl dark:border-orange-500/20 dark:bg-zinc-900/95 dark:shadow-black/20 lg:-left-14 xl:-left-20"
       >
         <div className="flex items-center gap-2 text-xs font-black text-[#111827] dark:text-zinc-100">
@@ -244,8 +214,6 @@ function FloatingInsights({ prefersReducedMotion }: { prefersReducedMotion: bool
       </FloatingInsightCard>
 
       <FloatingInsightCard
-        prefersReducedMotion={prefersReducedMotion}
-        delay={0.55}
         className="absolute bottom-32 right-0 z-30 rounded-[1.4rem] border border-green-100 bg-white/95 px-4 py-3 shadow-xl shadow-green-100/70 backdrop-blur-xl dark:border-emerald-500/20 dark:bg-zinc-900/95 dark:shadow-black/20 lg:-right-14 lg:bottom-40 xl:-right-20"
       >
         <div className="mb-2 flex items-center gap-2">
@@ -265,32 +233,13 @@ function FloatingInsights({ prefersReducedMotion }: { prefersReducedMotion: bool
 }
 
 export function PhoneMockup() {
-  const prefersReducedMotion = Boolean(useReducedMotion())
-
   return (
     <div className="relative mx-auto w-full max-w-[450px] sm:max-w-[430px] lg:max-w-[460px]">
-      <FloatingInsights prefersReducedMotion={prefersReducedMotion} />
+      <FloatingInsights />
 
-      <motion.div
-        initial={prefersReducedMotion ? false : { opacity: 0, y: 18, rotate: -0.6, scale: 0.985 }}
-        animate={
-          prefersReducedMotion
-            ? { opacity: 1 }
-            : { opacity: 1, y: [0, -8, 0], rotate: [-0.6, 0.25, -0.6], scale: 1 }
-        }
-        transition={
-          prefersReducedMotion
-            ? { duration: 0.1 }
-            : {
-                opacity: { duration: 0.35, ease: 'easeOut' },
-                scale: { duration: 0.45, ease: 'easeOut' },
-                y: { duration: 5.8, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' },
-                rotate: { duration: 5.8, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut' },
-              }
-        }
+      <div
         className="relative z-10 mx-auto w-[320px] max-w-[calc(100vw-2rem)] min-[390px]:w-[336px] sm:w-[304px] lg:w-[342px] xl:w-[356px]"
         aria-label="Mockup de loja PratoBy em celular"
-        style={{ willChange: prefersReducedMotion ? undefined : 'transform' }}
       >
         <div className="relative aspect-[0.505] rounded-[3.2rem] bg-[#0f172a] p-2.5 shadow-[0_30px_80px_rgba(15,23,42,0.24)] ring-1 ring-black/10">
           <div className="absolute -left-[3px] top-24 h-7 w-[3px] rounded-l-md bg-gray-800" />
@@ -410,7 +359,7 @@ export function PhoneMockup() {
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       <Link
         to={STORE_PATH}

@@ -1,58 +1,24 @@
-import { motion } from 'motion/react';
-import { useState } from 'react';
-import { FiChevronDown as ChevronDown } from 'react-icons/fi';
+import { motion } from 'motion/react'
+import { useState } from 'react'
+import { FiChevronDown as ChevronDown } from 'react-icons/fi'
+import { landingFaqs } from './faqData'
 
-export const landingFaqs = [
-  {
-    question: 'Preciso pagar comissão por pedido?',
-    answer:
-      'Não! No PratoBy você não paga nenhuma taxa por pedido. Você paga apenas a mensalidade do plano escolhido e 100% do valor dos pedidos é seu.',
-  },
-  {
-    question: 'Preciso de cartão de crédito para começar?',
-    answer: 'Sim. Você informa o cartão para ativar o teste, mas não paga nada durante os 14 dias grátis. A cobrança só acontece depois do período de teste, caso você continue com o plano.',
-  },
-  {
-    question: 'O cliente precisa baixar aplicativo?',
-    answer:
-      'Não. Seu cliente acessa a loja direto pelo navegador do celular, sem precisar instalar nada. Ele clica no link e já pode fazer o pedido.',
-  },
-  {
-    question: 'Posso usar Pix e maquininha?',
-    answer:
-      'Sim! Você configura os métodos de pagamento que aceita: dinheiro, Pix, cartão na maquininha, ou até integração com gateway de pagamento online.',
-  },
-  {
-    question: 'Funciona pelo WhatsApp?',
-    answer:
-      'Sim! Você pode compartilhar o link da sua loja pelo WhatsApp, Instagram, bio ou qualquer outro lugar. Seu cliente clica e faz o pedido.',
-  },
-  {
-    question: 'Consigo fechar a loja quando quiser?',
-    answer:
-      'Sim. Você configura os horários de funcionamento e pode abrir ou fechar manualmente a qualquer momento pelo painel de controle.',
-  },
-  {
-    question: 'Posso editar produtos e preços sozinho?',
-    answer:
-      'Sim! Você tem controle total. Pode adicionar, editar ou remover produtos, mudar preços, criar categorias e fazer promoções quando quiser.',
-  },
-];
+export { landingFaqs }
 
 export function FAQSection() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   return (
     <section id="duvidas" className="bg-[#f8fafc] py-16 lg:py-24">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12 lg:mb-16"
+          className="mb-12 text-center lg:mb-16"
         >
-          <h2 className="text-3xl lg:text-4xl font-black text-gray-900 mb-4">
+          <h2 className="mb-4 text-3xl font-black text-gray-900 lg:text-4xl">
             Perguntas frequentes
           </h2>
           <p className="text-lg text-gray-600">
@@ -63,20 +29,21 @@ export function FAQSection() {
         <div className="space-y-4">
           {landingFaqs.map((faq, index) => (
             <motion.div
-              key={index}
+              key={faq.question}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.05 }}
-              className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors"
+              className="overflow-hidden rounded-xl border border-gray-200 bg-white transition-colors hover:border-gray-300"
             >
               <button
+                type="button"
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="w-full px-6 py-5 flex items-center justify-between text-left"
+                className="flex w-full items-center justify-between px-6 py-5 text-left"
               >
-                <span className="font-semibold text-gray-900 pr-4">{faq.question}</span>
+                <span className="pr-4 font-semibold text-gray-900">{faq.question}</span>
                 <ChevronDown
-                  className={`flex-shrink-0 text-gray-400 transition-transform ${
+                  className={`shrink-0 text-gray-400 transition-transform ${
                     openIndex === index ? 'rotate-180' : ''
                   }`}
                   size={20}
@@ -92,5 +59,5 @@ export function FAQSection() {
         </div>
       </div>
     </section>
-  );
+  )
 }

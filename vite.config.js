@@ -46,20 +46,16 @@ function manualChunks(id) {
   if (packageName === '@firebase/storage') return 'vendor-firebase-storage'
   if (packageName.startsWith('@firebase/')) return 'vendor-firebase-core'
   if (packageName.startsWith('@sentry/')) return 'vendor-sentry'
-  if (packageName === 'react-icons') return 'vendor-icons'
   if (packageName === 'lucide-react') return 'vendor-lucide'
-  if (packageName === 'framer-motion' || packageName === 'motion') return 'vendor-motion'
   if (packageName.startsWith('@dnd-kit/')) return 'vendor-dnd'
-  if (packageName === 'qrcode.react') return 'vendor-qrcode'
   if (packageName === 'react-helmet-async' || packageName === 'helmet-async') return 'vendor-seo'
   // Firebase transitive deps
   if (packageName === 'idb') return 'vendor-firebase-core'
   if (packageName === 'tslib') return 'vendor-firebase-core'
-  if (packageName === 'undici-types') return 'vendor-misc'
   // React Router transitive deps
   if (packageName === 'history' || packageName.startsWith('@remix-run/')) return 'vendor-react'
 
-  return 'vendor-misc'
+  return undefined
 }
 
 // https://vite.dev/config/

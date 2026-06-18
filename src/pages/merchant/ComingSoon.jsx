@@ -1,8 +1,30 @@
-import { FiArrowLeft } from 'react-icons/fi'
+import {
+  FiArrowLeft,
+  FiCreditCard,
+  FiLayers,
+  FiPieChart,
+  FiSettings,
+  FiShoppingBag,
+  FiTruck,
+  FiUsers,
+  FiZap,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
-export function ComingSoon({ title, icon: Icon }) {
+const icons = {
+  creditCard: FiCreditCard,
+  layers: FiLayers,
+  pieChart: FiPieChart,
+  settings: FiSettings,
+  shoppingBag: FiShoppingBag,
+  truck: FiTruck,
+  users: FiUsers,
+  zap: FiZap,
+}
+
+export function ComingSoon({ title, iconName = 'zap' }) {
   const navigate = useNavigate()
+  const Icon = icons[iconName] || FiZap
 
   return (
     <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 bg-white p-12 text-center">

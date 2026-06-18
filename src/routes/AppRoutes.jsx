@@ -16,20 +16,8 @@ import {
 // Admin
 
 // Lojista
-import { ComingSoon } from '../pages/merchant/ComingSoon'
 
 // Ícones dos placeholders
-import {
-  FiCreditCard,
-  FiLayers,
-  FiPieChart,
-  FiTruck,
-  FiUsers,
-  FiZap,
-  FiShoppingBag,
-  FiSettings,
-} from 'react-icons/fi'
-
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const SignupPage = lazy(() => import('../pages/auth/SignupPage'))
 const OnboardingPage = lazy(() => import('../pages/auth/OnboardingPage'))
@@ -55,12 +43,27 @@ const GlobalOrderAlert = lazy(() =>
     default: module.GlobalOrderAlert,
   }))
 )
+const CartProvider = lazy(() =>
+  import('../contexts/CartContext').then((module) => ({
+    default: module.CartProvider,
+  }))
+)
+const DashboardThemeProvider = lazy(() =>
+  import('../contexts/DashboardThemeContext').then((module) => ({
+    default: module.DashboardThemeProvider,
+  }))
+)
 
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'))
 const CreateStorePage = lazy(() => import('../pages/admin/CreateStorePage'))
 const AdminSubscriptionsPage = lazy(() => import('../pages/admin/AdminSubscriptionsPage'))
 
 const MerchantDashboard = lazy(() => import('../pages/merchant/MerchantDashboard'))
+const ComingSoon = lazy(() =>
+  import('../pages/merchant/ComingSoon').then((module) => ({
+    default: module.ComingSoon,
+  }))
+)
 const OrdersPage = lazy(() => import('../pages/merchant/OrdersPage'))
 const Statistics = lazy(() => import('../pages/merchant/Statistics'))
 const Settings = lazy(() => import('../pages/merchant/Settings'))
@@ -142,6 +145,22 @@ function MerchantDashboardShell() {
   )
 }
 
+function StorefrontShell() {
+  return (
+    <CartProvider>
+      <StoreFrontPage />
+    </CartProvider>
+  )
+}
+
+function DashboardProviderShell({ children }) {
+  return (
+    <DashboardThemeProvider>
+      {children}
+    </DashboardThemeProvider>
+  )
+}
+
 export default function AppRoutes() {
   return (
     <>
@@ -187,7 +206,7 @@ export default function AppRoutes() {
           path="/store/:slug"
           element={
             <RouteSuspense fallback={<PublicRouteFallback />}>
-              <StoreFrontPage />
+              <StorefrontShell />
             </RouteSuspense>
           }
         />
@@ -205,9 +224,11 @@ export default function AppRoutes() {
           path="/admin"
           element={
             <DashboardSuspense>
-              <ProtectedRoute allowedRoles={['admin', 'developer']}>
-                <AdminLayout />
-              </ProtectedRoute>
+              <DashboardProviderShell>
+                <ProtectedRoute allowedRoles={['admin', 'developer']}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              </DashboardProviderShell>
             </DashboardSuspense>
           }
         >
@@ -217,19 +238,19 @@ export default function AppRoutes() {
 
           <Route
             path="orders"
-            element={<ComingSoon title="Pedidos globais" icon={FiShoppingBag} />}
+            element={<ComingSoon title="Pedidos globais" iconName="shoppingBag" />}
           />
 
           <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
 
           <Route
             path="users"
-            element={<ComingSoon title="Usuários e permissões" icon={FiUsers} />}
+            element={<ComingSoon title="Usuários e permissões" iconName="users" />}
           />
 
           <Route
             path="settings"
-            element={<ComingSoon title="Configurações admin" icon={FiSettings} />}
+            element={<ComingSoon title="Configurações admin" iconName="settings" />}
           />
 
           <Route path="create-store" element={<Navigate to="/admin/stores/new" replace />} />
@@ -240,9 +261,11 @@ export default function AppRoutes() {
           path="/dashboard"
           element={
             <DashboardSuspense>
-              <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
-                <MerchantDashboardShell />
-              </ProtectedRoute>
+              <DashboardProviderShell>
+                <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+                  <MerchantDashboardShell />
+                </ProtectedRoute>
+              </DashboardProviderShell>
             </DashboardSuspense>
           }
         >
@@ -257,14 +280,14 @@ export default function AppRoutes() {
           <Route path="pagamentos" element={<PaymentsPage />} />
           <Route path="financeiro" element={<Navigate to="/dashboard/pagamentos" replace />} />
           <Route path="qrcodes" element={<QRCodePage />} />
-          <Route path="users" element={<ComingSoon title="Clientes e CRM" icon={FiUsers} />} />
-          <Route path="motobot" element={<ComingSoon title="MotoBot / Motoboys" icon={FiTruck} />} />
+          <Route path="users" element={<ComingSoon title="Clientes e CRM" iconName="users" />} />
+          <Route path="motobot" element={<ComingSoon title="MotoBot / Motoboys" iconName="truck" />} />
           <Route path="motoboy" element={<Navigate to="/dashboard/motobot" replace />} />
 
-          <Route path="pix-automatico" element={<ComingSoon title="Pix automático" icon={FiCreditCard} />} />
-          <Route path="relatorios" element={<ComingSoon title="Relatórios avançados" icon={FiPieChart} />} />
-          <Route path="equipe" element={<ComingSoon title="Equipe e permissões" icon={FiLayers} />} />
-          <Route path="automacoes" element={<ComingSoon title="Automações" icon={FiZap} />} />
+          <Route path="pix-automatico" element={<ComingSoon title="Pix automático" iconName="creditCard" />} />
+          <Route path="relatorios" element={<ComingSoon title="Relatórios avançados" iconName="pieChart" />} />
+          <Route path="equipe" element={<ComingSoon title="Equipe e permissões" iconName="layers" />} />
+          <Route path="automacoes" element={<ComingSoon title="Automações" iconName="zap" />} />
           <Route path="billing" element={<BillingPage />} />
           <Route path="assinatura" element={<Navigate to="/dashboard/billing" replace />} />
           <Route path="subscription-management" element={<SubscriptionManagementPage />} />
@@ -277,9 +300,11 @@ export default function AppRoutes() {
           path="/dashboard/out-screen"
           element={
             <DashboardSuspense>
-              <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
-                <KitchenDisplayPage />
-              </ProtectedRoute>
+              <DashboardProviderShell>
+                <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+                  <KitchenDisplayPage />
+                </ProtectedRoute>
+              </DashboardProviderShell>
             </DashboardSuspense>
           }
         />
@@ -287,9 +312,11 @@ export default function AppRoutes() {
           path="/dashboard/out-screen/customer"
           element={
             <DashboardSuspense>
-              <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
-                <CustomerDisplayPage />
-              </ProtectedRoute>
+              <DashboardProviderShell>
+                <ProtectedRoute allowedRoles={['merchant', 'lojista', 'admin', 'developer']}>
+                  <CustomerDisplayPage />
+                </ProtectedRoute>
+              </DashboardProviderShell>
             </DashboardSuspense>
           }
         />
@@ -314,7 +341,7 @@ export default function AppRoutes() {
           path="/:slug"
           element={
             <RouteSuspense fallback={<PublicRouteFallback />}>
-              <StoreFrontPage />
+              <StorefrontShell />
             </RouteSuspense>
           }
         />

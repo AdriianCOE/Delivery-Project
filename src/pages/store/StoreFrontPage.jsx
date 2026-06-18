@@ -12,7 +12,6 @@ import {
   limit,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { AnimatePresence, motion } from 'motion/react'
 
 import {
   FiAlertCircle,
@@ -3113,19 +3112,12 @@ return (
 
 <StoreFooter store={store} todayHoursLabel={todayHoursLabel} />
 
-      <AnimatePresence>
-        {totalItemsCount > 0 && !orderingBlockedOnStorefront && (
-        <motion.button
+      {totalItemsCount > 0 && !orderingBlockedOnStorefront && (
+        <button
           type="button"
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-5 left-4 right-4 z-40 rounded-[1.7rem] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white shadow-2xl md:left-[calc(50%-18rem)] md:right-auto md:w-full md:max-w-xl"
+          className="fixed bottom-5 left-4 right-4 z-40 rounded-[1.7rem] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white shadow-2xl transition-transform duration-150 active:scale-[0.985] md:left-[calc(50%-18rem)] md:right-auto md:w-full md:max-w-xl md:hover:scale-[1.01]"
           style={{ background: themeColor }}
-          initial={{ y: 28, opacity: 0, scale: 0.96 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: 28, opacity: 0, scale: 0.96 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 28, mass: 0.8 }}
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.985 }}
         >
           <div className="flex items-center justify-between gap-5">
             <div className="flex items-center gap-4">
@@ -3134,53 +3126,30 @@ return (
                   <FiShoppingCart size={25} />
                 </div>
 
-                <motion.span
-                  key={`cart-count-${totalItemsCount}`}
-                  className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#111827] shadow-lg"
-                  initial={{ scale: 0.75, y: 4 }}
-                  animate={{ scale: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 22 }}
-                >
+                <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#111827] shadow-lg">
                   {totalItemsCount}
-                </motion.span>
+                </span>
               </div>
 
               <div className="text-left">
-                <motion.p
-                  className="text-lg font-black leading-none"
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.04, duration: 0.18 }}
-                >
+                <p className="text-lg font-black leading-none">
                   Ver carrinho
-                </motion.p>
-                <motion.p
-                  className="mt-1 text-sm font-bold text-white/80"
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.08, duration: 0.18 }}
-                >
+                </p>
+                <p className="mt-1 text-sm font-bold text-white/80">
                   Finalizar pedido
-                </motion.p>
+                </p>
               </div>
             </div>
 
             <div className="text-right">
               <p className="text-xs font-bold text-white/75">Total</p>
-              <motion.p
-                key={`cart-total-${cartTotal}`}
-                className="text-xl font-black tracking-tight"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.16 }}
-              >
+              <p className="text-xl font-black tracking-tight">
                 {formatMoney(cartTotal)}
-              </motion.p>
+              </p>
             </div>
           </div>
-        </motion.button>
-        )}
-      </AnimatePresence>
+        </button>
+      )}
 
       {store?.whatsapp && (
         <a

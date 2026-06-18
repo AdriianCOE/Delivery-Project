@@ -2,8 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
 import AppRoutes from './routes/AppRoutes'
-import { CartProvider } from './contexts/CartContext'
-import { DashboardThemeProvider } from './contexts/DashboardThemeContext'
 
 const AuthProvider = lazy(() =>
   import('./contexts/AuthContext').then((module) => ({
@@ -32,6 +30,23 @@ const COOKIE_PRIVATE_ROUTE_PREFIXES = [
   '/store',
 ]
 
+const PUBLIC_MARKETING_PATHS = new Set([
+  '',
+  'sobre',
+  'contato',
+  'planos',
+  'exemplos',
+  'privacidade',
+  'termos',
+  'cardapio-digital',
+  'delivery-sem-comissao',
+  'sistema-para-confeitaria',
+  'sistema-para-lanchonete',
+  'sistema-para-pizzaria',
+  'cardapio-digital-para-restaurante',
+  'Cardapio-Digital',
+])
+
 function matchesRoutePrefix(pathname = '', prefixes = []) {
   return prefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -40,6 +55,13 @@ function matchesRoutePrefix(pathname = '', prefixes = []) {
 
 function shouldLoadAuthProvider(pathname = '') {
   return matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)
+}
+
+function isLikelyPublicStorefrontPath(pathname = '') {
+  const segments = pathname.split('/').filter(Boolean)
+  if (segments.length !== 1) return false
+
+  return !PUBLIC_MARKETING_PATHS.has(segments[0])
 }
 
 function AuthBoundary({ children }) {
@@ -67,6 +89,7 @@ function DeferredCookieConsent() {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
     if (matchesRoutePrefix(pathname, COOKIE_PRIVATE_ROUTE_PREFIXES)) return undefined
+    if (isLikelyPublicStorefrontPath(pathname)) return undefined
 
     try {
       if (window.localStorage.getItem(COOKIE_CONSENT_KEY)) return undefined
@@ -111,12 +134,8 @@ function DeferredCookieConsent() {
 export default function App() {
   return (
     <AuthBoundary>
-      <CartProvider>
-        <DashboardThemeProvider>
-          <AppRoutes />
-          <DeferredCookieConsent />
-        </DashboardThemeProvider>
-      </CartProvider>
+      <AppRoutes />
+      <DeferredCookieConsent />
     </AuthBoundary>
   )
 }
