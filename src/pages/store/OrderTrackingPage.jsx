@@ -374,7 +374,7 @@ function isAsaasPaymentPending(order) {
 function isMercadoPagoPaymentPending(order) {
   if (!isMercadoPagoOnlineOrder(order) || isPaymentPaid(order)) return false
   const status = getPaymentStatusId(order)
-  return ['', 'pending', 'pending_payment', 'awaiting_payment', 'failed_link_creation'].includes(status)
+  return ['', 'pending', 'pending_payment', 'awaiting_payment'].includes(status)
 }
 
 function isPixPaymentPending(order) {
@@ -1477,7 +1477,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
               {paid
                 ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
                 : failed
-                  ? 'Não foi possível confirmar esse pagamento. Fale com a loja para combinar o próximo passo.'
+                  ? 'Checkout indisponivel. Fale com a loja para tentar novamente ou escolher outra forma de pagamento.'
                   : 'Abra o link de pagamento para concluir em ambiente seguro. A loja inicia o preparo após a confirmação automática.'}
             </p>
           </div>
@@ -1543,7 +1543,17 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
   const status = getPaymentStatusId(order)
   const paid = isPaymentPaid(order)
   const pending = isMercadoPagoPaymentPending(order)
-  const failed = ['failed', 'expired', 'canceled', 'cancelled', 'refunded', 'charged_back', 'amount_mismatch'].includes(status)
+  const failed = [
+    'failed',
+    'failed_link_creation',
+    'link_creation_failed',
+    'expired',
+    'canceled',
+    'cancelled',
+    'refunded',
+    'charged_back',
+    'amount_mismatch',
+  ].includes(status)
 
   const handleOpenPayment = useCallback(async () => {
     if (paymentUrl) {
@@ -1568,8 +1578,8 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
       const nextUrl = result?.data?.paymentUrl || result?.data?.initPoint || result?.data?.sandboxInitPoint
       if (!nextUrl) throw new Error('Pagamento online indisponível.')
       window.open(nextUrl, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      setError(err?.message || 'Não foi possível abrir o pagamento.')
+    } catch {
+      setError('Nao foi possivel abrir o pagamento online. Tente novamente ou escolha outra forma de pagamento.')
     } finally {
       setLoading(false)
     }
@@ -1596,7 +1606,7 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
               {paid
                 ? 'O pagamento foi confirmado automaticamente. Agora acompanhe o preparo do pedido.'
                 : failed
-                  ? 'Não foi possível confirmar esse pagamento. Fale com a loja para combinar o próximo passo.'
+                  ? 'Checkout indisponivel. Fale com a loja para tentar novamente ou escolher outra forma de pagamento.'
                   : 'Você será redirecionado para pagar em ambiente seguro. O PratoBy não armazena dados do cartão.'}
             </p>
           </div>

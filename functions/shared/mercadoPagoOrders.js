@@ -376,7 +376,14 @@ function buildWebhookUrl({ storeId, orderId }) {
     throw error
   }
 
-  const url = new URL(base)
+  let url
+  try {
+    url = new URL(base)
+  } catch {
+    const error = new Error('MERCADOPAGO_ORDER_WEBHOOK_URL invalida para pagamentos Mercado Pago.')
+    error.code = 'failed-precondition'
+    throw error
+  }
   url.searchParams.set('storeId', storeId)
   url.searchParams.set('orderId', orderId)
   url.searchParams.set('source_news', 'webhooks')
@@ -503,6 +510,32 @@ async function resolveAccessToken({ db, storeId, storeData, accessTokenTestSecre
   const error = new Error('Mercado Pago nao conectado para esta loja.')
   error.code = 'failed-precondition'
   throw error
+}
+
+async function assertMercadoPagoOrderCheckoutConfigured({
+  db,
+  storeId,
+  storeData,
+  accessTokenTestSecret,
+  accessTokenProdSecret,
+}) {
+  const safeStoreId = String(storeId || storeData?.id || storeData?.docId || '').trim()
+  if (!safeStoreId) {
+    const error = new Error('Loja invalida para Mercado Pago.')
+    error.code = 'failed-precondition'
+    throw error
+  }
+
+  buildWebhookUrl({ storeId: safeStoreId, orderId: 'preflight' })
+  await resolveAccessToken({
+    db,
+    storeId: safeStoreId,
+    storeData,
+    accessTokenTestSecret,
+    accessTokenProdSecret,
+  })
+
+  return true
 }
 
 async function createMercadoPagoPreference({
@@ -1252,6 +1285,7 @@ module.exports = {
   BLOCKED_REASON,
   ONLINE_MODE,
   PROVIDER,
+  assertMercadoPagoOrderCheckoutConfigured,
   buildMercadoPagoExternalReference,
   buildMercadoPagoPreferencePayload: buildPreferencePayload,
   buildMercadoPagoPendingPaymentSnapshot,

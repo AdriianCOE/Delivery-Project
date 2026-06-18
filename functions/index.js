@@ -722,6 +722,9 @@ const STORE_OPERATIONAL_SETTINGS_ALLOWED_FIELDS = new Set([
   'timeZone',
   'temporaryPauseUntil',
   'temporaryPauseReason',
+  'pausedUntil',
+  'pausedReason',
+  'pauseReason',
   'allowScheduledOrdersWhenClosed',
 ])
 
@@ -1659,6 +1662,10 @@ function sanitizeTemporaryPauseUntil(value) {
     throw new HttpsError('invalid-argument', 'Pausa temporaria invalida.')
   }
 
+  if (date.getTime() <= Date.now()) {
+    return null
+  }
+
   return date.toISOString()
 }
 
@@ -1702,6 +1709,18 @@ function sanitizeStoreOperationalSettings(value, currentSettings = {}) {
     nextSettings.temporaryPauseReason = sanitizePublicText(value.temporaryPauseReason, 120)
   }
 
+  if (Object.prototype.hasOwnProperty.call(value, 'pausedUntil')) {
+    nextSettings.pausedUntil = sanitizeTemporaryPauseUntil(value.pausedUntil)
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'pausedReason')) {
+    nextSettings.pausedReason = sanitizePublicText(value.pausedReason, 120)
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'pauseReason')) {
+    nextSettings.pauseReason = sanitizePublicText(value.pauseReason, 120)
+  }
+
   if (Object.prototype.hasOwnProperty.call(value, 'allowScheduledOrdersWhenClosed')) {
     nextSettings.allowScheduledOrdersWhenClosed = value.allowScheduledOrdersWhenClosed === true
   }
@@ -1713,6 +1732,25 @@ function patchClearsTemporaryPause(patch) {
   return Object.prototype.hasOwnProperty.call(patch || {}, 'settings') &&
     Object.prototype.hasOwnProperty.call(patch.settings || {}, 'temporaryPauseUntil') &&
     patch.settings.temporaryPauseUntil === null
+}
+
+function applyTemporaryPauseClearPatch(patch) {
+  patch.temporaryPauseUntil = admin.firestore.FieldValue.delete()
+  patch.temporaryPauseReason = admin.firestore.FieldValue.delete()
+  patch.pausedUntil = admin.firestore.FieldValue.delete()
+  patch.pausedReason = admin.firestore.FieldValue.delete()
+  patch.pauseReason = admin.firestore.FieldValue.delete()
+
+  if (patch.settings && typeof patch.settings === 'object' && !Array.isArray(patch.settings)) {
+    patch.settings = {
+      ...patch.settings,
+      temporaryPauseUntil: null,
+      temporaryPauseReason: '',
+      pausedUntil: null,
+      pausedReason: '',
+      pauseReason: '',
+    }
+  }
 }
 
 function sanitizeStoreSettingsPayload(payload, currentStoreData = {}) {
@@ -2213,8 +2251,7 @@ exports.updateStoreSettings = onCall(
     }
 
     if (patchClearsTemporaryPause(patch)) {
-      patch.temporaryPauseUntil = admin.firestore.FieldValue.delete()
-      patch.temporaryPauseReason = admin.firestore.FieldValue.delete()
+      applyTemporaryPauseClearPatch(patch)
     }
 
     patch.updatedAt = admin.firestore.FieldValue.serverTimestamp()

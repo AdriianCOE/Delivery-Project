@@ -55,3 +55,86 @@ export function DashboardPageSkeleton() {
     </div>
   )
 }
+
+export function StorefrontSkeleton() {
+  return (
+    <div
+      className="min-h-screen bg-[#fff7ed] text-[#111827]"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="mx-auto min-h-screen w-full max-w-3xl bg-white shadow-sm">
+        <div className="relative h-44 overflow-hidden bg-orange-100 sm:h-56">
+          <SkeletonBlock className="absolute inset-0 h-full w-full rounded-none bg-orange-200/70" />
+          <div className="absolute bottom-4 left-4 right-4 flex items-end gap-3">
+            <SkeletonBlock className="h-20 w-20 rounded-3xl bg-white/80" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonBlock className="h-6 w-48 bg-white/80" />
+              <SkeletonBlock className="h-4 w-32 bg-white/70" />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-5 px-4 py-5 sm:px-6">
+          <div className="flex flex-wrap gap-2">
+            <SkeletonBlock className="h-9 w-28 rounded-full" />
+            <SkeletonBlock className="h-9 w-32 rounded-full" />
+            <SkeletonBlock className="h-9 w-24 rounded-full" />
+          </div>
+
+          <SkeletonBlock className="h-12 w-full rounded-2xl" />
+
+          <div className="flex gap-2 overflow-hidden">
+            <SkeletonBlock className="h-10 w-24 shrink-0 rounded-full" />
+            <SkeletonBlock className="h-10 w-32 shrink-0 rounded-full" />
+            <SkeletonBlock className="h-10 w-28 shrink-0 rounded-full" />
+          </div>
+
+          <div className="grid gap-3">
+            {[0, 1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="grid grid-cols-[1fr_6rem] gap-3 rounded-3xl border border-orange-100 bg-white p-3 shadow-sm"
+              >
+                <div className="space-y-2 py-1">
+                  <SkeletonBlock className="h-4 w-24" />
+                  <SkeletonBlock className="h-5 w-44" />
+                  <SkeletonBlock className="h-3 w-full" />
+                  <SkeletonBlock className="h-3 w-2/3" />
+                  <SkeletonBlock className="h-6 w-24 rounded-full" />
+                </div>
+                <SkeletonBlock className="aspect-square h-auto w-full rounded-2xl" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Carregando cardapio.</span>
+    </div>
+  )
+}
+
+export function LandingFallback() {
+  return (
+    <div
+      className="min-h-screen bg-white px-6 py-8 text-[#111827]"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between">
+        <SkeletonBlock className="h-9 w-32" />
+        <SkeletonBlock className="h-9 w-24 rounded-full" />
+      </div>
+      <div className="mx-auto mt-16 max-w-3xl space-y-5">
+        <SkeletonBlock className="h-12 w-11/12" />
+        <SkeletonBlock className="h-12 w-8/12" />
+        <SkeletonBlock className="h-5 w-full" />
+        <SkeletonBlock className="h-5 w-9/12" />
+        <SkeletonBlock className="h-12 w-40 rounded-full" />
+      </div>
+      <span className="sr-only">Carregando.</span>
+    </div>
+  )
+}

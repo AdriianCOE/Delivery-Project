@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
@@ -1414,8 +1414,12 @@ export default function DashboardLayout() {
         availabilityMode: storeOperationalStatus.mode,
         operatingMode: storeOperationalStatus.mode,
         timeZone: storeOperationalStatus.timeZone || storeData.settings?.timeZone || 'America/Sao_Paulo',
-        temporaryPauseUntil: storeData.settings?.temporaryPauseUntil || null,
-        temporaryPauseReason: storeData.settings?.temporaryPauseReason || '',
+        temporaryPauseUntil: storeOperationalStatus.reason === 'temporary-pause'
+          ? storeOperationalStatus.temporaryPauseUntil
+          : null,
+        temporaryPauseReason: storeOperationalStatus.reason === 'temporary-pause'
+          ? storeOperationalStatus.temporaryPauseReason || ''
+          : '',
         allowScheduledOrdersWhenClosed: storeData.settings?.allowScheduledOrdersWhenClosed === true,
       }
       let payload
@@ -1867,7 +1871,13 @@ export default function DashboardLayout() {
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="min-h-full"
               >
-                {loading ? <DashboardPageSkeleton /> : currentOutlet}
+                {loading ? (
+                  <DashboardPageSkeleton />
+                ) : (
+                  <Suspense fallback={<DashboardPageSkeleton />}>
+                    {currentOutlet}
+                  </Suspense>
+                )}
               </motion.div>
             </AnimatePresence>
           </div>

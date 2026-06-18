@@ -6,7 +6,11 @@ import {
 } from 'react-router-dom'
 
 import ScrollToTop from '../utils/ScrollToTop'
-import { DashboardPageSkeleton } from '../components/shared/Skeletons'
+import {
+  DashboardPageSkeleton,
+  LandingFallback,
+  StorefrontSkeleton,
+} from '../components/shared/Skeletons'
 
 // Públicas
 
@@ -114,6 +118,14 @@ function DashboardSuspense({ children }) {
   )
 }
 
+function RouteSuspense({ fallback, children }) {
+  return (
+    <Suspense fallback={fallback}>
+      {children}
+    </Suspense>
+  )
+}
+
 function MerchantDashboardShell() {
   return (
     <>
@@ -131,7 +143,14 @@ export default function AppRoutes() {
       <Suspense fallback={<PublicRouteFallback />}>
         <Routes>
         {/* Públicas */}
-        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/"
+          element={
+            <RouteSuspense fallback={<LandingFallback />}>
+              <LandingPage />
+            </RouteSuspense>
+          }
+        />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/cadastro" element={<SignupPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
@@ -157,7 +176,14 @@ export default function AppRoutes() {
         <Route path="/404" element={<NotFoundPage />} />
 
         {/* Loja pública: formato antigo */}
-        <Route path="/store/:slug" element={<StoreFrontPage />} />
+        <Route
+          path="/store/:slug"
+          element={
+            <RouteSuspense fallback={<StorefrontSkeleton />}>
+              <StoreFrontPage />
+            </RouteSuspense>
+          }
+        />
         <Route path="/store/:slug/order/:orderId" element={<OrderTrackingPage />} />
         <Route path="/store/:slug/pedido/:orderId" element={<OrderTrackingPage />} />
 
@@ -277,7 +303,14 @@ export default function AppRoutes() {
         {/* Loja pública: formato principal do PratoBy */}
         <Route path="/:slug/pedido/:orderId" element={<OrderTrackingPage />} />
         <Route path="/:slug/order/:orderId" element={<OrderTrackingPage />} />
-        <Route path="/:slug" element={<StoreFrontPage />} />
+        <Route
+          path="/:slug"
+          element={
+            <RouteSuspense fallback={<StorefrontSkeleton />}>
+              <StoreFrontPage />
+            </RouteSuspense>
+          }
+        />
 
         {/* 404 */}
         <Route path="*" element={<NotFoundPage />} />

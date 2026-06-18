@@ -1,6 +1,7 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import SEO from '../../components/seo/SEO'
+import { StorefrontSkeleton } from '../../components/shared/Skeletons'
 import {
   collection,
   doc,
@@ -970,36 +971,25 @@ function sortByOrderThenName(a, b) {
 }
 
 function LoadingScreen({ timedOut = false, onRetry = null }) {
+  if (!timedOut) return <StorefrontSkeleton />
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f9fafb] px-6">
-      <div className="flex flex-col items-center gap-5 text-center">
-        <div className="relative">
-          <div className="h-16 w-16 animate-spin rounded-full border-4 border-orange-100 border-t-[#f97316]" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <FiShoppingCart className="text-[#f97316]" />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-lg font-black text-[#111827]">Carregando cardápio...</p>
-          <p className="mt-1 text-sm text-[#6b7280]">
-            {timedOut
-              ? 'A conexão parece instável. Tente carregar novamente.'
-              : 'Preparando a melhor experiência para você.'}
-          </p>
-        </div>
-
-        {timedOut && typeof onRetry === 'function' && (
+    <div className="relative min-h-screen bg-[#fff7ed]">
+      <StorefrontSkeleton />
+      {typeof onRetry === 'function' && (
+        <div className="fixed inset-x-4 bottom-6 z-50 mx-auto max-w-md rounded-3xl border border-orange-100 bg-white p-4 text-center shadow-2xl shadow-orange-200/60">
+          <p className="text-sm font-black text-[#111827]">A conexao parece instavel.</p>
+          <p className="mt-1 text-xs font-semibold text-[#6b7280]">Tente carregar o cardapio novamente.</p>
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-2 rounded-full bg-[#f97316] px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#f97316] px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-[#ea580c]"
           >
             <FiRefreshCw size={16} />
             Tentar novamente
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,10 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { getStoreOperationalStatus, storeAllowsScheduledOrdersWhenClosed } = require('./storeOperationalStatus')
+const {
+  getStoreOperationalStatus,
+  getTemporaryPauseState,
+  storeAllowsScheduledOrdersWhenClosed,
+} = require('./storeOperationalStatus')
 
 function store(overrides = {}) {
   const { settings: settingsOverrides = {}, ...storeOverrides } = overrides
@@ -53,6 +57,16 @@ test('automatic mode closes outside configured hours', () => {
   assert.equal(result.reason, 'outside-business-hours')
 })
 
+test('automatic mode ignores manual isOpen outside configured hours', () => {
+  const result = getStoreOperationalStatus(
+    store({ isOpen: true, settings: { availabilityMode: 'opening_hours' } }),
+    { now: new Date('2026-06-17T02:00:00.000Z') }
+  )
+
+  assert.equal(result.isOpen, false)
+  assert.equal(result.reason, 'outside-business-hours')
+})
+
 test('automatic mode supports overnight windows from previous day', () => {
   const result = getStoreOperationalStatus(
     store({ settings: { availabilityMode: 'opening_hours' } }),
@@ -76,6 +90,66 @@ test('temporary pause wins over automatic open hours', () => {
 
   assert.equal(result.isOpen, false)
   assert.equal(result.reason, 'temporary-pause')
+})
+
+test('expired temporary pause is not considered active', () => {
+  const input = store({
+    settings: {
+      availabilityMode: 'opening_hours',
+      temporaryPauseUntil: '2026-06-17T14:00:00.000Z',
+      temporaryPauseReason: 'Teste',
+    },
+  })
+  const pause = getTemporaryPauseState(input, { now: new Date('2026-06-17T15:00:00.000Z') })
+  const result = getStoreOperationalStatus(input, { now: new Date('2026-06-17T15:00:00.000Z') })
+
+  assert.equal(pause.active, false)
+  assert.equal(pause.expired, true)
+  assert.equal(result.isOpen, true)
+  assert.equal(result.reason, 'business-hours')
+})
+
+test('legacy pausedUntil alias closes only while future', () => {
+  const future = getStoreOperationalStatus(
+    store({
+      settings: {
+        availabilityMode: 'opening_hours',
+        pausedUntil: '2026-06-17T16:00:00.000Z',
+        pausedReason: 'Legado',
+      },
+    }),
+    { now: new Date('2026-06-17T15:00:00.000Z') }
+  )
+  const expired = getStoreOperationalStatus(
+    store({
+      settings: {
+        availabilityMode: 'opening_hours',
+        pausedUntil: '2026-06-17T14:00:00.000Z',
+      },
+    }),
+    { now: new Date('2026-06-17T15:00:00.000Z') }
+  )
+
+  assert.equal(future.isOpen, false)
+  assert.equal(future.reason, 'temporary-pause')
+  assert.equal(future.temporaryPauseReason, 'Legado')
+  assert.equal(expired.reason, 'business-hours')
+})
+
+test('explicit null temporaryPauseUntil does not fall back to legacy pausedUntil', () => {
+  const result = getStoreOperationalStatus(
+    store({
+      settings: {
+        availabilityMode: 'opening_hours',
+        temporaryPauseUntil: null,
+        pausedUntil: '2026-06-17T16:00:00.000Z',
+      },
+    }),
+    { now: new Date('2026-06-17T15:00:00.000Z') }
+  )
+
+  assert.equal(result.isOpen, true)
+  assert.equal(result.reason, 'business-hours')
 })
 
 test('scheduled orders closed-hours option is explicit', () => {

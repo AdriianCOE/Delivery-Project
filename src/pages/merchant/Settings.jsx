@@ -46,7 +46,7 @@ import { registerStoreMediaAsset } from '../../services/storeMediaLibrary'
 import LockedFeatureCard from '../../components/billing/LockedFeatureCard'
 import { hasPlanFeature } from '../../utils/planCatalog'
 import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
-import { getStoreOperationalStatus } from '../../utils/storeOperationalStatus'
+import { getStoreOperationalStatus, getTemporaryPauseState } from '../../utils/storeOperationalStatus'
 import MediaLibraryPicker from '../../components/media/MediaLibraryPicker'
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
@@ -193,7 +193,31 @@ function formatDateTimePtBr(value) {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
+
+  const nowInBrazil = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+  const dateInBrazil = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+  const time = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+
+  if (dateInBrazil === nowInBrazil) {
+    return `hoje, ${time}`
+  }
+
   return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(date)
@@ -901,6 +925,7 @@ function normalizeOpeningHours(store) {
 function mapStoreToForm(store) {
   const address = getAddressFromStore(store)
   const settings = store?.settings || {}
+  const temporaryPause = getTemporaryPauseState(store)
 
   return {
     ...DEFAULT_FORM,
@@ -954,8 +979,8 @@ function mapStoreToForm(store) {
         : settings?.autoOpenCloseEnabled === true
           ? 'opening_hours'
           : 'manual',
-    temporaryPauseUntil: settings?.temporaryPauseUntil || store?.temporaryPauseUntil || '',
-    temporaryPauseReason: settings?.temporaryPauseReason || store?.temporaryPauseReason || '',
+    temporaryPauseUntil: temporaryPause.active ? temporaryPause.untilIso : '',
+    temporaryPauseReason: temporaryPause.active ? temporaryPause.reason : '',
     allowScheduledOrdersWhenClosed:
       settings?.allowScheduledOrdersWhenClosed === true ||
       store?.allowScheduledOrdersWhenClosed === true,
@@ -1548,6 +1573,10 @@ const knownStoreIdsKey = useMemo(() => {
     return stores.find((store) => store.id === selectedStoreId) || stores[0] || null
   }, [selectedStoreId, stores])
 
+  const selectedStorePauseState = useMemo(() => {
+    return getTemporaryPauseState(selectedStore || {})
+  }, [selectedStore])
+
   const publicSlug = slugify(form.slug || form.name)
   const publicUrl = getStorePublicUrl(publicSlug)
   const settingsOperationalPreview = useMemo(() => {
@@ -1556,12 +1585,20 @@ const knownStoreIdsKey = useMemo(() => {
       isOpen: form.isOpen,
       isActive: form.isActive,
       openingHours: form.openingHours,
+      temporaryPauseUntil: form.temporaryPauseUntil || null,
+      temporaryPauseReason: form.temporaryPauseReason || '',
+      pausedUntil: null,
+      pausedReason: '',
+      pauseReason: '',
       settings: {
         ...(selectedStore?.settings || {}),
         availabilityMode: form.availabilityMode,
         openingHours: form.openingHours,
         temporaryPauseUntil: form.temporaryPauseUntil || null,
         temporaryPauseReason: form.temporaryPauseReason || '',
+        pausedUntil: null,
+        pausedReason: '',
+        pauseReason: '',
       },
     })
   }, [
@@ -1605,6 +1642,43 @@ const knownStoreIdsKey = useMemo(() => {
       [field]: value,
     }))
   }, [])
+
+  const handleClearTemporaryPause = useCallback(async () => {
+    if (!selectedStore || saving) return
+
+    if (!userCanManageStore(user, selectedStore)) {
+      showToast('error', 'Voce nao tem permissao para alterar esta loja.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId: selectedStore.id,
+        updates: {
+          settings: {
+            availabilityMode: form.availabilityMode === 'opening_hours' ? 'opening_hours' : 'manual',
+            operatingMode: form.availabilityMode === 'opening_hours' ? 'opening_hours' : 'manual',
+            timeZone: 'America/Sao_Paulo',
+            temporaryPauseUntil: null,
+            temporaryPauseReason: '',
+            allowScheduledOrdersWhenClosed: Boolean(form.allowScheduledOrdersWhenClosed),
+          },
+        },
+      })
+
+      updateField('temporaryPauseUntil', '')
+      updateField('temporaryPauseReason', '')
+      showToast('success', 'Pausa encerrada.')
+    } catch (error) {
+      console.error('handleClearTemporaryPause error:', error)
+      showToast('error', error?.message || 'Nao foi possivel encerrar a pausa.')
+    } finally {
+      setSaving(false)
+    }
+  }, [form.allowScheduledOrdersWhenClosed, form.availabilityMode, saving, selectedStore, showToast, updateField, user])
 
   const updateScheduling = useCallback((field, value) => {
     setForm((prev) => ({
@@ -1966,13 +2040,19 @@ const knownStoreIdsKey = useMemo(() => {
       const hoursClose = firstOpenDay
         ? openingHours[firstOpenDay.id].close
         : '23:30'
+      const formTemporaryPause = getTemporaryPauseState({
+        settings: {
+          temporaryPauseUntil: form.temporaryPauseUntil || null,
+          temporaryPauseReason: form.temporaryPauseReason || '',
+        },
+      })
 
       const settings = {
         availabilityMode: form.availabilityMode === 'opening_hours' ? 'opening_hours' : 'manual',
         operatingMode: form.availabilityMode === 'opening_hours' ? 'opening_hours' : 'manual',
         timeZone: 'America/Sao_Paulo',
-        temporaryPauseUntil: form.temporaryPauseUntil || null,
-        temporaryPauseReason: sanitizeTextField(form.temporaryPauseReason, 120),
+        temporaryPauseUntil: formTemporaryPause.active ? formTemporaryPause.untilIso : null,
+        temporaryPauseReason: formTemporaryPause.active ? sanitizeTextField(form.temporaryPauseReason, 120) : '',
         allowScheduledOrdersWhenClosed: Boolean(form.allowScheduledOrdersWhenClosed),
       }
 
@@ -2640,19 +2720,23 @@ const knownStoreIdsKey = useMemo(() => {
             <option value="120">Por 2 horas</option>
           </select>
 
-          {form.temporaryPauseUntil ? (
+          {settingsOperationalPreview.reason === 'temporary-pause' ? (
             <div className="rounded-2xl bg-white p-3 text-xs font-bold text-[#6b7280] dark:bg-zinc-950 dark:text-zinc-300">
-              Pausada até {formatDateTimePtBr(form.temporaryPauseUntil)}
+              Pausada até {formatDateTimePtBr(settingsOperationalPreview.temporaryPauseUntil)}
               <button
                 type="button"
-                onClick={() => {
-                  updateField('temporaryPauseUntil', '')
-                  updateField('temporaryPauseReason', '')
-                }}
+                onClick={handleClearTemporaryPause}
+                disabled={saving}
                 className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-3 text-xs font-black text-white transition hover:bg-black dark:bg-zinc-100 dark:text-zinc-950"
               >
-                Encerrar pausa
+                {saving ? 'Encerrando...' : 'Encerrar pausa'}
               </button>
+            </div>
+          ) : null}
+
+          {selectedStorePauseState.expired && !form.temporaryPauseUntil ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+              Pausa expirada. Ao salvar, os campos antigos serao removidos.
             </div>
           ) : null}
         </div>

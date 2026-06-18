@@ -41,6 +41,8 @@ import { ensureAppCheck, functions } from '../../services/firebase'
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
 const TRACKING_TOKENS_KEY = '@PratoBy:trackingTokens'
+const MERCADO_PAGO_CHECKOUT_ERROR =
+  'Nao foi possivel abrir o pagamento online. Tente novamente ou escolha outra forma de pagamento.'
 
 const EMPTY_CUSTOMER = {
   name: '',
@@ -131,6 +133,34 @@ function formatMoney(value) {
     style: 'currency',
     currency: 'BRL',
   })
+}
+
+function isMercadoPagoCheckoutCreationFailed(order = {}) {
+  const status = String(order.paymentStatus || order.payment?.status || '').toLowerCase()
+  const error = String(order.paymentError || order.payment?.linkCreationError || '').toLowerCase()
+
+  return (
+    status === 'failed_link_creation' ||
+    error === 'failed_link_creation' ||
+    error.includes('mercadopago') ||
+    error.includes('mercado pago')
+  )
+}
+
+function getCheckoutSubmitErrorMessage(error, paymentMethod) {
+  const message = String(error?.message || '').trim()
+
+  if (
+    paymentMethod === 'mercadopago_online' &&
+    (
+      !message ||
+      /mercado\s*pago|mercadopago|pagamento online|checkout|preference|preferencia|payment/i.test(message)
+    )
+  ) {
+    return MERCADO_PAGO_CHECKOUT_ERROR
+  }
+
+  return message || 'Erro ao enviar pedido. Tente novamente.'
 }
 
 function parseCurrency(value) {
@@ -2372,6 +2402,13 @@ if (orderType === 'delivery') {
         // O pedido ja foi criado; falha de storage local nao deve bloquear o tracking.
       }
 
+      if (
+        paymentMethod === 'mercadopago_online' &&
+        (!createdOrder.paymentUrl || isMercadoPagoCheckoutCreationFailed(createdOrder))
+      ) {
+        throw new Error(MERCADO_PAGO_CHECKOUT_ERROR)
+      }
+
       clearCart()
       onClose?.()
       if (createdOrder.paymentUrl && paymentMethod === 'mercadopago_online') {
@@ -2390,7 +2427,7 @@ if (orderType === 'delivery') {
         mercadoPagoWindow.close()
       }
       console.error(error)
-      const message = error?.message || 'Erro ao enviar pedido. Tente novamente.'
+      const message = getCheckoutSubmitErrorMessage(error, paymentMethod)
       setCheckoutError(message)
       scrollToFirstError()
     } finally {

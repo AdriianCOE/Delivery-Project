@@ -14,6 +14,10 @@ const WEEKDAY_TO_KEY = {
 
 const dateFormatterCache = new Map()
 
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object || {}, key)
+}
+
 function getDateFormatter(timeZone = BRAZIL_TIME_ZONE) {
   if (dateFormatterCache.has(timeZone)) return dateFormatterCache.get(timeZone)
 
@@ -87,21 +91,27 @@ function normalizeOpeningHours(store = {}) {
 }
 
 function getPauseUntil(store = {}) {
-  return (
-    store.settings?.temporaryPauseUntil ||
-    store.settings?.pausedUntil ||
-    store.temporaryPauseUntil ||
-    store.pausedUntil ||
-    null
-  )
+  const settings = store.settings || {}
+
+  if (hasOwn(settings, 'temporaryPauseUntil')) return settings.temporaryPauseUntil
+  if (hasOwn(settings, 'pausedUntil')) return settings.pausedUntil
+  if (hasOwn(store, 'temporaryPauseUntil')) return store.temporaryPauseUntil
+  if (hasOwn(store, 'pausedUntil')) return store.pausedUntil
+
+  return null
 }
 
 function getPauseReason(store = {}) {
-  return String(
-    store.settings?.temporaryPauseReason ||
-      store.temporaryPauseReason ||
-      ''
-  ).trim()
+  const settings = store.settings || {}
+
+  if (hasOwn(settings, 'temporaryPauseReason')) return String(settings.temporaryPauseReason || '').trim()
+  if (hasOwn(settings, 'pausedReason')) return String(settings.pausedReason || '').trim()
+  if (hasOwn(settings, 'pauseReason')) return String(settings.pauseReason || '').trim()
+  if (hasOwn(store, 'temporaryPauseReason')) return String(store.temporaryPauseReason || '').trim()
+  if (hasOwn(store, 'pausedReason')) return String(store.pausedReason || '').trim()
+  if (hasOwn(store, 'pauseReason')) return String(store.pauseReason || '').trim()
+
+  return ''
 }
 
 function parseDate(value) {
@@ -111,6 +121,31 @@ function parseDate(value) {
   if (value.seconds) return new Date(Number(value.seconds) * 1000)
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function getTemporaryPauseState(store = {}, options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date(options.now || Date.now())
+  const pauseUntil = parseDate(getPauseUntil(store))
+
+  if (!pauseUntil) {
+    return {
+      active: false,
+      expired: false,
+      until: null,
+      untilIso: '',
+      reason: '',
+    }
+  }
+
+  const expired = pauseUntil.getTime() <= now.getTime()
+
+  return {
+    active: !expired,
+    expired,
+    until: pauseUntil,
+    untilIso: pauseUntil.toISOString(),
+    reason: getPauseReason(store),
+  }
 }
 
 function isWithinWindow(openMinutes, closeMinutes, currentMinutes) {
@@ -177,15 +212,15 @@ function getStoreOperationalStatus(store = {}, options = {}) {
     return { isOpen: false, mode: normalizeAvailabilityMode(store), reason: 'store-blocked', label: 'Loja indisponível' }
   }
 
-  const pauseUntil = parseDate(getPauseUntil(store))
-  if (pauseUntil && pauseUntil.getTime() > now.getTime()) {
+  const temporaryPause = getTemporaryPauseState(store, { now })
+  if (temporaryPause.active) {
     return {
       isOpen: false,
       mode: normalizeAvailabilityMode(store),
       reason: 'temporary-pause',
       label: 'Pausada temporariamente',
-      temporaryPauseUntil: pauseUntil.toISOString(),
-      temporaryPauseReason: getPauseReason(store),
+      temporaryPauseUntil: temporaryPause.untilIso,
+      temporaryPauseReason: temporaryPause.reason,
     }
   }
 
@@ -216,6 +251,7 @@ function storeAllowsScheduledOrdersWhenClosed(store = {}) {
 
 module.exports = {
   BRAZIL_TIME_ZONE,
+  getTemporaryPauseState,
   getStoreOperationalStatus,
   storeAllowsScheduledOrdersWhenClosed,
 }

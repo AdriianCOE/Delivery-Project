@@ -745,7 +745,50 @@ function getScheduleStatus(businessHours) {
   }
 }
 
+function mapSharedOperationalStatus(status) {
+  if (!status) return null
+
+  if (status.isOpen) {
+    return {
+      label: 'Aberto agora',
+      description: status.label || 'A loja estÃ¡ recebendo pedidos.',
+      isOpen: true,
+      tone: 'success',
+    }
+  }
+
+  if (status.reason === 'temporary-pause') {
+    return {
+      label: 'Pausada temporariamente',
+      description: status.label || 'A loja estÃ¡ pausada no momento.',
+      mobileDescription: 'Loja pausada agora. VocÃª ainda pode ver o cardÃ¡pio.',
+      isOpen: false,
+      tone: 'warning',
+    }
+  }
+
+  if (status.reason === 'store-blocked') {
+    return {
+      label: 'Loja indisponÃ­vel',
+      description: status.label || 'Esta loja nÃ£o estÃ¡ disponÃ­vel no momento.',
+      isOpen: false,
+      tone: 'danger',
+    }
+  }
+
+  return {
+    label: 'Fechada agora',
+    description: status.label || 'A loja estÃ¡ fechada agora, mas vocÃª pode ver o cardÃ¡pio.',
+    mobileDescription: 'Loja fechada agora. VocÃª ainda pode ver o cardÃ¡pio.',
+    isOpen: false,
+    tone: 'warning',
+  }
+}
+
 function getOperationalStatus(store, scheduleStatus = {}) {
+  const sharedStatus = mapSharedOperationalStatus(store?.operationalStatus)
+  if (sharedStatus) return sharedStatus
+
   const status = stripAccents(store?.status || store?.storeStatus || '')
 
   if (store?.isDeleted) {

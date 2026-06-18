@@ -14,6 +14,7 @@ const {
   orderRequiresAsaasOnline,
 } = require('./shared/asaasOrders')
 const {
+  assertMercadoPagoOrderCheckoutConfigured,
   buildMercadoPagoPendingPaymentSnapshot,
   buildMercadoPagoPreferenceFailurePatch,
   createMercadoPagoPreference,
@@ -1484,6 +1485,27 @@ function createPublicOrderHandler({
       const storeKeys = getStoreKeys(store)
 
       if (!storeDocId || !storeSlug) fail('failed-precondition', 'Loja sem identificador publico valido.')
+
+      if (isMercadoPagoOnlinePaymentRequest(input)) {
+        try {
+          await assertMercadoPagoOrderCheckoutConfigured({
+            db,
+            storeId: storeDocId,
+            storeData: store,
+            accessTokenTestSecret: mercadoPagoAccessTokenTestSecret,
+            accessTokenProdSecret: mercadoPagoAccessTokenProdSecret,
+          })
+        } catch (paymentConfigError) {
+          logger.warn('createPublicOrder blocked by Mercado Pago checkout preflight.', {
+            storeId: storeDocId,
+            error: paymentConfigError?.message || String(paymentConfigError),
+          })
+          fail(
+            'failed-precondition',
+            'Pagamento online Mercado Pago indisponivel. Tente novamente ou escolha outra forma de pagamento.'
+          )
+        }
+      }
 
       const customerName = sanitizeText(input.customerName || input.customer?.name, 100)
       const customerPhone = normalizeBrazilianPhone(input.customerPhone || input.customer?.phone)
