@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import SEO from '../../components/seo/SEO'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 import {
@@ -26,6 +26,7 @@ import {
   FiMapPin,
   FiMessageCircle,
   FiPackage,
+  FiRefreshCw,
   FiShoppingBag,
   FiStar,
   FiTruck,
@@ -337,6 +338,7 @@ function isPaymentPaid(order) {
 
   return (
     paymentStatus === 'paid' ||
+    paymentStatus === 'approved' ||
     paymentStatus === 'pago' ||
     Boolean(order?.payment?.paidAt || order?.paidAt || order?.payment?.confirmedAt)
   )
@@ -880,6 +882,7 @@ function getPaymentStatusLabel(order) {
     pay_on_delivery: 'A receber na entrega',
     manual_confirmation: 'Confirmação manual',
     paid: 'Pago',
+    approved: 'Pago',
     pago: 'Pago',
     canceled: 'Cancelado',
     cancelled: 'Cancelado',
@@ -1536,7 +1539,13 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
   )
 }
 
-function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
+function MercadoPagoOnlinePaymentCard({
+  order,
+  trackingToken,
+  onReconcilePayment,
+  reconcileLoading = false,
+  reconcileMessage = '',
+}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const paymentUrl = getMercadoPagoPaymentUrl(order)
@@ -1629,24 +1638,43 @@ function MercadoPagoOnlinePaymentCard({ order, trackingToken }) {
         </div>
 
         {pending && (
-          <button
-            type="button"
-            onClick={handleOpenPayment}
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? (
-              <>
-                <FiLoader className="animate-spin" />
-                Abrindo pagamento...
-              </>
-            ) : (
-              <>
-                <FiCreditCard />
-                Pagar agora
-              </>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={handleOpenPayment}
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-4 text-sm font-black text-white transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loading ? (
+                <>
+                  <FiLoader className="animate-spin" />
+                  Abrindo pagamento...
+                </>
+              ) : (
+                <>
+                  <FiCreditCard />
+                  Pagar agora
+                </>
+              )}
+            </button>
+            {typeof onReconcilePayment === 'function' && (
+              <button
+                type="button"
+                onClick={onReconcilePayment}
+                disabled={reconcileLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-green-100 bg-white px-5 py-4 text-sm font-black text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {reconcileLoading ? <FiLoader className="animate-spin" /> : <FiRefreshCw />}
+                {reconcileLoading ? 'Verificando...' : 'Verificar pagamento'}
+              </button>
             )}
-          </button>
+          </div>
+        )}
+
+        {reconcileMessage && (
+          <p className="rounded-2xl border border-green-100 bg-green-50 p-3 text-xs font-bold text-green-800">
+            {reconcileMessage}
+          </p>
         )}
 
         {error && (
@@ -1788,6 +1816,7 @@ function getTrackingFooterStore(order, store) {
 
 export default function OrderTrackingPage() {
   const { slug, orderId } = useParams()
+  const [searchParams] = useSearchParams()
 
   const [order, setOrder] = useState(null)
   const [store, setStore] = useState(null)
@@ -1797,6 +1826,9 @@ export default function OrderTrackingPage() {
   const [cancelRequestLoading, setCancelRequestLoading] = useState(false)
   const [pixCopied, setPixCopied] = useState(false)
   const [proofLoading, setProofLoading] = useState(false)
+  const [mercadoPagoReconcileLoading, setMercadoPagoReconcileLoading] = useState(false)
+  const [mercadoPagoReconcileMessage, setMercadoPagoReconcileMessage] = useState('')
+  const [mercadoPagoAutoReconcileKey, setMercadoPagoAutoReconcileKey] = useState('')
 
   const [review, setReview] = useState(INITIAL_REVIEW)
   const [reviewLoading, setReviewLoading] = useState(false)
@@ -1811,6 +1843,24 @@ export default function OrderTrackingPage() {
   const customerPushAutoRegisterRef = useRef('')
 
   const trackingToken = String(order?.trackingToken || '').trim()
+  const mercadoPagoReturnParams = useMemo(() => ({
+    paymentId:
+      searchParams.get('payment_id') ||
+      searchParams.get('collection_id') ||
+      '',
+    preferenceId:
+      searchParams.get('preference_id') ||
+      searchParams.get('preferenceId') ||
+      '',
+    externalReference:
+      searchParams.get('external_reference') ||
+      searchParams.get('externalReference') ||
+      '',
+    status:
+      searchParams.get('status') ||
+      searchParams.get('collection_status') ||
+      '',
+  }), [searchParams])
   const customerPushStorageKey = order?.id && trackingToken
     ? `pratoby:customer-fcm:${order.id}:${trackingToken}`
     : ''
@@ -2277,6 +2327,92 @@ const isDelivered = status === 'entregue'
     }
   }, [actionLoading, order])
 
+  const reconcileMercadoPagoPayment = useCallback(async ({ automatic = false } = {}) => {
+    if (!order?.id || !trackingToken || mercadoPagoReconcileLoading) return
+    if (!isMercadoPagoOnlineOrder(order)) return
+
+    const paymentId =
+      mercadoPagoReturnParams.paymentId ||
+      order.payment?.providerPaymentId ||
+      order.mercadoPago?.paymentId ||
+      ''
+    const preferenceId =
+      mercadoPagoReturnParams.preferenceId ||
+      order.payment?.providerPreferenceId ||
+      order.payment?.preferenceId ||
+      order.mercadoPago?.preferenceId ||
+      ''
+    const externalReference =
+      mercadoPagoReturnParams.externalReference ||
+      order.payment?.externalReference ||
+      order.mercadoPago?.externalReference ||
+      ''
+
+    if (!paymentId && !preferenceId && !externalReference) {
+      if (!automatic) setMercadoPagoReconcileMessage('Pagamento ainda sem identificador para verificacao.')
+      return
+    }
+
+    try {
+      setMercadoPagoReconcileLoading(true)
+      setMercadoPagoReconcileMessage('Verificando pagamento...')
+      await ensureAppCheck()
+      const reconcilePayment = httpsCallable(functions, 'reconcileMercadoPagoOrderPayment')
+      const result = await reconcilePayment({
+        storeSlug: slug,
+        storeId: order.storeDocId || order.storeId || '',
+        trackingToken,
+        paymentId,
+        preferenceId,
+        externalReference,
+      })
+      const providerStatus = String(result?.data?.providerStatus || '').toLowerCase()
+      const paymentStatus = String(result?.data?.paymentStatus || '').toLowerCase()
+      if (providerStatus === 'approved' || paymentStatus === 'paid') {
+        setMercadoPagoReconcileMessage('Pagamento confirmado.')
+      } else {
+        setMercadoPagoReconcileMessage('Pagamento ainda pendente no Mercado Pago.')
+      }
+    } catch (error) {
+      console.error('[MercadoPago] reconcile failed', error)
+      setMercadoPagoReconcileMessage('Nao foi possivel verificar agora. Tente novamente em instantes.')
+    } finally {
+      setMercadoPagoReconcileLoading(false)
+    }
+  }, [
+    mercadoPagoReconcileLoading,
+    mercadoPagoReturnParams.externalReference,
+    mercadoPagoReturnParams.paymentId,
+    mercadoPagoReturnParams.preferenceId,
+    order,
+    slug,
+    trackingToken,
+  ])
+
+  useEffect(() => {
+    if (!order?.id || !trackingToken) return
+    if (!isMercadoPagoOnlineOrder(order) || !isMercadoPagoPaymentPending(order)) return
+
+    const key = [
+      order.id,
+      mercadoPagoReturnParams.paymentId,
+      mercadoPagoReturnParams.preferenceId,
+      mercadoPagoReturnParams.externalReference,
+    ].filter(Boolean).join(':')
+
+    if (!key || key === order.id || key === mercadoPagoAutoReconcileKey) return
+    setMercadoPagoAutoReconcileKey(key)
+    reconcileMercadoPagoPayment({ automatic: true })
+  }, [
+    mercadoPagoAutoReconcileKey,
+    mercadoPagoReturnParams.externalReference,
+    mercadoPagoReturnParams.paymentId,
+    mercadoPagoReturnParams.preferenceId,
+    order,
+    reconcileMercadoPagoPayment,
+    trackingToken,
+  ])
+
   const openStoreWhatsApp = useCallback((message) => {
     const url = buildWhatsAppUrl(storePhone, message)
 
@@ -2722,6 +2858,9 @@ const isDelivered = status === 'entregue'
           <MercadoPagoOnlinePaymentCard
             order={order}
             trackingToken={trackingToken}
+            onReconcilePayment={() => reconcileMercadoPagoPayment({ automatic: false })}
+            reconcileLoading={mercadoPagoReconcileLoading}
+            reconcileMessage={mercadoPagoReconcileMessage}
           />
         )}
 

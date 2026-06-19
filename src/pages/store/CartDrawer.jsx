@@ -2293,18 +2293,6 @@ if (orderType === 'delivery') {
       return
     }
 
-    const shouldOpenMercadoPagoCheckout = paymentMethod === 'mercadopago_online'
-    let mercadoPagoWindow = null
-
-    if (shouldOpenMercadoPagoCheckout) {
-      mercadoPagoWindow = window.open('about:blank', '_blank')
-      if (mercadoPagoWindow) {
-        mercadoPagoWindow.opener = null
-        mercadoPagoWindow.document.title = 'Abrindo Mercado Pago...'
-        mercadoPagoWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Abrindo checkout Mercado Pago...</p>'
-      }
-    }
-
     setIsSubmitting(true)
 
     try {
@@ -2404,24 +2392,16 @@ if (orderType === 'delivery') {
       const mercadoPagoCheckoutFailed =
         paymentMethod === 'mercadopago_online' &&
         (!createdOrder.paymentUrl || isMercadoPagoCheckoutCreationFailed(createdOrder))
+      const mercadoPagoPaymentUrl = String(createdOrder.paymentUrl || '').trim()
 
       clearCart()
       onClose?.()
-      if (!mercadoPagoCheckoutFailed && createdOrder.paymentUrl && paymentMethod === 'mercadopago_online') {
-        if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
-          mercadoPagoWindow.location.href = createdOrder.paymentUrl
-        } else {
-          window.location.assign(createdOrder.paymentUrl)
-          return
-        }
-      } else if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
-        mercadoPagoWindow.close()
+      if (!mercadoPagoCheckoutFailed && mercadoPagoPaymentUrl && paymentMethod === 'mercadopago_online') {
+        window.location.assign(mercadoPagoPaymentUrl)
+        return
       }
       navigate(createdOrder.trackingUrl || `/${storeSlug}/pedido/${orderId}`)
     } catch (error) {
-      if (mercadoPagoWindow && !mercadoPagoWindow.closed) {
-        mercadoPagoWindow.close()
-      }
       console.error(error)
       const message = getCheckoutSubmitErrorMessage(error, paymentMethod)
       setCheckoutError(message)

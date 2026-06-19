@@ -2,6 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes storefrontSoftRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes storefrontNavDrop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .storefront-category-nav {
+    animation: storefrontNavDrop 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .storefront-section-reveal {
+    animation: storefrontSoftRise 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--storefront-section-index, 0) * 35ms);
+  }
+
+  .storefront-product-reveal {
+    animation: storefrontSoftRise 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--storefront-item-index, 0) * 28ms);
+    transform-origin: center top;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storefront-category-nav,
+  .storefront-section-reveal,
+  .storefront-product-reveal {
+    animation: none !important;
+  }
+}
+
 @media print {
   @page {
     size: auto;

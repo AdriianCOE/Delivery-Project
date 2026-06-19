@@ -4,6 +4,7 @@ import { captureAppError } from '../../services/sentry'
 import { getPricingValidation } from '../../utils/orderValidation'
 import { getCallableErrorMessage } from '../../utils/callableError'
 import { getOrderSlaState, isOrderActiveStatus } from '../../utils/orderSla'
+import { getStoreOperationalStatus } from '../../utils/storeOperationalStatus'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -230,7 +231,7 @@ function getTodayOpeningHoursLabel(store) {
 const PERIOD_OPTIONS = [
   { label: 'Hoje', days: 0 },
   { label: '7 dias', days: 7 },
-  { label: '30 dias', days: 30 },
+  { label: 'Este mês', days: 'current_month' },
 ]
 
 const FINISHED_STATUSES = ['entregue']
@@ -302,10 +303,12 @@ function formatCurrency(value) {
 }
 
 function getOrderDate(order) {
-  const createdAt = order?.createdAt
+  const createdAt = order?.createdAt || order?.created_at || order?.date || order?.orderDate
   if (!createdAt) return null
   if (createdAt?.toDate) return createdAt.toDate()
   if (createdAt instanceof Date) return createdAt
+  if (typeof createdAt?._seconds === 'number') return new Date(createdAt._seconds * 1000)
+  if (typeof createdAt?.seconds === 'number') return new Date(createdAt.seconds * 1000)
   const date = new Date(createdAt)
   return Number.isNaN(date.getTime()) ? null : date
 }
@@ -647,8 +650,8 @@ function getStoreDocId(store) {
   return store?.storeDocId || store?.id || store?.storeId || store?.slug || store?.storeSlug || ''
 }
 
-function isStoreOpen(store) {
-  return store?.isOpen !== false && store?.isActive !== false && store?.isBlocked !== true && store?.isDeleted !== true
+function getMerchantStoreOperationalStatus(store, now = Date.now()) {
+  return getStoreOperationalStatus(store || {}, { now })
 }
 
 function getStorePublicUrl(store) {
@@ -790,13 +793,24 @@ function getPaymentBucket(order) {
   const payment = order?.payment || {}
   const mode = String(payment.mode || order?.paymentMode || '').toLowerCase()
   const provider = String(payment.provider || order?.paymentProvider || '').toLowerCase()
-  const status = String(payment.status || order?.paymentStatus || '').toLowerCase()
+  const status = String(payment.status || order?.paymentStatus || order?.asaasPaymentStatus || '').toLowerCase().trim()
   const method = String(payment.method || order?.paymentMethod || order?.paymentLabel || '').toLowerCase()
 
-  const online = mode === 'online' || provider === 'asaas' || provider === 'mercadopago' || mode === 'asaas' || mode === 'mercadopago' || mode === 'card_online'
+  const online =
+    mode === 'online' ||
+    provider === 'asaas' ||
+    provider === 'mercadopago' ||
+    mode === 'asaas' ||
+    mode === 'mercadopago' ||
+    mode === 'card_online' ||
+    Boolean(payment.asaasPaymentId || order?.asaasPaymentId || payment.mercadoPagoPaymentId || order?.mercadoPagoPaymentId)
 
   if (online) {
-    if (['paid', 'pago', 'confirmed', 'received'].includes(status)) return 'online_paid'
+    if (
+      order?.isPaid ||
+      order?.paid ||
+      ['paid', 'pago', 'confirmed', 'received', 'payment_confirmed', 'payment_received'].includes(status)
+    ) return 'online_paid'
     if (['failed', 'expired', 'overdue', 'canceled', 'cancelled', 'deleted'].includes(status)) return 'online_failed'
     if (status === 'partially_refunded' || status === 'partial_refund') return 'online_partially_refunded'
     if (status === 'refunded') return 'online_refunded'
@@ -824,9 +838,7 @@ function isRevenueOrder(order) {
   if (CANCELED_STATUSES.includes(status)) return false
 
   const bucket = getPaymentBucket(order)
-  if (bucket.startsWith('online_')) return bucket === 'online_paid'
-
-  return true
+  return FINISHED_STATUSES.includes(status) || bucket === 'online_paid'
 }
 
 function formatScheduledDate(date) {
@@ -1558,6 +1570,11 @@ const loading = loadingStores || loadingOrders
 const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
 const storeIsDraft = isDraftStore({ selectedStore, userData })
 const storeIsPaused = isPausedStore({ selectedStore, userData, now: slaNow })
+const selectedStoreOperationalStatus = useMemo(
+  () => getMerchantStoreOperationalStatus(selectedStore, slaNow),
+  [selectedStore, slaNow]
+)
+const selectedStoreIsOpen = selectedStoreOperationalStatus.isOpen
 
 const activeUsers = usePresence(selectedStore?.id || selectedStore?.storeId, true)
 const menuPeopleCount = Number(activeUsers || 0)
@@ -1612,16 +1629,52 @@ useEffect(() => {
       return
     }
 
-    const nextStatus = !isStoreOpen(selectedStore)
+    const nextStatus = !selectedStoreIsOpen
+    const nextSettings = {
+      availabilityMode: selectedStoreOperationalStatus.mode,
+      operatingMode: selectedStoreOperationalStatus.mode,
+      timeZone: selectedStoreOperationalStatus.timeZone || selectedStore.settings?.timeZone || 'America/Sao_Paulo',
+      temporaryPauseUntil: selectedStoreOperationalStatus.reason === 'temporary-pause'
+        ? selectedStoreOperationalStatus.temporaryPauseUntil
+        : null,
+      temporaryPauseReason: selectedStoreOperationalStatus.reason === 'temporary-pause'
+        ? selectedStoreOperationalStatus.temporaryPauseReason || ''
+        : '',
+      allowScheduledOrdersWhenClosed: selectedStore.settings?.allowScheduledOrdersWhenClosed === true,
+    }
+    let payload
+
+    if (selectedStoreOperationalStatus.mode === 'opening_hours') {
+      if (selectedStoreIsOpen) {
+        nextSettings.temporaryPauseUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+        nextSettings.temporaryPauseReason = 'Pausa pelo dashboard'
+        payload = { settings: nextSettings }
+      } else if (selectedStoreOperationalStatus.reason === 'temporary-pause') {
+        nextSettings.temporaryPauseUntil = null
+        nextSettings.temporaryPauseReason = ''
+        payload = { settings: nextSettings }
+      } else {
+        nextSettings.availabilityMode = 'manual'
+        nextSettings.operatingMode = 'manual'
+        nextSettings.temporaryPauseUntil = null
+        nextSettings.temporaryPauseReason = ''
+        payload = {
+          isOpen: true,
+          settings: nextSettings,
+        }
+      }
+    } else {
+      payload = {
+        isOpen: nextStatus,
+      }
+    }
 
     try {
       setStoreActionLoading(true)
       const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
       await updateStoreSettings({
         storeId: storeDocId,
-        payload: {
-          isOpen: nextStatus,
-        },
+        payload,
       })
       showToast('success', nextStatus ? 'Loja aberta. Agora você já pode receber pedidos.' : 'Loja fechada. Novos pedidos ficarão pausados.')
     } catch (error) {
@@ -1630,7 +1683,7 @@ useEffect(() => {
     } finally {
       setStoreActionLoading(false)
     }
-  }, [selectedStore, showToast, storeActionLoading, storeIsDraft, storeIsPaused])
+  }, [selectedStore, selectedStoreIsOpen, selectedStoreOperationalStatus, showToast, storeActionLoading, storeIsDraft, storeIsPaused])
 
   useEffect(() => {
     const uid = user?.uid
@@ -1741,7 +1794,7 @@ useEffect(() => {
     setLoadingOrders(true)
 
     const storeKeys = getStoreKeys(selectedStore)
-    const since = Timestamp.fromDate(new Date(Date.now() - 31 * 86400000))
+    const since = Timestamp.fromDate(new Date(Date.now() - 62 * 86400000))
 
     if (!storeKeys.length) {
       setOrders([])
@@ -1765,8 +1818,13 @@ useEffect(() => {
     }
 
     function updateOrdersFromSnapshot(snapshot) {
-      snapshot.docs.forEach((orderDoc) => {
-        ordersMap.set(orderDoc.id, { id: orderDoc.id, ...orderDoc.data() })
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'removed') {
+          ordersMap.delete(change.doc.id)
+          return
+        }
+
+        ordersMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() })
       })
 
       publishOrders()
@@ -1877,7 +1935,13 @@ subscribeOrders(query(
     const today = new Date()
     const startOfToday = new Date(today).setHours(0, 0, 0, 0)
     const endOfToday = startOfToday + 24 * 60 * 60 * 1000
-    const cutoff = period.days === 0 ? startOfToday : now - period.days * 24 * 60 * 60 * 1000
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime()
+    const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1).getTime()
+    const cutoff = period.days === 0
+      ? startOfToday
+      : period.days === 'current_month'
+      ? currentMonthStart
+      : now - period.days * 24 * 60 * 60 * 1000
 
     const periodOrders = orders.filter((order) => {
       const date = getOrderDate(order)
@@ -1888,8 +1952,8 @@ subscribeOrders(query(
     const revenueOrders = periodOrders.filter(isRevenueOrder)
     const deliveredOrders = periodOrders.filter((order) => FINISHED_STATUSES.includes(normalizeStatus(order.status)))
     const canceledOrders = periodOrders.filter((order) => CANCELED_STATUSES.includes(normalizeStatus(order.status)))
-    const paymentPendingOrders = orders.filter(isPaymentPending)
-    const paymentProblemOrders = orders.filter(isPaymentFailedOrBlocked)
+    const paymentPendingOrders = periodOrders.filter(isPaymentPending)
+    const paymentProblemOrders = periodOrders.filter(isPaymentFailedOrBlocked)
 
     const activeOrders = orders.filter((order) => {
       return isOrderActiveStatus(order.status) && !isPaymentPending(order)
@@ -1935,13 +1999,14 @@ subscribeOrders(query(
     const uniqueCustomers = new Set(nonCanceledOrders.map(getCustomerPhone).filter(Boolean)).size
     const completionRate = nonCanceledOrders.length > 0 ? Math.round((deliveredOrders.length / nonCanceledOrders.length) * 100) : 0
 
-    const periodLengthMs = period.days === 0 ? 24 * 60 * 60 * 1000 : period.days * 24 * 60 * 60 * 1000
-    const previousStart = cutoff - periodLengthMs
+    const periodLengthMs = period.days === 0 ? 24 * 60 * 60 * 1000 : Number(period.days || 0) * 24 * 60 * 60 * 1000
+    const previousStart = period.days === 'current_month' ? previousMonthStart : cutoff - periodLengthMs
+    const previousEnd = period.days === 'current_month' ? currentMonthStart : cutoff
 
     const previousPeriodOrders = orders.filter((order) => {
       const date = getOrderDate(order)
       const time = date?.getTime?.()
-      return time ? time >= previousStart && time < cutoff : false
+      return time ? time >= previousStart && time < previousEnd : false
     })
 
     const previousRevenueOrders = previousPeriodOrders.filter(isRevenueOrder)
@@ -2118,7 +2183,7 @@ subscribeOrders(query(
       }
     }
 
-    if (!isStoreOpen(selectedStore)) {
+    if (!selectedStoreIsOpen) {
       return {
         title: 'Abra sua loja',
         description: 'Sua loja está pronta para receber pedidos.',
@@ -2165,7 +2230,7 @@ subscribeOrders(query(
       href: '/dashboard/stats',
       tone: 'emerald',
     }
-  }, [products, categories, selectedStore, dashboardData, storeIsDraft, storeIsPaused])
+  }, [products, categories, selectedStore, selectedStoreIsOpen, dashboardData, storeIsDraft, storeIsPaused])
 
   const onboardingChecklist = useMemo(() => {
     const totalProducts = Array.isArray(products) ? products.length : 0
@@ -2239,13 +2304,13 @@ subscribeOrders(query(
                         ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/50'
                         : storeIsPaused
                         ? 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
-                        : isStoreOpen(selectedStore)
+                        : selectedStoreIsOpen
                         ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/50'
                         : 'bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-900/50'
                     }`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full bg-current ${!storeIsDraft && !storeIsPaused && isStoreOpen(selectedStore) ? 'animate-pulse' : ''}`} />
-                    {storeIsDraft ? 'Loja em rascunho' : storeIsPaused ? 'Loja pausada' : isStoreOpen(selectedStore) ? 'Loja aberta' : 'Loja fechada'}
+                    <span className={`h-1.5 w-1.5 rounded-full bg-current ${!storeIsDraft && !storeIsPaused && selectedStoreIsOpen ? 'animate-pulse' : ''}`} />
+                    {storeIsDraft ? 'Loja em rascunho' : storeIsPaused ? 'Loja pausada' : selectedStoreIsOpen ? 'Loja aberta' : 'Loja fechada'}
                   </span>
 
                   <span
@@ -2309,7 +2374,7 @@ subscribeOrders(query(
                     onClick={handleToggleStoreOpen}
                     disabled={storeActionLoading}
                     className={`inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl px-4 text-[13px] font-black shadow-sm ring-1 ring-inset transition active:scale-95 disabled:opacity-70 sm:min-w-[140px] ${
-                      isStoreOpen(selectedStore)
+                      selectedStoreIsOpen
                         ? 'bg-red-50 text-red-700 ring-red-200 shadow-red-100/50 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-900/40 dark:hover:bg-red-900/40'
                         : 'bg-emerald-50 text-emerald-700 ring-emerald-200 shadow-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40 dark:hover:bg-emerald-900/40'
                     }`}
@@ -2321,7 +2386,7 @@ subscribeOrders(query(
                         </span>
                         <span className="min-w-[82px] text-center">Atualizando...</span>
                       </>
-                    ) : isStoreOpen(selectedStore) ? (
+                    ) : selectedStoreIsOpen ? (
                       <>
                         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                           <FiPower size={16} />
@@ -2728,7 +2793,7 @@ subscribeOrders(query(
               priceReviewOrders={dashboardData.priceReviewOrders}
               paymentPendingOrders={dashboardData.paymentPendingOrders}
               scheduledLateOrders={dashboardData.scheduledLateOrders}
-              storeOpen={isStoreOpen(selectedStore)}
+              storeOpen={selectedStoreIsOpen}
             />
 
             <div className="mb-6 grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">

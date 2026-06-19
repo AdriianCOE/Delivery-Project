@@ -111,13 +111,13 @@ export function HeroSection() {
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(390px,470px)] lg:gap-14">
-          <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
-            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-orange-100 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 sm:text-xs">
+          <div className="landing-hero-enter mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
+            <div className="landing-reveal inline-flex max-w-full items-center gap-2 rounded-full border border-orange-100 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 sm:text-xs">
               <TrendingUp size={15} className="shrink-0" aria-hidden="true" />
               <span className="truncate">Chega de pagar 27% de comissão</span>
             </div>
 
-            <h1 className="mt-7 text-[2.15rem] font-black leading-[1.02] tracking-tight text-[#111827] min-[380px]:text-[2.35rem] sm:text-6xl lg:text-7xl">
+            <h1 className="landing-reveal landing-delay-2 mt-7 text-[2.15rem] font-black leading-[1.02] tracking-tight text-[#111827] min-[380px]:text-[2.35rem] sm:text-6xl lg:text-7xl">
               <span className="block whitespace-nowrap">Seu cardápio digital.</span>
 
               <span className="block whitespace-nowrap text-[#f97316]">Seu delivery.</span>
@@ -144,12 +144,12 @@ export function HeroSection() {
               </span>
             </h1>
 
-            <p className="mx-auto mt-6 max-w-xl text-base font-semibold leading-8 text-[#64748b] dark:text-zinc-400 sm:text-lg lg:mx-0">
+            <p className="landing-reveal landing-delay-2 mx-auto mt-6 max-w-xl text-base font-semibold leading-8 text-[#64748b] dark:text-zinc-400 sm:text-lg lg:mx-0">
               Crie sua loja online, receba pedidos pelo próprio link e venda sem comissão por
               pedido. Organize entrega, retirada, encomendas e atendimento em um painel simples.
             </p>
 
-            <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="landing-reveal landing-delay-2 mt-6 grid grid-cols-3 gap-2 sm:gap-3">
               {heroBadges.map((item) => {
                 const Icon = item.icon
 
@@ -197,7 +197,7 @@ export function HeroSection() {
               })}
             </div>
 
-            <div className="mt-6 space-y-3 sm:mt-8 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3 sm:space-y-0 lg:justify-start">
+            <div className="landing-reveal landing-delay-2 mt-6 space-y-3 sm:mt-8 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3 sm:space-y-0 lg:justify-start">
               <Link
                 to="/cadastro"
                 className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[1.5rem] bg-[#f97316] px-6 text-base font-black text-white shadow-xl shadow-orange-200 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c] hover:shadow-lg hover:shadow-orange-600/20 active:scale-95 dark:shadow-orange-950/40 sm:w-auto sm:min-w-[240px]"
@@ -224,7 +224,7 @@ export function HeroSection() {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-2 sm:mt-7 sm:flex sm:flex-wrap sm:justify-center sm:gap-3 lg:justify-start">
+            <div className="landing-reveal landing-delay-2 mt-5 grid grid-cols-3 gap-2 sm:mt-7 sm:flex sm:flex-wrap sm:justify-center sm:gap-3 lg:justify-start">
               {trustLinks.map((item) => (
                 <Link
                   key={item.label}
@@ -240,7 +240,7 @@ export function HeroSection() {
               ))}
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:flex sm:flex-wrap sm:justify-center sm:gap-2 lg:justify-start">
+            <div className="landing-reveal landing-delay-2 mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:flex sm:flex-wrap sm:justify-center sm:gap-2 lg:justify-start">
               {proofItems.map((item) => {
                 const Icon = item.icon
 
@@ -260,13 +260,13 @@ export function HeroSection() {
             </div>
           </div>
 
-          <div className="relative mx-auto flex min-h-[520px] w-full max-w-[470px] items-start justify-center lg:mx-0 lg:min-h-[690px] lg:justify-end">
+          <div className="landing-hero-enter landing-delay-2 relative mx-auto flex min-h-[520px] w-full max-w-[470px] items-start justify-center lg:mx-0 lg:min-h-[690px] lg:justify-end">
             <div
               aria-hidden="true"
               className="absolute inset-x-8 top-10 h-72 rounded-full bg-orange-200/35 blur-3xl dark:bg-orange-500/10"
             />
 
-            <div className="relative w-full">
+            <div className="landing-float relative w-full">
               <PhoneMockup />
             </div>
           </div>

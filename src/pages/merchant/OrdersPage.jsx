@@ -636,6 +636,7 @@ function getPaymentStatus(order) {
     proof_sent: 'Comprovante enviado',
     pay_on_delivery: 'A receber na entrega',
     paid: 'Pago',
+    approved: 'Pago',
     confirmed: 'Pago',
     canceled: 'Cancelado',
     cancelled: 'Cancelado',
@@ -704,7 +705,7 @@ function isMercadoPagoOnlineOrder(order) {
 
 function isPaymentPaid(order) {
   const status = getPaymentStatusId(order)
-  const hasPaidStatus = ['paid', 'confirmed', 'pago'].includes(status)
+  const hasPaidStatus = ['paid', 'approved', 'confirmed', 'pago'].includes(status)
   const hasConfirmationTime = Boolean(
     order?.payment?.confirmedAt ||
       order?.payment?.paidAt ||

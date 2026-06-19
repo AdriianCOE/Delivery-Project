@@ -3,8 +3,6 @@ const crypto = require('crypto')
 const {
   MercadoPagoConfig,
   Preference,
-  Payment,
-  WebhookSignatureValidator,
 } = require('mercadopago')
 
 const PROVIDER = 'mercadopago'
@@ -512,6 +510,52 @@ async function resolveAccessToken({ db, storeId, storeData, accessTokenTestSecre
   throw error
 }
 
+async function resolvePaymentLookupToken({
+  db,
+  storeId,
+  storeData,
+  accessTokenTestSecret,
+  accessTokenProdSecret,
+  preferProduction = true,
+  logger,
+}) {
+  const safeStoreId = String(storeId || '').trim()
+  if (safeStoreId && storeData) {
+    try {
+      return await resolveAccessToken({
+        db,
+        storeId: safeStoreId,
+        storeData,
+        accessTokenTestSecret,
+        accessTokenProdSecret,
+      })
+    } catch (error) {
+      logger?.warn?.('[mercadoPagoOrders] store token lookup failed, trying global token', {
+        storeId: safeStoreId,
+        reason: error?.code || error?.message || String(error),
+      })
+    }
+  }
+
+  const prodToken = getSecretValue(accessTokenProdSecret, 'MERCADOPAGO_ACCESS_TOKEN_PROD')
+  if (preferProduction && prodToken) {
+    return { accessToken: prodToken, environment: 'production', source: 'production_secret' }
+  }
+
+  const testToken = getSecretValue(accessTokenTestSecret, 'MERCADOPAGO_ACCESS_TOKEN_TEST')
+  if (testToken) {
+    return { accessToken: testToken, environment: 'sandbox', source: 'sandbox_secret' }
+  }
+
+  if (prodToken) {
+    return { accessToken: prodToken, environment: 'production', source: 'production_secret' }
+  }
+
+  const error = new Error('Token Mercado Pago indisponivel para reconciliacao.')
+  error.code = 'failed-precondition'
+  throw error
+}
+
 async function assertMercadoPagoOrderCheckoutConfigured({
   db,
   storeId,
@@ -692,11 +736,11 @@ function buildWebhookPaymentPatch({ admin, payment, orderData }) {
   const now = admin.firestore.FieldValue.serverTimestamp()
   const nextStatus = mapMercadoPagoPaymentStatus(payment)
   const paid = nextStatus === 'paid'
-  const currentStatus = normalizeText(orderData?.status)
-  const canReleaseOrder = paid && !['cancelado', 'canceled', 'cancelled', 'entregue', 'delivered'].includes(currentStatus)
   const paidAmountCents = toCents(Number(payment.transaction_amount || 0) * 100)
   const expectedAmountCents = toCents(orderData.totalCents || orderData.payment?.amountCents)
-  const amountMatches = paidAmountCents === expectedAmountCents
+  const amountMatches = !expectedAmountCents || paidAmountCents === expectedAmountCents
+  const providerStatus = normalizeText(payment.status || nextStatus)
+  const providerPaymentId = String(payment.id || '')
 
   if (paid && !amountMatches) {
     return stripUndefinedDeep({
@@ -707,9 +751,18 @@ function buildWebhookPaymentPatch({ admin, payment, orderData }) {
         status: 'amount_mismatch',
         provider: PROVIDER,
         mode: ONLINE_MODE,
-        providerPaymentId: String(payment.id || ''),
+        providerPaymentId,
+        lastProviderStatus: providerStatus,
         grossAmountCents: paidAmountCents,
         amountMismatchAt: now,
+        lastCheckedAt: now,
+        updatedAt: now,
+      },
+      mercadoPago: {
+        ...(orderData.mercadoPago || {}),
+        paymentId: providerPaymentId,
+        status: 'amount_mismatch',
+        lastProviderStatus: providerStatus,
         updatedAt: now,
       },
     })
@@ -720,28 +773,28 @@ function buildWebhookPaymentPatch({ admin, payment, orderData }) {
     paymentRequiresConfirmation: false,
     operationalBlockedReason: paid ? null : undefined,
     updatedAt: now,
-    ...(canReleaseOrder ? {
-      status: 'confirmado',
-      confirmedAt: now,
-      paymentConfirmedAt: now,
-      paidAt: now,
-    } : {}),
+    paidAt: paid ? now : undefined,
+    paymentConfirmedAt: paid ? now : undefined,
     mercadoPago: {
       ...(orderData.mercadoPago || {}),
-      paymentId: String(payment.id || ''),
+      paymentId: providerPaymentId,
+      status: providerStatus,
       paymentStatus: nextStatus,
+      lastProviderStatus: providerStatus,
       paymentMethodId: payment.payment_method_id || null,
       paymentTypeId: payment.payment_type_id || null,
       installments: payment.installments || null,
+      lastCheckedAt: now,
       updatedAt: now,
     },
     payment: {
       ...(orderData.payment || {}),
-      status: nextStatus,
+      status: paid ? 'approved' : nextStatus,
       provider: PROVIDER,
       mode: ONLINE_MODE,
       method: 'mercadopago_online',
-      providerPaymentId: String(payment.id || ''),
+      providerPaymentId,
+      lastProviderStatus: providerStatus,
       paymentMethodId: payment.payment_method_id || null,
       paymentTypeId: payment.payment_type_id || null,
       installments: payment.installments || null,
@@ -751,11 +804,96 @@ function buildWebhookPaymentPatch({ admin, payment, orderData }) {
       grossAmountCents: paidAmountCents || undefined,
       paidAt: paid ? now : undefined,
       confirmedAt: paid ? now : undefined,
+      lastCheckedAt: now,
       failedAt: nextStatus === 'failed' ? now : undefined,
       refundedAt: nextStatus === 'refunded' ? now : undefined,
       chargedBackAt: nextStatus === 'charged_back' ? now : undefined,
       updatedAt: now,
     },
+  })
+}
+
+async function applyMercadoPagoPaymentToOrder({
+  db,
+  admin,
+  orderMatch,
+  payment,
+  body = {},
+  query = {},
+}) {
+  const orderRef = orderMatch?.ref
+  if (!orderRef || !payment?.id) return { ignored: true, reason: 'missing_order_or_payment' }
+
+  const paymentId = String(payment.id || '')
+  const eventId = safeDocId(`${paymentId}_${payment.status || body.action || 'payment'}`)
+  const eventRef = orderRef.collection('paymentEvents').doc(`mercadopago_${eventId}`)
+
+  return db.runTransaction(async (transaction) => {
+    const eventSnapshot = await transaction.get(eventRef)
+    const now = admin.firestore.Timestamp.now()
+    if (eventSnapshot.exists && ['processed', 'ignored'].includes(eventSnapshot.data()?.status)) {
+      return {
+        duplicate: true,
+        orderId: orderRef.id,
+        paymentStatus: eventSnapshot.data()?.paymentStatus || null,
+      }
+    }
+
+    const latestOrderSnapshot = await transaction.get(orderRef)
+    if (!latestOrderSnapshot.exists) return { ignored: true, reason: 'order_not_found' }
+    const latestOrderData = latestOrderSnapshot.data() || {}
+    if (latestOrderData.payment?.provider !== PROVIDER || latestOrderData.payment?.mode !== ONLINE_MODE) {
+      transaction.set(eventRef, {
+        provider: PROVIDER,
+        status: 'ignored',
+        ignoreReason: 'order_not_mercadopago_online',
+        paymentId,
+        receivedAt: now,
+        processedAt: now,
+      }, { merge: true })
+      return { ignored: true, reason: 'order_not_mercadopago_online', orderId: orderRef.id }
+    }
+
+    const paymentStatus = mapMercadoPagoPaymentStatus(payment)
+    const patch = buildWebhookPaymentPatch({ admin, payment, orderData: latestOrderData })
+    const releasePatch = await releaseScheduledSlotForOrderPaymentInTransaction({
+      db,
+      admin,
+      transaction,
+      orderRef,
+      orderData: latestOrderData,
+      paymentStatus,
+    })
+
+    transaction.set(eventRef, stripUndefinedDeep({
+      provider: PROVIDER,
+      scope: 'order_payment',
+      status: 'processed',
+      eventId,
+      paymentId,
+      paymentStatus,
+      providerStatus: payment.status || null,
+      externalReference: payment.external_reference || null,
+      preferenceId: payment.preference_id || payment.order?.id || null,
+      receivedAt: eventSnapshot.exists ? eventSnapshot.data()?.receivedAt || now : now,
+      processedAt: now,
+      raw: {
+        action: body.action || null,
+        type: body.type || null,
+        data: body.data || null,
+        queryStoreId: query.storeId || null,
+        queryOrderId: query.orderId || null,
+      },
+    }), { merge: true })
+    transaction.set(orderRef, { ...patch, ...releasePatch }, { merge: true })
+
+    return {
+      processed: true,
+      orderId: orderRef.id,
+      storeId: String(latestOrderData.storeDocId || latestOrderData.storeId || ''),
+      paymentStatus: patch.paymentStatus || paymentStatus,
+      providerStatus: payment.status || null,
+    }
   })
 }
 
@@ -768,6 +906,203 @@ function getWebhookPaymentId(request, body) {
       body?.resource ||
       ''
   ).replace(/^.*\/payments\//, '').trim()
+}
+
+function parseMercadoPagoSignatureHeader(value) {
+  return String(value || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const [key, ...rest] = part.split('=')
+      const normalizedKey = String(key || '').trim()
+      const normalizedValue = rest.join('=').trim()
+      if (normalizedKey && normalizedValue) acc[normalizedKey] = normalizedValue
+      return acc
+    }, {})
+}
+
+function timingSafeEqualHex(left, right) {
+  const leftBuffer = Buffer.from(String(left || ''), 'hex')
+  const rightBuffer = Buffer.from(String(right || ''), 'hex')
+  if (leftBuffer.length === 0 || leftBuffer.length !== rightBuffer.length) return false
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+function validateMercadoPagoWebhookSignature({
+  xSignature,
+  xRequestId,
+  dataId,
+  secret,
+  nowMs = Date.now(),
+  toleranceSeconds = 300,
+}) {
+  const signature = parseMercadoPagoSignatureHeader(xSignature)
+  const ts = String(signature.ts || '').trim()
+  const v1 = String(signature.v1 || '').trim()
+  const requestId = String(xRequestId || '').trim()
+  const paymentId = String(dataId || '').trim()
+  const secretValue = String(secret || '').trim()
+
+  if (!secretValue) return { ok: false, reason: 'missing_secret' }
+  if (!ts || !v1) return { ok: false, reason: 'missing_signature_parts' }
+  if (!requestId) return { ok: false, reason: 'missing_request_id' }
+  if (!paymentId) return { ok: false, reason: 'missing_data_id' }
+
+  const timestampMs = Number(ts) * 1000
+  if (!Number.isFinite(timestampMs)) return { ok: false, reason: 'invalid_timestamp' }
+  if (toleranceSeconds > 0 && Math.abs(nowMs - timestampMs) > toleranceSeconds * 1000) {
+    return { ok: false, reason: 'signature_expired' }
+  }
+
+  const manifest = `id:${paymentId};request-id:${requestId};ts:${ts};`
+  const expected = crypto
+    .createHmac('sha256', secretValue)
+    .update(manifest)
+    .digest('hex')
+
+  return timingSafeEqualHex(expected, v1)
+    ? { ok: true, reason: 'valid' }
+    : { ok: false, reason: 'signature_mismatch' }
+}
+
+async function fetchMercadoPagoPayment({ paymentId, accessToken }) {
+  const id = String(paymentId || '').trim()
+  const token = String(accessToken || '').trim()
+  if (!id) {
+    const error = new Error('Payment id Mercado Pago obrigatorio.')
+    error.code = 'invalid-argument'
+    throw error
+  }
+  if (!token) {
+    const error = new Error('Token Mercado Pago indisponivel.')
+    error.code = 'failed-precondition'
+    throw error
+  }
+
+  const response = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    const error = new Error(payload?.message || payload?.error || 'Falha ao consultar pagamento Mercado Pago.')
+    error.code = response.status === 404 ? 'not-found' : 'failed-precondition'
+    error.status = response.status
+    error.payload = payload
+    throw error
+  }
+
+  return payload || {}
+}
+
+async function findOrderSnapshotByDocId(db, orderId) {
+  const id = String(orderId || '').trim()
+  if (!id) return null
+  const snapshot = await db.collection('orders').doc(id).get()
+  return snapshot.exists ? { ref: snapshot.ref, snapshot, data: snapshot.data() || {}, source: 'doc_id' } : null
+}
+
+async function findFirstOrderByField(db, field, value) {
+  const cleanValue = String(value || '').trim()
+  if (!cleanValue) return null
+  const snapshot = await db.collection('orders').where(field, '==', cleanValue).limit(1).get()
+  if (snapshot.empty) return null
+  const docSnapshot = snapshot.docs[0]
+  return {
+    ref: docSnapshot.ref,
+    snapshot: docSnapshot,
+    data: docSnapshot.data() || {},
+    source: field,
+  }
+}
+
+async function findMercadoPagoOrderSnapshot({
+  db,
+  payment = {},
+  body = {},
+  query = {},
+  hints = {},
+}) {
+  const externalReferences = uniqueTruthy([
+    payment.external_reference,
+    payment.externalReference,
+    hints.externalReference,
+    query.external_reference,
+    body.external_reference,
+    body.externalReference,
+  ])
+  const parsedReferences = externalReferences.map(parseMercadoPagoExternalReference)
+  const trackingTokens = uniqueTruthy([
+    hints.trackingToken,
+    query.trackingToken,
+    body.trackingToken,
+    payment.metadata?.trackingToken,
+    ...parsedReferences.map((reference) => reference.orderId),
+  ])
+  const orderIds = uniqueTruthy([
+    hints.orderId,
+    query.orderId,
+    body.orderId,
+    payment.metadata?.orderId,
+    ...trackingTokens,
+  ])
+
+  for (const orderId of orderIds) {
+    const match = await findOrderSnapshotByDocId(db, orderId)
+    if (match) return match
+  }
+
+  for (const externalReference of externalReferences) {
+    const match =
+      await findFirstOrderByField(db, 'payment.externalReference', externalReference) ||
+      await findFirstOrderByField(db, 'mercadoPago.externalReference', externalReference)
+    if (match) return match
+  }
+
+  for (const trackingToken of trackingTokens) {
+    const match = await findFirstOrderByField(db, 'trackingToken', trackingToken)
+    if (match) return match
+  }
+
+  const preferenceIds = uniqueTruthy([
+    hints.preferenceId,
+    query.preference_id,
+    query.preferenceId,
+    body.preference_id,
+    body.preferenceId,
+    payment.preference_id,
+    payment.preferenceId,
+    payment.metadata?.preferenceId,
+    payment.order?.id,
+  ])
+  for (const preferenceId of preferenceIds) {
+    const match =
+      await findFirstOrderByField(db, 'mercadoPago.preferenceId', preferenceId) ||
+      await findFirstOrderByField(db, 'payment.providerPreferenceId', preferenceId) ||
+      await findFirstOrderByField(db, 'payment.preferenceId', preferenceId)
+    if (match) return match
+  }
+
+  const paymentIds = uniqueTruthy([
+    hints.paymentId,
+    query.payment_id,
+    query.collection_id,
+    body.payment_id,
+    body.collection_id,
+    payment.id,
+  ])
+  for (const paymentId of paymentIds) {
+    const match =
+      await findFirstOrderByField(db, 'payment.providerPaymentId', paymentId) ||
+      await findFirstOrderByField(db, 'mercadoPago.paymentId', paymentId)
+    if (match) return match
+  }
+
+  return null
 }
 
 function createMercadoPagoOrderFunctions({
@@ -1084,6 +1419,112 @@ function createMercadoPagoOrderFunctions({
     }
   )
 
+  const reconcileMercadoPagoOrderPayment = onCall(
+    {
+      region,
+      timeoutSeconds: 60,
+      memory: '256MiB',
+      maxInstances: 10,
+      secrets: [accessTokenTestSecret, accessTokenProdSecret],
+    },
+    async (request) => {
+      const data = request.data || {}
+      const trackingToken = String(data.trackingToken || '').trim()
+      const storeId = String(data.storeId || '').trim()
+      const storeSlug = String(data.storeSlug || '').trim()
+      const paymentId = String(data.paymentId || data.payment_id || data.collection_id || '').trim()
+      const preferenceId = String(data.preferenceId || data.preference_id || '').trim()
+      const externalReference = String(data.externalReference || data.external_reference || '').trim()
+
+      if (!trackingToken || !/^[A-Za-z0-9_-]{8,180}$/.test(trackingToken)) {
+        throw new HttpsError('invalid-argument', 'Token de acompanhamento invalido.')
+      }
+
+      const orderMatch = await findMercadoPagoOrderSnapshot({
+        db,
+        payment: {
+          id: paymentId,
+          external_reference: externalReference,
+          preference_id: preferenceId,
+        },
+        query: {
+          storeId,
+          storeSlug,
+        },
+        hints: {
+          trackingToken,
+          paymentId,
+          preferenceId,
+          externalReference,
+        },
+      })
+
+      if (!orderMatch) throw new HttpsError('not-found', 'Pedido nao encontrado.')
+
+      const orderData = orderMatch.data || {}
+      if (String(orderData.trackingToken || '') !== trackingToken) {
+        throw new HttpsError('permission-denied', 'Token de acompanhamento invalido.')
+      }
+
+      const orderStoreKeys = uniqueTruthy([
+        orderData.storeId,
+        orderData.storeDocId,
+        orderData.storeSlug,
+        orderData.store?.id,
+        orderData.store?.docId,
+        orderData.store?.slug,
+      ])
+      const requestedStoreKeys = uniqueTruthy([storeId, storeSlug])
+      if (requestedStoreKeys.length > 0 && !requestedStoreKeys.some((key) => orderStoreKeys.includes(key))) {
+        throw new HttpsError('permission-denied', 'Pedido nao pertence a esta loja.')
+      }
+
+      const finalPaymentId = paymentId || orderData.payment?.providerPaymentId || orderData.mercadoPago?.paymentId || ''
+      if (!finalPaymentId) {
+        return {
+          ok: true,
+          reconciled: false,
+          orderId: orderMatch.ref.id,
+          paymentStatus: orderData.paymentStatus || orderData.payment?.status || 'pending_payment',
+          reason: 'missing_payment_id',
+        }
+      }
+
+      const finalStoreId = String(orderData.storeDocId || orderData.storeId || storeId || '').trim()
+      const storeSnapshot = finalStoreId ? await db.collection('stores').doc(finalStoreId).get() : null
+      const storeData = storeSnapshot?.exists ? storeSnapshot.data() || {} : null
+      const token = await resolvePaymentLookupToken({
+        db,
+        storeId: finalStoreId,
+        storeData,
+        accessTokenTestSecret,
+        accessTokenProdSecret,
+        preferProduction: true,
+        logger,
+      })
+      const payment = await fetchMercadoPagoPayment({
+        paymentId: finalPaymentId,
+        accessToken: token.accessToken,
+      })
+      const result = await applyMercadoPagoPaymentToOrder({
+        db,
+        admin,
+        orderMatch,
+        payment,
+        body: { action: 'manual_reconcile', type: 'payment' },
+        query: { storeId: finalStoreId, orderId: orderMatch.ref.id },
+      })
+
+      return {
+        ok: true,
+        reconciled: Boolean(result.processed || result.duplicate),
+        tokenSource: token.source,
+        providerStatus: payment.status || null,
+        ...result,
+      }
+    }
+  )
+
   const mercadoPagoOrderWebhook = onRequest(
     {
       region,
@@ -1099,48 +1540,73 @@ function createMercadoPagoOrderFunctions({
       }
 
       const body = request.body && typeof request.body === 'object' ? request.body : {}
+      const query = request.query || {}
       const paymentId = getWebhookPaymentId(request, body)
-      const orderIdFromQuery = String(request.query.orderId || '').trim()
-      const storeIdFromQuery = String(request.query.storeId || '').trim()
-        if (isMercadoPagoSimulatorPayload(request, body)) {
-          logger?.info?.('[mercadoPagoOrders] webhook simulator ping accepted', {
-            paymentId,
-            action: body.action || null,
-            type: body.type || null,
-          })
+      const orderIdFromQuery = String(query.orderId || '').trim()
+      const storeIdFromQuery = String(query.storeId || '').trim()
+      const xSignature = request.get('x-signature')
+      const xRequestId = request.get('x-request-id')
 
-          response.status(200).json({
-            ok: true,
-            simulator: true,
-            ignored: true,
-            reason: 'mercadopago_simulator_payload',
-          })
-          return
-        }
+      logger?.info?.('[mercadoPagoOrders] webhook received', {
+        action: body.action || null,
+        type: body.type || null,
+        paymentId: paymentId || null,
+        hasSignature: Boolean(xSignature),
+        hasRequestId: Boolean(xRequestId),
+        liveMode: body.live_mode ?? null,
+      })
+
       const webhookSecretValue = getSecretValue(webhookSecret, 'MERCADOPAGO_WEBHOOK_SECRET')
+      const allowUnsignedWebhook =
+        process.env.FUNCTIONS_EMULATOR === 'true' &&
+        process.env.ALLOW_MERCADOPAGO_UNSIGNED_WEBHOOKS === 'true'
 
-      if (!webhookSecretValue && process.env.FUNCTIONS_EMULATOR !== 'true') {
-        logger?.error?.('[mercadoPagoOrders] webhook rejected: MERCADOPAGO_WEBHOOK_SECRET not configured')
+      if (!webhookSecretValue && !allowUnsignedWebhook) {
+        logger?.error?.('[mercadoPagoOrders] webhook rejected', {
+          reason: 'webhook_secret_not_configured',
+          paymentId: paymentId || null,
+        })
         response.status(401).json({ ok: false, error: 'webhook_not_configured' })
         return
       }
 
       if (webhookSecretValue) {
-        try {
-          WebhookSignatureValidator.validate({
-            xSignature: request.get('x-signature'),
-            xRequestId: request.get('x-request-id'),
-            dataId: paymentId,
-            secret: webhookSecretValue,
-            toleranceSeconds: 300,
+        const signatureResult = validateMercadoPagoWebhookSignature({
+          xSignature,
+          xRequestId,
+          dataId: paymentId,
+          secret: webhookSecretValue,
+          toleranceSeconds: 300,
+        })
+        logger?.info?.('[mercadoPagoOrders] webhook signature validation completed', {
+          paymentId: paymentId || null,
+          valid: signatureResult.ok,
+          reason: signatureResult.reason,
+        })
+        if (!signatureResult.ok) {
+          logger?.warn?.('[mercadoPagoOrders] webhook rejected', {
+            reason: signatureResult.reason,
+            paymentId: paymentId || null,
+            hasSignature: Boolean(xSignature),
+            hasRequestId: Boolean(xRequestId),
           })
-        } catch (signatureError) {
-          logger?.warn?.('[mercadoPagoOrders] webhook rejected: invalid signature', {
-            reason: signatureError?.reason || signatureError?.message || String(signatureError),
-          })
-          response.status(401).json({ ok: false, error: 'invalid_signature' })
+          response.status(401).json({ ok: false, error: 'invalid_signature', reason: signatureResult.reason })
           return
         }
+      } else if (isMercadoPagoSimulatorPayload(request, body)) {
+        logger?.info?.('[mercadoPagoOrders] webhook simulator ping accepted', {
+          paymentId,
+          action: body.action || null,
+          type: body.type || null,
+        })
+
+        response.status(200).json({
+          ok: true,
+          simulator: true,
+          ignored: true,
+          reason: 'mercadopago_simulator_payload',
+        })
+        return
       }
 
       if (!paymentId) {
@@ -1149,103 +1615,70 @@ function createMercadoPagoOrderFunctions({
       }
 
       try {
-        const orderRef = orderIdFromQuery ? db.collection('orders').doc(orderIdFromQuery) : null
-        const orderSnapshot = orderRef ? await orderRef.get() : null
-        if (!orderSnapshot?.exists) {
+        let storeDataForToken = null
+        if (storeIdFromQuery) {
+          const storeSnapshot = await db.collection('stores').doc(storeIdFromQuery).get()
+          storeDataForToken = storeSnapshot.exists ? storeSnapshot.data() || {} : null
+        }
+
+        let token = await resolvePaymentLookupToken({
+          db,
+          storeId: storeIdFromQuery,
+          storeData: storeDataForToken,
+          accessTokenTestSecret,
+          accessTokenProdSecret,
+          preferProduction: body.live_mode !== false,
+          logger,
+        })
+        let payment
+        try {
+          payment = await fetchMercadoPagoPayment({ paymentId, accessToken: token.accessToken })
+        } catch (fetchError) {
+          if ((fetchError.status === 401 || fetchError.status === 403) && token.source === 'oauth') {
+            token = await resolvePaymentLookupToken({
+              db,
+              storeId: '',
+              storeData: null,
+              accessTokenTestSecret,
+              accessTokenProdSecret,
+              preferProduction: body.live_mode !== false,
+              logger,
+            })
+            payment = await fetchMercadoPagoPayment({ paymentId, accessToken: token.accessToken })
+          } else {
+            throw fetchError
+          }
+        }
+
+        logger?.info?.('[mercadoPagoOrders] payment fetched', {
+          paymentId,
+          status: payment.status || null,
+          tokenSource: token.source,
+          liveMode: payment.live_mode ?? null,
+        })
+
+        const orderMatch = await findMercadoPagoOrderSnapshot({
+          db,
+          payment,
+          body,
+          query,
+          hints: {
+            orderId: orderIdFromQuery,
+            paymentId,
+          },
+        })
+        if (!orderMatch) {
           response.status(202).json({ ok: true, ignored: true, reason: 'order_not_found' })
           return
         }
 
-        const orderData = orderSnapshot.data() || {}
-        const storeId = String(orderData.storeDocId || orderData.storeId || storeIdFromQuery || '').trim()
-        const storeSnapshot = await db.collection('stores').doc(storeId).get()
-        if (!storeSnapshot.exists) {
-          response.status(202).json({ ok: true, ignored: true, reason: 'store_not_found' })
-          return
-        }
-
-        const token = await resolveAccessToken({
+        const result = await applyMercadoPagoPaymentToOrder({
           db,
-          storeId,
-          storeData: storeSnapshot.data() || {},
-          accessTokenTestSecret,
-          accessTokenProdSecret,
-        })
-        const paymentClient = new Payment(createMercadoPagoClient(token.accessToken))
-        const payment = await paymentClient.get({ id: paymentId })
-        const reference = parseMercadoPagoExternalReference(payment.external_reference || orderData.payment?.externalReference)
-
-        if (reference.storeId && reference.storeId !== safeDocId(storeId)) {
-          response.status(202).json({ ok: true, ignored: true, reason: 'store_reference_mismatch' })
-          return
-        }
-
-        if (reference.orderId && reference.orderId !== orderSnapshot.id && reference.orderId !== orderData.trackingToken) {
-          response.status(202).json({ ok: true, ignored: true, reason: 'order_reference_mismatch' })
-          return
-        }
-
-        const eventId = safeDocId(`${paymentId}_${payment.status || body.action || 'payment'}`)
-        const eventRef = orderRef.collection('paymentEvents').doc(`mercadopago_${eventId}`)
-        const result = await db.runTransaction(async (transaction) => {
-          const eventSnapshot = await transaction.get(eventRef)
-          const now = admin.firestore.Timestamp.now()
-          if (eventSnapshot.exists && ['processed', 'ignored'].includes(eventSnapshot.data()?.status)) {
-            return { duplicate: true }
-          }
-
-          const latestOrderSnapshot = await transaction.get(orderRef)
-          if (!latestOrderSnapshot.exists) return { ignored: true, reason: 'order_not_found' }
-          const latestOrderData = latestOrderSnapshot.data() || {}
-          if (latestOrderData.payment?.provider !== PROVIDER || latestOrderData.payment?.mode !== ONLINE_MODE) {
-            transaction.set(eventRef, {
-              provider: PROVIDER,
-              status: 'ignored',
-              ignoreReason: 'order_not_mercadopago_online',
-              paymentId,
-              receivedAt: now,
-              processedAt: now,
-            }, { merge: true })
-            return { ignored: true, reason: 'order_not_mercadopago_online' }
-          }
-
-          const paymentStatus = mapMercadoPagoPaymentStatus(payment)
-          const patch = buildWebhookPaymentPatch({ admin, payment, orderData: latestOrderData })
-          const releasePatch = await releaseScheduledSlotForOrderPaymentInTransaction({
-            db,
-            admin,
-            transaction,
-            orderRef,
-            orderData: latestOrderData,
-            paymentStatus,
-          })
-
-          transaction.set(eventRef, stripUndefinedDeep({
-            provider: PROVIDER,
-            scope: 'order_payment',
-            status: 'processed',
-            eventId,
-            paymentId,
-            paymentStatus,
-            externalReference: payment.external_reference || null,
-            receivedAt: eventSnapshot.exists ? eventSnapshot.data()?.receivedAt || now : now,
-            processedAt: now,
-            raw: {
-              action: body.action || null,
-              type: body.type || null,
-              data: body.data || null,
-              queryStoreId: storeIdFromQuery || null,
-              queryOrderId: orderIdFromQuery || null,
-            },
-          }), { merge: true })
-          transaction.set(orderRef, { ...patch, ...releasePatch }, { merge: true })
-
-          return {
-            processed: true,
-            orderId: orderRef.id,
-            storeId,
-            paymentStatus: patch.paymentStatus || paymentStatus,
-          }
+          admin,
+          orderMatch,
+          payment,
+          body,
+          query,
         })
 
         if (result.processed && result.paymentStatus === 'paid' && typeof sendNewOrderPushToStore === 'function') {
@@ -1277,6 +1710,7 @@ function createMercadoPagoOrderFunctions({
     mercadoPagoOAuthCallback,
     disconnectMercadoPago,
     createMercadoPagoOrderPayment,
+    reconcileMercadoPagoOrderPayment,
     mercadoPagoOrderWebhook,
   }
 }
@@ -1285,6 +1719,7 @@ module.exports = {
   BLOCKED_REASON,
   ONLINE_MODE,
   PROVIDER,
+  buildWebhookPaymentPatch,
   assertMercadoPagoOrderCheckoutConfigured,
   buildMercadoPagoExternalReference,
   buildMercadoPagoPreferencePayload: buildPreferencePayload,
@@ -1292,6 +1727,8 @@ module.exports = {
   buildMercadoPagoPreferenceFailurePatch,
   createMercadoPagoOrderFunctions,
   createMercadoPagoPreference,
+  getWebhookPaymentId,
+  findMercadoPagoOrderSnapshot,
   isMercadoPagoOnlineActive,
   isMercadoPagoOnlinePaymentRequest,
   mapMercadoPagoPaymentStatus,
@@ -1299,4 +1736,6 @@ module.exports = {
   normalizePreorderPolicy,
   orderRequiresMercadoPagoOnline,
   parseMercadoPagoExternalReference,
+  parseMercadoPagoSignatureHeader,
+  validateMercadoPagoWebhookSignature,
 }

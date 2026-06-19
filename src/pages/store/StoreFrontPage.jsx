@@ -1,5 +1,6 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AnimatePresence } from 'motion/react'
 import SEO from '../../components/seo/SEO'
 import {
   collection,
@@ -38,6 +39,7 @@ import {
 
 import { db, functions } from '../../services/firebase'
 import { useCart } from '../../contexts/CartContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 import ProductCard from './ProductCard'
 import {
@@ -760,6 +762,7 @@ function getUserStoreKeys(user) {
     user.storeId,
     user.storeSlug,
     user.storeDocId,
+    user.slug,
     ...(Array.isArray(user.storeIds) ? user.storeIds : []),
     ...(Array.isArray(user.storeKeys) ? user.storeKeys : []),
   ])
@@ -1909,6 +1912,7 @@ export default function StoreFrontPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
   const { cartItems, cartTotal, setStoreKey } = useCart()
+  const authContext = useAuth()
 
   const [isFavorite, setIsFavorite] = useState(false)
   const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -1938,8 +1942,28 @@ export default function StoreFrontPage() {
   const manualCategoryScrollTimeoutRef = useRef(null)
   const [copyMessage, setCopyMessage] = useState('')
 
-  const isOwner = false
-  const canPreviewUnavailableStore = false
+  const storefrontEditorUser = useMemo(() => {
+    if (!authContext?.user && !authContext?.userData && !authContext?.firebaseUser) return null
+
+    return {
+      ...(authContext.user || {}),
+      ...(authContext.userData || {}),
+      uid: authContext.firebaseUser?.uid || authContext.user?.uid || authContext.userData?.uid || '',
+      role: authContext.role || authContext.userData?.role || authContext.user?.role || '',
+      storeId: authContext.storeId || authContext.userData?.storeId || authContext.user?.storeId || '',
+      storeIds: uniqueTruthy([
+        ...(Array.isArray(authContext.storeIds) ? authContext.storeIds : []),
+        ...(Array.isArray(authContext.userData?.storeIds) ? authContext.userData.storeIds : []),
+        ...(Array.isArray(authContext.user?.storeIds) ? authContext.user.storeIds : []),
+      ]),
+    }
+  }, [authContext])
+
+  const isOwner = useMemo(
+    () => canEditStorefront(storefrontEditorUser, storeData, slug),
+    [slug, storeData, storefrontEditorUser]
+  )
+  const canPreviewUnavailableStore = isOwner
 
   const [statusTick, setStatusTick] = useState(() => Date.now())
 
@@ -2841,14 +2865,17 @@ return (
           <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} store={store} />
         )}
 
-        {isProfileOpen && (
-          <CustomerDrawer
-            isOpen={isProfileOpen}
-            onClose={() => setIsProfileOpen(false)}
-            products={availableProducts}
-            store={store}
-          />
-        )}
+        <AnimatePresence>
+          {isProfileOpen && (
+            <CustomerDrawer
+              key="customer-drawer"
+              isOpen={isProfileOpen}
+              onClose={() => setIsProfileOpen(false)}
+              products={availableProducts}
+              store={store}
+            />
+          )}
+        </AnimatePresence>
       </Suspense>
       <StoreHeader store={store} isOwner={isOwner} />
 
@@ -2888,7 +2915,7 @@ return (
 
       {shouldShowCategoryNav && (
         <section
-          className={`sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
+          className={`storefront-category-nav sticky z-30 mt-4 px-3 py-2.5 backdrop-blur-xl sm:px-4 ${
             isOwner ? 'top-[44px]' : 'top-0'
           }`}
         >
@@ -2975,7 +3002,8 @@ return (
             {featuredProducts.length > 0 && activeCategory === 'all' && !searchTerm && (
               <section
                 id="category-destaques"
-                className="mb-8 lg:mb-10"
+                className="storefront-section-reveal mb-8 lg:mb-10"
+                style={{ '--storefront-section-index': 0 }}
               >
                 <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                   <div>
@@ -2995,8 +3023,12 @@ return (
                 </div>
 
                 <div className="grid auto-rows-fr gap-4 md:grid-cols-2 lg:gap-5 xl:grid-cols-3">
-                  {featuredProducts.map((product) => (
-                    <div key={`featured-${product.id}`} className="relative">
+                  {featuredProducts.map((product, productIndex) => (
+                    <div
+                      key={`featured-${product.id}`}
+                      className="storefront-product-reveal relative"
+                      style={{ '--storefront-item-index': Math.min(productIndex, 8) }}
+                    >
                       <div
                         className={`h-full ${
                           orderingBlockedOnStorefront
@@ -3033,13 +3065,19 @@ return (
                   (featuredProducts.length > 0 && activeCategory === 'all' && !searchTerm ? 1 : 0) +
                   sectionIndex
                 const deferSectionRendering = visibleSectionsBeforeCategory >= 2
+                const sectionStyle = {
+                  '--storefront-section-index': Math.min(visibleSectionsBeforeCategory, 4),
+                  ...(deferSectionRendering
+                    ? { contentVisibility: 'auto', containIntrinsicSize: '0 520px' }
+                    : {}),
+                }
 
                 return (
                 <section
                   key={section.id}
                   id={`category-${section.id}`}
-                  className="scroll-mt-28 mb-8 lg:mb-10"
-                  style={deferSectionRendering ? { contentVisibility: 'auto', containIntrinsicSize: '0 520px' } : undefined}
+                  className="storefront-section-reveal scroll-mt-28 mb-8 lg:mb-10"
+                  style={sectionStyle}
                 >
                   <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
                     <div>
@@ -3059,8 +3097,12 @@ return (
                   </div>
 
                   <div className="grid auto-rows-fr gap-4 md:grid-cols-2 lg:gap-5 xl:grid-cols-3">
-                    {section.products.map((product) => (
-                      <div key={product.id} className="relative h-full">
+                    {section.products.map((product, productIndex) => (
+                      <div
+                        key={product.id}
+                        className="storefront-product-reveal relative h-full"
+                        style={{ '--storefront-item-index': Math.min(productIndex, 8) }}
+                      >
                         <div
                           className={`h-full ${
                             orderingBlockedOnStorefront

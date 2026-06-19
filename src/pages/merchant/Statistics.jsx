@@ -142,7 +142,20 @@ function normalizePaymentStatus(order) {
 function isOnlinePayment(order) {
   const mode = String(order?.payment?.mode || order?.paymentMode || '').toLowerCase()
   const provider = String(order?.payment?.provider || order?.paymentProvider || '').toLowerCase()
-  return mode === 'online' || provider === 'asaas' || Boolean(order?.payment?.asaasPaymentId || order?.asaasPaymentId)
+  return (
+    mode === 'online' ||
+    mode === 'asaas' ||
+    mode === 'mercadopago' ||
+    mode === 'card_online' ||
+    provider === 'asaas' ||
+    provider === 'mercadopago' ||
+    Boolean(
+      order?.payment?.asaasPaymentId ||
+      order?.asaasPaymentId ||
+      order?.payment?.mercadoPagoPaymentId ||
+      order?.mercadoPagoPaymentId
+    )
+  )
 }
 
 function isPaidOrder(order) {

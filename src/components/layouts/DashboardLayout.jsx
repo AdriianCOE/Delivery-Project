@@ -1357,12 +1357,18 @@ export default function DashboardLayout() {
   const [storeError, setStoreError] = useState(null)
   const [storeToggleLoading, setStoreToggleLoading] = useState(false)
   const [confirmStatusModalOpen, setConfirmStatusModalOpen] = useState(false)
+  const [operationalNow, setOperationalNow] = useState(() => Date.now())
   const storeOperationalStatus = useMemo(
-    () => getStoreOperationalStatus(storeData || {}),
-    [storeData]
+    () => getStoreOperationalStatus(storeData || {}, { now: operationalNow }),
+    [storeData, operationalNow]
   )
   const storeCurrentlyOpen = storeOperationalStatus.isOpen
   const storeUsesAutomaticHours = storeOperationalStatus.mode === 'opening_hours'
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setOperationalNow(Date.now()), 30000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (!currentStoreId) {

@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { Link, useParams } from 'react-router-dom'
+import { motion, useReducedMotion } from 'motion/react'
 import { formatBrazilianPhone, normalizeBrazilianPhoneForWhatsApp } from '../../utils/phone'
 
 import {
@@ -376,6 +377,7 @@ export default function CustomerDrawer({
 }) {
   const { slug } = useParams()
   const { addToCart, clearCart } = useCart()
+  const reduceMotion = useReducedMotion()
 
   const [orders, setOrders] = useState([])
   const [profile, setProfile] = useState(null)
@@ -670,26 +672,32 @@ const greeting = useMemo(() => {
   )
 
   return (
-    <div 
-      className={`fixed inset-0 z-[90] flex justify-end transition-all duration-300 ease-out ${
-        isOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
-      }`}
+    <motion.div
+      className="fixed inset-0 z-[90] flex justify-end"
+      initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
     >
       {/* Fundo escuro com animação de fade */}
-      <button
+      <motion.button
         type="button"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/45 backdrop-blur-sm transition-opacity duration-300 ${
-          isOpen ? 'opacity-100' : 'opacity-0'
-        }`}
+        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         aria-label="Fechar perfil"
+        initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
       />
 
       {/* Painel lateral com animação de deslizar (slide) */}
-      <aside 
-        className={`relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#f9fafb] shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] sm:rounded-l-[2rem] ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+      <motion.aside
+        className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#f9fafb] shadow-2xl sm:rounded-l-[2rem]"
+        initial={reduceMotion ? { opacity: 1 } : { x: '100%', opacity: 0.98 }}
+        animate={reduceMotion ? { opacity: 1 } : { x: 0, opacity: 1 }}
+        exit={reduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0.98 }}
+        transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
       >
         <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-start justify-between gap-4">
@@ -1056,8 +1064,8 @@ const greeting = useMemo(() => {
             <FiChevronRight />
           </button>
         </footer>
-      </aside>
-    </div>
+      </motion.aside>
+    </motion.div>
   )
 }
 

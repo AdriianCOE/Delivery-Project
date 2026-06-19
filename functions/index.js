@@ -287,6 +287,7 @@ exports.getMercadoPagoConnectUrl = mercadoPagoOrderFunctions.getMercadoPagoConne
 exports.mercadoPagoOAuthCallback = mercadoPagoOrderFunctions.mercadoPagoOAuthCallback
 exports.disconnectMercadoPago = mercadoPagoOrderFunctions.disconnectMercadoPago
 exports.createMercadoPagoOrderPayment = mercadoPagoOrderFunctions.createMercadoPagoOrderPayment
+exports.reconcileMercadoPagoOrderPayment = mercadoPagoOrderFunctions.reconcileMercadoPagoOrderPayment
 exports.mercadoPagoOrderWebhook = mercadoPagoOrderFunctions.mercadoPagoOrderWebhook
 
 exports.createPublicOrder = onCall(

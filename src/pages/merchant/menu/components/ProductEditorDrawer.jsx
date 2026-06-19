@@ -1030,12 +1030,14 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                 </button>
               </div>
 
-              <ProductSummary
-                form={form}
-                visibleImage={visibleImage}
-                categoryName={activeCategory?.name}
-                discountPct={discountPct}
-              />
+              <div className="hidden md:block">
+                <ProductSummary
+                  form={form}
+                  visibleImage={visibleImage}
+                  categoryName={activeCategory?.name}
+                  discountPct={discountPct}
+                />
+              </div>
             </div>
 
             {/* Section tabs */}

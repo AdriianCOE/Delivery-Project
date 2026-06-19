@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import SEO from '../../components/seo/SEO'
 import {
   MARKETING_SEO,
@@ -58,7 +58,7 @@ function useDeferredLandingSections() {
 function LandingDeferredSections() {
   const { ready, sentinelRef } = useDeferredLandingSections()
   const fallback = (
-    <div ref={sentinelRef} className="h-12 bg-white dark:bg-zinc-950" aria-hidden="true" />
+    <div ref={sentinelRef} className="h-12 bg-white" aria-hidden="true" />
   )
 
   if (!ready) return fallback
@@ -83,6 +83,15 @@ export default function LandingPage() {
     buildFaqPageJsonLd(landingFaqs),
   ].filter(Boolean)
 
+  useLayoutEffect(() => {
+    document.documentElement.classList.remove('dark')
+    document.documentElement.style.colorScheme = 'light'
+
+    return () => {
+      document.documentElement.style.removeProperty('color-scheme')
+    }
+  }, [])
+
   return (
     <MarketingLayout>
       <SEO
@@ -90,7 +99,7 @@ export default function LandingPage() {
         structuredData={homeJsonLd}
       />
 
-      <div className="bg-white text-gray-900 dark:bg-zinc-950 dark:text-zinc-50">
+      <div className="bg-white text-gray-900">
         <HeroSection />
         <LandingDeferredSections />
       </div>

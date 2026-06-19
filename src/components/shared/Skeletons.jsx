@@ -118,21 +118,18 @@ export function StorefrontSkeleton() {
 export function LandingFallback() {
   return (
     <div
-      className="min-h-screen bg-white px-6 py-8 text-[#111827]"
+      className="fixed inset-0 z-[80] grid place-items-center bg-white px-6 text-[#111827]"
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <SkeletonBlock className="h-9 w-32" />
-        <SkeletonBlock className="h-9 w-24 rounded-full" />
-      </div>
-      <div className="mx-auto mt-16 max-w-3xl space-y-5">
-        <SkeletonBlock className="h-12 w-11/12" />
-        <SkeletonBlock className="h-12 w-8/12" />
-        <SkeletonBlock className="h-5 w-full" />
-        <SkeletonBlock className="h-5 w-9/12" />
-        <SkeletonBlock className="h-12 w-40 rounded-full" />
+      <div className="flex flex-col items-center text-center">
+        <div className="relative grid h-14 w-14 place-items-center rounded-[1.25rem] bg-orange-50 shadow-sm ring-1 ring-orange-100">
+          <div className="absolute inset-1 rounded-[1rem] bg-white" />
+          <div className="relative h-7 w-7 animate-spin rounded-full border-[3px] border-orange-100 border-t-[#f97316]" />
+        </div>
+        <p className="mt-4 text-sm font-black text-[#111827]">Carregando PratoBy</p>
+        <p className="mt-1 text-xs font-semibold text-[#6b7280]">Preparando a pagina inicial</p>
       </div>
       <span className="sr-only">Carregando.</span>
     </div>

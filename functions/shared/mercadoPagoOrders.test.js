@@ -2,16 +2,80 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 
 const {
+  buildWebhookPaymentPatch,
   buildMercadoPagoExternalReference,
   buildMercadoPagoPendingPaymentSnapshot,
   buildMercadoPagoPreferencePayload,
+  findMercadoPagoOrderSnapshot,
+  getWebhookPaymentId,
   isMercadoPagoOnlinePaymentRequest,
   mapMercadoPagoPaymentStatus,
   normalizeMercadoPagoPublicConfig,
   normalizePreorderPolicy,
   orderRequiresMercadoPagoOnline,
   parseMercadoPagoExternalReference,
+  validateMercadoPagoWebhookSignature,
 } = require('./mercadoPagoOrders')
+
+function signMercadoPagoWebhook({ secret, dataId, requestId, ts }) {
+  const crypto = require('crypto')
+  return crypto
+    .createHmac('sha256', secret)
+    .update(`id:${dataId};request-id:${requestId};ts:${ts};`)
+    .digest('hex')
+}
+
+function fakeAdmin() {
+  return {
+    firestore: {
+      FieldValue: {
+        serverTimestamp: () => 'SERVER_TIMESTAMP',
+      },
+    },
+  }
+}
+
+function fakeOrdersDb(orders) {
+  const docs = new Map(Object.entries(orders))
+  const makeSnapshot = (id, data) => ({
+    id,
+    exists: Boolean(data),
+    ref: { id },
+    data: () => data,
+  })
+  const valueAt = (data, field) => field.split('.').reduce((acc, key) => acc?.[key], data)
+
+  return {
+    collection(name) {
+      assert.equal(name, 'orders')
+      return {
+        doc(id) {
+          return {
+            async get() {
+              return makeSnapshot(id, docs.get(id))
+            },
+          }
+        },
+        where(field, operator, value) {
+          assert.equal(operator, '==')
+          return {
+            limit() {
+              return {
+                async get() {
+                  const match = [...docs.entries()].find(([, data]) => valueAt(data, field) === value)
+                  return {
+                    empty: !match,
+                    docs: match ? [makeSnapshot(match[0], match[1])] : [],
+                  }
+                },
+              }
+            },
+          }
+        },
+      }
+    },
+  }
+}
 
 test('normalizeMercadoPagoPublicConfig exposes only safe public fields', () => {
   const result = normalizeMercadoPagoPublicConfig({
@@ -194,4 +258,168 @@ test('mapMercadoPagoPaymentStatus keeps paid pending and failure states explicit
   assert.equal(mapMercadoPagoPaymentStatus({ status: 'rejected' }), 'failed')
   assert.equal(mapMercadoPagoPaymentStatus({ status: 'cancelled' }), 'canceled')
   assert.equal(mapMercadoPagoPaymentStatus({ status: 'refunded' }), 'refunded')
+})
+
+test('Mercado Pago webhook signature accepts the Webhooks v2 manifest', () => {
+  const secret = 'webhook-secret'
+  const dataId = '123456789'
+  const requestId = 'req-abc-123'
+  const ts = '1781730000'
+  const v1 = signMercadoPagoWebhook({ secret, dataId, requestId, ts })
+
+  const result = validateMercadoPagoWebhookSignature({
+    xSignature: `ts=${ts},v1=${v1}`,
+    xRequestId: requestId,
+    dataId,
+    secret,
+    nowMs: Number(ts) * 1000,
+  })
+
+  assert.deepEqual(result, { ok: true, reason: 'valid' })
+})
+
+test('Mercado Pago webhook signature rejects mismatched payloads', () => {
+  const secret = 'webhook-secret'
+  const ts = '1781730000'
+  const v1 = signMercadoPagoWebhook({
+    secret,
+    dataId: 'payment-1',
+    requestId: 'req-1',
+    ts,
+  })
+
+  const result = validateMercadoPagoWebhookSignature({
+    xSignature: `ts=${ts},v1=${v1}`,
+    xRequestId: 'req-1',
+    dataId: 'payment-2',
+    secret,
+    nowMs: Number(ts) * 1000,
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'signature_mismatch' })
+})
+
+test('getWebhookPaymentId reads payment.created and payment.updated payloads', () => {
+  assert.equal(
+    getWebhookPaymentId({ query: {} }, { action: 'payment.created', type: 'payment', data: { id: 'pay-1' } }),
+    'pay-1'
+  )
+  assert.equal(
+    getWebhookPaymentId(
+      { query: {} },
+      { action: 'payment.updated', type: 'payment', resource: 'https://api.mercadopago.com/v1/payments/pay-2' }
+    ),
+    'pay-2'
+  )
+  assert.equal(
+    getWebhookPaymentId({ query: { 'data.id': 'pay-3' } }, { action: 'payment.updated' }),
+    'pay-3'
+  )
+})
+
+test('buildWebhookPaymentPatch marks approved payment as paid without changing operational status', () => {
+  const patch = buildWebhookPaymentPatch({
+    admin: fakeAdmin(),
+    payment: {
+      id: 'payment-approved',
+      status: 'approved',
+      transaction_amount: 89.9,
+      payment_method_id: 'pix',
+      payment_type_id: 'bank_transfer',
+    },
+    orderData: {
+      status: 'pendente',
+      totalCents: 8990,
+      payment: {
+        provider: 'mercadopago',
+        mode: 'online',
+        status: 'pending_payment',
+      },
+      mercadoPago: {
+        preferenceId: 'pref-1',
+      },
+    },
+  })
+
+  assert.equal(patch.paymentStatus, 'paid')
+  assert.equal(patch.status, undefined)
+  assert.equal(patch.operationalBlockedReason, null)
+  assert.equal(patch.payment.status, 'approved')
+  assert.equal(patch.payment.providerPaymentId, 'payment-approved')
+  assert.equal(patch.payment.lastProviderStatus, 'approved')
+  assert.equal(patch.payment.paidAt, 'SERVER_TIMESTAMP')
+  assert.equal(patch.mercadoPago.paymentStatus, 'paid')
+  assert.equal(patch.mercadoPago.status, 'approved')
+})
+
+test('buildWebhookPaymentPatch keeps in_process payment pending with provider id', () => {
+  const patch = buildWebhookPaymentPatch({
+    admin: fakeAdmin(),
+    payment: {
+      id: 'payment-pending',
+      status: 'in_process',
+      transaction_amount: 50,
+    },
+    orderData: {
+      totalCents: 5000,
+      payment: {
+        provider: 'mercadopago',
+        mode: 'online',
+      },
+    },
+  })
+
+  assert.equal(patch.paymentStatus, 'pending_payment')
+  assert.equal(patch.status, undefined)
+  assert.equal(patch.operationalBlockedReason, undefined)
+  assert.equal(patch.payment.status, 'pending_payment')
+  assert.equal(patch.payment.providerPaymentId, 'payment-pending')
+  assert.equal(patch.payment.lastProviderStatus, 'in_process')
+  assert.equal(patch.payment.lastCheckedAt, 'SERVER_TIMESTAMP')
+})
+
+test('findMercadoPagoOrderSnapshot locates order by external reference tracking token', async () => {
+  const db = fakeOrdersDb({
+    tracking_12345678: {
+      trackingToken: 'tracking_12345678',
+      storeId: 'capivaras-lanches',
+      payment: {
+        provider: 'mercadopago',
+        mode: 'online',
+        externalReference: 'pratoby:order:capivaras-lanches:tracking_12345678',
+      },
+    },
+  })
+
+  const match = await findMercadoPagoOrderSnapshot({
+    db,
+    payment: {
+      id: 'payment-1',
+      external_reference: 'pratoby:order:capivaras-lanches:tracking_12345678',
+    },
+  })
+
+  assert.equal(match.ref.id, 'tracking_12345678')
+  assert.equal(match.source, 'doc_id')
+})
+
+test('findMercadoPagoOrderSnapshot falls back to provider payment id', async () => {
+  const db = fakeOrdersDb({
+    order_12345678: {
+      trackingToken: 'track_12345678',
+      payment: {
+        provider: 'mercadopago',
+        mode: 'online',
+        providerPaymentId: 'payment-existing',
+      },
+    },
+  })
+
+  const match = await findMercadoPagoOrderSnapshot({
+    db,
+    payment: { id: 'payment-existing' },
+  })
+
+  assert.equal(match.ref.id, 'order_12345678')
+  assert.equal(match.source, 'payment.providerPaymentId')
 })
