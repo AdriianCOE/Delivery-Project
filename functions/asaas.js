@@ -4421,6 +4421,10 @@ function createAsaasFunctions({ db, admin, logger }) {
       }
       
       const safeNotes = String(notes || '').trim().slice(0, 1000)
+      const completionNote = String(data.completionNote || notes || '').trim().slice(0, 1000)
+      const manualCompletion = data.manualCompletion && typeof data.manualCompletion === 'object'
+        ? data.manualCompletion
+        : {}
       
       const allowedCollections = [
         'subscriptionChangeRequests',
@@ -4434,6 +4438,32 @@ function createAsaasFunctions({ db, admin, logger }) {
       const allowedStatuses = ['pending', 'processing', 'done', 'rejected']
       if (!allowedStatuses.includes(status)) {
         throw new HttpsError('invalid-argument', 'Status invalido.')
+      }
+
+      const requiresManualAsaasCompletion = status === 'done' && [
+        SUBSCRIPTION_CHANGE_REQUESTS_COLLECTION,
+        SUBSCRIPTION_CANCELLATION_REQUESTS_COLLECTION,
+      ].includes(collectionName)
+
+      if (requiresManualAsaasCompletion) {
+        const confirmedChecklist =
+          manualCompletion.asaasActionConfirmed === true &&
+          manualCompletion.subscriptionStatusReviewed === true &&
+          manualCompletion.manualExecutionUnderstood === true
+
+        if (!confirmedChecklist) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Confirme a acao manual no Asaas, revise o status da assinatura e confirme que o PratoBy nao executa essa acao automaticamente.'
+          )
+        }
+
+        if (completionNote.length < 10) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Informe uma nota de conclusao com a evidencia da acao manual realizada no Asaas.'
+          )
+        }
       }
 
       const userDoc = await db.collection('users').doc(uid).get()
@@ -4450,13 +4480,27 @@ function createAsaasFunctions({ db, admin, logger }) {
            throw new HttpsError('not-found', 'Solicitacao nao encontrada.')
         }
         
-        transaction.update(reqRef, {
-           status,
-           notes: safeNotes,
-           processedBy: userDoc.data()?.email || uid,
-           processedAt: now,
-           updatedAt: now
-        })
+        const processedBy = userDoc.data()?.email || uid
+        const updatePayload = {
+          status,
+          notes: safeNotes,
+          processedBy,
+          processedAt: now,
+          updatedAt: now,
+        }
+
+        if (requiresManualAsaasCompletion) {
+          updatePayload.completedAt = now
+          updatePayload.completedBy = processedBy
+          updatePayload.completionNote = completionNote
+          updatePayload.manualCompletionChecklist = {
+            asaasActionConfirmed: true,
+            subscriptionStatusReviewed: true,
+            manualExecutionUnderstood: true,
+          }
+        }
+
+        transaction.update(reqRef, updatePayload)
         
         setAuditLog(transaction, db, now, {
            action: 'admin_updated_subscription_request',
@@ -4464,7 +4508,12 @@ function createAsaasFunctions({ db, admin, logger }) {
            entityId: safeRequestId,
            actorUid: uid,
            uid,
-           payload: { collectionName, status, notes: safeNotes }
+           payload: {
+             collectionName,
+             status,
+             notes: safeNotes,
+             manualCompletionRequired: requiresManualAsaasCompletion,
+           }
         })
         
         return { ok: true }

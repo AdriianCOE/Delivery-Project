@@ -6,6 +6,7 @@ Sempre execute os lints e checagens de sintaxe antes de fazer o deploy.
 ```bash
 npm run lint
 npm run build
+npm run test:plan-consistency
 cd functions
 node --check index.js
 node --check asaas.js
@@ -26,6 +27,7 @@ Antes de vender para lojista real, confirme estes pontos fora do codigo:
 - `cleanupAnonymousUsers` conferida em dry run antes de qualquer delecao real.
 - Para limpeza real monitorada, configurar em producao `CLEANUP_ANONYMOUS_USERS_ENABLED=true` e `CLEANUP_ANONYMOUS_USERS_DRY_RUN=false` somente durante a janela operacional; depois voltar `CLEANUP_ANONYMOUS_USERS_DRY_RUN=true` se a limpeza nativa do Firebase nao estiver habilitada.
 - Push FCM de novo pedido validado em runtime com token real em `stores/{storeId}/notificationTokens`, permission/subscription ativa no navegador do lojista e pedido criado via loja publica.
+- `/sitemap.xml` validado apos deploy, confirmando XML dinamico com URLs canonicas e sem lojas bloqueadas, inativas ou sem indexacao liberada.
 
 Fluxo minimo para validar App Check antes de enforcement:
 
@@ -90,7 +92,7 @@ firebase deploy --only functions:startAsaasSubscription,functions:asaasWebhook,f
 
 ### Lote 3: Catálogo e Perfil Público
 ```bash
-firebase deploy --only functions:getPublicCatalog,functions:getPublicStoreProfile,functions:validatePublicCoupon
+firebase deploy --only functions:getPublicCatalog,functions:getPublicStoreProfile,functions:validatePublicCoupon,functions:storefrontSeoPreview,functions:sitemapXml
 ```
 
 ### Lote 4: Configurações e Onboarding
@@ -110,5 +112,6 @@ Pendências ainda relevantes
 
 Cloudinary deve usar assinatura via `createCloudinaryUploadSignature`; fallback unsigned so deve ser habilitado temporariamente com `VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK=true`.
 App Check ainda precisa ser ativado/configurado no Firebase Console e no client para endurecer de verdade.
+Cold starts: manter `minInstances: 0` nas Functions publicas/SEO enquanto o trafego real nao justificar custo fixo. `storefrontSeoPreview` e `sitemapXml` usam cache curto; antes de subir `minInstances`, medir latencia real, taxa de cold start e volume de crawlers em producao.
 npm audit raiz deve retornar zero vulnerabilidades. Em `functions`, pode restar alerta moderado de `uuid <11.1.1` via `firebase-admin`/Google Cloud SDK; nao usar `npm audit fix --force` enquanto isso exigir `firebase-admin@14`, pois `firebase-functions@7.2.5` suporta `firebase-admin` apenas em `^11 || ^12 || ^13`.
 presence no Realtime Database ainda pode ser poluído por usuários autenticados/anonymous, embora o impacto seja baixo.

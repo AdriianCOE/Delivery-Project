@@ -44,6 +44,7 @@ const footerGroups = [
     links: [
       { label: 'Privacidade', to: '/privacidade' },
       { label: 'Termos', to: '/termos' },
+      { label: 'Exclusão de dados', to: '/data-deletion' },
     ],
   },
 ]

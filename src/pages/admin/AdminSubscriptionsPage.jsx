@@ -67,6 +67,9 @@ export default function AdminSubscriptionsPage() {
   const [editingRequest, setEditingRequest] = useState(null)
   const [editingStatus, setEditingStatus] = useState('')
   const [editingNotes, setEditingNotes] = useState('')
+  const [asaasDoneConfirmed, setAsaasDoneConfirmed] = useState(false)
+  const [asaasStatusReviewed, setAsaasStatusReviewed] = useState(false)
+  const [asaasManualExecutionUnderstood, setAsaasManualExecutionUnderstood] = useState(false)
   const [savingRequest, setSavingRequest] = useState(false)
 
   useEffect(() => {
@@ -158,9 +161,24 @@ export default function AdminSubscriptionsPage() {
   }, [changeRequests, cancelRequests, dueDateRequests])
 
   const pendingRequestsCount = allRequests.filter(r => r.status === 'pending').length
+  const requiresAsaasDoneConfirmation =
+    editingRequest &&
+    editingStatus === 'done' &&
+    ['subscriptionChangeRequests', 'subscriptionCancellationRequests'].includes(editingRequest.collectionName)
+  const hasAsaasCompletionNote = editingNotes.trim().length >= 10
+  const hasAsaasDoneChecklist =
+    asaasDoneConfirmed &&
+    asaasStatusReviewed &&
+    asaasManualExecutionUnderstood &&
+    hasAsaasCompletionNote
 
   const handleSaveRequest = async () => {
     if (!editingRequest) return
+    if (requiresAsaasDoneConfirmation && !hasAsaasDoneChecklist) {
+      alert('Confirme o checklist e informe uma nota de conclusão antes de marcar como concluída.')
+      return
+    }
+
     setSavingRequest(true)
     try {
       const adminUpdateSubscriptionRequestStatus = httpsCallable(functions, 'adminUpdateSubscriptionRequestStatus')
@@ -168,7 +186,15 @@ export default function AdminSubscriptionsPage() {
         collectionName: editingRequest.collectionName,
         requestId: editingRequest.id,
         status: editingStatus,
-        notes: editingNotes
+        notes: editingNotes,
+        completionNote: requiresAsaasDoneConfirmation ? editingNotes : '',
+        manualCompletion: requiresAsaasDoneConfirmation
+          ? {
+              asaasActionConfirmed: asaasDoneConfirmed,
+              subscriptionStatusReviewed: asaasStatusReviewed,
+              manualExecutionUnderstood: asaasManualExecutionUnderstood,
+            }
+          : null,
       })
       setEditingRequest(null)
     } catch (err) {
@@ -183,6 +209,9 @@ export default function AdminSubscriptionsPage() {
     setEditingRequest(req)
     setEditingStatus(req.status || 'pending')
     setEditingNotes(req.notes || '')
+    setAsaasDoneConfirmed(false)
+    setAsaasStatusReviewed(false)
+    setAsaasManualExecutionUnderstood(false)
   }
 
   if (loading) {
@@ -615,7 +644,12 @@ export default function AdminSubscriptionsPage() {
                 <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-1.5">Status</label>
                 <select
                   value={editingStatus}
-                  onChange={(e) => setEditingStatus(e.target.value)}
+                  onChange={(e) => {
+                    setEditingStatus(e.target.value)
+                    setAsaasDoneConfirmed(false)
+                    setAsaasStatusReviewed(false)
+                    setAsaasManualExecutionUnderstood(false)
+                  }}
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition"
                 >
                   <option value="pending">Pendente</option>
@@ -636,10 +670,56 @@ export default function AdminSubscriptionsPage() {
                 />
               </div>
 
+              {requiresAsaasDoneConfirmation && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                  <div className="flex gap-3">
+                    <FiAlertCircle className="mt-0.5 shrink-0 text-amber-600" size={18} />
+                    <div>
+                      <p className="font-black">Confirmação obrigatória</p>
+                      <p className="mt-1 font-semibold leading-relaxed">
+                        Este status não executa cancelamento ou troca de plano automaticamente. Marque como concluído apenas depois de realizar a ação no painel do Asaas, revisar a assinatura e registrar a evidência nas anotações.
+                      </p>
+                      <label className="mt-3 flex items-start gap-2 text-xs font-black uppercase tracking-wide text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={asaasDoneConfirmed}
+                          onChange={(e) => setAsaasDoneConfirmed(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-amber-300 text-[#f97316] focus:ring-orange-500"
+                        />
+                        Confirmei a ação no painel Asaas
+                      </label>
+                      <label className="mt-2 flex items-start gap-2 text-xs font-black uppercase tracking-wide text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={asaasStatusReviewed}
+                          onChange={(e) => setAsaasStatusReviewed(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-amber-300 text-[#f97316] focus:ring-orange-500"
+                        />
+                        Revisei o status da assinatura
+                      </label>
+                      <label className="mt-2 flex items-start gap-2 text-xs font-black uppercase tracking-wide text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={asaasManualExecutionUnderstood}
+                          onChange={(e) => setAsaasManualExecutionUnderstood(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-amber-300 text-[#f97316] focus:ring-orange-500"
+                        />
+                        Entendo que marcar como concluído no PratoBy não executa a ação automaticamente no Asaas
+                      </label>
+                      {!hasAsaasCompletionNote && (
+                        <p className="mt-3 text-xs font-bold text-amber-800">
+                          Informe nas anotações a evidência da ação manual realizada no Asaas.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleSaveRequest}
-                disabled={savingRequest}
+                disabled={savingRequest || (requiresAsaasDoneConfirmation && !hasAsaasDoneChecklist)}
                 className="mt-2 w-full inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#f97316] text-white font-black hover:bg-[#ea580c] transition active:scale-95 disabled:opacity-50"
               >
                 {savingRequest ? <FiLoader className="animate-spin" /> : <FiSave />}

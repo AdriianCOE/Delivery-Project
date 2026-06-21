@@ -1256,18 +1256,25 @@ async function storeRecordFromSnapshot(snapshot, collectionName) {
   }
 }
 
-async function queryStoreRecord(collectionName, field, operator, value) {
+async function queryStoreRecord(collectionName, field, operator, value, options = {}) {
   const cleanValue = String(value || '').trim()
   if (!cleanValue) return null
 
   const snapshot = await db.collection(collectionName)
     .where(field, operator, cleanValue)
-    .limit(1)
+    .limit(options.predicate ? 10 : 1)
     .get()
 
   if (snapshot.empty) return null
 
-  return storeRecordFromSnapshot(snapshot.docs[0], collectionName)
+  for (const doc of snapshot.docs) {
+    const record = storeRecordFromSnapshot(doc, collectionName)
+    if (!options.predicate || options.predicate(record.data)) {
+      return record
+    }
+  }
+
+  return null
 }
 
 async function findPublicStoreByParam(param) {
@@ -1278,19 +1285,24 @@ async function findPublicStoreByParam(param) {
 
   const directSnapshot = await db.collection('publicStores').doc(originalParam).get()
   if (directSnapshot.exists) {
-    return storeRecordFromSnapshot(directSnapshot, 'publicStores')
+    const directRecord = storeRecordFromSnapshot(directSnapshot, 'publicStores')
+    if (isStorePubliclyReadable(directRecord.data)) return directRecord
   }
 
   for (const [field, value] of [
     ['slug', normalizedParam],
     ['storeSlug', normalizedParam],
   ]) {
-    const record = await queryStoreRecord('publicStores', field, '==', value)
+    const record = await queryStoreRecord('publicStores', field, '==', value, {
+      predicate: isStorePubliclyReadable,
+    })
     if (record) return record
   }
 
   for (const key of uniqueTruthy([originalParam, normalizedParam])) {
-    const record = await queryStoreRecord('publicStores', 'storeKeys', 'array-contains', key)
+    const record = await queryStoreRecord('publicStores', 'storeKeys', 'array-contains', key, {
+      predicate: isStorePubliclyReadable,
+    })
     if (record) return record
   }
 
@@ -3972,6 +3984,11 @@ const INSTITUTIONAL_SEO_ROUTES = {
     description:
       'Consulte as regras de uso do PratoBy para lojistas, pedidos online, assinaturas, lojas públicas e serviços digitais.',
   },
+  '/data-deletion': {
+    title: 'Exclusão de dados do usuário | PratoBy',
+    description:
+      'Saiba como solicitar exclusão, correção ou anonimização de dados pessoais tratados pelo PratoBy.',
+  },
   '/cardapio-digital': {
     title: 'Cardápio digital para vender online | PratoBy',
     description:
@@ -4399,6 +4416,25 @@ const OFFICIAL_INDEXABLE_STORE_SLUGS = new Set([
   'doce-capivara-confeitaria',
 ])
 
+const SITEMAP_STATIC_ROUTES = [
+  { path: '/', priority: '1.0' },
+  { path: '/planos', priority: '0.9' },
+  { path: '/cardapio-digital', priority: '0.85' },
+  { path: '/delivery-sem-comissao', priority: '0.85' },
+  { path: '/cardapio-digital-para-restaurante', priority: '0.8' },
+  { path: '/sistema-para-lanchonete', priority: '0.8' },
+  { path: '/sistema-para-pizzaria', priority: '0.8' },
+  { path: '/sistema-para-confeitaria', priority: '0.8' },
+  { path: '/exemplos', priority: '0.7' },
+  { path: '/sobre', priority: '0.6' },
+  { path: '/contato', priority: '0.6' },
+  { path: '/privacidade', priority: '0.35' },
+  { path: '/termos', priority: '0.35' },
+  { path: '/data-deletion', priority: '0.3' },
+]
+
+const SITEMAP_MAX_URLS = 50000
+
 function isStoreUnavailableForSeo(store) {
   return (
     !store ||
@@ -4482,6 +4518,106 @@ function buildStorefrontJsonLd(store, meta) {
 
   return jsonLd
 }
+
+function xmlEscape(value) {
+  return escapeHtml(value)
+}
+
+function formatSitemapLastmod(value) {
+  const millis = timestampToMillis(value)
+  if (!millis) return ''
+  return new Date(millis).toISOString()
+}
+
+function buildSitemapUrl({ loc, lastmod = '', changefreq = 'weekly', priority = '0.5' }) {
+  const tags = [
+    `    <loc>${xmlEscape(loc)}</loc>`,
+  ]
+
+  if (lastmod) tags.push(`    <lastmod>${xmlEscape(lastmod)}</lastmod>`)
+  if (changefreq) tags.push(`    <changefreq>${xmlEscape(changefreq)}</changefreq>`)
+  if (priority) tags.push(`    <priority>${xmlEscape(priority)}</priority>`)
+
+  return ['  <url>', ...tags, '  </url>'].join('\n')
+}
+
+function buildSitemapXml(entries) {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...entries.map(buildSitemapUrl),
+    '</urlset>',
+    '',
+  ].join('\n')
+}
+
+function getStoreSitemapLastmod(store) {
+  return formatSitemapLastmod(
+    store.publicUpdatedAt ||
+      store.updatedAt ||
+      store.updated_at ||
+      store.lastUpdatedAt ||
+      store.createdAt
+  )
+}
+
+async function listIndexableStoreSitemapEntries(maxEntries) {
+  const entries = []
+  const seenPaths = new Set()
+  let lastDoc = null
+
+  while (entries.length < maxEntries) {
+    let query = db.collection('publicStores')
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(Math.min(250, maxEntries - entries.length))
+
+    if (lastDoc) query = query.startAfter(lastDoc)
+
+    const snapshot = await query.get()
+    if (snapshot.empty) break
+
+    for (const doc of snapshot.docs) {
+      const publicStore = buildPublicStoreProfile(doc.id, doc.data(), 'publicStores')
+      if (!isStorePubliclyReadable(publicStore) || !shouldIndexPublicStore(publicStore)) continue
+
+      const slug = normalizePublicStoreLookupParam(getPublicStoreSlug(doc.id, publicStore))
+      if (!slug) continue
+
+      const path = `/${slug}`
+      if (INSTITUTIONAL_SEO_ROUTES[path] || seenPaths.has(path)) continue
+
+      seenPaths.add(path)
+      entries.push({
+        loc: `${PUBLIC_APP_ORIGIN}${path}`,
+        lastmod: getStoreSitemapLastmod(publicStore),
+        changefreq: 'daily',
+        priority: '0.75',
+      })
+
+      if (entries.length >= maxEntries) break
+    }
+
+    lastDoc = snapshot.docs[snapshot.docs.length - 1]
+    if (snapshot.size < 250) break
+  }
+
+  return entries
+}
+
+async function buildDynamicSitemapEntries() {
+  const staticEntries = SITEMAP_STATIC_ROUTES
+    .filter(({ path }) => INSTITUTIONAL_SEO_ROUTES[path])
+    .map(({ path, priority }) => ({
+      loc: path === '/' ? `${PUBLIC_APP_ORIGIN}/` : `${PUBLIC_APP_ORIGIN}${path}`,
+      changefreq: path === '/' ? 'daily' : 'weekly',
+      priority,
+    }))
+
+  const storeEntries = await listIndexableStoreSitemapEntries(SITEMAP_MAX_URLS - staticEntries.length)
+
+  return [...staticEntries, ...storeEntries].slice(0, SITEMAP_MAX_URLS)
+}
+
 function buildStorefrontSeoMeta(store, requestedSlug = '') {
   const storeName = String(store?.name || store?.storeName || 'PratoBy').trim()
   const safeRequestedSlug = normalizePublicStoreLookupParam(requestedSlug)
@@ -4698,6 +4834,40 @@ exports.storefrontSeoPreview = onRequest(
       response.status(200).send(html || buildMinimalSeoHtml({
         canonical: slug ? `${PUBLIC_APP_ORIGIN}/${slug}` : PUBLIC_APP_ORIGIN,
       }))
+    }
+  }
+)
+
+exports.sitemapXml = onRequest(
+  {
+    region: REGION,
+    timeoutSeconds: 20,
+    memory: '256MiB',
+    minInstances: 0,
+    maxInstances: 2,
+    invoker: 'public',
+  },
+  async (_request, response) => {
+    response.set('Content-Type', 'application/xml; charset=utf-8')
+    response.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800')
+
+    try {
+      const entries = await buildDynamicSitemapEntries()
+      response.status(200).send(buildSitemapXml(entries))
+    } catch (error) {
+      logger.error('[sitemapXml] failed to build dynamic sitemap', {
+        message: error?.message || String(error),
+      })
+
+      const fallbackEntries = SITEMAP_STATIC_ROUTES
+        .filter(({ path }) => INSTITUTIONAL_SEO_ROUTES[path])
+        .map(({ path, priority }) => ({
+          loc: path === '/' ? `${PUBLIC_APP_ORIGIN}/` : `${PUBLIC_APP_ORIGIN}${path}`,
+          changefreq: path === '/' ? 'daily' : 'weekly',
+          priority,
+        }))
+
+      response.status(200).send(buildSitemapXml(fallbackEntries))
     }
   }
 )

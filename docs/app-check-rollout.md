@@ -8,12 +8,20 @@ Status atual: as callable functions publicas aceitam enforcement por `ENFORCE_AP
 - `getPublicStoreProfile`
 - `getPublicCatalog`
 - `validatePublicCoupon`
+- `registerCustomerOrderPushToken`
+- `disableCustomerOrderPushToken`
 - `confirmCustomerDelivery`
 - `markCustomerPixProofSent`
 - `requestCustomerOrderCancellation`
 - `submitPublicOrderReview`
 
 Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warning no cold start para lembrar que o rollout ainda esta em modo monitoramento.
+
+## Fora do enforcement de App Check por enquanto
+
+- `storefrontSeoPreview` e `sitemapXml` sao HTTP publicas para crawlers e nao devem exigir App Check.
+- Webhooks de pagamento continuam protegidos por segredo/assinatura do provedor, nao por App Check.
+- Callables de painel, admin e billing devem entrar em uma etapa separada depois de validar que todos os clients autenticados inicializam App Check antes de chamar Functions.
 
 ## Plano seguro
 
