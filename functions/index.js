@@ -1268,7 +1268,7 @@ async function queryStoreRecord(collectionName, field, operator, value, options 
   if (snapshot.empty) return null
 
   for (const doc of snapshot.docs) {
-    const record = storeRecordFromSnapshot(doc, collectionName)
+    const record = await storeRecordFromSnapshot(doc, collectionName)
     if (!options.predicate || options.predicate(record.data)) {
       return record
     }
@@ -1285,7 +1285,7 @@ async function findPublicStoreByParam(param) {
 
   const directSnapshot = await db.collection('publicStores').doc(originalParam).get()
   if (directSnapshot.exists) {
-    const directRecord = storeRecordFromSnapshot(directSnapshot, 'publicStores')
+    const directRecord = await storeRecordFromSnapshot(directSnapshot, 'publicStores')
     if (isStorePubliclyReadable(directRecord.data)) return directRecord
   }
 
