@@ -1428,12 +1428,30 @@ function CartItemDetailsModal({
 }
 
 
-export default function CartDrawer({ isOpen, onClose, store }) {
+export default function CartDrawer({ isOpen, onClose, onExited, store }) {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const [isDesktopDrawer, setIsDesktopDrawer] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(min-width: 768px)').matches
+  })
   const [loadingCep, setLoadingCep] = useState(false)
   const [cepError, setCepError] = useState('')
   const [cepLookupStatus, setCepLookupStatus] = useState('idle')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const mediaQuery = window.matchMedia('(min-width: 768px)')
+    const handleChange = () => setIsDesktopDrawer(mediaQuery.matches)
+
+    handleChange()
+    mediaQuery.addEventListener?.('change', handleChange)
+
+    return () => {
+      mediaQuery.removeEventListener?.('change', handleChange)
+    }
+  }, [])
 
   const handleSearchCep = async (cep) => {
   const digits = onlyDigits(cep)
@@ -2429,11 +2447,23 @@ if (orderType === 'delivery') {
     validateCheckout,
   ])
 
+  const drawerMotion = isDesktopDrawer
+    ? {
+        initial: { x: '104%', opacity: 0.96, scale: 0.985 },
+        animate: { x: 0, opacity: 1, scale: 1 },
+        exit: { x: '104%', opacity: 0.96, scale: 0.985 },
+      }
+    : {
+        initial: { y: '104%', opacity: 0.96, scale: 0.985 },
+        animate: { y: 0, opacity: 1, scale: 1 },
+        exit: { y: '104%', opacity: 0.96, scale: 0.985 },
+      }
+
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false} onExitComplete={onExited}>
       {isOpen && (
     <motion.div
-      className="fixed inset-0 z-[70] flex justify-end"
+      className="fixed inset-0 z-[70] flex items-end justify-center md:items-stretch md:justify-end"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -2446,15 +2476,16 @@ if (orderType === 'delivery') {
         aria-label="Fechar carrinho"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.18 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       />
 
       <motion.aside
-        initial={{ x: '104%', opacity: 0.94, scale: 0.985 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: '104%', opacity: 0.94, scale: 0.985 }}
-        transition={{ type: 'spring', stiffness: 280, damping: 32, mass: 0.9 }}
-        className="relative flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-[#F9FAFB] shadow-2xl will-change-transform"
+        initial={drawerMotion.initial}
+        animate={drawerMotion.animate}
+        exit={drawerMotion.exit}
+        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        className="relative mt-auto flex h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-[#F9FAFB] shadow-2xl will-change-transform md:mt-0 md:h-dvh md:rounded-l-[2rem] md:rounded-t-none"
       >
         <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">

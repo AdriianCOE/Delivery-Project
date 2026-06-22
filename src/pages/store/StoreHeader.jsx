@@ -1090,7 +1090,13 @@ function getAcceptedPaymentMethods(store) {
   ].filter(Boolean)
 }
 
-export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
+export default function StoreHeader({
+  store,
+  onOpenProfile,
+  activeUsers = 0,
+  infoOpenRequestKey = 0,
+  onInfoOpenChange,
+}) {
   const storeDescription = useMemo(() => getStoreDescription(store), [store])
   const heroDescription = useMemo(
     () => getStoreHeroDescription(store, storeDescription),
@@ -1103,6 +1109,22 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
   const [favorited, setFavorited] = useState(false)
   const [animateHeart, setAnimateHeart] = useState(false)
   const [showMap, setShowMap] = useState(false)
+
+  const openInfoModal = useCallback(() => {
+    setShowModal(true)
+    onInfoOpenChange?.(true)
+  }, [onInfoOpenChange])
+
+  const closeInfoModal = useCallback(() => {
+    setShowModal(false)
+    onInfoOpenChange?.(false)
+  }, [onInfoOpenChange])
+
+  useEffect(() => {
+    if (!infoOpenRequestKey) return
+
+    openInfoModal()
+  }, [infoOpenRequestKey, openInfoModal])
 
   const themeColor = getStoreTheme(store)
   const themeSoft = getRgba(themeColor, 0.1)
@@ -1215,7 +1237,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        setShowModal(false)
+        closeInfoModal()
         setShowQrModal(false)
       }
     }
@@ -1226,7 +1248,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showModal, showQrModal])
+  }, [closeInfoModal, showModal, showQrModal])
   useEffect(() => {
     if (!showQrModal || QrCodeSvg) return undefined
 
@@ -1440,7 +1462,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
                     <button
   type="button"
-  onClick={() => setShowModal(true)}
+  onClick={openInfoModal}
   className="group block max-w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-200"
   aria-label="Abrir informações da loja"
 >
@@ -1458,7 +1480,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
       label="Informações da loja"
       desktopLabel="Info"
       showLabelOnDesktop
-      onClick={() => setShowModal(true)}
+      onClick={openInfoModal}
       themeColor={themeColor}
     >
       <FiInfo size={18} />
@@ -1585,7 +1607,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
           className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
             showModal ? 'opacity-100' : 'opacity-0'
           }`}
-          onClick={() => setShowModal(false)}
+          onClick={closeInfoModal}
           aria-label="Fechar informações"
         />
 
@@ -1624,7 +1646,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
             <button
               type="button"
-              onClick={() => setShowModal(false)}
+              onClick={closeInfoModal}
               className="absolute right-4 top-4 z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-[#111827] shadow-lg shadow-gray-200/70 ring-1 ring-gray-100 backdrop-blur-xl transition hover:bg-[#111827] hover:text-white active:scale-95"
               aria-label="Fechar"
             >

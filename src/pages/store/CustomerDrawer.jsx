@@ -386,6 +386,24 @@ export default function CustomerDrawer({
   const [reorderingId, setReorderingId] = useState(null)
   const [toast, setToast] = useState('')
   const [showOnlyCurrentStore, setShowOnlyCurrentStore] = useState(true)
+  const [isDesktopDrawer, setIsDesktopDrawer] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(min-width: 768px)').matches
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const mediaQuery = window.matchMedia('(min-width: 768px)')
+    const handleChange = () => setIsDesktopDrawer(mediaQuery.matches)
+
+    handleChange()
+    mediaQuery.addEventListener?.('change', handleChange)
+
+    return () => {
+      mediaQuery.removeEventListener?.('change', handleChange)
+    }
+  }, [])
 
   const currentStoreKeys = useMemo(() => {
     return uniqueArray([
@@ -671,9 +689,21 @@ const greeting = useMemo(() => {
     ]
   )
 
+  const drawerMotion = isDesktopDrawer
+    ? {
+        initial: { x: '104%', opacity: 0.96, scale: 0.985 },
+        animate: { x: 0, opacity: 1, scale: 1 },
+        exit: { x: '104%', opacity: 0.96, scale: 0.985 },
+      }
+    : {
+        initial: { y: '104%', opacity: 0.96, scale: 0.985 },
+        animate: { y: 0, opacity: 1, scale: 1 },
+        exit: { y: '104%', opacity: 0.96, scale: 0.985 },
+      }
+
   return (
     <motion.div
-      className="fixed inset-0 z-[90] flex justify-end"
+      className="fixed inset-0 z-[90] flex items-end justify-center md:items-stretch md:justify-end"
       initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -693,11 +723,11 @@ const greeting = useMemo(() => {
 
       {/* Painel lateral com animação de deslizar (slide) */}
       <motion.aside
-        className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#f9fafb] shadow-2xl sm:rounded-l-[2rem]"
-        initial={reduceMotion ? { opacity: 1 } : { x: '100%', opacity: 0.98 }}
-        animate={reduceMotion ? { opacity: 1 } : { x: 0, opacity: 1 }}
-        exit={reduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0.98 }}
-        transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        className="relative flex h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] bg-[#f9fafb] shadow-2xl will-change-transform md:h-dvh md:rounded-l-[2rem] md:rounded-t-none"
+        initial={reduceMotion ? { opacity: 1 } : drawerMotion.initial}
+        animate={reduceMotion ? { opacity: 1 } : drawerMotion.animate}
+        exit={reduceMotion ? { opacity: 0 } : drawerMotion.exit}
+        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       >
         <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-start justify-between gap-4">

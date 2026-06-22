@@ -1,6 +1,6 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import SEO from '../../components/seo/SEO'
 import {
   collection,
@@ -33,6 +33,7 @@ import {
   FiStar,
   FiHeart,
   FiInfo,
+  FiHome,
   FiUser,
   FiX,
 } from 'react-icons/fi'
@@ -1410,6 +1411,7 @@ function StoreQuickActions({
   searchExpanded,
   searchTerm,
   setSearchTerm,
+  searchInputRef,
   onToggleSearch,
   onOpenProfile,
   onCopyLink,
@@ -1417,13 +1419,15 @@ function StoreQuickActions({
   themeColor,
 }) {
   return (
-    <section className="mx-auto mt-2 max-w-[1120px] px-3 sm:mt-3 sm:px-4">
+    <section id="storefront-quick-actions" className="mx-auto mt-2 max-w-[1120px] px-3 sm:mt-3 sm:px-4">
       <div className="rounded-[1.15rem] border border-white/80 bg-white/90 p-1 shadow-md shadow-orange-100/40 ring-1 ring-orange-50/80 backdrop-blur-xl sm:rounded-[1.35rem]">
       <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
         <button
           type="button"
           onClick={onToggleSearch}
-          className={`flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] px-3 text-sm font-black transition duration-200 active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem] ${
+          aria-label={searchExpanded ? 'Fechar busca do cardápio' : 'Abrir busca do cardápio'}
+          title="Buscar no cardápio"
+          className={`flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] px-3 text-sm font-black transition duration-200 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:min-h-[46px] sm:rounded-[1.05rem] ${
             searchExpanded || searchTerm
               ? 'text-white shadow-lg shadow-orange-200/50'
               : 'bg-[#f9fafb] text-[#111827] hover:bg-orange-50 hover:text-[#f97316]'
@@ -1439,7 +1443,9 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onOpenProfile}
-          className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:min-h-[46px] sm:rounded-[1.05rem]"
+          aria-label="Abrir meus pedidos"
+          title="Meus pedidos"
+          className="flex min-h-[42px] items-center justify-center gap-2 rounded-[0.95rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:min-h-[46px] sm:rounded-[1.05rem]"
         >
           <FiUser />
             <span className="sm:hidden">Pedidos</span>
@@ -1449,7 +1455,9 @@ function StoreQuickActions({
         <button
           type="button"
           onClick={onCopyLink}
-          className="hidden min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] sm:flex"
+          aria-label={copied ? 'Link copiado' : 'Copiar link da loja'}
+          title={copied ? 'Link copiado' : 'Copiar link da loja'}
+          className="hidden min-h-[46px] items-center justify-center gap-2 rounded-[1.05rem] bg-[#f9fafb] px-3 text-sm font-black text-[#111827] transition duration-200 hover:bg-orange-50 hover:text-[#f97316] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:flex"
         >
           {copied ? <FiCheck /> : <FiCopy />}
           {copied ? 'Copiado!' : 'Copiar link'}
@@ -1472,6 +1480,8 @@ function StoreQuickActions({
             />
 
             <input
+              ref={searchInputRef}
+              id="storefront-search-input"
               type="text"
               autoFocus={searchExpanded}
               placeholder="Buscar bolos, doces, kits..."
@@ -1617,7 +1627,7 @@ function MenuEndDivider({ store, themeColor, onBackToTop }) {
           <button
             type="button"
             onClick={onBackToTop}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-[#f9fafb] px-3.5 text-xs font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] active:scale-95"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-[#f9fafb] px-3.5 text-xs font-black text-[#111827] transition hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316] active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
           >
             <FiArrowUp />
             Voltar ao topo
@@ -1886,6 +1896,165 @@ const timeout = window.setTimeout(() => {
   )
 }
 
+function PublicStoreBottomNav({
+  cartItemsCount,
+  cartTotal,
+  isSearchActive,
+  isInfoOpen,
+  onBackToTop,
+  onOpenSearch,
+  onOpenInfo,
+  onOpenOrders,
+  onOpenCart,
+}) {
+  const sideItems = [
+    {
+      key: 'home',
+      label: 'Início',
+      icon: FiHome,
+      onClick: onBackToTop,
+      ariaLabel: 'Voltar ao início do cardápio',
+    },
+    {
+      key: 'search',
+      label: 'Buscar',
+      icon: FiSearch,
+      onClick: onOpenSearch,
+      active: isSearchActive,
+      ariaLabel: 'Buscar produtos no cardápio',
+    },
+    {
+      key: 'info',
+      label: 'Info',
+      icon: FiInfo,
+      onClick: onOpenInfo,
+      active: isInfoOpen,
+      ariaLabel: 'Abrir informações da loja',
+    },
+    {
+      key: 'orders',
+      label: 'Pedidos',
+      icon: FiUser,
+      onClick: onOpenOrders,
+      ariaLabel: 'Abrir acompanhamento de pedidos',
+    },
+  ]
+  const cartAriaLabel = cartItemsCount > 0
+    ? `Abrir carrinho com ${cartItemsCount} ${cartItemsCount === 1 ? 'item' : 'itens'}`
+    : 'Abrir carrinho'
+
+  return (
+    <motion.nav
+      initial={{ opacity: 0, y: 24, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+      className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.8rem+env(safe-area-inset-bottom))] md:hidden"
+      aria-label="Atalhos do cardápio público"
+    >
+      <div className="mx-auto flex max-w-md items-end justify-around gap-1 rounded-[2.15rem] border border-orange-100/80 bg-white/90 px-3 pb-2 pt-3 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-xl">
+        {sideItems.slice(0, 2).map((item) => {
+          const Icon = item.icon
+          const active = item.active
+
+          return (
+            <motion.button
+              key={item.key}
+              type="button"
+              onClick={item.onClick}
+              aria-label={item.ariaLabel}
+              title={item.ariaLabel}
+              whileTap={{ scale: 0.96 }}
+              className={`flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                active
+                  ? 'bg-orange-50 text-orange-600'
+                  : 'text-slate-500 hover:bg-orange-50 hover:text-slate-900'
+              }`}
+            >
+              <span className={`grid h-7 w-7 place-items-center rounded-2xl transition ${
+                active ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'
+              }`}>
+                <Icon size={18} />
+              </span>
+              <span className="leading-none">{item.label}</span>
+            </motion.button>
+          )
+        })}
+
+        <div className="flex min-w-[76px] flex-col items-center justify-end">
+          <motion.button
+            type="button"
+            onClick={onOpenCart}
+            aria-label={cartAriaLabel}
+            title={cartAriaLabel}
+            whileTap={{ scale: 0.95 }}
+            animate={{
+              y: cartItemsCount > 0 ? -2 : 0,
+              scale: cartItemsCount > 0 ? 1.03 : 1,
+            }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="relative -mt-8 grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 text-white shadow-xl shadow-orange-600/30 ring-4 ring-white transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-200 focus-visible:ring-offset-2"
+          >
+            <FiShoppingCart size={25} />
+            <AnimatePresence>
+              {cartItemsCount > 0 && (
+                <motion.span
+                  key={cartItemsCount}
+                  initial={{ scale: 0.7, opacity: 0, y: 4 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.7, opacity: 0, y: 4 }}
+                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-white px-1 text-xs font-black text-orange-600 shadow-md ring-1 ring-orange-100"
+                >
+                  {cartItemsCount > 99 ? '99+' : cartItemsCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+
+          <div className="mt-1 flex max-w-[86px] flex-col items-center">
+            <span className="text-[11px] font-black leading-none text-orange-600">
+              Carrinho
+            </span>
+            {cartItemsCount > 0 && (
+              <span className="mt-0.5 max-w-full truncate text-[9px] font-black leading-none text-slate-700">
+                {formatMoney(cartTotal)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {sideItems.slice(2).map((item) => {
+          const Icon = item.icon
+          const active = item.active
+
+          return (
+            <motion.button
+              key={item.key}
+              type="button"
+              onClick={item.onClick}
+              aria-label={item.ariaLabel}
+              title={item.ariaLabel}
+              whileTap={{ scale: 0.96 }}
+              className={`flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                active
+                  ? 'bg-orange-50 text-orange-600'
+                  : 'text-slate-500 hover:bg-orange-50 hover:text-slate-900'
+              }`}
+            >
+              <span className={`grid h-7 w-7 place-items-center rounded-2xl transition ${
+                active ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'
+              }`}>
+                <Icon size={18} />
+              </span>
+              <span className="leading-none">{item.label}</span>
+            </motion.button>
+          )
+        })}
+      </div>
+    </motion.nav>
+  )
+}
+
 function HeaderIconButton({ icon: Icon, label, onClick, active = false }) {
   return (
     <button
@@ -1893,7 +2062,7 @@ function HeaderIconButton({ icon: Icon, label, onClick, active = false }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`group flex h-8 w-8 items-center justify-center rounded-full border shadow-sm transition active:scale-95 lg:h-10 lg:w-auto lg:gap-2 lg:px-3 ${
+      className={`group flex h-8 w-8 items-center justify-center rounded-full border shadow-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 lg:h-10 lg:w-auto lg:gap-2 lg:px-3 ${
         active
           ? 'border-orange-100 bg-orange-50 text-[#f97316]'
           : 'border-gray-100 bg-white text-[#6b7280] hover:border-orange-100 hover:bg-orange-50 hover:text-[#f97316]'
@@ -1929,7 +2098,9 @@ export default function StoreFrontPage() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
+  const [isCartDrawerMounted, setIsCartDrawerMounted] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [headerInfoOpenRequestKey, setHeaderInfoOpenRequestKey] = useState(0)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [quickEditProduct, setQuickEditProduct] = useState(null)
 
@@ -1937,6 +2108,7 @@ export default function StoreFrontPage() {
   const [searchExpanded, setSearchExpanded] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const categoryScrollRef = useRef(null)
+  const searchInputRef = useRef(null)
   const activeCategoryRef = useRef('all')
   const isManualCategoryScrollRef = useRef(false)
   const manualCategoryScrollTimeoutRef = useRef(null)
@@ -2434,6 +2606,23 @@ const storeJsonLd = useMemo(
   })
 }, [])
 
+  const handleOpenSearch = useCallback(() => {
+    setSearchExpanded(true)
+
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+  }, [])
+
+  const handleOpenCart = useCallback(() => {
+    setIsCartDrawerMounted(true)
+    setIsCartOpen(true)
+  }, [])
+
   const handleCopyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(storePublicUrl)
@@ -2810,7 +2999,7 @@ return (
     />
 
     <div
-  className="min-h-screen bg-[#fff8f1] text-[#111827]"
+  className="min-h-screen bg-[#fff8f1] pb-[calc(7.5rem+env(safe-area-inset-bottom))] text-[#111827] md:pb-0"
   style={{
     '--theme-color': themeColor,
   }}
@@ -2861,8 +3050,13 @@ return (
       )}
 
       <Suspense fallback={null}>
-        {isCartOpen && (
-          <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} store={store} />
+        {isCartDrawerMounted && (
+          <CartDrawer
+            isOpen={isCartOpen}
+            onClose={() => setIsCartOpen(false)}
+            onExited={() => setIsCartDrawerMounted(false)}
+            store={store}
+          />
         )}
 
         <AnimatePresence>
@@ -2877,12 +3071,18 @@ return (
           )}
         </AnimatePresence>
       </Suspense>
-      <StoreHeader store={store} isOwner={isOwner} />
+      <StoreHeader
+        store={store}
+        isOwner={isOwner}
+        infoOpenRequestKey={headerInfoOpenRequestKey}
+        onInfoOpenChange={setIsInfoOpen}
+      />
 
       <StoreQuickActions
         searchExpanded={searchExpanded}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        searchInputRef={searchInputRef}
         onToggleSearch={() => setSearchExpanded((current) => !current)}
         onOpenProfile={() => setIsProfileOpen(true)}
         onCopyLink={handleCopyLink}
@@ -2932,7 +3132,9 @@ return (
                 type="button"
                 data-active-category={activeCategory === 'all' ? 'true' : undefined}
                 onClick={() => handleScrollToCategory('all')}
-                className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
+                aria-label="Ver todos os produtos do cardápio"
+                title="Todos os produtos"
+                className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:px-5 ${
                   activeCategory === 'all'
                     ? 'text-white shadow-lg shadow-orange-600/20'
                     : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
@@ -2963,7 +3165,9 @@ return (
                     type="button"
                     data-active-category={active ? 'true' : undefined}
                     onClick={() => handleScrollToCategory(category.id)}
-                    className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] sm:px-5 ${
+                    aria-label={`Ver categoria ${category.name}`}
+                    title={`Categoria ${category.name}`}
+                    className={`inline-flex shrink-0 snap-start items-center gap-2 rounded-[1.15rem] px-4 py-2.5 text-sm font-black transition duration-200 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:px-5 ${
                       active
                         ? 'text-white shadow-lg shadow-orange-600/20'
                         : 'text-[#6b7280] hover:bg-[#f9fafb] hover:text-[#111827]'
@@ -3154,11 +3358,27 @@ return (
 
 <StoreFooter store={store} todayHoursLabel={todayHoursLabel} />
 
+      {store && (
+        <PublicStoreBottomNav
+          cartItemsCount={totalItemsCount}
+          cartTotal={cartTotal}
+          isSearchActive={searchExpanded || Boolean(searchTerm)}
+          isInfoOpen={isInfoOpen}
+          onBackToTop={handleBackToTop}
+          onOpenSearch={handleOpenSearch}
+          onOpenInfo={() => setHeaderInfoOpenRequestKey((current) => current + 1)}
+          onOpenOrders={() => setIsProfileOpen(true)}
+          onOpenCart={handleOpenCart}
+        />
+      )}
+
       {totalItemsCount > 0 && !orderingBlockedOnStorefront && (
         <button
           type="button"
-          onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-5 left-4 right-4 z-40 rounded-[1.7rem] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white shadow-2xl transition-transform duration-150 active:scale-[0.985] md:left-[calc(50%-18rem)] md:right-auto md:w-full md:max-w-xl md:hover:scale-[1.01]"
+          onClick={handleOpenCart}
+          aria-label={`Abrir carrinho com ${totalItemsCount} ${totalItemsCount === 1 ? 'item' : 'itens'}`}
+          title="Abrir carrinho"
+          className="fixed bottom-5 left-4 right-4 z-40 hidden rounded-[1.7rem] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white shadow-2xl transition-transform duration-150 active:scale-[0.985] md:left-[calc(50%-18rem)] md:right-auto md:block md:w-full md:max-w-xl md:hover:scale-[1.01]"
           style={{ background: themeColor }}
         >
           <div className="flex items-center justify-between gap-5">

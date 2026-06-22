@@ -2810,19 +2810,6 @@ const knownStoreIdsKey = useMemo(() => {
       </div>
     </div>
 
-    <Toggle
-      checked={Boolean(form.allowScheduledOrdersWhenClosed)}
-      onChange={(value) => {
-        if (value && !schedulingAllowed) {
-          showToast('error', 'Agendamento fora do horário exige plano Profissional ou Premium.')
-          return
-        }
-        updateField('allowScheduledOrdersWhenClosed', value)
-      }}
-      label="Aceitar pedidos agendados quando a loja estiver fechada"
-      description="Mantém pedidos imediatos bloqueados fora do horário, mas permite encomendas ou agendamentos para uma janela válida."
-    />
-
     <div className="space-y-3">
     {DAYS_OF_WEEK.map((day) => {
       const dayHours = form.openingHours?.[day.id] || {
@@ -2939,6 +2926,13 @@ const knownStoreIdsKey = useMemo(() => {
                 </div>
               ) : (
                 <>
+                  <Toggle
+                    checked={Boolean(form.allowScheduledOrdersWhenClosed)}
+                    onChange={(value) => updateField('allowScheduledOrdersWhenClosed', value)}
+                    label="Aceitar agendamentos com a loja fechada"
+                    description="Mantém pedidos imediatos bloqueados fora do horário, mas permite pedidos agendados para uma janela válida."
+                  />
+
                   <div className="grid items-end gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_220px]">
                     <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
                       <Input

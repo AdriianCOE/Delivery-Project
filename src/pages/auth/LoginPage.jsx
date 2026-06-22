@@ -611,7 +611,7 @@ export default function LoginPage() {
             className="relative z-10 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]"
           >
               {/* card PratoBy Cloud */}
-              <div className="relative flex h-full min-h-[316px] flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+              <div className="relative flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
                 <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-orange-500/20 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-12 -left-12 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
 
@@ -629,13 +629,12 @@ export default function LoginPage() {
                     </div>
 
                     <p className="mt-2 max-w-[34rem] text-sm font-semibold leading-6 text-gray-300">
-                      Seu cardápio digital, pedidos online e operação de delivery em um painel
-                      próprio — sem depender de marketplace para vender.
+                      Cardápio digital para negócios locais venderem direto, sem depender de marketplace.
                     </p>
                   </div>
                 </div>
 
-                <div className="relative mt-auto pt-5">
+                <div className="relative mt-5">
                   <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4 ring-1 ring-white/5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
