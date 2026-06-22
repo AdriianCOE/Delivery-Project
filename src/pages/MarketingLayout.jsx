@@ -27,6 +27,7 @@ const footerGroups = [
     links: [
       { label: 'Início', to: '/' },
       { label: 'Exemplos', to: '/exemplos' },
+      { label: 'Blog', to: '/blog' },
       { label: 'Planos', to: '/planos' },
     ],
   },

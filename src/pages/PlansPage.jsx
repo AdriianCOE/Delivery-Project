@@ -53,7 +53,7 @@ const planShortDescriptions = {
 
 const planBestFor = {
   essential: 'Ideal para começar',
-  professional: 'Mais indicado para piloto',
+  professional: 'Mais indicado para crescer',
   premium: 'Para operação avançada',
 }
 

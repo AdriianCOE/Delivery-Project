@@ -542,7 +542,7 @@ export default function QRCodePage() {
                   Em breve
                 </p>
                 <p className="mt-1 text-xs font-bold text-[#6b7280] dark:text-zinc-400">
-                  QR por mesa não está liberado para uso no piloto.
+                  QR por mesa ainda não está disponível para esta loja.
                 </p>
               </div>
 
@@ -644,7 +644,7 @@ export default function QRCodePage() {
                 <FiLock size={15} className="mt-0.5 shrink-0 text-orange-600 dark:text-orange-400" />
                 <p className="text-xs font-bold leading-5 text-orange-800 dark:text-orange-300">
                   <span className="font-black">QR por mesa está em breve.</span>{' '}
-                  Use o QR do cardápio público para o piloto. Mesas, download e impressão por mesa serão liberados quando o fluxo de pedido presencial estiver pronto.
+                  Use o QR do cardápio público por enquanto. Mesas, download e impressão por mesa serão liberados quando o fluxo de pedido presencial estiver pronto.
                 </p>
               </div>
             </SectionCard>

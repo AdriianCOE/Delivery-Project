@@ -35,7 +35,7 @@ const CONTACT_WHATSAPP = '5579999786984'
 
 const subjectOptions = [
   { label: 'Quero conhecer o PratoBy', value: 'Quero conhecer o PratoBy' },
-  { label: 'Quero entrar no piloto acompanhado', value: 'Quero entrar no piloto acompanhado' },
+  { label: 'Quero começar com acompanhamento', value: 'Quero começar com acompanhamento' },
   { label: 'Tenho dúvida sobre planos', value: 'Tenho dúvida sobre planos' },
   { label: 'Já sou lojista e preciso de suporte', value: 'Já sou lojista e preciso de suporte' },
   { label: 'Parceria ou outro assunto', value: 'Parceria ou outro assunto' },
@@ -55,7 +55,7 @@ const businessTypeOptions = [
 const contactBlocks = [
   {
     icon: FiZap,
-    title: 'Entrar no piloto',
+    title: 'Começar com acompanhamento',
     description:
       'Ideal para quem quer configurar a loja com acompanhamento e testar o PratoBy com mais segurança.',
     cta: 'Criar minha loja',
@@ -93,8 +93,8 @@ const trustPoints = [
   },
   {
     icon: FiClock,
-    title: 'Configuração acompanhada',
-    description: 'Nesta fase, estamos priorizando poucas lojas piloto com orientação mais próxima.',
+    title: 'Configuração assistida',
+    description: 'Nossa equipe pode orientar os primeiros passos para sua loja começar com mais segurança.',
   },
   {
     icon: FiGlobe,
@@ -118,7 +118,7 @@ const faqs = [
   },
   {
     q: 'Já posso usar em uma loja real?',
-    a: 'Sim, mas a recomendação atual é começar em piloto acompanhado, validando cardápio, horários, entrega, pagamento e fluxo de pedidos.',
+    a: 'Sim. Recomendamos começar com configuração assistida, validando cardápio, horários, entrega, pagamento e fluxo de pedidos antes de divulgar em escala.',
   },
   {
     q: 'Como começo?',
@@ -372,7 +372,7 @@ export default function ContactPage() {
                 </h1>
 
                 <p className="mx-auto mt-6 max-w-2xl text-base font-semibold leading-8 text-[#6b7280] dark:text-zinc-400 sm:text-lg">
-                  Tire dúvidas, peça ajuda ou comece seu piloto acompanhado. O PratoBy ajuda
+                  Tire dúvidas, peça ajuda ou comece com acompanhamento. O PratoBy ajuda
                   negócios de alimentação a venderem online pelo próprio link, sem comissão por
                   pedido.
                 </p>
@@ -399,7 +399,7 @@ export default function ContactPage() {
                 </div>
 
                 <p className="mt-5 text-xs font-bold text-[#6b7280] dark:text-zinc-500">
-                  Estamos priorizando poucas lojas piloto com configuração acompanhada.
+                  Atendimento consultivo para configurar sua loja com mais segurança.
                 </p>
               </motion.div>
             </div>
@@ -535,9 +535,9 @@ export default function ContactPage() {
                 </h2>
 
                 <p className="mt-3 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
-                  Se sua loja ainda não usa o PratoBy, recomendamos começar pelo piloto acompanhado.
+                  Se sua loja ainda não usa o PratoBy, recomendamos começar com configuração assistida.
                   Assim fica mais fácil configurar cardápio, horários, entrega, retirada, pagamentos
-                  e primeiro pedido teste.
+                  e primeiro pedido de validação.
                 </p>
 
                 <div className="mt-6 grid gap-4">
@@ -627,7 +627,7 @@ export default function ContactPage() {
                 </h2>
 
                 <p className="mt-3 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
-                  Algumas respostas rápidas sobre o PratoBy, venda online e piloto acompanhado.
+                  Algumas respostas rápidas sobre o PratoBy, venda online e configuração assistida.
                 </p>
               </div>
 

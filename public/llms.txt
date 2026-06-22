@@ -9,8 +9,9 @@ O PratoBy ajuda lojistas de alimentação a criar uma loja online com cardápio 
 - [Página inicial](https://pratoby.com/): visão geral do PratoBy, proposta de valor e chamada para começar.
 - [Planos](https://pratoby.com/planos): comparação dos planos, recursos e valores do PratoBy.
 - [Sobre o PratoBy](https://pratoby.com/sobre): informações sobre a plataforma e sua proposta para pequenos negócios.
-- [Contato](https://pratoby.com/contato): canal para falar com o PratoBy, tirar dúvidas e iniciar um piloto acompanhado.
+- [Contato](https://pratoby.com/contato): canal para falar com o PratoBy, tirar dúvidas e começar com configuração assistida.
 - [Exemplos de lojas](https://pratoby.com/exemplos): exemplos públicos de lojas criadas com o PratoBy.
+- [Blog](https://pratoby.com/blog): tutoriais rápidos sobre cardápio digital, delivery próprio, QR Code e pedidos online.
 
 ## Soluções
 
@@ -22,10 +23,16 @@ O PratoBy ajuda lojistas de alimentação a criar uma loja online com cardápio 
 - [Cardápio digital para restaurante](https://pratoby.com/cardapio-digital-para-restaurante): cardápio digital para restaurantes venderem direto.
 - [Loja online para restaurante](https://pratoby.com/Cardapio-Digital): loja online com cardápio, carrinho, pedidos e painel de gestão.
 
-## Lojas demo
+## Tutoriais
 
-- [Doce Capivara Confeitaria](https://pratoby.com/doce-capivara-confeitaria): loja demo de confeitaria no PratoBy.
-- [Capivaras Lanches](https://pratoby.com/capivaras-lanches): loja demo de lanchonete no PratoBy.
+- [Como criar um cardápio digital para restaurante](https://pratoby.com/blog/como-criar-cardapio-digital-para-restaurante): passo a passo para montar cardápio, categorias, link público, QR Code e pedidos online.
+- [Como vender delivery sem comissão por pedido](https://pratoby.com/blog/como-vender-delivery-sem-comissao): orientações para vender direto pelo próprio link sem depender apenas de marketplace.
+- [QR Code no cardápio digital](https://pratoby.com/blog/qr-code-cardapio-digital-como-usar): como usar QR Code para divulgar o cardápio e receber pedidos online.
+
+## Lojas modelo
+
+- [Doce Capivara Confeitaria](https://pratoby.com/doce-capivara-confeitaria): loja modelo de confeitaria no PratoBy.
+- [Capivaras Lanches](https://pratoby.com/capivaras-lanches): loja modelo de lanchonete no PratoBy.
 
 ## Informações legais
 

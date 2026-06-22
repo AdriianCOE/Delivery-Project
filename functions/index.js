@@ -3970,9 +3970,9 @@ const INSTITUTIONAL_SEO_ROUTES = {
       'Fale com o PratoBy para criar seu cardápio digital, tirar dúvidas sobre planos ou começar sua loja online com venda direta e sem comissão.',
   },
   '/exemplos': {
-    title: 'Exemplos de lojas PratoBy | Cardápio digital na prática',
+    title: 'Exemplos de lojas PratoBy | Cardápio digital e delivery',
     description:
-      'Veja exemplos oficiais de lojas no PratoBy para restaurantes, lanchonetes e confeitarias venderem pelo próprio link sem comissão por pedido.',
+      'Teste lojas modelo do PratoBy com cardápio digital, carrinho, adicionais, entrega, retirada e pedidos online para restaurantes, lanchonetes e confeitarias.',
   },
   '/privacidade': {
     title: 'Política de Privacidade | PratoBy',
@@ -3988,6 +3988,35 @@ const INSTITUTIONAL_SEO_ROUTES = {
     title: 'Exclusão de dados do usuário | PratoBy',
     description:
       'Saiba como solicitar exclusão, correção ou anonimização de dados pessoais tratados pelo PratoBy.',
+  },
+  '/blog': {
+    title: 'Blog PratoBy | Tutoriais de cardápio digital e delivery',
+    description:
+      'Tutoriais rápidos sobre cardápio digital, delivery próprio, QR Code, pedidos online e venda direta para restaurantes.',
+  },
+  '/blog/como-criar-cardapio-digital-para-restaurante': {
+    title: 'Como criar um cardápio digital para restaurante | Blog PratoBy',
+    description:
+      'Passo a passo para montar um cardápio digital com produtos, categorias, fotos, link público, QR Code e pedidos online para restaurante.',
+    ogType: 'article',
+    datePublished: '2026-06-22',
+    dateModified: '2026-06-22',
+  },
+  '/blog/como-vender-delivery-sem-comissao': {
+    title: 'Como vender delivery sem comissão por pedido | Blog PratoBy',
+    description:
+      'Entenda como usar um link próprio, cardápio digital e pedidos online para vender direto sem depender de marketplace.',
+    ogType: 'article',
+    datePublished: '2026-06-22',
+    dateModified: '2026-06-22',
+  },
+  '/blog/qr-code-cardapio-digital-como-usar': {
+    title: 'QR Code no cardápio digital: como usar na loja | Blog PratoBy',
+    description:
+      'Veja onde usar QR Code, como divulgar o link da loja e como organizar pedidos online com cardápio digital.',
+    ogType: 'article',
+    datePublished: '2026-06-22',
+    dateModified: '2026-06-22',
   },
   '/cardapio-digital': {
     title: 'Cardápio digital para vender online | PratoBy',
@@ -4212,6 +4241,36 @@ function buildBreadcrumbJsonLd(items) {
 function buildInstitutionalJsonLd(meta) {
   const graph = [buildInstitutionalWebPageJsonLd(meta)]
 
+  if (meta.ogType === 'article') {
+    graph.push({
+      '@type': 'BlogPosting',
+      '@id': `${meta.canonical}#article`,
+      headline: meta.title.replace(/\s\|\sBlog PratoBy$/, ''),
+      description: meta.description,
+      image: meta.image || DEFAULT_OG_IMAGE,
+      datePublished: meta.datePublished,
+      dateModified: meta.dateModified || meta.datePublished,
+      inLanguage: 'pt-BR',
+      mainEntityOfPage: {
+        '@type': 'WebPage',
+        '@id': meta.canonical,
+      },
+      author: {
+        '@type': 'Organization',
+        name: 'PratoBy',
+        url: PUBLIC_APP_ORIGIN,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'PratoBy',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${PUBLIC_APP_ORIGIN}/icons/android-chrome-512x512.png`,
+        },
+      },
+    })
+  }
+
   if (meta.path !== '/') {
     graph.push(buildBreadcrumbJsonLd([
       { name: 'Início', url: `${PUBLIC_APP_ORIGIN}/` },
@@ -4240,6 +4299,7 @@ function injectInstitutionalSeo(html, meta) {
   const safeImageType = escapeHtml(meta.imageType || getPreviewImageType(meta.image || DEFAULT_OG_IMAGE))
   const safeImageAlt = escapeHtml(meta.imageAlt || DEFAULT_OG_IMAGE_ALT)
   const safeRobots = escapeHtml(meta.robots || INDEX_ROBOTS)
+  const safeOgType = escapeHtml(meta.ogType === 'article' ? 'article' : 'website')
 
   const tags = [
     [/<title\b[^>]*>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`],
@@ -4248,7 +4308,7 @@ function injectInstitutionalSeo(html, meta) {
     [/<meta\b(?=[^>]*\bname=["']googlebot["'])[\s\S]*?>/i, `<meta name="googlebot" content="${safeRobots}">`],
     [/<link\b(?=[^>]*\brel=["']canonical["'])[\s\S]*?>/i, `<link rel="canonical" href="${safeCanonical}">`],
     [/<meta\b(?=[^>]*\bproperty=["']og:locale["'])[\s\S]*?>/i, '<meta property="og:locale" content="pt_BR">'],
-    [/<meta\b(?=[^>]*\bproperty=["']og:type["'])[\s\S]*?>/i, '<meta property="og:type" content="website">'],
+    [/<meta\b(?=[^>]*\bproperty=["']og:type["'])[\s\S]*?>/i, `<meta property="og:type" content="${safeOgType}">`],
     [/<meta\b(?=[^>]*\bproperty=["']og:site_name["'])[\s\S]*?>/i, '<meta property="og:site_name" content="PratoBy">'],
     [/<meta\b(?=[^>]*\bproperty=["']og:url["'])[\s\S]*?>/i, `<meta property="og:url" content="${safeCanonical}">`],
     [/<meta\b(?=[^>]*\bproperty=["']og:title["'])[\s\S]*?>/i, `<meta property="og:title" content="${safeTitle}">`],
@@ -4425,6 +4485,10 @@ const SITEMAP_STATIC_ROUTES = [
   { path: '/sistema-para-lanchonete', priority: '0.8' },
   { path: '/sistema-para-pizzaria', priority: '0.8' },
   { path: '/sistema-para-confeitaria', priority: '0.8' },
+  { path: '/blog', priority: '0.65' },
+  { path: '/blog/como-criar-cardapio-digital-para-restaurante', priority: '0.6' },
+  { path: '/blog/como-vender-delivery-sem-comissao', priority: '0.6' },
+  { path: '/blog/qr-code-cardapio-digital-como-usar', priority: '0.6' },
   { path: '/exemplos', priority: '0.7' },
   { path: '/sobre', priority: '0.6' },
   { path: '/contato', priority: '0.6' },

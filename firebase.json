@@ -185,7 +185,7 @@
     ],
     "redirects": [
       {
-        "regex": "^/(login|cadastro|onboarding|dashboard|admin|planos|sobre|contato|exemplos|privacidade|privacy|termos|terms|data-deletion)/+$",
+        "regex": "^/(login|cadastro|onboarding|dashboard|admin|planos|sobre|contato|exemplos|blog|privacidade|privacy|termos|terms|data-deletion)/+$",
         "destination": "/:1",
         "type": 301
       },
@@ -361,6 +361,20 @@
       },
       {
         "source": "/data-deletion",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/blog",
+        "function": {
+          "functionId": "storefrontSeoPreview",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/blog/**",
         "function": {
           "functionId": "storefrontSeoPreview",
           "region": "southamerica-east1"

@@ -1,14 +1,22 @@
 ﻿import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import SEO from '../components/seo/SEO'
-import { MARKETING_SEO, buildBreadcrumbJsonLd } from '../components/seo/seoConfig'
+import {
+  MARKETING_SEO,
+  buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+  buildWebPageJsonLd,
+} from '../components/seo/seoConfig'
 import MarketingLayout from '../pages/MarketingLayout'
 import {
   FiArrowRight,
   FiCheck,
+  FiCheckCircle,
   FiClock,
   FiExternalLink,
   FiGift,
+  FiHelpCircle,
+  FiLink,
   FiMapPin,
   FiMessageCircle,
   FiShoppingBag,
@@ -23,13 +31,13 @@ const examples = [
     type: 'Lanchonete / fast-food',
     emoji: '🍔',
     description:
-      'Uma loja demo para operação rápida: combos, adicionais, entrega, retirada e acompanhamento do pedido em tempo real.',
+      'Uma loja modelo para operação rápida: combos, adicionais, entrega, retirada e acompanhamento do pedido em tempo real.',
     items: ['Capivara Burger', 'Combo Família', 'Batata Rústica'],
     features: ['Combos', 'Adicionais', 'Entrega e retirada', 'Status do pedido'],
     averageTicket: 'R$ 39,90',
     deliveryTime: '30-45 min',
     slug: '/capivaras-lanches',
-    badge: 'Demo de lanchonete',
+    badge: 'Modelo de lanchonete',
     highlight: 'Pedidos rápidos',
     gradient: 'from-orange-500 via-amber-500 to-yellow-400',
     softGradient: 'from-orange-50 via-amber-50 to-white',
@@ -45,7 +53,7 @@ const examples = [
     averageTicket: 'R$ 89,90',
     deliveryTime: 'Sob encomenda',
     slug: '/doce-capivara-confeitaria',
-    badge: 'Demo de confeitaria',
+    badge: 'Modelo de confeitaria',
     highlight: 'Encomendas agendadas',
     gradient: 'from-[#D9773F] via-[#F4A6A6] to-[#FFF4E6]',
     softGradient: 'from-[#fff4e6] via-[#fff8f1] to-white',
@@ -59,12 +67,36 @@ const benefits = [
   'Visual pronto para mobile',
 ]
 
+const comparison = [
+  {
+    label: 'Operação rápida',
+    title: 'Lanches, combos e adicionais',
+    description:
+      'Use a Capivaras Lanches para testar carrinho, adicionais, entrega, retirada e status do pedido.',
+    link: '/capivaras-lanches',
+  },
+  {
+    label: 'Venda planejada',
+    title: 'Confeitaria, kits e encomendas',
+    description:
+      'Use a Doce Capivara para entender produtos sob encomenda, pedidos maiores e atendimento mais consultivo.',
+    link: '/doce-capivara-confeitaria',
+  },
+  {
+    label: 'Modelo para sua loja',
+    title: 'Mesma estrutura com sua marca',
+    description:
+      'Depois de conhecer o modelo, troque nome, cores, produtos, horários, taxas e formas de atendimento no PratoBy.',
+    link: '/planos',
+  },
+]
+
 const steps = [
   {
     icon: FiShoppingBag,
     title: 'Veja a experiência do cliente',
     description:
-      'Abra as lojas demo como se fosse comprar e veja categorias, produtos, adicionais, carrinho e status do pedido.',
+      'Abra as lojas modelo como se fosse comprar e veja categorias, produtos, adicionais, carrinho e status do pedido.',
   },
   {
     icon: FiGift,
@@ -80,9 +112,43 @@ const steps = [
   },
 ]
 
+const faqItems = [
+  {
+    q: 'As lojas de exemplo recebem pedidos reais?',
+    a: 'Não. Elas são demonstrações públicas para você testar a experiência do cliente, carrinho, produtos e fluxo de pedido no PratoBy.',
+  },
+  {
+    q: 'Posso ter uma loja parecida com esses exemplos?',
+    a: 'Sim. O PratoBy permite personalizar nome, logo, cores, categorias, produtos, horários, taxas, entrega, retirada e formas de pagamento.',
+  },
+  {
+    q: 'Essas lojas modelo servem para qualquer tipo de restaurante?',
+    a: 'Elas mostram dois modelos comuns. Restaurantes, pizzarias, lanchonetes, confeitarias e pequenos deliveries podem adaptar a estrutura para sua operação.',
+  },
+  {
+    q: 'O PratoBy cobra comissão por pedido como marketplace?',
+    a: 'Não. A proposta do PratoBy é vender pelo próprio link da loja sem comissão do PratoBy por pedido.',
+  },
+]
+
 const fadeUp = {
   hidden: { opacity: 0, y: 22 },
   visible: { opacity: 1, y: 0 },
+}
+
+function buildExamplesItemListJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'Exemplos de lojas PratoBy',
+    itemListElement: examples.map((example, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: example.name,
+      description: example.description,
+      url: `https://pratoby.com${example.slug}`,
+    })),
+  }
 }
 
 function PreviewItem({ item, index }) {
@@ -259,12 +325,48 @@ function StepCard({ step, index }) {
   )
 }
 
+function ComparisonCard({ item, index }) {
+  return (
+    <motion.article
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.35 }}
+      variants={fadeUp}
+      transition={{ duration: 0.45, delay: index * 0.08 }}
+      className="rounded-[1.75rem] border border-gray-100 bg-white p-5 shadow-sm"
+    >
+      <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-[#f97316]">
+        <FiCheckCircle size={14} />
+        {item.label}
+      </span>
+      <h3 className="mt-4 text-lg font-black text-[#111827]">{item.title}</h3>
+      <p className="mt-3 text-sm font-semibold leading-7 text-[#6b7280]">
+        {item.description}
+      </p>
+      <Link
+        to={item.link}
+        className="mt-5 inline-flex items-center gap-2 text-sm font-black text-[#f97316] transition hover:text-[#ea580c]"
+      >
+        Abrir caminho
+        <FiArrowRight size={15} />
+      </Link>
+    </motion.article>
+  )
+}
+
 export default function RestaurantExamplesPage() {
+  const structuredData = [
+    buildWebPageJsonLd(MARKETING_SEO.examples),
+    buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Exemplos', path: '/exemplos' }]),
+    buildExamplesItemListJsonLd(),
+    buildFaqPageJsonLd(faqItems),
+  ].filter(Boolean)
+
   return (
     <>
       <SEO
         {...MARKETING_SEO.examples}
-        structuredData={buildBreadcrumbJsonLd([{ name: 'Início', path: '/' }, { name: 'Exemplos', path: '/exemplos' }])}
+        structuredData={structuredData}
       />
 
       <MarketingLayout>
@@ -287,11 +389,11 @@ export default function RestaurantExamplesPage() {
                 </span>
 
                 <h1 className="mt-6 text-4xl font-black tracking-tight text-[#111827] sm:text-5xl lg:text-6xl">
-                  Veja duas lojas prontas funcionando na prática.
+                  Veja lojas modelo do PratoBy funcionando na prática.
                 </h1>
 
                 <p className="mx-auto mt-6 max-w-3xl text-lg font-medium leading-8 text-[#4b5563]">
-                  Use a Capivaras Lanches para entender uma operação rápida de delivery e a Doce Capivara Confeitaria para ver encomendas, kits festa e produtos agendados.
+                  Teste cardápio digital, carrinho, adicionais, entrega, retirada e pedidos online em exemplos públicos feitos para restaurantes, lanchonetes e confeitarias.
                 </p>
 
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -334,6 +436,35 @@ export default function RestaurantExamplesPage() {
             </div>
           </section>
 
+          <section className="relative pb-12 sm:pb-16">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.35 }}
+                variants={fadeUp}
+                transition={{ duration: 0.45 }}
+                className="mb-7 max-w-3xl"
+              >
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-[#f97316]">
+                  O que comparar
+                </p>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                  Abra as lojas modelo com olhar de cliente e de lojista.
+                </h2>
+                <p className="mt-4 text-sm font-semibold leading-7 text-[#6b7280]">
+                  As lojas mostram modelos diferentes de operação para você decidir como quer apresentar produtos, montar combos e receber pedidos no seu próprio link.
+                </p>
+              </motion.div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {comparison.map((item, index) => (
+                  <ComparisonCard key={item.title} item={item} index={index} />
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section id="exemplos" className="relative pb-16 sm:pb-24">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
               <motion.div
@@ -346,7 +477,7 @@ export default function RestaurantExamplesPage() {
               >
                 <div>
                   <p className="text-sm font-black uppercase tracking-[0.18em] text-[#f97316]">
-                    Lojas demo
+                    Lojas modelo
                   </p>
                   <h2 className="mt-3 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
                     Escolha um exemplo para abrir.
@@ -393,12 +524,30 @@ export default function RestaurantExamplesPage() {
                       <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#4b5563]">
                         Divulgue o link no Instagram, WhatsApp, Google Business, bio, panfleto, cartão de visita ou QR Code. O cliente acessa, escolhe os produtos e envia o pedido organizado.
                       </p>
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {[
+                          ['Cardápio digital', '/cardapio-digital'],
+                          ['Delivery sem comissão', '/delivery-sem-comissao'],
+                          ['Sistema para lanchonete', '/sistema-para-lanchonete'],
+                          ['Sistema para confeitaria', '/sistema-para-confeitaria'],
+                        ].map(([label, to]) => (
+                          <Link
+                            key={to}
+                            to={to}
+                            className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white px-3 py-1.5 text-xs font-black text-[#f97316] shadow-sm transition hover:bg-orange-50"
+                          >
+                            <FiLink size={13} />
+                            {label}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row">
                       <Link
                         to="/planos"
-                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111827] px-8 py-4 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#111827] px-8 py-4 text-sm font-black text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-black"
                       >
                         Ver planos
                         <FiArrowRight size={18} />
@@ -409,12 +558,54 @@ export default function RestaurantExamplesPage() {
                         className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f97316] px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#ea580c]"
                       >
                         <FiMessageCircle size={18} />
-                        Falar comigo
+                        Falar com o PratoBy
                       </Link>
                     </div>
                   </div>
                 </div>
               </motion.div>
+            </div>
+          </section>
+
+          <section className="bg-[#f9fafb] py-14 sm:py-20">
+            <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.35 }}
+                variants={fadeUp}
+                transition={{ duration: 0.45 }}
+                className="text-center"
+              >
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-[#f97316]">
+                  FAQ
+                </p>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-[#111827] sm:text-4xl">
+                  Dúvidas sobre as lojas de exemplo
+                </h2>
+              </motion.div>
+
+              <div className="mt-8 grid gap-4">
+                {faqItems.map((faq, index) => (
+                  <motion.article
+                    key={faq.q}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, amount: 0.28 }}
+                    variants={fadeUp}
+                    transition={{ duration: 0.45, delay: index * 0.05 }}
+                    className="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm"
+                  >
+                    <h3 className="flex items-start gap-3 text-base font-black text-[#111827]">
+                      <FiHelpCircle className="mt-1 shrink-0 text-[#f97316]" />
+                      {faq.q}
+                    </h3>
+                    <p className="ml-8 mt-2 text-sm font-semibold leading-7 text-[#6b7280]">
+                      {faq.a}
+                    </p>
+                  </motion.article>
+                ))}
+              </div>
             </div>
           </section>
         </main>

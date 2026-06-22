@@ -342,12 +342,6 @@ export default function TermsPage() {
             </div>
 
             <div className="space-y-10 lg:col-span-3">
-              <div className="rounded-[2rem] border border-orange-100 bg-orange-50/40 p-5 text-sm font-semibold leading-relaxed text-orange-950 sm:p-6">
-                <p>
-                  <span className="font-black text-[#f97316]">Importante:</span> este texto foi escrito para ser claro para lojistas e clientes, mas não substitui revisão jurídica. Antes de publicar em produção, vale conferir CNPJ/razão social, canal de suporte, política comercial e versão dos termos usada no backend.
-                </p>
-              </div>
-
               {SECTIONS.map((section) => {
                 const Icon = section.icon
 

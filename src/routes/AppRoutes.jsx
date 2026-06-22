@@ -36,6 +36,8 @@ const PrivacyPage = lazy(() => import('../pages/PrivacyPage'))
 const TermsPage = lazy(() => import('../pages/TermsPage'))
 const DataDeletionPage = lazy(() => import('../pages/DataDeletionPage'))
 const SeoIntentPage = lazy(() => import('../pages/SeoIntentPage'))
+const BlogPage = lazy(() => import('../pages/BlogPage'))
+const BlogPostPage = lazy(() => import('../pages/BlogPostPage'))
 
 const AdminLayout = lazy(() => import('../components/layouts/AdminLayout'))
 const DashboardLayout = lazy(() => import('../components/layouts/DashboardLayout'))
@@ -190,6 +192,8 @@ export default function AppRoutes() {
         <Route path="/privacidade" element={<PrivacyPage />} />
         <Route path="/termos" element={<TermsPage />} />
         <Route path="/data-deletion" element={<DataDeletionPage />} />
+        <Route path="/blog" element={<BlogPage />} />
+        <Route path="/blog/:slug" element={<BlogPostPage />} />
         <Route path="/cardapio-digital" element={<SeoIntentPage />} />
         <Route path="/delivery-sem-comissao" element={<SeoIntentPage />} />
         <Route path="/sistema-para-confeitaria" element={<SeoIntentPage />} />

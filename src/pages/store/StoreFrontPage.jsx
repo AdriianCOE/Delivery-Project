@@ -85,7 +85,7 @@ const PLAYWRIGHT_STORE_FIXTURES = {
       slug: 'capivaras-lanches',
       storeSlug: 'capivaras-lanches',
       name: 'Capivaras Lanches',
-      description: 'Hamburgueria demo do PratoBy com cardápio público, pedidos online e retirada.',
+      description: 'Hamburgueria modelo do PratoBy com cardápio público, pedidos online e retirada.',
       segment: 'Lanchonete',
       themeColor: BRAND_GREEN,
       isActive: true,
@@ -101,7 +101,7 @@ const PLAYWRIGHT_STORE_FIXTURES = {
       },
       pix: {
         enabled: true,
-        key: 'demo@pratoby.com',
+        key: 'contato@pratoby.com',
         keyType: 'email',
         merchantName: 'Capivaras Lanches',
         merchantCity: 'Sao Paulo',
@@ -2646,7 +2646,7 @@ const handleToggleFavorite = useCallback(() => {
     const productsQuery = query(collection(db, 'publicStores', targetStoreId, 'products'))
 
     if (import.meta.env.DEV) {
-      console.log('[StoreFront] Carregando cardapio publico:', targetStoreId)
+      console.log('[StoreFront] Carregando cardápio público:', targetStoreId)
     }
 
     setMenuError('')

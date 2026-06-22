@@ -300,7 +300,7 @@ export function ComparisonSection() {
           </Link>
 
           <p className="mt-4 text-sm font-semibold text-[#6b7280]">
-            Comece com uma loja piloto e valide seu delivery próprio.
+            Comece com sua loja online e valide seu delivery próprio.
           </p>
         </motion.div>
       </div>

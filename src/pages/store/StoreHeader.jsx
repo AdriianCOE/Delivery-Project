@@ -749,7 +749,7 @@ function mapSharedOperationalStatus(status) {
   if (status.isOpen) {
     return {
       label: 'Aberto agora',
-      description: status.label || 'A loja estÃ¡ recebendo pedidos.',
+      description: status.label || 'A loja está recebendo pedidos.',
       isOpen: true,
       tone: 'success',
     }
@@ -758,8 +758,8 @@ function mapSharedOperationalStatus(status) {
   if (status.reason === 'temporary-pause') {
     return {
       label: 'Pausada temporariamente',
-      description: status.label || 'A loja estÃ¡ pausada no momento.',
-      mobileDescription: 'Loja pausada agora. VocÃª ainda pode ver o cardÃ¡pio.',
+      description: status.label || 'A loja está pausada no momento.',
+      mobileDescription: 'Loja pausada agora. Você ainda pode ver o cardápio.',
       isOpen: false,
       tone: 'warning',
     }
@@ -767,8 +767,8 @@ function mapSharedOperationalStatus(status) {
 
   if (status.reason === 'store-blocked') {
     return {
-      label: 'Loja indisponÃ­vel',
-      description: status.label || 'Esta loja nÃ£o estÃ¡ disponÃ­vel no momento.',
+      label: 'Loja indisponível',
+      description: status.label || 'Esta loja não está disponível no momento.',
       isOpen: false,
       tone: 'danger',
     }
@@ -776,8 +776,8 @@ function mapSharedOperationalStatus(status) {
 
   return {
     label: 'Fechada agora',
-    description: status.label || 'A loja estÃ¡ fechada agora, mas vocÃª pode ver o cardÃ¡pio.',
-    mobileDescription: 'Loja fechada agora. VocÃª ainda pode ver o cardÃ¡pio.',
+    description: status.label || 'A loja está fechada agora, mas você pode ver o cardápio.',
+    mobileDescription: 'Loja fechada agora. Você ainda pode ver o cardápio.',
     isOpen: false,
     tone: 'warning',
   }
@@ -1387,7 +1387,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
         srcSet={logoSrcSet || undefined}
         sizes="(max-width: 640px) 76px, 120px"
         alt={store?.name || 'Logo da loja'}
-        className="h-full w-full object-cover"
+        className="h-full w-full object-contain p-2"
         loading="eager"
         decoding="async"
         width={120}
@@ -1643,7 +1643,7 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
             srcSet={logoSrcSet || undefined}
             sizes="64px"
             alt={store?.name || 'Logo da loja'}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain p-1.5"
             loading="lazy"
             decoding="async"
             width={64}
@@ -1797,11 +1797,11 @@ export default function StoreHeader({ store, onOpenProfile, activeUsers = 0 }) {
 
       <div>
         <p className="text-[11px] font-black uppercase tracking-wide text-amber-700">
-          Atendimento indisponivel
+          Atendimento indisponível
         </p>
 
         <p className="mt-1 text-sm font-black text-[#111827]">
-          A loja ainda nao liberou entrega, retirada ou agendamento.
+          A loja ainda não liberou entrega, retirada ou agendamento.
         </p>
       </div>
     </div>

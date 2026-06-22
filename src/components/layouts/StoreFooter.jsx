@@ -18,6 +18,7 @@ import {
   FiShoppingBag,
   FiZap,
 } from 'react-icons/fi'
+import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
 
 const DEFAULT_THEME = '#f97316'
 const PRATOBY_URL = 'https://pratoby.com'
@@ -76,13 +77,9 @@ function getLogoUrl(store) {
     '/icons/favicon-32x32.png'
   )
 
-  const normalizedLogoUrl = String(logoUrl)
-
-  if (!normalizedLogoUrl.includes('res.cloudinary.com') || !normalizedLogoUrl.includes('/upload/')) {
-    return normalizedLogoUrl
-  }
-
-  return normalizedLogoUrl.replace('/upload/', '/upload/f_auto,q_auto,c_fill,w_96,h_96/')
+  return getCloudinaryImageUrl(String(logoUrl), 'storeLogoSmall', {
+    replaceExistingTransform: true,
+  })
 }
 
 function getAddressText(store) {
@@ -468,7 +465,7 @@ export default function StoreFooter({ store, todayHoursLabel }) {
                   <img
                     src={logoUrl}
                     alt={storeName}
-                    className="h-14 w-14 rounded-[1.15rem] object-cover sm:h-16 sm:w-16"
+                    className="h-14 w-14 rounded-[1.15rem] object-contain p-1 sm:h-16 sm:w-16"
                     loading="lazy"
                   />
                 </div>

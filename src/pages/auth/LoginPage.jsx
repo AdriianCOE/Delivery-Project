@@ -48,17 +48,26 @@ const APP_ENV = import.meta.env.MODE || 'production'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const BENEFITS = [
-  'Pedidos em tempo real no painel',
-  'Cardápio com link exclusivo da loja',
-  'Sem comissão do PratoBy por pedido',
-  'Produtos, horários, cupons e entrega em um só lugar',
+  'Pedidos, status e atendimento em tempo real',
+  'Cardápio, horários e loja pública em um só lugar',
+  'Cupons, entrega, retirada e pagamentos organizados',
+  'Canal próprio sem comissão do PratoBy por pedido',
 ]
 
-const METRICS = [
-  { label: 'Pedidos', value: '24', helper: 'hoje' },
-  { label: 'Conversão', value: '+18%', helper: 'sem app' },
-  { label: 'Comissão PratoBy', value: 'R$ 0', helper: 'por pedido' },
-]
+const OPERATION_STEPS = [
+  {
+    label: "Cliente faz o pedido",
+    helper: "Pelo link próprio da loja, direto no cardápio digital.",
+  },
+  {
+    label: "A loja recebe o aviso",
+    helper: "Pedido aparece no painel com alerta em tempo real.",
+  },
+  {
+    label: "Confirma e acompanha",
+    helper: "Status, pagamento e entrega organizados em um só lugar.",
+  },
+];
 
 // ─────────────────────────────────────────────────────────────
 // LÓGICA DE AUTH (preservada integralmente)
@@ -560,22 +569,22 @@ export default function LoginPage() {
               className="inline-flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-100"
             >
               <FiShield className="text-[#f97316]" />
-              Painel exclusivo para lojistas e administradores
+              Acesso do lojista PratoBy
             </motion.span>
 
             <motion.h1
               variants={fadeUp}
               className="mt-7 max-w-2xl text-5xl font-black leading-[1.03] tracking-tight xl:text-6xl"
             >
-              Volte para sua operação
-              <span className="block text-[#f97316]">em poucos segundos.</span>
+              Entre no painel
+              <span className="block text-[#f97316]">sem perder o ritmo.</span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="mt-6 max-w-xl text-lg font-medium leading-8 text-gray-300"
             >
-              Acesse pedidos, cardápio, horários, clientes e atendimento em um painel feito para operação real.
+              Continue de onde parou: pedidos, cardápio, horários, pagamentos e atendimento no mesmo lugar.
             </motion.p>
 
             <motion.div
@@ -601,48 +610,120 @@ export default function LoginPage() {
             transition={{ duration: 0.55, delay: 0.35, ease: 'easeOut' }}
             className="relative z-10 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]"
           >
-            {/* card PratoBy Cloud */}
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/20">
-              <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#f97316] shadow-lg shadow-orange-950/20">
-                  <FiZap size={22} />
-                </div>
-                <div>
-                  <p className="font-black">PratoBy Cloud</p>
-                  <p className="mt-1 text-sm font-medium leading-6 text-gray-300">
-                    Cardápio digital para negócios locais venderem direto, sem
-                    depender de marketplace.
-                  </p>
-                </div>
-              </div>
-            </div>
+              {/* card PratoBy Cloud */}
+              <div className="relative flex h-full min-h-[316px] flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+                <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-orange-500/20 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-12 -left-12 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
 
-            {/* card métricas */}
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/20">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm font-black text-white">
-                  <FiTrendingUp className="text-[#f97316]" />
-                  Visão rápida da operação
-                </div>
-                <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-black text-emerald-200">
-                  Online
-                </span>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {METRICS.map((metric) => (
-                  <div
-                    key={metric.label}
-                    className="rounded-2xl bg-black/20 p-3 ring-1 ring-white/5"
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/45">
-                      {metric.label}
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-white">{metric.value}</p>
-                    <p className="text-xs font-bold text-orange-100/70">{metric.helper}</p>
+                <div className="relative flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-950/30 ring-1 ring-white/20">
+                    <FiZap size={22} />
                   </div>
-                ))}
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-black tracking-tight text-white">PratoBy Cloud</p>
+                      <span className="rounded-full border border-orange-300/20 bg-orange-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-orange-100">
+                        Sem comissão
+                      </span>
+                    </div>
+
+                    <p className="mt-2 max-w-[34rem] text-sm font-semibold leading-6 text-gray-300">
+                      Seu cardápio digital, pedidos online e operação de delivery em um painel
+                      próprio — sem depender de marketplace para vender.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="relative mt-auto pt-5">
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4 ring-1 ring-white/5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-orange-100/70">
+                          Operação própria
+                        </p>
+                        <p className="mt-1 text-sm font-black text-white">
+                          Venda direto pelo seu link
+                        </p>
+                      </div>
+
+                      <span className="rounded-full border border-emerald-300/20 bg-emerald-500/15 px-3 py-1 text-[11px] font-black text-emerald-100">
+                        Ativo
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-white/45">
+                          Pedido
+                        </p>
+                        <p className="mt-1 text-sm font-black text-white">Online</p>
+                      </div>
+
+                      <div className="rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-white/45">
+                          Taxa
+                        </p>
+                        <p className="mt-1 text-sm font-black text-white">0%</p>
+                      </div>
+
+                      <div className="rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-white/45">
+                          Canal
+                        </p>
+                        <p className="mt-1 text-sm font-black text-white">Próprio</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              {/* card fluxo */}
+              <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+                <div className="pointer-events-none absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-orange-500/10 blur-3xl" />
+
+                <div className="relative flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-black text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10">
+                      <FiTrendingUp className="text-[#f97316]" />
+                    </span>
+                    Fluxo de trabalho
+                  </div>
+
+                  <span className="rounded-full border border-emerald-300/20 bg-emerald-500/15 px-3 py-1 text-[11px] font-black text-emerald-100">
+                    Ao vivo
+                  </span>
+                </div>
+
+                <div className="relative mt-5 grid gap-3">
+                  <div className="absolute left-[17px] top-4 h-[calc(100%-2rem)] w-px bg-gradient-to-b from-orange-400/50 via-white/10 to-transparent" />
+
+                  {OPERATION_STEPS.map((step, index) => (
+                    <div
+                      key={step.label}
+                      className="group relative flex items-start gap-3 rounded-2xl bg-black/20 p-3 ring-1 ring-white/5 transition duration-200 hover:bg-black/30 hover:ring-orange-300/20"
+                    >
+                      <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xs font-black text-white shadow-lg shadow-orange-950/25 ring-1 ring-white/20">
+                        {index + 1}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black leading-5 text-white">
+                          {step.label}
+                        </p>
+                        <p className="mt-0.5 text-xs font-semibold leading-5 text-orange-100/70">
+                          {step.helper}
+                        </p>
+                      </div>
+
+                      <span className="mt-1 hidden rounded-full bg-white/5 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white/45 transition group-hover:text-orange-100 sm:inline-flex">
+                        etapa {index + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
           </motion.div>
         </section>
 
@@ -683,7 +764,7 @@ export default function LoginPage() {
                     Bem-vindo de volta
                   </h2>
                   <p className="mt-2 text-sm font-semibold leading-6 text-[#6b7280]">
-                    Continue para o painel da sua loja com e-mail, senha ou Google.
+                    Acesse sua loja para acompanhar pedidos, editar o cardápio e manter a operação atualizada.
                   </p>
                 </motion.div>
 
@@ -713,12 +794,12 @@ export default function LoginPage() {
                     className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-black text-[#374151] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <GoogleIcon size={18} />
-                    Continuar com Google
+                    Entrar com Google
                   </motion.button>
 
                   <div className="mt-5 flex items-center gap-3">
                     <div className="h-px flex-1 bg-gray-200" />
-                    <span className="text-[11px] font-black text-[#9ca3af]">ou entre com seu e-mail</span>
+                    <span className="text-[11px] font-black text-[#9ca3af]">ou use e-mail e senha</span>
                     <div className="h-px flex-1 bg-gray-200" />
                   </div>
                 </motion.div>
@@ -842,8 +923,8 @@ export default function LoginPage() {
                         Plataforma para operação real
                       </p>
                       <p className="mt-1 text-xs font-semibold leading-5 text-[#6b7280]">
-                        Use o painel para gerenciar loja, pedidos, cardápio e atendimento
-                        em tempo real.
+                        Use o painel para gerenciar loja, pedidos, cardápio, pagamentos
+                        e atendimento.
                       </p>
                     </div>
                   </div>

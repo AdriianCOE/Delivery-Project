@@ -2911,9 +2911,9 @@ const fulfillmentDetail = address.isPickup
       }`}
     />
 
-    {isNewOrder && !isOverdue && (
+    {(isNewOrder || isLatest) && !isOverdue && (
       <div className="pointer-events-none absolute right-4 top-3 hidden rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-lg shadow-orange-500/20 sm:block">
-        Novo pedido
+        {isNewOrder ? 'Novo pedido' : 'Último pedido'}
       </div>
     )}
 
@@ -2958,10 +2958,10 @@ const fulfillmentDetail = address.isPickup
             </span>
           )}
 
-          {isNewOrder && (
+          {(isNewOrder || isLatest) && (
             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] shadow-sm shadow-orange-500/10 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300">
               <FiZap size={11} />
-              Novo pedido
+              {isNewOrder ? 'Novo pedido' : 'Último pedido'}
             </span>
           )}
 

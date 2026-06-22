@@ -334,8 +334,18 @@ function getStoreImageMediaType(fieldName) {
   return 'general'
 }
 
-function getStoreImageVariant(fieldName) {
-  if (fieldName === 'logoUrl') return 'storeLogoLarge'
+function getLogoFitModeFromUrl(url) {
+  const text = String(url || '')
+  if (/(^|[,/])c_fill([,/]|$)/.test(text)) return 'cover'
+  return 'contain'
+}
+
+function getLogoImageVariant(fitMode) {
+  return fitMode === 'cover' ? 'storeLogoCoverLarge' : 'storeLogoLarge'
+}
+
+function getStoreImageVariant(fieldName, options = {}) {
+  if (fieldName === 'logoUrl') return getLogoImageVariant(options.logoFitMode)
   if (fieldName === 'bannerUrl') return 'storeBanner'
   if (fieldName === 'bannerMobileUrl') return 'storeBannerMobile'
   if (fieldName === 'shareImageUrl') return 'ogImage'
@@ -1178,7 +1188,10 @@ function ImageUploadField({
   const [isDraggingFile, setIsDraggingFile] = useState(false)
 
   const normalizedLabel = String(label || '').toLowerCase()
+  const isLogoPreview = aspect === 'square'
   const isWidePreview = aspect === 'banner' || aspect === 'share'
+  const [logoFitModeOverride, setLogoFitModeOverride] = useState(null)
+  const logoFitMode = logoFitModeOverride || getLogoFitModeFromUrl(value)
 
   const previewClass =
     aspect === 'share'
@@ -1233,7 +1246,24 @@ function ImageUploadField({
         ? normalizedLabel.includes('mobile')
           ? 'storeBannerMobile'
           : 'storeBanner'
-        : 'storeLogoLarge'
+        : getLogoImageVariant(logoFitMode)
+
+  const logoPreviewObjectClass =
+    isLogoPreview && logoFitMode === 'contain'
+      ? 'object-contain p-2'
+      : 'object-cover'
+
+  function updateLogoFitMode(nextMode) {
+    setLogoFitModeOverride(nextMode)
+
+    if (!value) return
+
+    onSelectFromLibrary?.(
+      getCloudinaryImageUrl(value, getLogoImageVariant(nextMode), {
+        replaceExistingTransform: true,
+      })
+    )
+  }
 
   const handleDroppedFile = (event) => {
     event.preventDefault()
@@ -1253,7 +1283,7 @@ function ImageUploadField({
       return
     }
 
-    onUpload(file)
+    onUpload(file, { fitMode: logoFitMode })
   }
 
   const handleDragOver = (event) => {
@@ -1334,7 +1364,7 @@ function ImageUploadField({
                     <img
                       src={value}
                       alt={label}
-                      className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] group-hover:opacity-80"
+                      className={`h-full w-full ${logoPreviewObjectClass} transition duration-200 group-hover:scale-[1.02] group-hover:opacity-80`}
                       loading="lazy"
                     />
                   ) : (
@@ -1411,11 +1441,42 @@ function ImageUploadField({
                       const file = event.target.files?.[0]
                       event.target.value = ''
 
-                      if (file) onUpload(file)
+                      if (file) onUpload(file, { fitMode: logoFitMode })
                     }}
                     className="hidden"
                   />
                 </label>
+
+                {isLogoPreview && (
+                  <div className="rounded-2xl border border-orange-100 bg-white p-3 dark:border-orange-500/20 dark:bg-zinc-950">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280] dark:text-zinc-400">
+                      Enquadramento da logo
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'contain', label: 'Sem corte' },
+                        { id: 'cover', label: 'Preencher' },
+                      ].map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => updateLogoFitMode(option.id)}
+                          disabled={uploading}
+                          className={`rounded-xl px-3 py-2 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            logoFitMode === option.id
+                              ? 'bg-[#f97316] text-white shadow-sm shadow-orange-500/20'
+                              : 'bg-orange-50 text-[#f97316] hover:bg-orange-100 dark:bg-orange-500/10 dark:text-orange-300'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-[#6b7280] dark:text-zinc-400">
+                      Use sem corte para logos horizontais ou com texto. Preencher é melhor para marcas quadradas.
+                    </p>
+                  </div>
+                )}
 
                 <button
                   type="button"
@@ -1631,6 +1692,10 @@ const knownStoreIdsKey = useMemo(() => {
   )
   const schedulingMaxDaysAheadExceeded =
     Number(form.scheduling?.maxDaysAhead || 0) > MAX_SCHEDULE_DAYS_AHEAD
+  const allowScheduledOrdersWhenClosed =
+    schedulingAllowed &&
+    form.scheduling?.enabled === true &&
+    Boolean(form.allowScheduledOrdersWhenClosed)
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -1664,7 +1729,7 @@ const knownStoreIdsKey = useMemo(() => {
             timeZone: 'America/Sao_Paulo',
             temporaryPauseUntil: null,
             temporaryPauseReason: '',
-            allowScheduledOrdersWhenClosed: Boolean(form.allowScheduledOrdersWhenClosed),
+            allowScheduledOrdersWhenClosed,
           },
         },
       })
@@ -1678,7 +1743,7 @@ const knownStoreIdsKey = useMemo(() => {
     } finally {
       setSaving(false)
     }
-  }, [form.allowScheduledOrdersWhenClosed, form.availabilityMode, saving, selectedStore, showToast, updateField, user])
+  }, [allowScheduledOrdersWhenClosed, form.availabilityMode, saving, selectedStore, showToast, updateField, user])
 
   const updateScheduling = useCallback((field, value) => {
     setForm((prev) => ({
@@ -1902,7 +1967,7 @@ const knownStoreIdsKey = useMemo(() => {
   }, [publicUrl, showToast])
 
   const handleUploadStoreImage = useCallback(
-    async (file, fieldName) => {
+    async (file, fieldName, options = {}) => {
       if (!file || !selectedStore) return
 
       if (!userCanManageStore(user, selectedStore)) {
@@ -1937,7 +2002,9 @@ const knownStoreIdsKey = useMemo(() => {
 
         updateField(
           fieldName,
-          getCloudinaryImageUrl(imageUrl, getStoreImageVariant(fieldName), {
+          getCloudinaryImageUrl(imageUrl, getStoreImageVariant(fieldName, {
+            logoFitMode: options.fitMode,
+          }), {
             replaceExistingTransform: true,
           })
         )
@@ -2053,7 +2120,7 @@ const knownStoreIdsKey = useMemo(() => {
         timeZone: 'America/Sao_Paulo',
         temporaryPauseUntil: formTemporaryPause.active ? formTemporaryPause.untilIso : null,
         temporaryPauseReason: formTemporaryPause.active ? sanitizeTextField(form.temporaryPauseReason, 120) : '',
-        allowScheduledOrdersWhenClosed: Boolean(form.allowScheduledOrdersWhenClosed),
+        allowScheduledOrdersWhenClosed,
       }
 
       const payload = {
@@ -2152,7 +2219,7 @@ const knownStoreIdsKey = useMemo(() => {
     } finally {
       setSaving(false)
     }
-  }, [brandingAllowed, form, saving, schedulingAllowed, selectedStore, showToast, user])
+  }, [allowScheduledOrdersWhenClosed, brandingAllowed, form, saving, schedulingAllowed, selectedStore, showToast, user])
 
   if (loadingStores) {
     return (
@@ -2282,7 +2349,7 @@ const knownStoreIdsKey = useMemo(() => {
                     <img
                       src={form.logoUrl}
                       alt={form.name}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain p-1"
                     />
                   ) : (
                     <FiShoppingBag className="text-[#f97316]" size={26} />

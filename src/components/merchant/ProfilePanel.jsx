@@ -39,6 +39,7 @@ import app from '../../services/firebase'
 import { auth } from '../../services/firebaseAuth'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDashboardTheme } from '../../contexts/DashboardThemeContext'
+import { formatBrazilianPhone } from '../../utils/phone'
 import {
   getCloudinaryOptimizedUrl,
   uploadImageToCloudinary,
@@ -652,6 +653,7 @@ function SecurityCard({ user, onSuccess, onError }) {
 
 function PhoneCard({ userData, onSuccess }) {
   const phone = userData?.phone || userData?.whatsapp || userData?.phoneNumber || null
+  const phoneLabel = phone ? (formatBrazilianPhone(phone) || phone) : 'Não cadastrado'
   const verified = Boolean(userData?.phoneVerified)
   const [editing, setEditing] = useState(false)
   const [newPhone, setNewPhone] = useState('')
@@ -673,7 +675,7 @@ function PhoneCard({ userData, onSuccess }) {
           </div>
           <div className="flex items-center gap-2 min-w-0">
             <FiPhone size={14} className="shrink-0 text-[#9ca3af]" />
-            <span className="truncate text-sm font-bold text-[#111827]">{phone || 'Não cadastrado'}</span>
+            <span className="truncate text-sm font-bold text-[#111827]">{phoneLabel}</span>
           </div>
         </div>
         <button
@@ -749,7 +751,7 @@ function SubscriptionCard({ userData }) {
       </div>
       <p className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-[#9ca3af]">
         <FiInfo size={11} />
-        Para alterar plano ou assinatura, acesse a área de suporte.
+        Para alterar plano ou assinatura, acesse a área de assinatura.
       </p>
     </SectionCard>
   )

@@ -46,9 +46,9 @@ export const MARKETING_SEO = {
     path: '/termos',
   },
   examples: {
-    title: 'Exemplos de lojas PratoBy | Cardápio digital na prática',
+    title: 'Exemplos de lojas PratoBy | Cardápio digital e delivery',
     description:
-      'Veja exemplos oficiais de lojas no PratoBy para restaurantes, lanchonetes e confeitarias venderem pelo próprio link sem comissão por pedido.',
+      'Teste lojas modelo do PratoBy com cardápio digital, carrinho, adicionais, entrega, retirada e pedidos online para restaurantes, lanchonetes e confeitarias.',
     path: '/exemplos',
   },
 }

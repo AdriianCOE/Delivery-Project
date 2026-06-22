@@ -892,7 +892,7 @@ function StoreLogo({
       <img
         src={logoUrl}
         alt={`Logo de ${storeName}`}
-        className={`${className} ${rounded} shrink-0 object-cover ring-1 ring-gray-100`}
+        className={`${className} ${rounded} shrink-0 bg-white object-contain p-1 ring-1 ring-gray-100`}
         loading="lazy"
         onError={() => setImageError(true)}
       />

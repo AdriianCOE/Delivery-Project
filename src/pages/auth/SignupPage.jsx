@@ -353,6 +353,168 @@ function SelectField({ label, icon: Icon, className = '', ...props }) {
   )
 }
 
+function normalizeCityText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function CityCombobox({
+  label,
+  icon: Icon,
+  id,
+  value,
+  options,
+  onSelect,
+  className = '',
+  required = false,
+}) {
+  const [focused, setFocused] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(value || '')
+
+  useEffect(() => {
+    setQuery(value || '')
+  }, [value])
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = normalizeCityText(query)
+    const visibleOptions = normalizedQuery
+      ? options.filter((option) => normalizeCityText(option).includes(normalizedQuery))
+      : options
+
+    return visibleOptions.slice(0, 8)
+  }, [options, query])
+
+  const hasExactMatch = options.some(
+    (option) => normalizeCityText(option) === normalizeCityText(query)
+  )
+
+  function selectCity(city) {
+    onSelect(city)
+    setQuery(city)
+    setOpen(false)
+    setFocused(false)
+  }
+
+  return (
+    <label className={`block ${className}`} htmlFor={id}>
+      <span
+        className={`mb-2 block text-xs font-black uppercase tracking-wide transition-colors duration-200 ${
+          focused ? 'text-[#f97316]' : 'text-[#6b7280]'
+        }`}
+      >
+        {label}
+      </span>
+      <div className="relative">
+        {Icon && (
+          <Icon
+            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
+              focused ? 'text-[#f97316]' : 'text-gray-400'
+            }`}
+            size={17}
+          />
+        )}
+        <input
+          id={id}
+          name={id}
+          type="text"
+          value={query}
+          required={required}
+          autoComplete="address-level2"
+          placeholder="Digite para buscar sua cidade"
+          onFocus={() => {
+            setFocused(true)
+            setOpen(true)
+          }}
+          onBlur={() => {
+            window.setTimeout(() => {
+              setFocused(false)
+              setOpen(false)
+              if (value) setQuery(value)
+            }, 120)
+          }}
+          onChange={(event) => {
+            const nextQuery = event.target.value
+            setQuery(nextQuery)
+            setOpen(true)
+            if (value && normalizeCityText(nextQuery) !== normalizeCityText(value)) {
+              onSelect('')
+            }
+          }}
+          className={`h-12 w-full rounded-2xl border border-orange-100/80 bg-white px-4 pr-12 text-sm font-bold text-[#111827] shadow-sm outline-none transition placeholder:text-gray-400 focus:border-[#f97316] focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70 ${
+            Icon ? 'pl-11' : ''
+          }`}
+        />
+        <FiChevronDown
+          className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
+            focused ? 'text-[#f97316]' : 'text-gray-400'
+          }`}
+          size={16}
+        />
+
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, y: 6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.98 }}
+              transition={{ duration: 0.16 }}
+              className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-xl shadow-orange-100/50"
+            >
+              <div className="max-h-64 overflow-y-auto p-1.5">
+                {filteredOptions.length > 0 ? (
+                  filteredOptions.map((city) => (
+                    <button
+                      key={city}
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                        selectCity(city)
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${
+                        city === value
+                          ? 'bg-orange-50 text-[#f97316]'
+                          : 'text-[#374151] hover:bg-gray-50 hover:text-[#111827]'
+                      }`}
+                    >
+                      <span>{city}</span>
+                      {city === value && <FiCheck size={15} />}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2.5 text-sm font-semibold text-[#6b7280]">
+                    Nenhuma cidade encontrada.
+                  </p>
+                )}
+
+                {query.trim() && !hasExactMatch && (
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      selectCity('Outro')
+                    }}
+                    className="mt-1 flex w-full items-center justify-between rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5 text-left text-sm font-black text-[#f97316] transition hover:bg-orange-100"
+                  >
+                    Minha cidade não está na lista
+                    <FiArrowRight size={15} />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <p className="mt-1.5 text-xs font-semibold text-[#9ca3af]">
+        Digite para filtrar e selecione uma opção da lista.
+      </p>
+    </label>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────
 // CARD DO PLANO
 // ─────────────────────────────────────────────────────────────
@@ -960,6 +1122,14 @@ export default function SignupPage() {
     setFormError('')
   }, [])
 
+  const handleCitySelect = useCallback((city) => {
+    setForm((prev) => ({ ...prev, city }))
+    if (city !== 'Outro') {
+      setCustomCity('')
+    }
+    setFormError('')
+  }, [])
+
   const handlePlanSelect = useCallback((planId) => {
     setSelectedPlanId(planId)
   }, [])
@@ -1489,20 +1659,16 @@ export default function SignupPage() {
                           <option key={seg} value={seg}>{seg}</option>
                         ))}
                       </SelectField>
-                      <SelectField
+                      <CityCombobox
                         label="Cidade *"
                         icon={FiMapPin}
                         id="city"
                         value={form.city}
-                        onChange={handleField('city')}
+                        options={CITIES}
+                        onSelect={handleCitySelect}
                         className="sm:col-span-2"
                         required
-                      >
-                        <option value="">Selecione sua cidade</option>
-                        {CITIES.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </SelectField>
+                      />
 
                       <AnimatePresence>
                         {form.city === 'Outro' && (

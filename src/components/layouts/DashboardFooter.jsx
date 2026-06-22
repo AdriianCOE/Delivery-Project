@@ -209,7 +209,7 @@ export default function DashboardFooter({
     <img
       src={storeLogoUrl}
       alt={storeName}
-      className="h-full w-full object-cover"
+      className="h-full w-full object-contain p-1"
       loading="lazy"
     />
   ) : (
