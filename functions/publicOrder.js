@@ -629,6 +629,10 @@ function findSelectedOptionMatch(productOption, selectedOptions) {
   })
 }
 
+function selectedOptionHasIdentity(option) {
+  return Boolean(getOptionKey(option) || normalizeForMatch(option?.name || option?.title))
+}
+
 function buildOptionCalculations(item, product) {
   const productGroups = getProductOptionGroups(product)
   const selectedGroups = getSelectedGroups(item)
@@ -643,6 +647,21 @@ function buildOptionCalculations(item, product) {
       []
 
     const selectedMatches = []
+    const invalidSelectedOptions = selectedOptions.filter((selected) => {
+      if (!selectedOptionHasIdentity(selected)) return false
+      return !group.options.some((productOption) => findSelectedOptionMatch(productOption, [selected]))
+    })
+
+    if (invalidSelectedOptions.length > 0) {
+      const invalidName = sanitizeText(
+        invalidSelectedOptions[0]?.name ||
+          invalidSelectedOptions[0]?.title ||
+          getOptionKey(invalidSelectedOptions[0]) ||
+          'opcao',
+        80
+      )
+      fail('failed-precondition', `Opcao invalida: ${invalidName}`)
+    }
 
     group.options.forEach((productOption) => {
       const selected = findSelectedOptionMatch(productOption, selectedOptions)

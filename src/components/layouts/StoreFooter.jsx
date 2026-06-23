@@ -446,7 +446,10 @@ export default function StoreFooter({ store, todayHoursLabel }) {
   if (!store) return null
 
   return (
-    <footer className="relative overflow-hidden border-t border-orange-100/80 bg-gradient-to-b from-white via-orange-50/20 to-[#fff7ed]/35 antialiased">
+    <footer
+      id="storefront-footer"
+      className="relative z-[60] overflow-hidden border-t border-orange-100/80 bg-gradient-to-b from-white via-orange-50/20 to-[#fff7ed]/35 antialiased lg:z-auto"
+    >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(149,115,22,.12),transparent_34%),radial-gradient(circle_at_top_right,rgba(16,185,129,.1),transparent_30%)]" />
 
       <div className="relative mx-auto max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
@@ -461,11 +464,11 @@ export default function StoreFooter({ store, todayHoursLabel }) {
           <div className="grid gap-6 px-4 py-5 sm:px-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:px-6 lg:py-6">
             <div className="flex min-w-0 items-start gap-4">
               <div className="relative shrink-0">
-                <div className="rounded-[1.4rem] bg-gradient-to-br from-orange-50 via-white to-amber-50 p-1 shadow-[0_14px_36px_rgba(249,115,22,0.16)] ring-1 ring-orange-100">
+                <div className="h-16 w-16 overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white shadow-[0_14px_36px_rgba(249,115,22,0.16)] sm:h-[72px] sm:w-[72px]">
                   <img
                     src={logoUrl}
                     alt={storeName}
-                    className="h-14 w-14 rounded-[1.15rem] object-contain p-1 sm:h-16 sm:w-16"
+                    className="h-full w-full object-cover object-center"
                     loading="lazy"
                   />
                 </div>

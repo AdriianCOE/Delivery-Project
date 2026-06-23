@@ -2999,7 +2999,7 @@ return (
     />
 
     <div
-  className="min-h-screen bg-[#fff8f1] pb-[calc(7.5rem+env(safe-area-inset-bottom))] text-[#111827] md:pb-0"
+  className="min-h-screen bg-[#fff8f1] text-[#111827]"
   style={{
     '--theme-color': themeColor,
   }}

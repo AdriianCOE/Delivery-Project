@@ -111,13 +111,13 @@ export function HeroSection() {
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(390px,470px)] lg:gap-14">
-          <div className="landing-hero-enter mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
+          <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
             <div className="landing-reveal inline-flex max-w-full items-center gap-2 rounded-full border border-orange-100 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-wide text-[#f97316] shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 sm:text-xs">
               <TrendingUp size={15} className="shrink-0" aria-hidden="true" />
               <span className="truncate">Chega de pagar 27% de comissão</span>
             </div>
 
-            <h1 className="landing-reveal landing-delay-2 mt-7 text-[2.15rem] font-black leading-[1.02] tracking-tight text-[#111827] min-[380px]:text-[2.35rem] sm:text-6xl lg:text-7xl">
+            <h1 className="mt-7 text-[2.15rem] font-black leading-[1.02] tracking-tight text-[#111827] min-[380px]:text-[2.35rem] sm:text-6xl lg:text-7xl">
               <span className="block whitespace-nowrap">Seu cardápio digital.</span>
 
               <span className="block whitespace-nowrap text-[#f97316]">Seu delivery.</span>
@@ -144,7 +144,7 @@ export function HeroSection() {
               </span>
             </h1>
 
-            <p className="landing-reveal landing-delay-2 mx-auto mt-6 max-w-xl text-base font-semibold leading-8 text-[#64748b] dark:text-zinc-400 sm:text-lg lg:mx-0">
+            <p className="mx-auto mt-6 max-w-xl text-base font-semibold leading-8 text-[#64748b] dark:text-zinc-400 sm:text-lg lg:mx-0">
               Crie sua loja online, receba pedidos pelo próprio link e venda sem comissão por
               pedido. Organize entrega, retirada, encomendas e atendimento em um painel simples.
             </p>

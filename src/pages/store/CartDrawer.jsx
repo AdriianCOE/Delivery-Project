@@ -40,6 +40,7 @@ import { ensureAppCheck, functions } from '../../services/firebase'
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
 const TRACKING_TOKENS_KEY = '@PratoBy:trackingTokens'
+const MAX_CART_ITEM_QUANTITY = 99
 const MERCADO_PAGO_CHECKOUT_ERROR =
   'Nao foi possivel abrir o pagamento online. Tente novamente ou escolha outra forma de pagamento.'
 
@@ -397,7 +398,9 @@ function getItemKey(item) {
 }
 
 function getItemQuantity(item) {
-  return Number(item?.quantity || item?.qty || 1)
+  const quantity = Number(item?.quantity ?? item?.qty ?? 1)
+  if (!Number.isFinite(quantity)) return 1
+  return Math.max(1, Math.min(MAX_CART_ITEM_QUANTITY, Math.floor(quantity)))
 }
 
 function hasExplicitBasePrice(item) {
@@ -463,7 +466,15 @@ function getOptionGroupsFromItem(item) {
 }
 
 function getOptionQuantity(option) {
-  return Number(option?.quantity || option?.qty || option?.selectedQuantity || 1)
+  const quantity = Number(option?.quantity ?? option?.qty ?? option?.selectedQuantity ?? 1)
+  if (!Number.isFinite(quantity)) return 1
+  return Math.max(1, Math.min(MAX_CART_ITEM_QUANTITY, Math.floor(quantity)))
+}
+
+function getChargedOptionQuantity(value, fallback = 1) {
+  const quantity = Number(value ?? fallback)
+  if (!Number.isFinite(quantity)) return fallback
+  return Math.max(0, Math.min(MAX_CART_ITEM_QUANTITY, Math.floor(quantity)))
 }
 
 function getExtraUnitPrice(extra) {
@@ -498,21 +509,21 @@ function getExtraTotal(extra) {
     return normalizeMoney(extra.total, null)
   }
 
-  const quantity = Number(
+  const quantity = getChargedOptionQuantity(
     extra?.chargedQuantity ??
       extra?.billableQuantity ??
       extra?.quantity ??
-      extra?.qty ??
-      1
+      extra?.qty,
+    1
   )
 
-  return getExtraUnitPrice(extra) * Math.max(0, quantity)
+  return getExtraUnitPrice(extra) * quantity
 }
 
 function normalizeExtraForCart(extra, fallback = {}) {
-  const quantity = Number(extra?.quantity || extra?.qty || extra?.selectedQuantity || 1)
-  const chargedQuantity = Number(extra?.chargedQuantity ?? quantity)
-  const includedQuantity = Number(extra?.includedQuantity || 0)
+  const quantity = getOptionQuantity(extra)
+  const chargedQuantity = getChargedOptionQuantity(extra?.chargedQuantity, quantity)
+  const includedQuantity = Math.max(0, Number(extra?.includedQuantity || 0) || 0)
   const unitPrice = getExtraUnitPrice(extra)
   const total = getExtraTotal(extra)
 
@@ -1940,6 +1951,7 @@ export default function CartDrawer({ isOpen, onClose, onExited, store }) {
   const handleQuantity = useCallback(
     (item, nextQuantity) => {
       const itemKey = getItemKey(item)
+      const normalizedQuantity = getItemQuantity({ quantity: nextQuantity })
 
       if (nextQuantity <= 0) {
         removeFromCart(itemKey)
@@ -1951,12 +1963,12 @@ export default function CartDrawer({ isOpen, onClose, onExited, store }) {
         return
       }
 
-      updateQuantity(itemKey, nextQuantity)
+      updateQuantity(itemKey, normalizedQuantity)
 
       if (selectedCartItem && getItemKey(selectedCartItem) === itemKey) {
         setSelectedCartItem((current) => ({
           ...current,
-          quantity: nextQuantity,
+          quantity: normalizedQuantity,
         }))
       }
     },
@@ -2485,30 +2497,40 @@ if (orderType === 'delivery') {
         animate={drawerMotion.animate}
         exit={drawerMotion.exit}
         transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-        className="relative mt-auto flex h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-[#F9FAFB] shadow-2xl will-change-transform md:mt-0 md:h-dvh md:rounded-l-[2rem] md:rounded-t-none"
+        className="relative mt-auto flex h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-[#F6F7F9] shadow-[0_-24px_80px_rgba(15,23,42,0.28)] ring-1 ring-white/70 will-change-transform md:mt-0 md:h-dvh md:rounded-l-[2rem] md:rounded-t-none md:shadow-[-28px_0_80px_rgba(15,23,42,0.22)]"
       >
-        <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl">
+        <header className="sticky top-0 z-20 shrink-0 border-b border-gray-100/80 bg-white/95 px-4 pb-4 pt-3 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+          <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-gray-200 md:hidden" />
+
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {step === 'checkout' && (
                 <button
                   type="button"
                   onClick={() => setStep('cart')}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-50 text-[#111827] transition hover:bg-gray-100"
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-50 text-[#111827] shadow-sm ring-1 ring-gray-100 transition hover:bg-gray-100 active:scale-95"
                   aria-label="Voltar ao carrinho"
                 >
                   <FiChevronRight className="rotate-180" />
                 </button>
               )}
 
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-[#f97316]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 text-[#f97316] shadow-sm ring-1 ring-orange-100">
                 <FiShoppingBag size={21} />
               </div>
 
               <div>
-                <h2 className="text-lg font-black text-[#111827]">
-                  {step === 'cart' ? 'Seu carrinho' : 'Finalizar pedido'}
-                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-black text-[#111827]">
+                    {step === 'cart' ? 'Seu carrinho' : 'Finalizar pedido'}
+                  </h2>
+
+                  {cartItems.length > 0 && (
+                    <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-black text-[#f97316] ring-1 ring-orange-100">
+                      {itemCount} item{itemCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
 
                 <p className="text-xs font-medium text-[#6b7280]">
                   {store?.name || 'PratoBy'}
@@ -2519,14 +2541,14 @@ if (orderType === 'delivery') {
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-50 text-gray-500 transition hover:bg-gray-100 hover:text-[#111827]"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-50 text-gray-500 shadow-sm ring-1 ring-gray-100 transition hover:bg-gray-100 hover:text-[#111827] active:scale-95"
               aria-label="Fechar"
             >
               <FiX size={20} />
             </button>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-[#F9FAFB] p-1">
+          <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-[#F3F4F6] p-1 ring-1 ring-gray-100">
             {[
               { id: 'cart', label: 'Carrinho' },
               { id: 'checkout', label: 'Dados' },
@@ -2542,9 +2564,9 @@ if (orderType === 'delivery') {
                   key={item.id}
                   className={`rounded-xl px-2 py-2 text-center text-[11px] font-black transition ${
                     active
-                      ? 'text-white shadow-sm'
+                      ? 'text-white shadow-sm shadow-orange-200/60'
                       : completed
-                        ? 'bg-white text-[#111827]'
+                        ? 'bg-white text-[#111827] shadow-sm'
                         : 'text-[#9ca3af]'
                   }`}
                   style={{ backgroundColor: active ? themeColor : undefined }}
@@ -2569,26 +2591,26 @@ if (orderType === 'delivery') {
         )}
 
         {cartItems.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-white to-[#F9FAFB] p-8 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-[1.7rem] bg-white text-gray-300 shadow-xl shadow-gray-200/70 ring-1 ring-gray-100">
+          <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-white via-[#FFF7ED] to-[#F6F7F9] p-8 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-[1.7rem] bg-white text-[#f97316] shadow-xl shadow-orange-100/70 ring-1 ring-orange-100">
               <FiShoppingBag size={34} />
             </div>
 
             <h3 className="mt-5 text-lg font-black text-[#111827]">
-              Carrinho vazio
+              Seu carrinho está vazio
             </h3>
 
             <p className="mt-2 max-w-xs text-sm leading-6 text-[#6b7280]">
-              Adicione itens do cardápio para continuar seu pedido.
+              Adicione itens do cardápio para montar seu pedido.
             </p>
 
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 active:scale-95"
+              className="mt-6 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 active:scale-95"
               style={{ backgroundColor: themeColor }}
             >
-              Explorar cardápio
+              Ver cardápio
             </button>
           </div>
         ) : (
@@ -2630,7 +2652,7 @@ if (orderType === 'delivery') {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto bg-[#F9FAFB] p-4 pratoby-scrollbar">
+            <div className="flex-1 overflow-y-auto bg-[#F6F7F9] p-4 pratoby-scrollbar">
               <AnimatePresence mode="wait" initial={false}>
               {step === 'cart' && (
                 <motion.div
@@ -2665,10 +2687,10 @@ if (orderType === 'delivery') {
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') setSelectedCartItem(item)
                           }}
-                          className="cursor-pointer rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-100 hover:bg-white hover:shadow-lg hover:shadow-orange-100/40"
+                          className="cursor-pointer rounded-[1.4rem] border border-white bg-white p-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] ring-1 ring-gray-100/80 transition hover:-translate-y-0.5 hover:ring-orange-100 hover:shadow-lg hover:shadow-orange-100/50"
                         >
                           <div className="flex gap-3">
-                            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-100 text-gray-300">
+                            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 text-gray-300 ring-1 ring-gray-100">
                               {getItemImage(item) ? (
                                 <img
                                   src={getItemImage(item)}
@@ -2692,13 +2714,13 @@ if (orderType === 'delivery') {
                               </p>
 
                               {extrasSummary && (
-                                <p className="mt-1 line-clamp-1 text-xs text-[#6b7280]">
+                                <p className="mt-2 line-clamp-2 rounded-2xl bg-[#F6F7F9] px-3 py-2 text-xs leading-5 text-[#6b7280]">
                                   {extrasSummary}
                                 </p>
                               )}
 
                               {item.observation && (
-                                <p className="mt-1 line-clamp-1 text-xs font-bold text-amber-700">
+                                <p className="mt-2 line-clamp-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
                                   Obs: {item.observation}
                                 </p>
                               )}
@@ -2709,21 +2731,21 @@ if (orderType === 'delivery') {
                                 {formatMoney(getItemTotal(item))}
                               </p>
 
-                              <p className="mt-1 text-[10px] font-bold text-[#6b7280]">
+                              <p className="mt-1 rounded-full bg-gray-50 px-2 py-1 text-[10px] font-bold text-[#6b7280]">
                                 Ver detalhes
                               </p>
                             </div>
                           </div>
 
                           <div className="mt-3 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-1 rounded-2xl border border-gray-100 bg-[#F9FAFB] p-1">
+                            <div className="flex items-center gap-1 rounded-full border border-gray-100 bg-[#F6F7F9] p-1 shadow-inner">
                               <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   handleQuantity(item, quantity - 1)
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-500 transition hover:bg-white hover:text-red-600"
+                                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition hover:bg-white hover:text-red-600 active:scale-95"
                               >
                                 {quantity === 1 ? <FiTrash2 size={14} /> : <FiMinus size={14} />}
                               </button>
@@ -2738,7 +2760,7 @@ if (orderType === 'delivery') {
                                   event.stopPropagation()
                                   handleQuantity(item, quantity + 1)
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-500 transition hover:bg-white hover:text-[#f97316]"
+                                className="flex h-8 w-8 items-center justify-center rounded-full text-[#f97316] transition hover:bg-white active:scale-95"
                               >
                                 <FiPlus size={14} />
                               </button>
@@ -2750,7 +2772,7 @@ if (orderType === 'delivery') {
                                 event.stopPropagation()
                                 removeFromCart(itemKey)
                               }}
-                              className="text-xs font-black text-red-500 transition hover:text-red-700"
+                              className="rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-500 transition hover:bg-red-100 hover:text-red-700 active:scale-95"
                             >
                               Remover
                             </button>
@@ -2811,8 +2833,8 @@ if (orderType === 'delivery') {
                     />
                   </SectionCard>
 
-                  <section className="rounded-[1.5rem] border border-gray-100 bg-white p-3 shadow-sm">
-                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#F9FAFB] p-1">
+                  <section className="rounded-[1.5rem] border border-white bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)] ring-1 ring-gray-100/80">
+                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#F3F4F6] p-1 ring-1 ring-gray-100">
                       <button
                         type="button"
                         onClick={() => setOrderType('delivery')}
@@ -2822,8 +2844,8 @@ if (orderType === 'delivery') {
                         }
                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderType === 'delivery'
-                            ? 'bg-white text-[#f97316] shadow-sm'
-                            : 'text-[#6b7280]'
+                            ? 'bg-white text-[#f97316] shadow-sm ring-1 ring-orange-100'
+                            : 'text-[#6b7280] hover:bg-white/70'
                         } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         <FiTruck />
@@ -2839,8 +2861,8 @@ if (orderType === 'delivery') {
                         }
                         className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderType === 'pickup'
-                            ? 'bg-white text-[#f97316] shadow-sm'
-                            : 'text-[#6b7280]'
+                            ? 'bg-white text-[#f97316] shadow-sm ring-1 ring-orange-100'
+                            : 'text-[#6b7280] hover:bg-white/70'
                         } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         <FiHome />
@@ -2856,7 +2878,7 @@ if (orderType === 'delivery') {
                   </section>
 
                   <SectionCard title="Quando você quer receber?" icon={FiClock}>
-                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#F9FAFB] p-1">
+                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#F3F4F6] p-1 ring-1 ring-gray-100">
                       <button
                         type="button"
                         onClick={() => {
@@ -2865,8 +2887,8 @@ if (orderType === 'delivery') {
                         disabled={!schedulingState.canOrderNow || !hasAsapFulfillmentMethod}
                         className={`rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderTiming === 'asap'
-                            ? 'bg-white text-[#f97316] shadow-sm'
-                            : 'text-[#6b7280]'
+                            ? 'bg-white text-[#f97316] shadow-sm ring-1 ring-orange-100'
+                            : 'text-[#6b7280] hover:bg-white/70'
                         } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         Pedir agora
@@ -2882,8 +2904,8 @@ if (orderType === 'delivery') {
                         disabled={!schedulingState.canSchedule && !schedulingState.requiresScheduling}
                         className={`rounded-xl px-4 py-3 text-sm font-black transition ${
                           orderTiming === 'scheduled'
-                            ? 'bg-white text-[#f97316] shadow-sm'
-                            : 'text-[#6b7280]'
+                            ? 'bg-white text-[#f97316] shadow-sm ring-1 ring-orange-100'
+                            : 'text-[#6b7280] hover:bg-white/70'
                         } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         Agendar
@@ -3216,10 +3238,10 @@ if (orderType === 'delivery') {
                               setChangeFor('')
                             }}
                             disabled={paymentDisabled}
-                            className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                            className={`flex w-full items-center gap-3 rounded-[1.35rem] border p-4 text-left transition ${
                               paymentMethod === option.value
-                                ? 'border-green-200 bg-orange-50'
-                                : 'border-gray-100 bg-[#F9FAFB] hover:bg-white'
+                                ? 'border-orange-200 bg-orange-50 shadow-sm ring-2 ring-orange-100'
+                                : 'border-gray-100 bg-[#F6F7F9] hover:bg-white hover:shadow-sm'
                             } disabled:cursor-not-allowed disabled:opacity-45`}
                           >
                             <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 transition ${
@@ -3349,15 +3371,21 @@ if (orderType === 'delivery') {
 
                   <SectionCard title="Cupom de desconto" icon={FiTag}>
                     {appliedCoupon ? (
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                        <div>
-                          <p className="text-sm font-black text-[#f97316]">
-                            {appliedCoupon.code}
-                          </p>
+                      <div className="flex items-center justify-between gap-3 rounded-[1.35rem] border border-green-100 bg-green-50 p-4 ring-1 ring-green-100/70">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-green-700 shadow-sm ring-1 ring-green-100">
+                            <FiCheck size={18} />
+                          </span>
 
-                          <p className="mt-0.5 text-xs font-bold text-orange-700">
-                            Desconto de {formatMoney(discount)}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-green-800">
+                              {appliedCoupon.code}
+                            </p>
+
+                            <p className="mt-0.5 text-xs font-bold text-green-700">
+                              Desconto de {formatMoney(discount)}
+                            </p>
+                          </div>
                         </div>
 
                         <button
@@ -3366,7 +3394,7 @@ if (orderType === 'delivery') {
                             setAppliedCoupon(null)
                             setCouponError('')
                           }}
-                          className="text-xs font-black text-red-600"
+                          className="shrink-0 rounded-full bg-white px-3 py-2 text-xs font-black text-red-600 shadow-sm ring-1 ring-red-100 transition hover:bg-red-50 active:scale-95"
                         >
                           Remover
                         </button>
@@ -3374,35 +3402,39 @@ if (orderType === 'delivery') {
                     ) : (
                       <>
                         <div className="flex gap-2">
-                          <input
-                            id="checkout-coupon-code"
-                            name="couponCode"
-                            type="text"
-                            autoComplete="off"
-                            placeholder="Código do cupom"
-                            value={couponCode}
-                            onChange={(event) => {
-                              setCouponCode(event.target.value.toUpperCase())
-                              setCouponError('')
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') handleApplyCoupon()
-                            }}
-                            className="h-12 min-w-0 flex-1 rounded-2xl border border-gray-100 bg-[#F9FAFB] px-4 text-sm font-black uppercase tracking-widest text-[#111827] outline-none transition placeholder:normal-case placeholder:font-medium placeholder:tracking-normal placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
-                          />
+                          <div className="relative min-w-0 flex-1">
+                            <FiTag className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+
+                            <input
+                              id="checkout-coupon-code"
+                              name="couponCode"
+                              type="text"
+                              autoComplete="off"
+                              placeholder="Código do cupom"
+                              value={couponCode}
+                              onChange={(event) => {
+                                setCouponCode(event.target.value.toUpperCase())
+                                setCouponError('')
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') handleApplyCoupon()
+                              }}
+                              className="h-12 w-full rounded-2xl border border-gray-100 bg-[#F6F7F9] pl-11 pr-4 text-sm font-black uppercase tracking-widest text-[#111827] outline-none transition placeholder:normal-case placeholder:font-medium placeholder:tracking-normal placeholder:text-gray-400 focus:border-[#f97316] focus:bg-white focus:ring-4 focus:ring-orange-100"
+                            />
+                          </div>
 
                           <button
                             type="button"
                             onClick={handleApplyCoupon}
                             disabled={couponLoading || !couponCode.trim()}
-                            className="flex h-12 items-center justify-center rounded-2xl bg-[#111827] px-4 text-sm font-black text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex h-12 items-center justify-center rounded-2xl bg-[#111827] px-4 text-sm font-black text-white shadow-sm transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {couponLoading ? <FiLoader className="animate-spin" /> : 'Aplicar'}
                           </button>
                         </div>
 
                         {couponError && (
-                          <p className="flex items-center gap-2 text-xs font-bold text-red-600">
+                          <p className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
                             <FiAlertCircle />
                             {couponError}
                           </p>
@@ -3411,7 +3443,7 @@ if (orderType === 'delivery') {
                     )}
                   </SectionCard>
 
-                  <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+                  <div className="rounded-[1.5rem] border border-white bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] ring-1 ring-gray-100/80">
   <div className="mb-4 flex items-center justify-between gap-3">
     <p className="text-xs font-black uppercase tracking-wide text-[#6B7280]">
       Resumo do pedido
@@ -3434,7 +3466,7 @@ if (orderType === 'delivery') {
       return (
         <div
           key={itemKey}
-          className="rounded-2xl border border-gray-100 bg-[#F9FAFB] p-3"
+          className="rounded-2xl border border-gray-100 bg-[#F6F7F9] p-3"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -3530,7 +3562,7 @@ if (orderType === 'delivery') {
     )}
 
     <div className="border-t border-gray-100 pt-3">
-      <div className="flex justify-between text-lg font-black text-[#111827]">
+      <div className="flex justify-between rounded-2xl bg-[#111827] px-4 py-3 text-lg font-black text-white">
         <span>Total</span>
         <span>{formatMoney(total)}</span>
       </div>
@@ -3564,7 +3596,7 @@ if (orderType === 'delivery') {
       loadingCep ||
       (orderType === 'delivery' && blockingCepError)
     }
-    className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+    className="flex w-full items-center justify-center gap-2 rounded-[1.35rem] px-5 py-4 text-base font-black text-white shadow-xl shadow-orange-200/70 transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
     style={{ backgroundColor: themeColor }}
   >
     {isSubmitting ? (
@@ -3609,7 +3641,7 @@ if (orderType === 'delivery') {
             </div>
 
             {step === 'cart' && (
-              <footer className="shrink-0 border-t border-gray-100 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+              <footer className="shrink-0 border-t border-gray-100/80 bg-white/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl">
                 {belowMinimum && (
                   <div className="mb-3 flex gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3">
                     <FiAlertCircle className="mt-0.5 shrink-0 text-amber-600" />
@@ -3630,11 +3662,26 @@ if (orderType === 'delivery') {
                   </div>
                 )}
 
+                <div className="mb-3 flex items-end justify-between gap-3 rounded-2xl bg-[#F6F7F9] px-4 py-3 ring-1 ring-gray-100">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-wide text-[#6b7280]">
+                      Total dos itens
+                    </p>
+                    <p className="mt-0.5 text-xs font-bold text-[#9ca3af]">
+                      Conferir dados antes de enviar
+                    </p>
+                  </div>
+
+                  <p className="text-lg font-black text-[#111827]">
+                    {formatMoney(subtotal)}
+                  </p>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setStep('checkout')}
                   disabled={belowMinimum || !storeIsOpen || !hasUsableOrderingMethod}
-                  className="flex w-full items-center justify-between rounded-2xl px-5 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                  className="flex w-full items-center justify-between rounded-[1.35rem] px-5 py-4 text-base font-black text-white shadow-xl shadow-orange-200/70 transition hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   style={{
                     background: belowMinimum || !storeIsOpen || !hasUsableOrderingMethod ? '#9ca3af' : themeColor,
                   }}

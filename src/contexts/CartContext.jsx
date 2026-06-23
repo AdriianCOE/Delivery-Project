@@ -4,6 +4,7 @@ const CartContext = createContext(null)
 
 const CART_KEY = '@PratoBy:cart'
 const LEGACY_CART_KEY = '@DeliveryApp:cart'
+const MAX_CART_ITEM_QUANTITY = 99
 
 function safeJsonParse(value, fallback = []) {
   try {
@@ -38,28 +39,26 @@ function safeRemoveItem(key) {
   }
 }
 
-function loadCart() {
-  const currentCart = safeJsonParse(safeGetItem(CART_KEY), null)
-  const legacyCart = safeJsonParse(safeGetItem(LEGACY_CART_KEY), null)
-
-  if (Array.isArray(currentCart)) return currentCart
-  if (Array.isArray(legacyCart)) return legacyCart
-
-  return []
-}
-
-function saveCart(cartItems) {
-  const payload = JSON.stringify(cartItems)
-  safeSetItem(CART_KEY, payload)
-  safeSetItem(LEGACY_CART_KEY, payload)
-}
-
 function getCartItemKey(item) {
   return item?.cartItemId || item?.key || item?.id
 }
 
 function getQuantity(item) {
-  return Number(item?.quantity || item?.qty || 1)
+  const quantity = Number(item?.quantity ?? item?.qty ?? 1)
+  if (!Number.isFinite(quantity)) return 1
+  return Math.max(1, Math.min(MAX_CART_ITEM_QUANTITY, Math.floor(quantity)))
+}
+
+function normalizeCartItems(items) {
+  if (!Array.isArray(items)) return []
+
+  return items
+    .slice(0, 80)
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({
+      ...item,
+      quantity: getQuantity(item),
+    }))
 }
 
 function normalizeMoney(value, centsValue) {
@@ -157,7 +156,7 @@ export function CartProvider({ children }) {
         loadedItems = safeJsonParse(stored, [])
         // If we have an ID now, migrate slug cart to ID cart
         if (idKey) {
-          safeSetItem(idKey, JSON.stringify(loadedItems))
+          safeSetItem(idKey, JSON.stringify(normalizeCartItems(loadedItems)))
           safeRemoveItem(slugKey)
         }
       }
@@ -190,7 +189,7 @@ export function CartProvider({ children }) {
           loadedItems = legacyItems
           const targetKey = idKey || slugKey
           if (targetKey) {
-            safeSetItem(targetKey, JSON.stringify(loadedItems))
+            safeSetItem(targetKey, JSON.stringify(normalizeCartItems(loadedItems)))
           }
         }
 
@@ -199,7 +198,7 @@ export function CartProvider({ children }) {
       }
     }
 
-    setCartItems(loadedItems || [])
+    setCartItems(normalizeCartItems(loadedItems))
   }, [storeKeyInfo])
 
   const persistCart = (newItems, currentKeyInfo = storeKeyInfo) => {
@@ -208,14 +207,14 @@ export function CartProvider({ children }) {
     if (!active) return
 
     const targetKey = id ? `@PratoBy:cart:${id}` : `@PratoBy:cart:${slug}`
-    safeSetItem(targetKey, JSON.stringify(newItems))
+    safeSetItem(targetKey, JSON.stringify(normalizeCartItems(newItems)))
   }
 
   const addToCart = (product) => {
     if (!product?.id && !product?.cartItemId) return
 
     setCartItems((currentItems) => {
-      const productQuantity = Number(product.quantity || 1)
+      const productQuantity = getQuantity(product)
       const itemKey = getCartItemKey(product)
 
       const existingItem = currentItems.find(
@@ -229,7 +228,7 @@ export function CartProvider({ children }) {
 
           return {
             ...item,
-            quantity: getQuantity(item) + productQuantity,
+            quantity: Math.min(MAX_CART_ITEM_QUANTITY, getQuantity(item) + productQuantity),
           }
         })
       } else {
@@ -268,15 +267,16 @@ export function CartProvider({ children }) {
 
     setCartItems((currentItems) => {
       let nextItems
-      if (nextQuantity <= 0) {
+      if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) {
         nextItems = currentItems.filter((item) => getCartItemKey(item) !== itemKey)
       } else {
+        const normalizedQuantity = Math.min(MAX_CART_ITEM_QUANTITY, Math.floor(nextQuantity))
         nextItems = currentItems.map((item) => {
           if (getCartItemKey(item) !== itemKey) return item
 
           return {
             ...item,
-            quantity: nextQuantity,
+            quantity: normalizedQuantity,
           }
         })
       }

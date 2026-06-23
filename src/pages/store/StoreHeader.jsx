@@ -1121,9 +1121,10 @@ export default function StoreHeader({
   }, [onInfoOpenChange])
 
   useEffect(() => {
-    if (!infoOpenRequestKey) return
+    if (!infoOpenRequestKey) return undefined
 
-    openInfoModal()
+    const timeoutId = window.setTimeout(openInfoModal, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [infoOpenRequestKey, openInfoModal])
 
   const themeColor = getStoreTheme(store)
@@ -1402,14 +1403,14 @@ export default function StoreHeader({
           <div className="p-3.5 sm:p-5 lg:p-6">
             <div className="flex min-w-0 items-start gap-3 sm:gap-5 lg:items-center">
               <div className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 sm:w-28 lg:w-[120px]">
-                <div className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[1.25rem] bg-white shadow-md shadow-gray-200/80 ring-1 ring-gray-100 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
+                <div className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[1.25rem] border border-gray-100 bg-white shadow-md shadow-gray-200/80 sm:h-28 sm:w-28 sm:rounded-[1.7rem] lg:h-[120px] lg:w-[120px]">
     {logoUrl ? (
       <img
         src={logoUrl}
         srcSet={logoSrcSet || undefined}
         sizes="(max-width: 640px) 76px, 120px"
         alt={store?.name || 'Logo da loja'}
-        className="h-full w-full object-contain p-2"
+        className="h-full w-full object-cover object-center"
         loading="eager"
         decoding="async"
         width={120}
@@ -1656,7 +1657,7 @@ export default function StoreHeader({
   <div className="relative pr-12">
     <div className="flex items-start gap-4">
       <div
-        className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] border-4 border-white bg-white text-xl font-black shadow-xl shadow-gray-200/80"
+        className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] border border-gray-100 bg-white text-xl font-black shadow-xl shadow-gray-200/80"
         style={{ color: themeColor }}
       >
         {logoUrl ? (
@@ -1665,7 +1666,7 @@ export default function StoreHeader({
             srcSet={logoSrcSet || undefined}
             sizes="64px"
             alt={store?.name || 'Logo da loja'}
-            className="h-full w-full object-contain p-1.5"
+            className="h-full w-full object-cover object-center"
             loading="lazy"
             decoding="async"
             width={64}
