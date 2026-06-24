@@ -3,12 +3,47 @@ import {
   AbsoluteFill,
   Audio,
   Img,
+  Sequence,
   interpolate,
   spring,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+
+/**
+ * PratoBy — Reel institucional
+ * ---------------------------------------------------------------------------
+ * 1080×1920 @ 30fps · 450 frames (15s). Ver `VIDEO` / `pratoByReelMetadata`
+ * para registrar a <Composition> em Root.tsx:
+ *
+ *   <Composition
+ *     id="PratoByReel"
+ *     component={PratoByReel}
+ *     fps={pratoByReelMetadata.fps}
+ *     width={pratoByReelMetadata.width}
+ *     height={pratoByReelMetadata.height}
+ *     durationInFrames={pratoByReelMetadata.durationInFrames}
+ *   />
+ *
+ * Assets esperados em /public:
+ *   - pratoby-mark-96.png
+ *   - assets/pratoby-reel/store-top.png
+ *   - assets/pratoby-reel/product-list-dock.png
+ *   - assets/pratoby-reel/product-modal.png
+ *   - assets/pratoby-reel/marketing-card.png
+ *   - (opcional) audio/pratoby-reel.mp3
+ *
+ * Arquitetura: cada cena vive dentro de um <Sequence>, então useCurrentFrame()
+ * já é LOCAL ao início da cena — os "delay" usados pelos componentes internos
+ * são sempre relativos ao início da própria cena, nunca ao frame global.
+ *
+ * Tipografia: o stack abaixo depende de fontes do sistema, que nem sempre
+ * existem na máquina de render (Chrome headless). Para fidelidade garantida
+ * em qualquer ambiente, troque por @remotion/google-fonts/Inter:
+ *   import {loadFont} from "@remotion/google-fonts/Inter";
+ *   const {fontFamily} = loadFont("normal", {weights: ["600", "700", "800", "900"]});
+ */
 
 const VIDEO = {
   fps: 30,
@@ -18,11 +53,11 @@ const VIDEO = {
 } as const;
 
 const TIMELINE = {
-  hook: { start: 0, end: 78 },
-  storefront: { start: 78, end: 168 },
-  product: { start: 168, end: 258 },
-  order: { start: 258, end: 348 },
-  cta: { start: 348, end: 450 },
+  hook: { start: 0, end: 78, label: "Hook — Sem comissão" },
+  storefront: { start: 78, end: 168, label: "Vitrine — Loja no celular" },
+  product: { start: 168, end: 258, label: "Produto — Montar pedido" },
+  order: { start: 258, end: 348, label: "Pedido — Painel do lojista" },
+  cta: { start: 348, end: 450, label: "CTA — Marca" },
 } as const;
 
 type SceneKey = keyof typeof TIMELINE;
@@ -35,28 +70,21 @@ type IconName =
   | "panel"
   | "search"
   | "store"
-  | "clock"
-  | "spark"
   | "whatsapp"
   | "arrowUp"
   | "phone"
-  | "money"
-  | "user";
+  | "money";
 
 const colors = {
   orange: "#f97316",
   orangeDark: "#ea580c",
-  orangeDeep: "#c2410c",
   orangeSoft: "#ffedd5",
   orangePale: "#fff7ed",
   cream: "#fffaf4",
-  paper: "#fffdf9",
   white: "#ffffff",
   slate: "#0f172a",
-  slate2: "#1e293b",
   slateMuted: "#64748b",
   slateSoft: "#94a3b8",
-  border: "rgba(249,115,22,0.16)",
   green: "#16a34a",
   greenSoft: "#dcfce7",
 } as const;
@@ -80,19 +108,20 @@ const clamp = (value: number, min: number, max: number) =>
 
 const sceneLength = (scene: SceneKey) => TIMELINE[scene].end - TIMELINE[scene].start;
 
-const localFrame = (frame: number, scene: SceneKey) =>
-  Math.max(0, frame - TIMELINE[scene].start);
-
-const sceneOpacity = (frame: number, scene: SceneKey, freezeAtEnd = false) => {
-  const { start, end } = TIMELINE[scene];
-  const fadeIn = interpolate(frame, [start, start + 14], [0, 1], {
+/**
+ * Curva de opacidade de uma cena, em frame LOCAL (0 = início da cena).
+ * `freezeAtEnd` mantém a cena em opacidade 1 ao final, útil para a última
+ * cena do vídeo (evita um fade-out indesejado no corte final).
+ */
+const sceneOpacity = (localFrame: number, durationInFrames: number, freezeAtEnd = false) => {
+  const fadeIn = interpolate(localFrame, [0, 14], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   if (freezeAtEnd) return fadeIn;
 
-  const fadeOut = interpolate(frame, [end - 14, end], [1, 0], {
+  const fadeOut = interpolate(localFrame, [durationInFrames - 14, durationInFrames], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -126,8 +155,6 @@ const fadeUpStyle = (
     transform: `translateY(${(1 - progress) * distance}px)`,
   };
 };
-
-const safeDelay = (scene: SceneKey, offset: number) => TIMELINE[scene].start + offset;
 
 const Icon = ({ name, size = 26, color = colors.orange }: { name: IconName; size?: number; color?: string }) => {
   const common = {
@@ -183,18 +210,6 @@ const Icon = ({ name, size = 26, color = colors.orange }: { name: IconName; size
           <path {...common} d="M9 19v-5h6v5" />
         </>
       )}
-      {name === "clock" && (
-        <>
-          <circle {...common} cx="12" cy="12" r="8" />
-          <path {...common} d="M12 8v5l3 2" />
-        </>
-      )}
-      {name === "spark" && (
-        <>
-          <path {...common} d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
-          <path {...common} d="M18 15l.9 2.4L21 18l-2.1.6L18 21l-.9-2.4L15 18l2.1-.6L18 15Z" />
-        </>
-      )}
       {name === "whatsapp" && (
         <>
           <path {...common} d="M5 19l1-3a7 7 0 1 1 2.8 2.5L5 19Z" />
@@ -220,21 +235,14 @@ const Icon = ({ name, size = 26, color = colors.orange }: { name: IconName; size
           <path {...common} d="M7 10v4M17 10v4" />
         </>
       )}
-      {name === "user" && (
-        <>
-          <circle {...common} cx="12" cy="8" r="3" />
-          <path {...common} d="M5 20a7 7 0 0 1 14 0" />
-        </>
-      )}
     </svg>
   );
 };
 
-const Background = ({ scene }: { scene: SceneKey }) => {
+const Background = ({ durationInFrames }: { durationInFrames: number }) => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, scene);
   const softShift = interpolate(Math.sin(frame / 58), [-1, 1], [-34, 34]);
-  const rotate = interpolate(local, [0, sceneLength(scene)], [-2.5, 2.5], {
+  const rotate = interpolate(frame, [0, durationInFrames], [-2.5, 2.5], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -297,9 +305,9 @@ const SceneContainer = ({
   children: React.ReactNode;
 }) => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, scene);
-  const opacity = sceneOpacity(frame, scene, freezeAtEnd);
-  const y = interpolate(local, [0, 16], [16, 0], {
+  const duration = sceneLength(scene);
+  const opacity = sceneOpacity(frame, duration, freezeAtEnd);
+  const y = interpolate(frame, [0, 16], [16, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -314,7 +322,7 @@ const SceneContainer = ({
         fontFamily,
       }}
     >
-      <Background scene={scene} />
+      <Background durationInFrames={duration} />
       <div style={{ position: "relative", width: "100%", height: "100%" }}>{children}</div>
     </AbsoluteFill>
   );
@@ -366,7 +374,7 @@ const Brand = ({ large = false, center = false }: { large?: boolean; center?: bo
   );
 };
 
-const Eyebrow = ({ children, delay = 0, icon = "spark" }: { children: React.ReactNode; delay?: number; icon?: IconName }) => {
+const Eyebrow = ({ children, delay = 0, icon }: { children: React.ReactNode; delay?: number; icon: IconName }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = delayedSpring(frame, delay, fps, 22, 120);
@@ -383,7 +391,7 @@ const Eyebrow = ({ children, delay = 0, icon = "spark" }: { children: React.Reac
         color: colors.white,
         boxShadow: "0 14px 32px rgba(234,88,12,0.20)",
         fontSize: 21,
-        fontWeight: 850,
+        fontWeight: 800,
         opacity: clamp(enter, 0, 1),
         transform: `translateY(${(1 - enter) * 12}px) scale(${0.96 + enter * 0.04})`,
       }}
@@ -420,7 +428,7 @@ const Headline = ({
         lineHeight: 0.98,
         letterSpacing: -3,
         color: colors.slate,
-        fontWeight: 930,
+        fontWeight: 900,
         textAlign: align,
       }}
     >
@@ -452,7 +460,7 @@ const Subhead = ({
         fontSize: 28,
         lineHeight: 1.28,
         color: colors.slateMuted,
-        fontWeight: 650,
+        fontWeight: 600,
         textAlign: align,
       }}
     >
@@ -616,7 +624,7 @@ const FeaturePill = ({
         boxShadow: orange ? "0 16px 32px rgba(234,88,12,0.18)" : "0 12px 26px rgba(15,23,42,0.06)",
         color: orange ? colors.white : green ? colors.green : colors.slate,
         fontSize: 20,
-        fontWeight: 850,
+        fontWeight: 800,
         whiteSpace: "nowrap",
         opacity: clamp(enter, 0, 1),
         transform: `translateY(${(1 - enter) * 12}px) scale(${0.96 + enter * 0.04})`,
@@ -673,8 +681,8 @@ const InfoCard = ({
         <Icon name={icon} size={25} color={accent ? colors.white : colors.orange} />
       </div>
       <div>
-        <div style={{ fontSize: 24, fontWeight: 920, color: accent ? colors.white : colors.slate, lineHeight: 1.08 }}>{title}</div>
-        <div style={{ marginTop: 7, fontSize: 19, fontWeight: 650, color: accent ? "rgba(255,255,255,0.82)" : colors.slateMuted, lineHeight: 1.2 }}>{text}</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: accent ? colors.white : colors.slate, lineHeight: 1.08 }}>{title}</div>
+        <div style={{ marginTop: 7, fontSize: 19, fontWeight: 600, color: accent ? "rgba(255,255,255,0.82)" : colors.slateMuted, lineHeight: 1.2 }}>{text}</div>
       </div>
     </div>
   );
@@ -724,25 +732,25 @@ const MiniOrderCard = ({ delay = 0 }: { delay?: number }) => {
           <Icon name="check" size={27} color={colors.green} />
         </div>
         <div>
-          <div style={{ fontSize: 24, fontWeight: 930, color: colors.slate, lineHeight: 1 }}>Novo pedido recebido</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: colors.slate, lineHeight: 1 }}>Novo pedido recebido</div>
           <div style={{ marginTop: 7, fontSize: 18, fontWeight: 700, color: colors.slateMuted }}>Pedido #1042 · Doce Capivara</div>
         </div>
       </div>
 
       <div style={{ marginTop: 23, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div style={{ padding: "15px 16px", borderRadius: 22, background: "#f8fafc" }}>
-          <div style={{ fontSize: 14, fontWeight: 850, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>Total</div>
-          <div style={{ marginTop: 6, fontSize: 26, fontWeight: 930, color: colors.slate }}>R$ 33,60</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>Total</div>
+          <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900, color: colors.slate }}>R$ 33,60</div>
         </div>
         <div style={{ padding: "15px 16px", borderRadius: 22, background: colors.greenSoft }}>
-          <div style={{ fontSize: 14, fontWeight: 850, color: "rgba(22,163,74,0.72)", textTransform: "uppercase", letterSpacing: 0.5 }}>Chegou</div>
-          <div style={{ marginTop: 6, fontSize: 26, fontWeight: 930, color: colors.green }}>Agora</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(22,163,74,0.72)", textTransform: "uppercase", letterSpacing: 0.5 }}>Chegou</div>
+          <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900, color: colors.green }}>Agora</div>
         </div>
       </div>
 
       <div style={{ marginTop: 16, padding: "17px 19px", borderRadius: 22, background: colors.orangePale, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 19, fontWeight: 850, color: colors.slate }}>Status</span>
-        <span style={{ fontSize: 19, fontWeight: 930, color: colors.orangeDark }}>Aguardando confirmação</span>
+        <span style={{ fontSize: 19, fontWeight: 800, color: colors.slate }}>Status</span>
+        <span style={{ fontSize: 19, fontWeight: 900, color: colors.orangeDark }}>Aguardando confirmação</span>
       </div>
     </div>
   );
@@ -767,7 +775,7 @@ const CTAButton = ({ children, delay = 0 }: { children: React.ReactNode; delay?:
         color: colors.white,
         boxShadow: `0 22px 48px rgba(234,88,12,${glow})`,
         fontSize: 31,
-        fontWeight: 920,
+        fontWeight: 900,
         opacity: clamp(enter, 0, 1),
         transform: `translateY(${(1 - enter) * 16}px) scale(${0.95 + enter * 0.05})`,
       }}
@@ -778,6 +786,7 @@ const CTAButton = ({ children, delay = 0 }: { children: React.ReactNode; delay?:
   );
 };
 
+/** Barra de progresso global do Reel — usa o frame absoluto da composição. */
 const TopProgress = () => {
   const frame = useCurrentFrame();
   const scenes = Object.keys(TIMELINE) as SceneKey[];
@@ -798,10 +807,29 @@ const TopProgress = () => {
   );
 };
 
+/** Grão filmico discreto, aplicado uma única vez sobre toda a composição. */
+const GrainOverlay = () => (
+  <AbsoluteFill style={{ pointerEvents: "none", mixBlendMode: "soft-light", opacity: 0.045, zIndex: 60 }}>
+    <svg width="100%" height="100%">
+      <filter id="pb-grain">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves={2} stitchTiles="stitch" result="noise" />
+        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.7 0" />
+      </filter>
+      <rect width="100%" height="100%" filter="url(#pb-grain)" />
+    </svg>
+  </AbsoluteFill>
+);
+
+// ---------------------------------------------------------------------------
+// Cenas
+// ---------------------------------------------------------------------------
+// useCurrentFrame() aqui já é LOCAL: cada cena vive dentro de um <Sequence>
+// (ver PratoByReel, ao final), então os "delay" abaixo são sempre relativos
+// ao início da própria cena.
+
 const SceneOne = () => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, "hook");
-  const phoneY = interpolate(local, [0, 64], [76, 0], {
+  const phoneY = interpolate(frame, [0, 64], [76, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -838,8 +866,7 @@ const SceneOne = () => {
 
 const SceneTwo = () => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, "storefront");
-  const panY = interpolate(local, [20, 84], [0, -105], {
+  const panY = interpolate(frame, [20, 84], [0, -105], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -847,22 +874,22 @@ const SceneTwo = () => {
   return (
     <SceneContainer scene="storefront">
       <div style={{ position: "absolute", top: 210, left: 82, right: 82, textAlign: "center" }}>
-        <Headline delay={safeDelay("storefront", 5)} size={64} maxWidth={920} align="center">
+        <Headline delay={5} size={64} maxWidth={920} align="center">
           Uma loja bonita no celular,
           <br /> pronta para vender.
         </Headline>
-        <Subhead delay={safeDelay("storefront", 11)} maxWidth={760} align="center">
+        <Subhead delay={11} maxWidth={760} align="center">
           Produtos, categorias, busca e carrinho em uma experiência simples para o cliente.
         </Subhead>
       </div>
 
       <div style={{ position: "absolute", left: 72, top: 570 }}>
-        <PhoneMockup src={assets.productListDock} delay={safeDelay("storefront", 15)} width={510} height={1110} objectPosition="center center" scale={1.15} panY={panY} />
+        <PhoneMockup src={assets.productListDock} delay={15} width={510} height={1110} objectPosition="center center" scale={1.15} panY={panY} />
       </div>
 
       <div style={{ position: "absolute", right: 72, top: 640, width: 390 }}>
         <StepList
-          delay={safeDelay("storefront", 24)}
+          delay={24}
           steps={[
             { icon: "search", title: "Cliente encontra", text: "Busca e categorias deixam o pedido mais rápido." },
             { icon: "cart", title: "Adiciona ao carrinho", text: "O total aparece claro durante a compra." },
@@ -876,32 +903,31 @@ const SceneTwo = () => {
 
 const SceneThree = () => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, "product");
-  const panY = interpolate(local, [18, 76], [0, -52], {
+  const panY = interpolate(frame, [18, 76], [0, -52], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const cartPulse = interpolate(Math.sin(local / 7), [-1, 1], [0.99, 1.035]);
+  const cartPulse = interpolate(Math.sin(frame / 7), [-1, 1], [0.99, 1.035]);
 
   return (
     <SceneContainer scene="product">
       <div style={{ position: "absolute", top: 208, left: 82, width: 610 }}>
-        <Headline delay={safeDelay("product", 5)} size={64} maxWidth={650}>
+        <Headline delay={5} size={64} maxWidth={650}>
           O cliente monta o pedido em poucos toques.
         </Headline>
-        <Subhead delay={safeDelay("product", 11)} maxWidth={600}>
+        <Subhead delay={11} maxWidth={600}>
           Opções, tamanhos, subtotal e botão de compra no mesmo fluxo.
         </Subhead>
       </div>
 
       <div style={{ position: "absolute", left: 70, top: 610, width: 420, display: "flex", flexDirection: "column", gap: 14 }}>
-        <InfoCard icon="order" title="Produtos com opções" text="Tamanhos, adicionais e observações organizados." delay={safeDelay("product", 28)} accent />
-        <InfoCard icon="money" title="Subtotal claro" text="O cliente sabe o valor antes de finalizar." delay={safeDelay("product", 38)} />
-        <InfoCard icon="cart" title="Carrinho pronto" text="Pedido segue para o fluxo de checkout." delay={safeDelay("product", 48)} />
+        <InfoCard icon="order" title="Produtos com opções" text="Tamanhos, adicionais e observações organizados." delay={28} accent />
+        <InfoCard icon="money" title="Subtotal claro" text="O cliente sabe o valor antes de finalizar." delay={38} />
+        <InfoCard icon="cart" title="Carrinho pronto" text="Pedido segue para o fluxo de checkout." delay={48} />
       </div>
 
       <div style={{ position: "absolute", right: 40, bottom: -120, transform: `scale(${cartPulse})` }}>
-        <PhoneMockup src={assets.productModal} delay={safeDelay("product", 16)} width={560} height={1240} objectPosition="center center" scale={1.02} panY={panY} rotate={2} />
+        <PhoneMockup src={assets.productModal} delay={16} width={560} height={1240} objectPosition="center center" scale={1.02} panY={panY} rotate={2} />
       </div>
     </SceneContainer>
   );
@@ -909,8 +935,7 @@ const SceneThree = () => {
 
 const SceneFour = () => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, "order");
-  const panY = interpolate(local, [20, 70], [-62, -120], {
+  const panY = interpolate(frame, [20, 70], [-62, -120], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -918,26 +943,26 @@ const SceneFour = () => {
   return (
     <SceneContainer scene="order">
       <div style={{ position: "absolute", top: 210, left: 82, width: 840 }}>
-        <Headline delay={safeDelay("order", 5)} size={64} maxWidth={850}>
+        <Headline delay={5} size={64} maxWidth={850}>
           Pedido direto para a loja.
           <br /> Menos bagunça no WhatsApp.
         </Headline>
-        <Subhead delay={safeDelay("order", 11)} maxWidth={740}>
+        <Subhead delay={11} maxWidth={740}>
           O cliente compra pelo link e o lojista acompanha tudo no painel.
         </Subhead>
       </div>
 
       <div style={{ position: "absolute", left: -70, bottom: -160 }}>
-        <PhoneMockup src={assets.productListDock} delay={safeDelay("order", 18)} width={520} height={1160} objectPosition="bottom center" scale={1.14} panY={panY} rotate={2} />
+        <PhoneMockup src={assets.productListDock} delay={18} width={520} height={1160} objectPosition="bottom center" scale={1.14} panY={panY} rotate={2} />
       </div>
 
       <div style={{ position: "absolute", right: 72, top: 680 }}>
-        <MiniOrderCard delay={safeDelay("order", 28)} />
+        <MiniOrderCard delay={28} />
       </div>
 
       <div style={{ position: "absolute", right: 72, top: 1110, width: 460, display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
-        <InfoCard icon="panel" title="Painel do lojista" text="Status do pedido, atendimento e operação no mesmo lugar." delay={safeDelay("order", 48)} />
-        <InfoCard icon="whatsapp" title="WhatsApp como apoio" text="O pedido não fica perdido em conversas soltas." delay={safeDelay("order", 58)} />
+        <InfoCard icon="panel" title="Painel do lojista" text="Status do pedido, atendimento e operação no mesmo lugar." delay={48} />
+        <InfoCard icon="whatsapp" title="WhatsApp como apoio" text="O pedido não fica perdido em conversas soltas." delay={58} />
       </div>
     </SceneContainer>
   );
@@ -945,12 +970,11 @@ const SceneFour = () => {
 
 const SceneFive = () => {
   const frame = useCurrentFrame();
-  const local = localFrame(frame, "cta");
-  const previewOpacity = interpolate(local, [48, 62], [0, 0.16], {
+  const previewOpacity = interpolate(frame, [48, 62], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const hintOpacity = interpolate(Math.sin(local / 13), [-1, 1], [0.5, 1]);
+  const hintOpacity = interpolate(Math.sin(frame / 13), [-1, 1], [0.5, 1]);
 
   return (
     <SceneContainer scene="cta" freezeAtEnd>
@@ -958,23 +982,23 @@ const SceneFive = () => {
         <Brand large center />
       </div>
       <div style={{ position: "absolute", top: 420, left: 90, right: 90, textAlign: "center" }}>
-        <Headline align="center" maxWidth={900} size={72} delay={safeDelay("cta", 10)}>
+        <Headline align="center" maxWidth={900} size={72} delay={10}>
           Seu cardápio.
           <br /> Seu delivery.
           <br /> Sua <span style={{ color: colors.orange }}>margem</span>.
         </Headline>
-        <Subhead align="center" maxWidth={810} delay={safeDelay("cta", 17)}>
+        <Subhead align="center" maxWidth={810} delay={17}>
           Venda online pelo seu próprio link, sem comissão por pedido.
         </Subhead>
       </div>
       <div style={{ position: "absolute", top: 842, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-        <CTAButton delay={safeDelay("cta", 28)}>Conheça o PratoBy</CTAButton>
+        <CTAButton delay={28}>Conheça o PratoBy</CTAButton>
       </div>
       <div style={{ position: "absolute", top: 1002, left: 126, right: 126, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <FeaturePill icon="check" delay={safeDelay("cta", 38)}>Sem comissão</FeaturePill>
-        <FeaturePill icon="cart" delay={safeDelay("cta", 44)}>Pedidos online</FeaturePill>
-        <FeaturePill icon="panel" delay={safeDelay("cta", 50)}>Painel do lojista</FeaturePill>
-        <FeaturePill icon="link" delay={safeDelay("cta", 56)}>Link próprio</FeaturePill>
+        <FeaturePill icon="check" delay={38}>Sem comissão</FeaturePill>
+        <FeaturePill icon="cart" delay={44}>Pedidos online</FeaturePill>
+        <FeaturePill icon="panel" delay={50}>Painel do lojista</FeaturePill>
+        <FeaturePill icon="link" delay={56}>Link próprio</FeaturePill>
       </div>
       <div
         style={{
@@ -990,7 +1014,16 @@ const SceneFive = () => {
           border: "1px solid rgba(249,115,22,0.12)",
         }}
       >
-
+        <Img src={staticFile(assets.marketingCard)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(165deg, rgba(255,255,255,0.14), transparent 35%, transparent 65%, rgba(15,23,42,0.08))",
+            pointerEvents: "none",
+          }}
+        />
       </div>
       <div
         style={{
@@ -999,14 +1032,14 @@ const SceneFive = () => {
           left: 0,
           right: 0,
           textAlign: "center",
-          opacity: interpolate(local, [62, 76], [0, 1], {
+          opacity: interpolate(frame, [62, 76], [0, 1], {
             extrapolateLeft: "clamp",
             extrapolateRight: "clamp",
           }),
         }}
       >
-        <div style={{ fontSize: 34, fontWeight: 930, color: colors.orangeDark, letterSpacing: -0.4 }}>pratoby.com</div>
-        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, opacity: hintOpacity, color: colors.slateMuted, fontSize: 20, fontWeight: 820 }}>
+        <div style={{ fontSize: 34, fontWeight: 900, color: colors.orangeDark, letterSpacing: -0.4 }}>pratoby.com</div>
+        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, opacity: hintOpacity, color: colors.slateMuted, fontSize: 20, fontWeight: 800 }}>
           <Icon name="arrowUp" size={20} color={colors.slateMuted} />
           Comece pelo seu próprio link
         </div>
@@ -1033,14 +1066,29 @@ const OptionalAudio = () => {
 
 export const PratoByReel = () => {
   return (
-    <AbsoluteFill style={{ backgroundColor: colors.warm, fontFamily }}>
+    <AbsoluteFill style={{ backgroundColor: colors.cream, fontFamily }}>
       <OptionalAudio />
-      <SceneOne />
-      <SceneTwo />
-      <SceneThree />
-      <SceneFour />
-      <SceneFive />
+
+      <Sequence from={TIMELINE.hook.start} durationInFrames={sceneLength("hook")} name={TIMELINE.hook.label}>
+        <SceneOne />
+      </Sequence>
+      <Sequence from={TIMELINE.storefront.start} durationInFrames={sceneLength("storefront")} name={TIMELINE.storefront.label}>
+        <SceneTwo />
+      </Sequence>
+      <Sequence from={TIMELINE.product.start} durationInFrames={sceneLength("product")} name={TIMELINE.product.label}>
+        <SceneThree />
+      </Sequence>
+      <Sequence from={TIMELINE.order.start} durationInFrames={sceneLength("order")} name={TIMELINE.order.label}>
+        <SceneFour />
+      </Sequence>
+      <Sequence from={TIMELINE.cta.start} durationInFrames={sceneLength("cta")} name={TIMELINE.cta.label}>
+        <SceneFive />
+      </Sequence>
+
       <TopProgress />
+      {/* Camada de grão unificando todas as cenas com um acabamento filmico.
+          Remova esta linha se precisar reduzir o tempo de renderização. */}
+      <GrainOverlay />
     </AbsoluteFill>
   );
 };
