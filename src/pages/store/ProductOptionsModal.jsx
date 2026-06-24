@@ -959,7 +959,7 @@ const modalInfoBadges = useMemo(() => {
                         )
                         const active = selectedOptionQuantity > 0
                         const disableIncrease =
-                          group.max > 0 && selectedQuantity >= group.max && !active
+                          group.type !== 'single' && group.max > 0 && selectedQuantity >= group.max && !active
 
                         return (
                           <div

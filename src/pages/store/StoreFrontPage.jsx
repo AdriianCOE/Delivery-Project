@@ -1917,7 +1917,7 @@ function PublicStoreMobileDock({
       aria-hidden={isHidden}
       aria-label="Atalhos do cardápio público"
     >
-      <div className="mx-auto flex max-w-md items-end justify-around gap-1 rounded-[2.15rem] border border-orange-100/80 bg-white/92 px-3 pb-1.5 pt-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.14)] ring-1 ring-white/70 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-md items-end justify-around gap-1 rounded-[2.15rem] border border-orange-100/80 bg-white px-3 pb-1.5 pt-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.14)] ring-1 ring-white/70">
         {sideItems.slice(0, 2).map((item) => {
           const Icon = item.icon
           const active = item.active
@@ -3600,7 +3600,7 @@ return (
           href={`https://wa.me/${onlyNumbers(store.whatsapp)}`}
           target="_blank"
           rel="noreferrer"
-          className={`group fixed right-5 z-30 hidden h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366] text-white shadow-[0_18px_40px_rgba(16,185,129,0.28)] transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-500 active:scale-95 md:bottom-[6.75rem] md:flex xl:bottom-6 xl:right-6 ${
+          className={`group fixed right-5 z-30 hidden h-16 w-16 items-center justify-center rounded-[1.35rem] bg-[#25D366] text-white shadow-[0_18px_40px_rgba(16,185,129,0.28)] transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-500 active:scale-95 md:bottom-[6.75rem] md:flex xl:bottom-6 xl:right-6 ${
             isFooterInView || isCartOpen
               ? 'pointer-events-none translate-y-4 opacity-0'
               : 'pointer-events-auto translate-y-0 opacity-100'
@@ -3610,7 +3610,7 @@ return (
           <span className="pointer-events-none absolute bottom-full right-0 mb-2 hidden whitespace-nowrap rounded-full bg-[#111827] px-3 py-1.5 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100 md:block">
             Precisa de ajuda?
           </span>
-          <FiMessageCircle size={25} />
+          <FiMessageCircle size={29} />
         </a>
       )}
 
