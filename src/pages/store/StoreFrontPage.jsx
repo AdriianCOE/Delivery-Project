@@ -1896,62 +1896,28 @@ const timeout = window.setTimeout(() => {
   )
 }
 
-function PublicStoreBottomNav({
+function PublicStoreMobileDock({
+  sideItems,
   cartItemsCount,
   cartTotal,
-  isSearchActive,
-  isInfoOpen,
-  onBackToTop,
-  onOpenSearch,
-  onOpenInfo,
-  onOpenOrders,
+  isHidden,
   onOpenCart,
 }) {
-  const sideItems = [
-    {
-      key: 'home',
-      label: 'Início',
-      icon: FiHome,
-      onClick: onBackToTop,
-      ariaLabel: 'Voltar ao início do cardápio',
-    },
-    {
-      key: 'search',
-      label: 'Buscar',
-      icon: FiSearch,
-      onClick: onOpenSearch,
-      active: isSearchActive,
-      ariaLabel: 'Buscar produtos no cardápio',
-    },
-    {
-      key: 'info',
-      label: 'Info',
-      icon: FiInfo,
-      onClick: onOpenInfo,
-      active: isInfoOpen,
-      ariaLabel: 'Abrir informações da loja',
-    },
-    {
-      key: 'orders',
-      label: 'Pedidos',
-      icon: FiUser,
-      onClick: onOpenOrders,
-      ariaLabel: 'Abrir acompanhamento de pedidos',
-    },
-  ]
   const cartAriaLabel = cartItemsCount > 0
     ? `Abrir carrinho com ${cartItemsCount} ${cartItemsCount === 1 ? 'item' : 'itens'}`
     : 'Abrir carrinho'
 
   return (
-    <motion.nav
-      initial={{ opacity: 0, y: 24, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-      className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.8rem+env(safe-area-inset-bottom))] md:hidden"
+    <nav
+      className={`fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.8rem+env(safe-area-inset-bottom))] transition-all duration-200 ease-out md:hidden ${
+        isHidden
+          ? 'pointer-events-none translate-y-6 opacity-0'
+          : 'pointer-events-auto translate-y-0 opacity-100'
+      }`}
+      aria-hidden={isHidden}
       aria-label="Atalhos do cardápio público"
     >
-      <div className="mx-auto flex max-w-md items-end justify-around gap-1 rounded-[2.15rem] border border-orange-100/80 bg-white/90 px-3 pb-2 pt-3 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-md items-end justify-around gap-1 rounded-[2.15rem] border border-orange-100/80 bg-white/92 px-3 pb-1.5 pt-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.14)] ring-1 ring-white/70 backdrop-blur-xl">
         {sideItems.slice(0, 2).map((item) => {
           const Icon = item.icon
           const active = item.active
@@ -1964,7 +1930,7 @@ function PublicStoreBottomNav({
               aria-label={item.ariaLabel}
               title={item.ariaLabel}
               whileTap={{ scale: 0.96 }}
-              className={`flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+              className={`flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-1.5 text-[11px] font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
                 active
                   ? 'bg-orange-50 text-orange-600'
                   : 'text-slate-500 hover:bg-orange-50 hover:text-slate-900'
@@ -1992,7 +1958,7 @@ function PublicStoreBottomNav({
               scale: cartItemsCount > 0 ? 1.03 : 1,
             }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="relative -mt-8 grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 text-white shadow-xl shadow-orange-600/30 ring-4 ring-white transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-200 focus-visible:ring-offset-2"
+            className="relative -mt-8 grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 text-white shadow-[0_16px_34px_rgba(234,88,12,0.28)] ring-4 ring-white transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-200 focus-visible:ring-offset-2"
           >
             <FiShoppingCart size={25} />
             <AnimatePresence>
@@ -2035,7 +2001,7 @@ function PublicStoreBottomNav({
               aria-label={item.ariaLabel}
               title={item.ariaLabel}
               whileTap={{ scale: 0.96 }}
-              className={`flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+              className={`flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-1.5 text-[11px] font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
                 active
                   ? 'bg-orange-50 text-orange-600'
                   : 'text-slate-500 hover:bg-orange-50 hover:text-slate-900'
@@ -2051,7 +2017,225 @@ function PublicStoreBottomNav({
           )
         })}
       </div>
-    </motion.nav>
+    </nav>
+  )
+}
+
+function PublicStoreDesktopDock({
+  sideItems,
+  cartItemsCount,
+  cartTotal,
+  isHidden,
+  isOpen,
+  onOpenCart,
+  themeColor,
+  todayHoursLabel,
+}) {
+  const cartAriaLabel = cartItemsCount > 0
+    ? `Abrir carrinho com ${cartItemsCount} ${cartItemsCount === 1 ? 'item' : 'itens'}`
+    : 'Abrir carrinho'
+  const cartItemsLabel = cartItemsCount > 0
+    ? `${cartItemsCount} ${cartItemsCount === 1 ? 'item' : 'itens'}`
+    : 'Seu pedido'
+  const statusLabel = isOpen ? 'Aberta' : 'Fechada'
+  const compactTodayHoursLabel = todayHoursLabel.replace(/^Hoje:\s*/, 'Hoje ')
+  const previousCartCountRef = useRef(cartItemsCount)
+  const hasMountedCartAnimationRef = useRef(false)
+  const [cartJustUpdated, setCartJustUpdated] = useState(false)
+
+  useEffect(() => {
+    if (!hasMountedCartAnimationRef.current) {
+      hasMountedCartAnimationRef.current = true
+      previousCartCountRef.current = cartItemsCount
+      return undefined
+    }
+
+    if (cartItemsCount > previousCartCountRef.current) {
+      previousCartCountRef.current = cartItemsCount
+
+      if (
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      ) {
+        return undefined
+      }
+
+      const frameId = window.requestAnimationFrame(() => {
+        setCartJustUpdated(true)
+      })
+      const timeoutId = window.setTimeout(() => {
+        setCartJustUpdated(false)
+      }, 420)
+
+      return () => {
+        window.cancelAnimationFrame(frameId)
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    previousCartCountRef.current = cartItemsCount
+    return undefined
+  }, [cartItemsCount])
+
+  return (
+    <nav
+      className={`fixed inset-x-0 bottom-5 z-40 hidden justify-center px-4 transition-all duration-200 ease-out md:flex lg:bottom-6 lg:px-6 ${
+        isHidden
+          ? 'pointer-events-none translate-y-6 opacity-0'
+          : 'pointer-events-auto translate-y-0 opacity-100'
+      }`}
+      aria-hidden={isHidden}
+      aria-label="Comandos do cardápio público"
+    >
+      <div className="mx-auto inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-orange-100/80 bg-gradient-to-r from-white via-white to-orange-50/45 px-2 py-1.5 text-[#111827] shadow-[0_14px_34px_rgba(15,23,42,0.11)] backdrop-blur-xl lg:max-w-[980px]">
+        <div className="flex h-9 shrink-0 items-center gap-1.5 px-2 text-xs font-black text-slate-700">
+          <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+            {isOpen && (
+              <span className="absolute h-2.5 w-2.5 rounded-full bg-emerald-400/30 motion-safe:animate-pulse" />
+            )}
+            <span className={`relative h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          </span>
+          <span className="shrink-0">{statusLabel}</span>
+          <span className="shrink-0 text-slate-300">·</span>
+          <span className="shrink-0 text-slate-500">{compactTodayHoursLabel}</span>
+          {!isOpen && (
+            <>
+              <span className="hidden shrink-0 text-slate-300 xl:inline">·</span>
+              <span className="hidden max-w-[150px] truncate text-slate-400 xl:inline">{compactTodayHoursLabel}</span>
+            </>
+          )}
+        </div>
+
+        <span className="h-5 w-px shrink-0 bg-orange-100/60" aria-hidden="true" />
+
+        <div className="flex min-w-0 items-center justify-center gap-0.5 lg:gap-1">
+          {sideItems.map((item) => {
+            const Icon = item.icon
+
+            return (
+              <motion.button
+                key={item.key}
+                type="button"
+                onClick={item.onClick}
+                aria-label={item.ariaLabel}
+                title={item.ariaLabel}
+                whileTap={{ scale: 0.96 }}
+                className={`inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-200 focus-visible:ring-offset-2 focus-visible:ring-offset-white lg:px-3 ${
+                  item.active
+                    ? 'bg-orange-50/70 text-orange-600'
+                    : 'text-slate-500 hover:bg-orange-50/60 hover:text-orange-600'
+                }`}
+              >
+                <Icon size={14} />
+                <span className="hidden lg:inline">{item.label}</span>
+              </motion.button>
+            )
+          })}
+        </div>
+
+        <span className="h-5 w-px shrink-0 bg-orange-100/60" aria-hidden="true" />
+
+        <button
+          type="button"
+          onClick={onOpenCart}
+          aria-label={cartAriaLabel}
+          title={cartAriaLabel}
+          className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-3.5 text-xs font-black text-white transition duration-200 hover:-translate-y-0.5 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transform-none motion-reduce:transition-none lg:px-4 ${
+            cartJustUpdated
+              ? 'scale-[1.035] shadow-[0_14px_34px_rgba(234,88,12,0.34)] ring-4 ring-orange-200/50'
+              : 'shadow-[0_8px_20px_rgba(234,88,12,0.2)] hover:shadow-[0_12px_26px_rgba(234,88,12,0.24)]'
+          }`}
+          style={{ background: `linear-gradient(135deg, ${themeColor}, #ea580c)` }}
+        >
+          <FiShoppingCart
+            className={`shrink-0 transition-transform duration-200 motion-reduce:transform-none motion-reduce:transition-none ${
+              cartJustUpdated ? '-translate-y-0.5 rotate-[-6deg]' : ''
+            }`}
+            size={15}
+          />
+          <span className="shrink-0">Carrinho</span>
+          {cartItemsCount > 0 && (
+            <>
+              <span className="hidden text-white/60 xl:inline">·</span>
+              <span className="hidden shrink-0 text-white/90 xl:inline">{cartItemsLabel}</span>
+            </>
+          )}
+          <span className="text-white/60">·</span>
+          <span className="shrink-0">{formatMoney(cartTotal)}</span>
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+function PublicStoreBottomNav({
+  cartItemsCount,
+  cartTotal,
+  isSearchActive,
+  isInfoOpen,
+  isHidden,
+  onBackToTop,
+  onOpenSearch,
+  onOpenInfo,
+  onOpenOrders,
+  onOpenCart,
+  store,
+  themeColor,
+  todayHoursLabel,
+}) {
+  const sideItems = [
+    {
+      key: 'home',
+      label: 'Início',
+      icon: FiHome,
+      onClick: onBackToTop,
+      ariaLabel: 'Voltar ao início do cardápio',
+    },
+    {
+      key: 'search',
+      label: 'Buscar',
+      icon: FiSearch,
+      onClick: onOpenSearch,
+      active: isSearchActive,
+      ariaLabel: 'Buscar produtos no cardápio',
+    },
+    {
+      key: 'info',
+      label: 'Info',
+      icon: FiInfo,
+      onClick: onOpenInfo,
+      active: isInfoOpen,
+      ariaLabel: 'Abrir informações da loja',
+    },
+    {
+      key: 'orders',
+      label: 'Pedidos',
+      icon: FiUser,
+      onClick: onOpenOrders,
+      ariaLabel: 'Abrir acompanhamento de pedidos',
+    },
+  ]
+
+  return (
+    <>
+      <PublicStoreMobileDock
+        sideItems={sideItems}
+        cartItemsCount={cartItemsCount}
+        cartTotal={cartTotal}
+        isHidden={isHidden}
+        onOpenCart={onOpenCart}
+      />
+      <PublicStoreDesktopDock
+        sideItems={sideItems}
+        cartItemsCount={cartItemsCount}
+        cartTotal={cartTotal}
+        isHidden={isHidden}
+        isOpen={store?.isOpen === true}
+        onOpenCart={onOpenCart}
+        themeColor={themeColor}
+        todayHoursLabel={todayHoursLabel}
+      />
+    </>
   )
 }
 
@@ -2113,6 +2297,8 @@ export default function StoreFrontPage() {
   const isManualCategoryScrollRef = useRef(false)
   const manualCategoryScrollTimeoutRef = useRef(null)
   const [copyMessage, setCopyMessage] = useState('')
+  const [isFooterInView, setIsFooterInView] = useState(false)
+  const [footerElement, setFooterElement] = useState(null)
 
   const storefrontEditorUser = useMemo(() => {
     if (!authContext?.user && !authContext?.userData && !authContext?.firebaseUser) return null
@@ -2186,6 +2372,50 @@ export default function StoreFrontPage() {
     typeof window !== 'undefined'
       ? `${window.location.origin}/${storeSlug}`
       : `/${storeSlug}`
+
+  useEffect(() => {
+    if (!hasMenuStore || typeof window === 'undefined') return undefined
+
+    const footerNode = footerElement
+    if (!footerNode) return undefined
+
+    let frameId = 0
+    const updateFooterVisibility = () => {
+      const rect = footerNode.getBoundingClientRect()
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+      const nextIsFooterInView = rect.top < viewportHeight - 72 && rect.bottom > 0
+
+      setIsFooterInView(nextIsFooterInView)
+    }
+    const scheduleUpdate = () => {
+      if (frameId) window.cancelAnimationFrame(frameId)
+      frameId = window.requestAnimationFrame(updateFooterVisibility)
+    }
+    const observer = typeof IntersectionObserver === 'undefined'
+      ? null
+      : new IntersectionObserver(
+        ([entry]) => {
+          setIsFooterInView(entry.isIntersecting)
+          scheduleUpdate()
+        },
+        {
+          threshold: 0.05,
+          rootMargin: '0px 0px -72px 0px',
+        },
+      )
+
+    updateFooterVisibility()
+    observer?.observe(footerNode)
+    window.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleUpdate)
+
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId)
+      observer?.disconnect()
+      window.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+    }
+  }, [footerElement, hasMenuStore])
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -2364,19 +2594,6 @@ export default function StoreFrontPage() {
   }, [categories, productsByCategory])
 
   const shouldShowCategoryNav = categories.length > 0 || availableProducts.length > 0
-
-  const storeInfoItems = useMemo(() => {
-    return [
-      {
-        icon: FiClock,
-        label: store?.deliveryTime || store?.estimatedDeliveryTime || '25-40 min',
-      },
-      {
-        icon: FiMapPin,
-        label: store?.city || store?.address?.city || 'Aracaju',
-      },
-    ]
-  }, [store])
 
   const handleCategoryWheel = useCallback((event) => {
     const element = categoryScrollRef.current
@@ -3194,7 +3411,7 @@ return (
         </section>
       )}
 
-      <main id="menu-start" className="mx-auto mt-5 max-w-[1440px] px-4 sm:mt-7 xl:px-6">
+      <main id="menu-start" className="mx-auto mt-5 max-w-[1440px] px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] sm:mt-7 md:pb-28 lg:pb-32 xl:px-6">
         {loadingMenu ? (
           <div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((item) => (
@@ -3356,7 +3573,9 @@ return (
   onBackToTop={handleBackToTop}
 />
 
-<StoreFooter store={store} todayHoursLabel={todayHoursLabel} />
+<div ref={setFooterElement}>
+  <StoreFooter store={store} todayHoursLabel={todayHoursLabel} />
+</div>
 
       {store && (
         <PublicStoreBottomNav
@@ -3364,53 +3583,16 @@ return (
           cartTotal={cartTotal}
           isSearchActive={searchExpanded || Boolean(searchTerm)}
           isInfoOpen={isInfoOpen}
+          isHidden={isFooterInView || isCartOpen}
           onBackToTop={handleBackToTop}
           onOpenSearch={handleOpenSearch}
           onOpenInfo={() => setHeaderInfoOpenRequestKey((current) => current + 1)}
           onOpenOrders={() => setIsProfileOpen(true)}
           onOpenCart={handleOpenCart}
+          store={store}
+          themeColor={themeColor}
+          todayHoursLabel={todayHoursLabel}
         />
-      )}
-
-      {totalItemsCount > 0 && !orderingBlockedOnStorefront && (
-        <button
-          type="button"
-          onClick={handleOpenCart}
-          aria-label={`Abrir carrinho com ${totalItemsCount} ${totalItemsCount === 1 ? 'item' : 'itens'}`}
-          title="Abrir carrinho"
-          className="fixed bottom-5 left-4 right-4 z-40 hidden rounded-[1.7rem] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white shadow-2xl transition-transform duration-150 active:scale-[0.985] md:left-[calc(50%-18rem)] md:right-auto md:block md:w-full md:max-w-xl md:hover:scale-[1.01]"
-          style={{ background: themeColor }}
-        >
-          <div className="flex items-center justify-between gap-5">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black/15">
-                  <FiShoppingCart size={25} />
-                </div>
-
-                <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#111827] shadow-lg">
-                  {totalItemsCount}
-                </span>
-              </div>
-
-              <div className="text-left">
-                <p className="text-lg font-black leading-none">
-                  Ver carrinho
-                </p>
-                <p className="mt-1 text-sm font-bold text-white/80">
-                  Finalizar pedido
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <p className="text-xs font-bold text-white/75">Total</p>
-              <p className="text-xl font-black tracking-tight">
-                {formatMoney(cartTotal)}
-              </p>
-            </div>
-          </div>
-        </button>
       )}
 
       {store?.whatsapp && (
@@ -3418,7 +3600,11 @@ return (
           href={`https://wa.me/${onlyNumbers(store.whatsapp)}`}
           target="_blank"
           rel="noreferrer"
-          className="group fixed bottom-5 right-5 z-30 hidden h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366] text-[#111827] shadow-2xl transition hover:scale-105 md:flex"
+          className={`group fixed right-5 z-30 hidden h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366] text-white shadow-[0_18px_40px_rgba(16,185,129,0.28)] transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-500 active:scale-95 md:bottom-[6.75rem] md:flex xl:bottom-6 xl:right-6 ${
+            isFooterInView || isCartOpen
+              ? 'pointer-events-none translate-y-4 opacity-0'
+              : 'pointer-events-auto translate-y-0 opacity-100'
+          }`}
           aria-label="Falar com a loja no WhatsApp"
         >
           <span className="pointer-events-none absolute bottom-full right-0 mb-2 hidden whitespace-nowrap rounded-full bg-[#111827] px-3 py-1.5 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:opacity-100 md:block">
@@ -3444,5 +3630,4 @@ return (
   </>
 )
 }
-
 

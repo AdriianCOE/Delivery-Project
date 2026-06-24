@@ -83,6 +83,7 @@ const NAV_SECTIONS = [
       },
       {
         label: 'Tela de Cozinha',
+        mobileLabel: 'Cozinha',
         description: 'Produção em tempo real',
         to: '/dashboard/out-screen',
         icon: FiMonitor,
@@ -536,6 +537,7 @@ function ComingSoonNavItem({ item, onNavigate, collapsed = false }) {
 
 function MobileNavItem({ item, badgeCount = 0, hasNotification = false }) {
   const Icon = item.icon
+  const label = item.mobileLabel || item.label
   const showNotification = badgeCount > 0 || hasNotification
 
   return (
@@ -547,16 +549,23 @@ function MobileNavItem({ item, badgeCount = 0, hasNotification = false }) {
         : item.label}
       className={({ isActive }) =>
         cn(
-          'relative flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98]',
+          'relative flex min-w-0 flex-col items-center justify-center rounded-[1.15rem] px-1 py-2 text-[10px] font-black transition duration-200 active:scale-[0.96]',
           isActive
-            ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
-            : 'text-[#6b7280] active:bg-gray-50 dark:text-zinc-400 dark:active:bg-zinc-800/50'
+            ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/20'
+            : 'text-zinc-400 hover:bg-white/5 hover:text-white'
         )
       }
     >
       {({ isActive }) => (
         <>
-          <span className="relative">
+          {isActive && (
+            <span className="absolute top-1 h-1 w-5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.7)]" />
+          )}
+
+          <span className={cn(
+            'relative grid h-7 w-7 place-items-center rounded-xl transition duration-200',
+            isActive ? 'bg-orange-500 text-white shadow-lg shadow-orange-950/30' : 'text-zinc-400'
+          )}>
             <Icon size={19} />
             {showNotification && (
               <span className="absolute -right-2 -top-2">
@@ -565,7 +574,7 @@ function MobileNavItem({ item, badgeCount = 0, hasNotification = false }) {
             )}
           </span>
 
-          <span className="mt-1 max-w-full truncate">{item.label}</span>
+          <span className="mt-0.5 max-w-full truncate">{label}</span>
         </>
       )}
     </NavLink>
@@ -1197,8 +1206,14 @@ function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
   })
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/95 px-2 pt-2 shadow-2xl shadow-gray-300/60 backdrop-blur-xl pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:hidden dark:bg-zinc-900/95 dark:border-zinc-800 dark:shadow-[0_-10px_50px_rgba(0,0,0,0.3)]">
-      <div className="grid grid-cols-5 gap-1">
+    <motion.nav
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.7rem+env(safe-area-inset-bottom))] lg:hidden"
+      aria-label="Navegação principal do painel"
+    >
+      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1 rounded-[1.65rem] border border-white/10 bg-[#111318]/95 p-2 shadow-[0_20px_50px_rgba(0,0,0,0.34)] ring-1 ring-black/10 backdrop-blur-xl">
         {mobileItems.map((item) => (
           <MobileNavItem
             key={item.to}
@@ -1212,13 +1227,20 @@ function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
           onClick={onOpenMore}
           aria-label={hiddenHasNotification ? 'Mais, há notificações em itens escondidos' : 'Mais'}
           className={cn(
-            'relative flex min-w-0 flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-[10px] font-black transition active:scale-[0.98] active:bg-gray-50 dark:active:bg-zinc-800',
+            'relative flex min-w-0 flex-col items-center justify-center rounded-[1.15rem] px-1 py-2 text-[10px] font-black transition duration-200 active:scale-[0.96]',
             moreActive
-              ? 'bg-orange-50 text-[#f97316] dark:bg-orange-950/20'
-              : 'text-[#6b7280] dark:text-zinc-400'
+              ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/20'
+              : 'text-zinc-400 hover:bg-white/5 hover:text-white'
           )}
         >
-          <span className="relative">
+          {moreActive && (
+            <span className="absolute top-1 h-1 w-5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.7)]" />
+          )}
+
+          <span className={cn(
+            'relative grid h-7 w-7 place-items-center rounded-xl transition duration-200',
+            moreActive ? 'bg-orange-500 text-white shadow-lg shadow-orange-950/30' : 'text-zinc-400'
+          )}>
             <FiMenu size={19} />
             {hiddenHasNotification && (
               <span className="absolute -right-2 -top-2">
@@ -1227,10 +1249,10 @@ function MobileBottomNav({ onOpenMore, moreActive, notificationCounts = {} }) {
             )}
           </span>
 
-          <span className="mt-1 max-w-full truncate">Mais</span>
+          <span className="mt-0.5 max-w-full truncate">Mais</span>
         </button>
       </div>
-    </nav>
+    </motion.nav>
   )
 }
 export default function DashboardLayout() {
