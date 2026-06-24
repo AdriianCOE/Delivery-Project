@@ -200,8 +200,16 @@ export default function LandingPage() {
     document.documentElement.classList.remove('dark')
     document.documentElement.style.colorScheme = 'light'
 
+    const targets = [document.documentElement, document.body]
+    targets.forEach((target) => {
+      target.classList.add('pratoby-scrollbar', 'pratoby-page-scrollbar')
+    })
+
     return () => {
       document.documentElement.style.removeProperty('color-scheme')
+      targets.forEach((target) => {
+        target.classList.remove('pratoby-scrollbar', 'pratoby-page-scrollbar')
+      })
     }
   }, [])
 
