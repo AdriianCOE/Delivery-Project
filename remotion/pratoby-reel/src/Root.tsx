@@ -1,23 +1,15 @@
 import {Composition} from 'remotion';
-import {PratoByReel} from './PratoByReel';
-
-const REEL = {
-  id: 'PratoByReel',
-  durationInSeconds: 15,
-  fps: 30,
-  width: 1080,
-  height: 1920,
-} as const;
+import {PratoByReel, pratoByReelMetadata} from './PratoByReel';
 
 export const Root = () => {
   return (
     <Composition
-      id={REEL.id}
+      id="PratoByReel"
       component={PratoByReel}
-      durationInFrames={REEL.durationInSeconds * REEL.fps}
-      fps={REEL.fps}
-      width={REEL.width}
-      height={REEL.height}
+      durationInFrames={pratoByReelMetadata.durationInFrames}
+      fps={pratoByReelMetadata.fps}
+      width={pratoByReelMetadata.width}
+      height={pratoByReelMetadata.height}
     />
   );
 };

@@ -14,7 +14,7 @@ import {
 /**
  * PratoBy — Reel institucional
  * ---------------------------------------------------------------------------
- * 1080×1920 @ 30fps · 450 frames (15s). Ver `VIDEO` / `pratoByReelMetadata`
+ * 1080×1920 @ 30fps · 600 frames (20s). Ver `VIDEO` / `pratoByReelMetadata`
  * para registrar a <Composition> em Root.tsx:
  *
  *   <Composition
@@ -32,11 +32,29 @@ import {
  *   - assets/pratoby-reel/product-list-dock.png
  *   - assets/pratoby-reel/product-modal.png
  *   - assets/pratoby-reel/marketing-card.png
- *   - (opcional) audio/pratoby-reel.mp3
+ *   - audio/pratoby-bed.wav      (trilha de fundo, 20s)
+ *   - audio/sfx-whoosh*.wav      (entradas/transições com variações)
+ *   - audio/sfx-pop.wav          (confirmação de UI)
+ *   - audio/sfx-cash.wav        (moeda — "sem comissão")
+ *   - audio/sfx-ding.wav         (notificação — novo pedido)
+ *   - audio/sfx-chime.wav        (stinger de encerramento da marca)
+ *   - audio/sfx-cut.wav          (tick seco — início de cada cena)
+ *
+ * Som: a trilha (BackgroundBed) toca do frame 0 ao final em loop, com fade-in/out.
+ * Cada efeito (SoundEffect) é disparado no MESMO "delay" do elemento visual que
+ * ele acompanha, então o áudio sempre nasce sincronizado com a animação.
+ * CutFlash + sfx-cut tocam automaticamente no frame 0 de TODA cena (dentro de
+ * SceneContainer) — é o que dá intenção ao corte seco entre cenas.
  *
  * Arquitetura: cada cena vive dentro de um <Sequence>, então useCurrentFrame()
  * já é LOCAL ao início da cena — os "delay" usados pelos componentes internos
  * são sempre relativos ao início da própria cena, nunca ao frame global.
+ *
+ * Zona segura (Instagram Reels/Stories/Feed): a UI do app cobre faixas no
+ * topo (perfil/menu, ~150px) e na base (legenda, CTA de seguir, ícones de
+ * curtir/comentar, ~300px). Todo TEXTO relevante fica fora dessas faixas —
+ * SAFE_TOP / SAFE_BOTTOM abaixo. Elementos puramente decorativos (mockups de
+ * celular, fundos) podem sangrar até a borda sem problema.
  *
  * Tipografia: o stack abaixo depende de fontes do sistema, que nem sempre
  * existem na máquina de render (Chrome headless). Para fidelidade garantida
@@ -47,17 +65,22 @@ import {
 
 const VIDEO = {
   fps: 30,
-  durationInFrames: 450,
+  durationInFrames: 600,
   width: 1080,
   height: 1920,
 } as const;
 
+// Zona segura: nenhum TEXTO deve ficar acima de SAFE_TOP nem abaixo de
+// (height - SAFE_BOTTOM_MARGIN).
+const SAFE_TOP = 150;
+const SAFE_BOTTOM_MARGIN = 300;
+
 const TIMELINE = {
-  hook: { start: 0, end: 78, label: "Hook — Sem comissão" },
-  storefront: { start: 78, end: 168, label: "Vitrine — Loja no celular" },
-  product: { start: 168, end: 258, label: "Produto — Montar pedido" },
-  order: { start: 258, end: 348, label: "Pedido — Painel do lojista" },
-  cta: { start: 348, end: 450, label: "CTA — Marca" },
+  hook: { start: 0, end: 104, label: "Hook — Sem comissão" },
+  storefront: { start: 104, end: 224, label: "Vitrine — Loja no celular" },
+  product: { start: 224, end: 344, label: "Produto — Montar pedido" },
+  order: { start: 344, end: 464, label: "Pedido — Painel do lojista" },
+  cta: { start: 464, end: 600, label: "CTA — Marca" },
 } as const;
 
 type SceneKey = keyof typeof TIMELINE;
@@ -98,10 +121,19 @@ const assets = {
   productListDock: "assets/pratoby-reel/product-list-dock.png",
   productModal: "assets/pratoby-reel/product-modal.png",
   marketingCard: "assets/pratoby-reel/marketing-card.png",
+  audio: {
+    bed: "audio/pratoby-bed.wav",
+    whoosh: "audio/sfx-whoosh.wav",
+    whooshSoft: "audio/sfx-whoosh-soft.wav",
+    whooshFast: "audio/sfx-whoosh-fast.wav",
+    whooshDeep: "audio/sfx-whoosh-deep.wav",
+    pop: "audio/sfx-pop.wav",
+    cash: "audio/sfx-cash.wav",
+    ding: "audio/sfx-ding.wav",
+    chime: "audio/sfx-chime.wav",
+    cut: "audio/sfx-cut.wav",
+  },
 } as const;
-
-// Opcional: coloque uma trilha leve em public/audio/pratoby-reel.mp3 e troque para esse caminho.
-const optionalAudioTrack: string | null = null;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -110,24 +142,16 @@ const sceneLength = (scene: SceneKey) => TIMELINE[scene].end - TIMELINE[scene].s
 
 /**
  * Curva de opacidade de uma cena, em frame LOCAL (0 = início da cena).
- * `freezeAtEnd` mantém a cena em opacidade 1 ao final, útil para a última
- * cena do vídeo (evita um fade-out indesejado no corte final).
+ * Em vez de cada cena apagar no final, fazemos só um micro fade-in no
+ * começo (6 frames) — como as Sequences são coladas uma na outra, a tela
+ * nunca fica "quase vazia" numa transição. O corte seco entre cenas ganha
+ * intenção própria via <CutFlash />, dentro de SceneContainer.
  */
-const sceneOpacity = (localFrame: number, durationInFrames: number, freezeAtEnd = false) => {
-  const fadeIn = interpolate(localFrame, [0, 14], [0, 1], {
+const sceneOpacity = (localFrame: number) =>
+  interpolate(localFrame, [0, 6], [0.94, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-
-  if (freezeAtEnd) return fadeIn;
-
-  const fadeOut = interpolate(localFrame, [durationInFrames - 14, durationInFrames], [1, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-
-  return Math.min(fadeIn, fadeOut);
-};
 
 const delayedSpring = (
   frame: number,
@@ -297,16 +321,14 @@ const Background = ({ durationInFrames }: { durationInFrames: number }) => {
 
 const SceneContainer = ({
   scene,
-  freezeAtEnd = false,
   children,
 }: {
   scene: SceneKey;
-  freezeAtEnd?: boolean;
   children: React.ReactNode;
 }) => {
   const frame = useCurrentFrame();
   const duration = sceneLength(scene);
-  const opacity = sceneOpacity(frame, duration, freezeAtEnd);
+  const opacity = sceneOpacity(frame);
   const y = interpolate(frame, [0, 16], [16, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -322,7 +344,9 @@ const SceneContainer = ({
         fontFamily,
       }}
     >
+      <SoundEffect src={assets.audio.cut} at={0} volume={0.36} />
       <Background durationInFrames={duration} />
+      <CutFlash />
       <div style={{ position: "relative", width: "100%", height: "100%" }}>{children}</div>
     </AbsoluteFill>
   );
@@ -339,16 +363,16 @@ const Brand = ({ large = false, center = false }: { large?: boolean; center?: bo
         display: "flex",
         alignItems: "center",
         justifyContent: center ? "center" : "flex-start",
-        gap: large ? 18 : 12,
+        gap: large ? 14 : 12,
         opacity: enter,
-        transform: `translateY(${(1 - enter) * 8}px) scale(${0.97 + enter * 0.03})`,
+        transform: `translateX(${large && center ? 10 : 0}px) translateY(${(1 - enter) * 8}px) scale(${0.97 + enter * 0.03})`,
       }}
     >
       <div
         style={{
-          width: large ? 116 : 56,
-          height: large ? 116 : 56,
-          borderRadius: large ? 34 : 17,
+          width: large ? 96 : 56,
+          height: large ? 96 : 56,
+          borderRadius: large ? 28 : 17,
           background: colors.white,
           display: "grid",
           placeItems: "center",
@@ -361,7 +385,7 @@ const Brand = ({ large = false, center = false }: { large?: boolean; center?: bo
       </div>
       <div
         style={{
-          fontSize: large ? 76 : 34,
+          fontSize: large ? 66 : 34,
           fontWeight: 900,
           letterSpacing: large ? -2 : -0.7,
           color: large ? colors.orangeDark : colors.slate,
@@ -469,14 +493,182 @@ const Subhead = ({
   );
 };
 
+/** Legenda curta sob a marca — reforça o que é o PratoBy nos primeiros segundos. */
+const Tagline = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  return (
+    <p
+      style={{
+        ...fadeUpStyle(frame, delay, fps, 8),
+        margin: "10px 0 0",
+        fontSize: 20,
+        fontWeight: 700,
+        color: colors.slateMuted,
+        letterSpacing: 0.2,
+      }}
+    >
+      {children}
+    </p>
+  );
+};
+
+/** Linha leve com check — reforço de benefício, mais discreta que o InfoCard. */
+const ChecklistItem = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 24, 130);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        opacity: clamp(enter, 0, 1),
+        transform: `translateX(${(1 - enter) * -10}px)`,
+        fontSize: 21,
+        fontWeight: 700,
+        color: colors.slate,
+      }}
+    >
+      <div style={{ width: 26, height: 26, borderRadius: "50%", background: colors.greenSoft, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+        <Icon name="check" size={15} color={colors.green} />
+      </div>
+      {children}
+    </div>
+  );
+};
+
+/** Tag leve, sem ícone — usada para listar categorias de cardápio. */
+const TagChip = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 22, 140);
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "10px 18px",
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.9)",
+        border: "1px solid rgba(249,115,22,0.16)",
+        color: colors.slateMuted,
+        fontSize: 18,
+        fontWeight: 700,
+        opacity: clamp(enter, 0, 1),
+        transform: `scale(${0.92 + enter * 0.08})`,
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
+/** Etiqueta flutuante de preço — estilo "sticker", preenche vazios perto do celular. */
+const PlanTeaser = ({ delay = 0 }: { delay?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 18, 150);
+  const floatY = interpolate(Math.sin(frame / 22), [-1, 1], [-3, 3]);
+
+  return (
+    <div
+      style={{
+        width: 300,
+        padding: "20px 22px",
+        borderRadius: 30,
+        background: "rgba(255,255,255,0.96)",
+        border: "1px solid rgba(249,115,22,0.18)",
+        boxShadow:
+          "0 22px 52px rgba(15,23,42,0.12), 0 12px 28px rgba(249,115,22,0.10)",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 16 + floatY}px) scale(${0.94 + enter * 0.06})`,
+      }}
+    >
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 12px",
+          borderRadius: 999,
+          background: colors.orangePale,
+          color: colors.orangeDark,
+          fontSize: 13,
+          fontWeight: 900,
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        <Icon name="money" size={15} color={colors.orangeDark} />
+        Plano Essencial
+      </div>
+
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 6,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 38,
+            fontWeight: 950,
+            letterSpacing: -1.3,
+            color: colors.slate,
+            lineHeight: 1,
+          }}
+        >
+          R$ 59,99
+        </span>
+        <span
+          style={{
+            marginBottom: 4,
+            fontSize: 15,
+            fontWeight: 800,
+            color: colors.slateMuted,
+          }}
+        >
+          /mês
+        </span>
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          paddingTop: 12,
+          borderTop: "1px solid rgba(249,115,22,0.12)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 16,
+          fontWeight: 850,
+          color: colors.orangeDark,
+        }}
+      >
+        <Icon name="check" size={17} color={colors.orangeDark} />
+        Sem comissão por pedido
+      </div>
+    </div>
+  );
+};
+
 const ScreenshotFrame = ({
   src,
   objectPosition = "top center",
+  objectFit = "cover",
   scale = 1,
   panY = 0,
 }: {
   src: string;
   objectPosition?: string;
+  objectFit?: "cover" | "contain";
   scale?: number;
   panY?: number;
 }) => (
@@ -495,7 +687,7 @@ const ScreenshotFrame = ({
       style={{
         width: "100%",
         height: "100%",
-        objectFit: "cover",
+        objectFit,
         objectPosition,
         transform: `scale(${scale}) translateY(${panY}px)`,
       }}
@@ -509,6 +701,7 @@ const PhoneMockup = ({
   width = 540,
   height = 1188,
   objectPosition = "top center",
+  objectFit = "cover",
   scale = 1,
   panY = 0,
   rotate = 0,
@@ -518,6 +711,7 @@ const PhoneMockup = ({
   width?: number;
   height?: number;
   objectPosition?: string;
+  objectFit?: "cover" | "contain";
   scale?: number;
   panY?: number;
   rotate?: number;
@@ -559,7 +753,13 @@ const PhoneMockup = ({
           opacity: 0.85,
         }}
       />
-      <ScreenshotFrame src={src} objectPosition={objectPosition} scale={scale} panY={panY} />
+      <ScreenshotFrame
+        src={src}
+        objectFit={objectFit}
+        objectPosition={objectPosition}
+        scale={scale}
+        panY={panY}
+      />
       <div
         style={{
           position: "absolute",
@@ -595,13 +795,12 @@ const FeaturePill = ({
   icon: IconName;
   children: React.ReactNode;
   delay?: number;
-  variant?: "light" | "orange" | "green";
+  variant?: "light" | "orange";
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = delayedSpring(frame, delay, fps, 22, 120);
   const orange = variant === "orange";
-  const green = variant === "green";
 
   return (
     <div
@@ -613,16 +812,12 @@ const FeaturePill = ({
         borderRadius: 999,
         background: orange
           ? `linear-gradient(135deg, ${colors.orange}, ${colors.orangeDark})`
-          : green
-            ? "rgba(220,252,231,0.96)"
-            : "rgba(255,255,255,0.96)",
+          : "rgba(255,255,255,0.96)",
         border: orange
           ? "1px solid rgba(255,255,255,0.24)"
-          : green
-            ? "1px solid rgba(34,197,94,0.18)"
-            : "1px solid rgba(249,115,22,0.14)",
+          : "1px solid rgba(249,115,22,0.14)",
         boxShadow: orange ? "0 16px 32px rgba(234,88,12,0.18)" : "0 12px 26px rgba(15,23,42,0.06)",
-        color: orange ? colors.white : green ? colors.green : colors.slate,
+        color: orange ? colors.white : colors.slate,
         fontSize: 20,
         fontWeight: 800,
         whiteSpace: "nowrap",
@@ -630,7 +825,7 @@ const FeaturePill = ({
         transform: `translateY(${(1 - enter) * 12}px) scale(${0.96 + enter * 0.04})`,
       }}
     >
-      <Icon name={icon} size={22} color={orange ? colors.white : green ? colors.green : colors.orange} />
+      <Icon name={icon} size={22} color={orange ? colors.white : colors.orange} />
       {children}
     </div>
   );
@@ -688,25 +883,397 @@ const InfoCard = ({
   );
 };
 
+const StatCard = ({
+  icon,
+  label,
+  value,
+  text,
+  delay = 0,
+  tone = "light",
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  text: string;
+  delay?: number;
+  tone?: "light" | "orange";
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 22, 120);
+  const accent = tone === "orange";
+
+  return (
+    <div
+      style={{
+        padding: "22px 24px",
+        borderRadius: 28,
+        background: accent
+          ? `linear-gradient(135deg, ${colors.orange}, ${colors.orangeDark})`
+          : "rgba(255,255,255,0.96)",
+        border: accent
+          ? "1px solid rgba(255,255,255,0.22)"
+          : "1px solid rgba(249,115,22,0.12)",
+        boxShadow: accent
+          ? "0 18px 42px rgba(234,88,12,0.22)"
+          : "0 16px 34px rgba(15,23,42,0.07)",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 18}px) scale(${0.96 + enter * 0.04})`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 13,
+            background: accent ? "rgba(255,255,255,0.18)" : colors.orangeSoft,
+            display: "grid",
+            placeItems: "center",
+            flex: "0 0 auto",
+          }}
+        >
+          <Icon name={icon} size={19} color={accent ? colors.white : colors.orange} />
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 800,
+            letterSpacing: 0.7,
+            textTransform: "uppercase",
+            color: accent ? "rgba(255,255,255,0.74)" : colors.slateSoft,
+          }}
+        >
+          {label}
+        </div>
+      </div>
+      <div
+        style={{
+          marginTop: 10,
+          fontSize: 34,
+          fontWeight: 900,
+          lineHeight: 1,
+          color: accent ? colors.white : colors.slate,
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 18,
+          lineHeight: 1.2,
+          fontWeight: 700,
+          color: accent ? "rgba(255,255,255,0.82)" : colors.slateMuted,
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Pilha de InfoCards/Checklist em UM único container flex (gap controla o
+ * espaçamento de verdade, em vez de cada item ter um "top" absoluto chutado
+ * — é exatamente isso que causava textos colados/sobrepostos na versão
+ * anterior). Aceita qualquer mistura de InfoCard/ChecklistItem como filhos.
+ */
+const StackColumn = ({
+  top,
+  left,
+  right,
+  width,
+  gap = 14,
+  children,
+}: {
+  top: number;
+  left?: number;
+  right?: number;
+  width?: number;
+  gap?: number;
+  children: React.ReactNode;
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      top,
+      left,
+      right,
+      width,
+      display: "flex",
+      flexDirection: "column",
+      gap,
+    }}
+  >
+    {children}
+  </div>
+);
+
+const AccentRail = ({
+  top,
+  left,
+  height = 300,
+  delay = 0,
+}: {
+  top: number;
+  left: number;
+  height?: number;
+  delay?: number;
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 24, 130);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top,
+        left,
+        width: 6,
+        height,
+        borderRadius: 999,
+        background: `linear-gradient(180deg, ${colors.orange}, rgba(249,115,22,0.08))`,
+        boxShadow: "0 16px 38px rgba(249,115,22,0.16)",
+        opacity: clamp(enter, 0, 1),
+        transform: `scaleY(${0.88 + enter * 0.12})`,
+        transformOrigin: "top",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: -10,
+          left: "50%",
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          background: colors.white,
+          border: `5px solid ${colors.orange}`,
+          transform: "translateX(-50%)",
+          boxShadow: "0 10px 26px rgba(249,115,22,0.20)",
+        }}
+      />
+    </div>
+  );
+};
+
+const SceneBadge = ({
+  icon,
+  children,
+  delay = 0,
+  style,
+}: {
+  icon: IconName;
+  children: React.ReactNode;
+  delay?: number;
+  style?: React.CSSProperties;
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 24, 130);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 9,
+        width: "max-content",
+        padding: "10px 15px",
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.88)",
+        border: "1px solid rgba(249,115,22,0.16)",
+        boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
+        color: colors.slateMuted,
+        fontSize: 15,
+        fontWeight: 900,
+        letterSpacing: 0.35,
+        textTransform: "uppercase",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 10}px) scale(${0.96 + enter * 0.04})`,
+        ...style,
+      }}
+    >
+      <Icon name={icon} size={17} color={colors.orangeDark} />
+      {children}
+    </div>
+  );
+};
+
+const InsightBadge = ({
+  icon,
+  label,
+  value,
+  delay = 0,
+  width = 360,
+  style,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  delay?: number;
+  width?: number;
+  style?: React.CSSProperties;
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 24, 130);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        width,
+        padding: "18px 20px",
+        borderRadius: 28,
+        background: "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,247,237,0.90))",
+        border: "1px solid rgba(249,115,22,0.16)",
+        boxShadow: "0 22px 54px rgba(15,23,42,0.09), 0 12px 32px rgba(249,115,22,0.08)",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 16}px) scale(${0.96 + enter * 0.04})`,
+        ...style,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 16,
+            background: `linear-gradient(135deg, ${colors.orange}, ${colors.orangeDark})`,
+            display: "grid",
+            placeItems: "center",
+            flex: "0 0 auto",
+            boxShadow: "0 14px 28px rgba(249,115,22,0.22)",
+          }}
+        >
+          <Icon name={icon} size={22} color={colors.white} />
+        </div>
+        <div>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 950,
+              color: colors.orangeDark,
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+            }}
+          >
+            {label}
+          </div>
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: 22,
+              lineHeight: 1.08,
+              fontWeight: 950,
+              letterSpacing: -0.4,
+              color: colors.slate,
+            }}
+          >
+            {value}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const FlowStrip = ({
+  steps,
+  delay = 0,
+  style,
+}: {
+  steps: string[];
+  delay?: number;
+  style?: React.CSSProperties;
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 24, 130);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "12px 14px",
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.92)",
+        border: "1px solid rgba(249,115,22,0.14)",
+        boxShadow: "0 16px 36px rgba(15,23,42,0.07)",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 12}px)`,
+        ...style,
+      }}
+    >
+      {steps.map((step, index) => (
+        <React.Fragment key={step}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "8px 11px",
+              borderRadius: 999,
+              background: index === steps.length - 1 ? colors.orangePale : "#f8fafc",
+              color: index === steps.length - 1 ? colors.orangeDark : colors.slateMuted,
+              fontSize: 14,
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                background: index === steps.length - 1 ? colors.orange : "rgba(100,116,139,0.12)",
+                color: index === steps.length - 1 ? colors.white : colors.slateMuted,
+                fontSize: 11,
+              }}
+            >
+              {index + 1}
+            </span>
+            {step}
+          </div>
+          {index < steps.length - 1 && (
+            <div style={{ width: 10, height: 2, borderRadius: 999, background: "rgba(249,115,22,0.28)" }} />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
 const StepList = ({
   steps,
   delay,
+  stagger = 8,
 }: {
   steps: Array<{ icon: IconName; title: string; text: string }>;
   delay: number;
+  stagger?: number;
 }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+  <>
     {steps.map((step, index) => (
       <InfoCard
         key={step.title}
         icon={step.icon}
         title={step.title}
         text={step.text}
-        delay={delay + index * 8}
+        delay={delay + index * stagger}
         accent={index === 0}
       />
     ))}
-  </div>
+  </>
 );
 
 const MiniOrderCard = ({ delay = 0 }: { delay?: number }) => {
@@ -717,44 +1284,120 @@ const MiniOrderCard = ({ delay = 0 }: { delay?: number }) => {
   return (
     <div
       style={{
-        width: 460,
+        width: 470,
         padding: 28,
         borderRadius: 34,
         background: "rgba(255,255,255,0.98)",
-        border: "1px solid rgba(34,197,94,0.18)",
+        border: "1px solid rgba(34,197,94,0.16)",
         boxShadow: "0 30px 76px rgba(15,23,42,0.14)",
         opacity: clamp(enter, 0, 1),
         transform: `translateY(${(1 - enter) * 22}px) scale(${0.94 + enter * 0.06})`,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ width: 58, height: 58, borderRadius: 20, background: colors.greenSoft, display: "grid", placeItems: "center" }}>
+        <div
+          style={{
+            width: 58,
+            height: 58,
+            borderRadius: 20,
+            background: colors.greenSoft,
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
           <Icon name="check" size={27} color={colors.green} />
         </div>
         <div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: colors.slate, lineHeight: 1 }}>Novo pedido recebido</div>
-          <div style={{ marginTop: 7, fontSize: 18, fontWeight: 700, color: colors.slateMuted }}>Pedido #1042 · Doce Capivara</div>
+          <div
+            style={{
+              fontSize: 24,
+              fontWeight: 900,
+              color: colors.slate,
+              lineHeight: 1,
+            }}
+          >
+            Novo pedido recebido
+          </div>
+          <div
+            style={{
+              marginTop: 7,
+              fontSize: 18,
+              fontWeight: 700,
+              color: colors.slateMuted,
+            }}
+          >
+            Pedido #1042 · Lanches da Capivara
+          </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 23, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div
+        style={{
+          marginTop: 22,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+        }}
+      >
         <div style={{ padding: "15px 16px", borderRadius: 22, background: "#f8fafc" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>Total</div>
-          <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900, color: colors.slate }}>R$ 33,60</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Total
+          </div>
+          <div style={{ marginTop: 6, fontSize: 24, fontWeight: 900, color: colors.slate }}>
+            R$ 33,60
+          </div>
         </div>
+
         <div style={{ padding: "15px 16px", borderRadius: 22, background: colors.greenSoft }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(22,163,74,0.72)", textTransform: "uppercase", letterSpacing: 0.5 }}>Chegou</div>
-          <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900, color: colors.green }}>Agora</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(22,163,74,0.74)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Status
+          </div>
+          <div style={{ marginTop: 6, fontSize: 22, fontWeight: 900, color: colors.green }}>
+            Agora
+          </div>
+        </div>
+
+        <div style={{ padding: "15px 16px", borderRadius: 22, background: colors.orangePale }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Pagamento
+          </div>
+          <div style={{ marginTop: 6, fontSize: 21, fontWeight: 900, color: colors.orangeDark }}>
+            Pix
+          </div>
+        </div>
+
+        <div style={{ padding: "15px 16px", borderRadius: 22, background: "#f8fafc" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Canal
+          </div>
+          <div style={{ marginTop: 6, fontSize: 21, fontWeight: 900, color: colors.slate }}>
+            Link da loja
+          </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 16, padding: "17px 19px", borderRadius: 22, background: colors.orangePale, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 19, fontWeight: 800, color: colors.slate }}>Status</span>
-        <span style={{ fontSize: 19, fontWeight: 900, color: colors.orangeDark }}>Aguardando confirmação</span>
+      <div
+        style={{
+          marginTop: 16,
+          padding: "17px 19px",
+          borderRadius: 22,
+          background: colors.orangePale,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontSize: 19, fontWeight: 800, color: colors.slate }}>
+          Atendimento
+        </span>
+        <span style={{ fontSize: 19, fontWeight: 900, color: colors.orangeDark }}>
+          Aguardando confirmação
+        </span>
       </div>
     </div>
   );
 };
+
 
 const CTAButton = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => {
   const frame = useCurrentFrame();
@@ -776,6 +1419,8 @@ const CTAButton = ({ children, delay = 0 }: { children: React.ReactNode; delay?:
         boxShadow: `0 22px 48px rgba(234,88,12,${glow})`,
         fontSize: 31,
         fontWeight: 900,
+        letterSpacing: -0.4,
+        whiteSpace: "nowrap",
         opacity: clamp(enter, 0, 1),
         transform: `translateY(${(1 - enter) * 16}px) scale(${0.95 + enter * 0.05})`,
       }}
@@ -792,7 +1437,7 @@ const TopProgress = () => {
   const scenes = Object.keys(TIMELINE) as SceneKey[];
 
   return (
-    <div style={{ position: "absolute", top: 54, left: 82, right: 82, display: "flex", gap: 8, zIndex: 50 }}>
+    <div style={{ position: "absolute", top: 72, left: 82, right: 82, display: "flex", gap: 8, zIndex: 50 }}>
       {scenes.map((scene) => {
         const { start, end } = TIMELINE[scene];
         const fill = clamp((frame - start) / (end - start), 0, 1);
@@ -820,45 +1465,141 @@ const GrainOverlay = () => (
   </AbsoluteFill>
 );
 
+/**
+ * Flash curto no início de cada cena — dá intenção ao corte seco entre
+ * cenas (em vez de um jump-cut "cru"), sem reintroduzir o problema de tela
+ * quase vazia que o fade-out anterior causava. Dura ~7 frames (~0.23s).
+ */
+const CutFlash = () => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, 1, 7], [0, 0.55, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: colors.white,
+        opacity,
+        pointerEvents: "none",
+      }}
+    />
+  );
+};
+
+/**
+ * Efeito sonoro pontual. `at` é o mesmo "delay" (em frame LOCAL) usado pelo
+ * elemento visual que esse som acompanha — som e imagem nascem juntos.
+ */
+const SoundEffect = ({ src, at, volume = 0.6 }: { src: string; at: number; volume?: number }) => (
+  <Sequence from={at} layout="none">
+    <Audio src={staticFile(src)} volume={volume} />
+  </Sequence>
+);
+
+/** Trilha de fundo: toca o Reel inteiro, em loop, com fade-in/out. */
+const BackgroundBed = () => {
+  const bedVolume = (frame: number) =>
+    interpolate(
+      frame,
+      [0, 24, VIDEO.durationInFrames - 28, VIDEO.durationInFrames],
+      [0, 0.42, 0.42, 0],
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+    );
+
+  return (
+    <Sequence from={0} durationInFrames={VIDEO.durationInFrames} name="Trilha de fundo" layout="none">
+      <Audio src={staticFile(assets.audio.bed)} loop volume={bedVolume} />
+    </Sequence>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Cenas
 // ---------------------------------------------------------------------------
 // useCurrentFrame() aqui já é LOCAL: cada cena vive dentro de um <Sequence>
 // (ver PratoByReel, ao final), então os "delay" abaixo são sempre relativos
-// ao início da própria cena.
+// ao início da própria cena. As cenas ficaram ~33% mais longas (20s no
+// total) — as animações continuam terminando nos mesmos "delay", o tempo
+// extra é "fôlego" de leitura no final de cada cena, o que é desejável em
+// vídeo comercial (dá tempo do espectador absorver a mensagem).
 
 const SceneOne = () => {
   const frame = useCurrentFrame();
-  const phoneY = interpolate(frame, [0, 64], [76, 0], {
+  const phoneY = interpolate(frame, [0, 64], [70, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   return (
     <SceneContainer scene="hook">
-      <div style={{ position: "absolute", top: 112, left: 82 }}>
+      <SoundEffect src={assets.audio.cash} at={5} volume={0.52} />
+      <SoundEffect src={assets.audio.whooshDeep} at={18} volume={0.4} />
+      <SoundEffect src={assets.audio.pop} at={28} volume={0.42} />
+
+      <AccentRail top={SAFE_TOP + 150} left={60} height={510} delay={8} />
+      <SceneBadge icon="store" delay={12} style={{ top: SAFE_TOP + 4, right: 82 }}>
+        SaaS white-label
+      </SceneBadge>
+
+      <div style={{ position: "absolute", top: SAFE_TOP, left: 82 }}>
         <Brand />
+        <Tagline delay={4}>Cardápio Digital - Pedidos sem Comissão.</Tagline>
       </div>
 
-      <div style={{ position: "absolute", top: 262, left: 82, width: 650 }}>
+      <div style={{ position: "absolute", top: SAFE_TOP + 145, left: 82, width: 560 }}>
         <Eyebrow delay={5} icon="money">Sem comissão por pedido</Eyebrow>
-        <div style={{ marginTop: 44 }}>
-          <Headline delay={9} size={72} maxWidth={760}>
-            Venda direto pelo seu <span style={{ color: colors.orange }}>próprio link</span>.
+        <div style={{ marginTop: 38 }}>
+          <Headline delay={9} size={76} maxWidth={720}>
+            Seu delivery online,
+            <br />
+            <span style={{ color: colors.orange }}>sem comissão.</span>
           </Headline>
-          <Subhead delay={15} maxWidth={620}>
-            Cardápio digital, carrinho e pedidos online para sua loja vender com mais controle.
+          <Subhead delay={15} maxWidth={500}>
+            Venda online pelo seu próprio link, sem pagar comissão por pedido.
           </Subhead>
         </div>
       </div>
 
-      <div style={{ position: "absolute", left: 78, top: 850, width: 430, display: "flex", flexDirection: "column", gap: 14 }}>
-        <InfoCard icon="store" title="Delivery próprio" text="Sua loja recebe pedidos sem depender só de marketplace." delay={30} />
-        <InfoCard icon="link" title="Link da loja" text="Compartilhe no Instagram, WhatsApp e bio." delay={38} />
-      </div>
+      <StackColumn top={960} left={82} width={420} gap={16}>
+        <InfoCard
+          icon="store"
+          title="Sua loja no seu canal"
+          text="Cardápio, carrinho e checkout em uma experiência própria para vender pelo celular."
+          delay={26}
+          accent
+        />
+        <ChecklistItem delay={36}>Seu link na bio, no Instagram e no WhatsApp</ChecklistItem>
+        <ChecklistItem delay={44}>Mais margem sem taxa por pedido</ChecklistItem>
+      </StackColumn>
 
-      <div style={{ position: "absolute", right: -40, bottom: -220, transform: `translateY(${phoneY}px)` }}>
-        <PhoneMockup src={assets.storeTop} delay={18} width={560} height={1240} objectPosition="top center" scale={1.04} rotate={-2} />
+      <InsightBadge
+        icon="link"
+        label="Canal próprio"
+        value="Cardápio, pedidos e painel no mesmo sistema"
+        delay={52}
+        width={430}
+        style={{ top: 1284, left: 82 }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          right: -112,
+          top: 430,
+          transform: `translateY(${phoneY}px)`,
+        }}
+      >
+        <PhoneMockup
+          src={assets.storeTop}
+          delay={18}
+          width={500}
+          height={1120}
+          objectPosition="top center"
+          scale={1.03}
+          rotate={-2}
+        />
       </div>
     </SceneContainer>
   );
@@ -866,68 +1607,145 @@ const SceneOne = () => {
 
 const SceneTwo = () => {
   const frame = useCurrentFrame();
-  const panY = interpolate(frame, [20, 84], [0, -105], {
+  const panY = interpolate(frame, [20, 84], [44, 24], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   return (
     <SceneContainer scene="storefront">
-      <div style={{ position: "absolute", top: 210, left: 82, right: 82, textAlign: "center" }}>
-        <Headline delay={5} size={64} maxWidth={920} align="center">
-          Uma loja bonita no celular,
-          <br /> pronta para vender.
+      <SoundEffect src={assets.audio.whooshSoft} at={15} volume={0.42} />
+      <SoundEffect src={assets.audio.pop} at={24} volume={0.4} />
+
+      <div
+        style={{
+          position: "absolute",
+          top: SAFE_TOP + 60,
+          left: 82,
+          right: 82,
+          textAlign: "center",
+        }}
+      >
+        <SceneBadge
+          icon="phone"
+          delay={10}
+          style={{ top: 284, left: 0, right: 0, margin: "0 auto" }}
+        >
+          Mobile-first
+        </SceneBadge>
+        <Headline delay={5} size={66} maxWidth={900} align="center">
+          Uma loja bonita
+          <br />
+          para vender no celular.
         </Headline>
-        <Subhead delay={11} maxWidth={760} align="center">
-          Produtos, categorias, busca e carrinho em uma experiência simples para o cliente.
+        <Subhead delay={11} maxWidth={770} align="center">
+          Cardápio claro, busca rápida e carrinho sempre visível para o cliente pedir sem atrito.
         </Subhead>
       </div>
 
-      <div style={{ position: "absolute", left: 72, top: 570 }}>
-        <PhoneMockup src={assets.productListDock} delay={15} width={510} height={1110} objectPosition="center center" scale={1.15} panY={panY} />
-      </div>
-
-      <div style={{ position: "absolute", right: 72, top: 640, width: 390 }}>
-        <StepList
-          delay={24}
-          steps={[
-            { icon: "search", title: "Cliente encontra", text: "Busca e categorias deixam o pedido mais rápido." },
-            { icon: "cart", title: "Adiciona ao carrinho", text: "O total aparece claro durante a compra." },
-            { icon: "phone", title: "Compra no celular", text: "Interface mobile pensada para delivery." },
-          ]}
+      <div style={{ position: "absolute", left: 48, top: 535 }}>
+        <PhoneMockup
+          src={assets.productListDock}
+          delay={15}
+          width={455}
+          height={1240}
+          objectPosition="top center"
+          scale={1.03}
+          panY={panY}
         />
       </div>
+
+      <StackColumn top={620} right={68} width={410}>
+        <StepList
+          delay={24}
+          stagger={10}
+          steps={[
+            { icon: "search", title: "Busca rápida", text: "O cliente encontra produtos sem perder tempo rolando a tela." },
+            { icon: "store", title: "Categorias organizadas", text: "O cardápio fica fácil de navegar mesmo com muitos itens." },
+            { icon: "cart", title: "Carrinho sempre visível", text: "Resumo do pedido e valor aparecem no momento certo da compra." },
+          ]}
+        />
+      </StackColumn>
+
+      <InsightBadge
+        icon="cart"
+        label="Compra mais fluida"
+        value="Busca, categorias e carrinho trabalhando juntos"
+        delay={54}
+        width={410}
+        style={{ top: 1088, right: 68 }}
+      />
     </SceneContainer>
   );
 };
 
 const SceneThree = () => {
   const frame = useCurrentFrame();
-  const panY = interpolate(frame, [18, 76], [0, -52], {
+  const panY = interpolate(frame, [18, 76], [0, -50], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const cartPulse = interpolate(Math.sin(frame / 7), [-1, 1], [0.99, 1.035]);
+  const cartPulse = interpolate(Math.sin(frame / 7), [-1, 1], [0.992, 1.03]);
 
   return (
     <SceneContainer scene="product">
-      <div style={{ position: "absolute", top: 208, left: 82, width: 610 }}>
-        <Headline delay={5} size={64} maxWidth={650}>
-          O cliente monta o pedido em poucos toques.
+      <SoundEffect src={assets.audio.whooshFast} at={16} volume={0.36} />
+      <SoundEffect src={assets.audio.pop} at={28} volume={0.4} />
+
+      <AccentRail top={SAFE_TOP + 76} left={60} height={318} delay={6} />
+      <SceneBadge icon="cart" delay={14} style={{ top: 535, left: 82 }}>
+        Fluxo de compra guiado
+      </SceneBadge>
+
+      <div style={{ position: "absolute", top: SAFE_TOP + 70, left: 82, width: 570 }}>
+        <Headline delay={5} size={64} maxWidth={620}>
+          O cliente finaliza em poucos toques.
         </Headline>
-        <Subhead delay={11} maxWidth={600}>
-          Opções, tamanhos, subtotal e botão de compra no mesmo fluxo.
+        <Subhead delay={11} maxWidth={560}>
+          Produto, adicionais, observações e checkout simples no mesmo fluxo de compra.
         </Subhead>
       </div>
 
-      <div style={{ position: "absolute", left: 70, top: 610, width: 420, display: "flex", flexDirection: "column", gap: 14 }}>
-        <InfoCard icon="order" title="Produtos com opções" text="Tamanhos, adicionais e observações organizados." delay={28} accent />
-        <InfoCard icon="money" title="Subtotal claro" text="O cliente sabe o valor antes de finalizar." delay={38} />
-        <InfoCard icon="cart" title="Carrinho pronto" text="Pedido segue para o fluxo de checkout." delay={48} />
+      <StackColumn top={650} left={82} width={400}>
+        <StepList
+          delay={26}
+          stagger={10}
+          steps={[
+            { icon: "order", title: "Adicionais e observações", text: "O pedido fica completo antes de chegar na operação." },
+            { icon: "money", title: "Subtotal claro", text: "O cliente entende o valor antes de finalizar." },
+            { icon: "cart", title: "Checkout simples", text: "Menos atrito para concluir a compra e enviar o pedido." },
+          ]}
+        />
+      </StackColumn>
+
+      <div style={{ position: "absolute", right: 82, top: 500 }}>
+        <PlanTeaser delay={54} />
       </div>
 
-      <div style={{ position: "absolute", right: 40, bottom: -120, transform: `scale(${cartPulse})` }}>
-        <PhoneMockup src={assets.productModal} delay={16} width={560} height={1240} objectPosition="center center" scale={1.02} panY={panY} rotate={2} />
+      <FlowStrip
+        steps={["Escolhe", "Personaliza", "Finaliza"]}
+        delay={58}
+        style={{ top: 1112, left: 82 }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          right: 10,
+          bottom: -120,
+          transform: `scale(${cartPulse})`,
+        }}
+      >
+        <PhoneMockup
+          src={assets.productModal}
+          delay={16}
+          width={530}
+          height={1180}
+          objectPosition="center center"
+          scale={1.02}
+          panY={panY}
+          rotate={2}
+        />
       </div>
     </SceneContainer>
   );
@@ -935,140 +1753,398 @@ const SceneThree = () => {
 
 const SceneFour = () => {
   const frame = useCurrentFrame();
-  const panY = interpolate(frame, [20, 70], [-62, -120], {
+
+  const panY = interpolate(frame, [20, 72], [-14, -42], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   return (
     <SceneContainer scene="order">
-      <div style={{ position: "absolute", top: 210, left: 82, width: 840 }}>
-        <Headline delay={5} size={64} maxWidth={850}>
-          Pedido direto para a loja.
-          <br /> Menos bagunça no WhatsApp.
+      <SoundEffect src={assets.audio.whoosh} at={18} volume={0.4} />
+      <SoundEffect src={assets.audio.ding} at={28} volume={0.58} />
+
+      <AccentRail top={SAFE_TOP + 72} left={60} height={300} delay={6} />
+      <SceneBadge icon="panel" delay={14} style={{ top: 552, right: 68 }}>
+        Painel do lojista
+      </SceneBadge>
+
+      <div
+        style={{
+          position: "absolute",
+          top: SAFE_TOP + 66,
+          left: 82,
+          width: 790,
+        }}
+      >
+        <Headline delay={5} size={62} maxWidth={790}>
+          Pedido no painel,
+          <br />
+          operação no controle.
         </Headline>
-        <Subhead delay={11} maxWidth={740}>
-          O cliente compra pelo link e o lojista acompanha tudo no painel.
+
+        <Subhead delay={11} maxWidth={690}>
+          Receba, acompanhe e atualize pedidos sem perder informação em conversas soltas.
         </Subhead>
       </div>
 
-      <div style={{ position: "absolute", left: -70, bottom: -160 }}>
-        <PhoneMockup src={assets.productListDock} delay={18} width={520} height={1160} objectPosition="bottom center" scale={1.14} panY={panY} rotate={2} />
+      <div
+        style={{
+          position: "absolute",
+          left: -88,
+          bottom: -185,
+        }}
+      >
+        <PhoneMockup
+          src={assets.productListDock}
+          delay={18}
+          width={455}
+          height={1220}
+          objectPosition="top center"
+          scale={1.02}
+          panY={panY}
+          rotate={2}
+        />
       </div>
 
-      <div style={{ position: "absolute", right: 72, top: 680 }}>
+      <div
+        style={{
+          position: "absolute",
+          right: 68,
+          top: 640,
+        }}
+      >
         <MiniOrderCard delay={28} />
       </div>
 
-      <div style={{ position: "absolute", right: 72, top: 1110, width: 460, display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
-        <InfoCard icon="panel" title="Painel do lojista" text="Status do pedido, atendimento e operação no mesmo lugar." delay={48} />
-        <InfoCard icon="whatsapp" title="WhatsApp como apoio" text="O pedido não fica perdido em conversas soltas." delay={58} />
-      </div>
+      <InsightBadge
+        icon="panel"
+        label="Operação em tempo real"
+        value="Confirme, prepare e acompanhe sem perder contexto"
+        delay={42}
+        width={470}
+        style={{ top: 1030, right: 68 }}
+      />
+
+      <StackColumn top={1180} right={68} width={470}>
+        <StepList
+          delay={48}
+          stagger={10}
+          steps={[
+            {
+              icon: "order",
+              title: "Novo pedido recebido",
+              text: "O pedido entra com total, canal e informações principais.",
+            },
+            {
+              icon: "panel",
+              title: "Status em tempo real",
+              text: "Atualize o andamento e mantenha a operação no fluxo certo.",
+            },
+            {
+              icon: "whatsapp",
+              title: "Atendimento mais organizado",
+              text: "Use a conversa como apoio, não como lugar para perder pedidos.",
+            },
+          ]}
+        />
+      </StackColumn>
     </SceneContainer>
+  );
+};
+
+const MarketingPreviewCard = ({ delay = 0 }: { delay?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const enter = delayedSpring(frame, delay, fps, 24, 125);
+  const floatY = interpolate(Math.sin(frame / 24), [-1, 1], [-4, 4]);
+
+  return (
+    <div
+      style={{
+        width: 860,
+        height: 376,
+        borderRadius: 42,
+        position: "relative",
+        overflow: "hidden",
+        background:
+          "linear-gradient(135deg, rgba(255,251,245,0.98), rgba(255,237,213,0.92))",
+        border: "1px solid rgba(249,115,22,0.16)",
+        boxShadow:
+          "0 30px 82px rgba(15,23,42,0.13), 0 18px 46px rgba(249,115,22,0.12)",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 22 + floatY}px) scale(${0.96 + enter * 0.04})`,
+      }}
+    >
+      <Img
+        src={staticFile(assets.marketingCard)}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          objectPosition: "center",
+          display: "block",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background:
+            "linear-gradient(145deg, rgba(255,255,255,0.18), transparent 36%, transparent 72%, rgba(15,23,42,0.06))",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          borderRadius: 42,
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          right: 22,
+          bottom: 20,
+          padding: "10px 14px",
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.88)",
+          border: "1px solid rgba(249,115,22,0.14)",
+          boxShadow: "0 12px 28px rgba(15,23,42,0.08)",
+          color: colors.orangeDark,
+          fontSize: 14,
+          fontWeight: 950,
+          letterSpacing: 0.2,
+        }}
+      >
+        Loja pública + painel do lojista
+      </div>
+    </div>
+  );
+};
+
+const FinalProofBar = ({ delay = 0 }: { delay?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = delayedSpring(frame, delay, fps, 22, 120);
+
+  return (
+    <div
+      style={{
+        width: 860,
+        padding: "20px 24px",
+        borderRadius: 34,
+        position: "relative",
+        overflow: "hidden",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,247,237,0.92))",
+        border: "1px solid rgba(249,115,22,0.14)",
+        boxShadow: "0 22px 54px rgba(15,23,42,0.08)",
+        opacity: clamp(enter, 0, 1),
+        transform: `translateY(${(1 - enter) * 14}px) scale(${0.97 + enter * 0.03})`,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 34,
+          right: 34,
+          height: 4,
+          borderRadius: "0 0 999px 999px",
+          background: `linear-gradient(90deg, transparent, ${colors.orange}, transparent)`,
+          opacity: 0.9,
+        }}
+      />
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 14,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 900, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Link próprio
+          </div>
+          <div style={{ marginTop: 5, fontSize: 22, fontWeight: 950, color: colors.slate }}>
+            Sua marca
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 900, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Pedidos
+          </div>
+          <div style={{ marginTop: 5, fontSize: 22, fontWeight: 950, color: colors.slate }}>
+            Organizados
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 900, color: colors.slateSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Comissão
+          </div>
+          <div style={{ marginTop: 5, fontSize: 22, fontWeight: 950, color: colors.orangeDark }}>
+            Zero por pedido
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 14,
+          borderTop: "1px solid rgba(249,115,22,0.12)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 14,
+          fontSize: 19,
+          fontWeight: 850,
+          color: colors.slateMuted,
+        }}
+      >
+        <span style={{ color: colors.orangeDark, fontWeight: 950 }}>pratoby.com</span>
+        <span>·</span>
+        <span>@pratobybr</span>
+        <span>·</span>
+        <span>Teste grátis</span>
+      </div>
+    </div>
   );
 };
 
 const SceneFive = () => {
-  const frame = useCurrentFrame();
-  const previewOpacity = interpolate(frame, [48, 62], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const hintOpacity = interpolate(Math.sin(frame / 13), [-1, 1], [0.5, 1]);
-
   return (
-    <SceneContainer scene="cta" freezeAtEnd>
-      <div style={{ position: "absolute", top: 186, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-        <Brand large center />
-      </div>
-      <div style={{ position: "absolute", top: 420, left: 90, right: 90, textAlign: "center" }}>
-        <Headline align="center" maxWidth={900} size={72} delay={10}>
-          Seu cardápio.
-          <br /> Seu delivery.
-          <br /> Sua <span style={{ color: colors.orange }}>margem</span>.
-        </Headline>
-        <Subhead align="center" maxWidth={810} delay={17}>
-          Venda online pelo seu próprio link, sem comissão por pedido.
-        </Subhead>
-      </div>
-      <div style={{ position: "absolute", top: 842, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-        <CTAButton delay={28}>Conheça o PratoBy</CTAButton>
-      </div>
-      <div style={{ position: "absolute", top: 1002, left: 126, right: 126, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <FeaturePill icon="check" delay={38}>Sem comissão</FeaturePill>
-        <FeaturePill icon="cart" delay={44}>Pedidos online</FeaturePill>
-        <FeaturePill icon="panel" delay={50}>Painel do lojista</FeaturePill>
-        <FeaturePill icon="link" delay={56}>Link próprio</FeaturePill>
-      </div>
+    <SceneContainer scene="cta">
+      <SoundEffect src={assets.audio.pop} at={24} volume={0.42} />
+      <SoundEffect src={assets.audio.cash} at={36} volume={0.34} />
+      <SoundEffect src={assets.audio.chime} at={52} volume={0.62} />
+
       <div
         style={{
           position: "absolute",
-          left: 155,
-          right: 155,
-          top: 1204,
-          height: 250,
-          borderRadius: 42,
-          overflow: "hidden",
-          opacity: previewOpacity,
-          boxShadow: "0 22px 60px rgba(15,23,42,0.12)",
-          border: "1px solid rgba(249,115,22,0.12)",
-        }}
-      >
-        <Img src={staticFile(assets.marketingCard)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(165deg, rgba(255,255,255,0.14), transparent 35%, transparent 65%, rgba(15,23,42,0.08))",
-            pointerEvents: "none",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          bottom: 248,
+          top: SAFE_TOP + 28,
           left: 0,
           right: 0,
-          textAlign: "center",
-          opacity: interpolate(frame, [62, 76], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          }),
+          display: "flex",
+          justifyContent: "center",
         }}
       >
-        <div style={{ fontSize: 34, fontWeight: 900, color: colors.orangeDark, letterSpacing: -0.4 }}>pratoby.com</div>
-        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, opacity: hintOpacity, color: colors.slateMuted, fontSize: 20, fontWeight: 800 }}>
-          <Icon name="arrowUp" size={20} color={colors.slateMuted} />
-          Comece pelo seu próprio link
-        </div>
+        <Brand large center />
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 292,
+          left: 125,
+          right: 90,
+          textAlign: "center",
+        }}
+      >
+        <Headline align="center" maxWidth={860} size={68} delay={8}>
+          Seu cardápio
+          <br />
+          Seus pedidos
+          <br />
+          <span style={{ color: colors.orange }}>Zero comissão.</span>
+        </Headline>
+
+        <Subhead align="center" maxWidth={790} delay={16}>
+          Uma forma mais profissional de vender online pelo seu próprio canal.
+        </Subhead>
+      </div>
+
+      <SceneBadge
+        icon="store"
+        delay={20}
+        style={{ top: 625, left: 0, right: 0, margin: "0 auto" }}
+      >
+        Cardápio + pedidos + painel
+      </SceneBadge>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 715,
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <CTAButton delay={24}>Conheça o PratoBy</CTAButton>
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 875,
+          left: 84,
+          right: 84,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+        }}
+      >
+        <FeaturePill icon="check" delay={34} variant="orange">
+          Sem comissão por pedido
+        </FeaturePill>
+
+        <FeaturePill icon="link" delay={40}>
+          Seu próprio link
+        </FeaturePill>
+
+        <FeaturePill icon="order" delay={46}>
+          Pedidos organizados
+        </FeaturePill>
+
+        <FeaturePill icon="panel" delay={52}>
+          Painel do lojista
+        </FeaturePill>
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 1065,
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <MarketingPreviewCard delay={42} />
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          top: 1486,
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <FinalProofBar delay={58} />
       </div>
     </SceneContainer>
-  );
-};
-
-const OptionalAudio = () => {
-  if (!optionalAudioTrack) return null;
-
-  return (
-    <Audio
-      src={staticFile(optionalAudioTrack)}
-      volume={(frame) =>
-        interpolate(frame, [0, 20, VIDEO.durationInFrames - 30, VIDEO.durationInFrames], [0, 0.2, 0.2, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        })
-      }
-    />
   );
 };
 
 export const PratoByReel = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: colors.cream, fontFamily }}>
-      <OptionalAudio />
-
+      <BackgroundBed />
       <Sequence from={TIMELINE.hook.start} durationInFrames={sceneLength("hook")} name={TIMELINE.hook.label}>
         <SceneOne />
       </Sequence>
@@ -1081,10 +2157,13 @@ export const PratoByReel = () => {
       <Sequence from={TIMELINE.order.start} durationInFrames={sceneLength("order")} name={TIMELINE.order.label}>
         <SceneFour />
       </Sequence>
-      <Sequence from={TIMELINE.cta.start} durationInFrames={sceneLength("cta")} name={TIMELINE.cta.label}>
+      <Sequence
+        from={TIMELINE.cta.start}
+        durationInFrames={sceneLength("cta")}
+        name={TIMELINE.cta.label}
+      >
         <SceneFive />
       </Sequence>
-
       <TopProgress />
       {/* Camada de grão unificando todas as cenas com um acabamento filmico.
           Remova esta linha se precisar reduzir o tempo de renderização. */}
