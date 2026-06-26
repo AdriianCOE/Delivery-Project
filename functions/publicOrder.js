@@ -22,7 +22,7 @@ const {
   isMercadoPagoOnlinePaymentRequest,
   orderRequiresMercadoPagoOnline,
 } = require('./shared/mercadoPagoOrders')
-const { hasPlanFeature } = require('./shared/planAccess')
+const { deriveBillingAccessState, hasPlanFeature } = require('./shared/planAccess')
 
 class PublicOrderError extends Error {
   constructor(code, message) {
@@ -279,15 +279,30 @@ function isFutureDate(value) {
 function assertStoreBillingAllowsPublicOrder(store, logger) {
   const storeId = getStoreDocId(store)
   const subscriptionStatus = getStoreSubscriptionStatus(store)
+  const billingAccess = deriveBillingAccessState(store, { allowLegacyAccess: true })
+
+  if (billingAccess.canReceiveOrders) {
+    if (billingAccess.reason === 'legacy_missing_subscription_status') {
+      logger.warn('createPublicOrder allowed for legacy store without subscriptionStatus', { storeId })
+    }
+    if (billingAccess.reason === 'past_due_grace_period') {
+      logger.warn('createPublicOrder allowed during past_due grace period', {
+        storeId,
+        subscriptionStatus,
+        graceEndsAt: getBillingGraceEndsAt(store)?.toISOString?.() || null,
+      })
+    }
+    return
+  }
 
   if (store?.isBillingBlocked === true) {
     logger.warn('createPublicOrder blocked by explicit billing block', { storeId, subscriptionStatus })
-    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+    fail('failed-precondition', 'Esta loja nao esta recebendo pedidos no momento.')
   }
 
   if (subscriptionStatus === 'blocked' || subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled') {
     logger.warn('createPublicOrder blocked by subscription status', { storeId, subscriptionStatus })
-    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+    fail('failed-precondition', 'Esta loja nao esta recebendo pedidos no momento.')
   }
 
   if (subscriptionStatus === 'trialing') {
@@ -298,55 +313,31 @@ function assertStoreBillingAllowsPublicOrder(store, logger) {
       subscriptionStatus,
       hasAsaasSubscription: Boolean(store?.asaasSubscriptionId || store?.subscription?.providerSubscriptionId),
     })
-    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+    fail('failed-precondition', 'Esta loja nao esta recebendo pedidos no momento.')
   }
-
-  if (subscriptionStatus === 'active') return
 
   if (subscriptionStatus === 'checkout_pending' || subscriptionStatus === 'billing_pending_payment_method') {
     logger.warn('createPublicOrder blocked by checkout pending billing', { storeId, subscriptionStatus })
-    fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+    fail('failed-precondition', 'Esta loja nao esta recebendo pedidos no momento.')
   }
 
   if (subscriptionStatus === 'past_due') {
-    const graceEndsAt = getBillingGraceEndsAt(store)
-
-    if (!graceEndsAt) {
-      logger.warn('createPublicOrder blocked by past_due without grace period', {
-        storeId,
-        subscriptionStatus,
-      })
-      fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
-    }
-
-    if (graceEndsAt.getTime() <= Date.now()) {
-      logger.warn('createPublicOrder blocked by expired past_due grace period', {
-        storeId,
-        subscriptionStatus,
-        graceEndsAt: graceEndsAt.toISOString(),
-      })
-      fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
-    }
-
-    logger.warn('createPublicOrder allowed with past_due grace period', {
+    logger.warn('createPublicOrder blocked by past_due billing', {
       storeId,
       subscriptionStatus,
-      graceEndsAt: graceEndsAt.toISOString(),
+      graceEndsAt: getBillingGraceEndsAt(store)?.toISOString?.() || null,
     })
-    return
+    fail('failed-precondition', 'Esta loja nao esta recebendo pedidos no momento.')
   }
 
-  if (!subscriptionStatus) {
-    logger.warn('createPublicOrder allowed for legacy store without subscriptionStatus', { storeId })
-    return
-  }
-
-  logger.warn('createPublicOrder blocked by unknown subscription status', {
+  logger.warn('createPublicOrder blocked by billing access state', {
     storeId,
     subscriptionStatus,
+    billingAccessState: billingAccess.state,
+    billingAccessReason: billingAccess.reason,
   })
 
-  fail('failed-precondition', 'Esta loja esta temporariamente indisponivel para receber pedidos.')
+  fail('failed-precondition', 'Esta loja nao esta recebendo pedidos no momento.')
 }
 
 async function findStoreForPublicOrder(db, input) {

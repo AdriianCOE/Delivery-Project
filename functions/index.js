@@ -3942,16 +3942,16 @@ function publicCatalogEntitlementsChanged(beforeData, afterData) {
 
 const PUBLIC_APP_ORIGIN = 'https://pratoby.com'
 const DEFAULT_OG_IMAGE = `${PUBLIC_APP_ORIGIN}/og/pratoby-cover.png`
-const DEFAULT_OG_IMAGE_ALT = 'PratoBy - cardápio digital e delivery sem comissão'
+const DEFAULT_OG_IMAGE_ALT = 'PratoBy - cardápio digital, delivery próprio e pedidos online sem comissão'
 const INDEX_ROBOTS = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
 const NOINDEX_ROBOTS = 'noindex, follow'
 const NOINDEX_NOFOLLOW_ROBOTS = 'noindex, nofollow'
 const SEO_INDEX_CACHE_MS = 60 * 1000
 const HOME_SEO_DESCRIPTION =
-  'Crie uma loja online para restaurante, lanchonete ou confeitaria. Receba pedidos pelo seu próprio link, organize entregas e venda sem comissão por pedido.'
+  'Crie seu cardápio digital, receba pedidos online pelo próprio link e venda sem comissão por pedido. O PratoBy é feito para restaurantes, lanchonetes, pizzarias e confeitarias.'
 const INSTITUTIONAL_SEO_ROUTES = {
   '/': {
-    title: 'PratoBy | Cardápio digital e delivery sem comissão',
+    title: 'PratoBy | Cardápio digital e delivery próprio sem comissão',
     description: HOME_SEO_DESCRIPTION,
   },
   '/planos': {
@@ -3978,11 +3978,13 @@ const INSTITUTIONAL_SEO_ROUTES = {
     title: 'Política de Privacidade | PratoBy',
     description:
       'Entenda como o PratoBy coleta, usa e protege dados de lojistas e clientes em sua plataforma de cardápio digital e pedidos online.',
+    robots: NOINDEX_ROBOTS,
   },
   '/termos': {
     title: 'Termos de Uso | PratoBy',
     description:
       'Consulte as regras de uso do PratoBy para lojistas, pedidos online, assinaturas, lojas públicas e serviços digitais.',
+    robots: NOINDEX_ROBOTS,
   },
   '/data-deletion': {
     title: 'Exclusão de dados do usuário | PratoBy',
@@ -4203,7 +4205,7 @@ function getInstitutionalSeoMeta(path) {
     image: DEFAULT_OG_IMAGE,
     imageType: getPreviewImageType(DEFAULT_OG_IMAGE),
     imageAlt: DEFAULT_OG_IMAGE_ALT,
-    robots: INDEX_ROBOTS,
+    robots: route.robots || INDEX_ROBOTS,
   }
 }
 
@@ -4492,8 +4494,6 @@ const SITEMAP_STATIC_ROUTES = [
   { path: '/exemplos', priority: '0.7' },
   { path: '/sobre', priority: '0.6' },
   { path: '/contato', priority: '0.6' },
-  { path: '/privacidade', priority: '0.35' },
-  { path: '/termos', priority: '0.35' },
   { path: '/data-deletion', priority: '0.3' },
 ]
 
@@ -4759,7 +4759,7 @@ async function loadStaticIndexHtml() {
 function buildMinimalSeoHtml(meta = {}) {
   const previewImage = normalizePreviewImageUrl(absolutePublicUrl(meta.image) || DEFAULT_OG_IMAGE) || DEFAULT_OG_IMAGE
   const safeMeta = {
-    title: meta.title || 'PratoBy | Cardápio digital e delivery sem comissão',
+    title: meta.title || 'PratoBy | Cardápio digital e delivery próprio sem comissão',
     description: meta.description || HOME_SEO_DESCRIPTION,
     image: previewImage,
     imageType: getPreviewImageType(previewImage),
@@ -4831,6 +4831,9 @@ exports.storefrontSeoPreview = onRequest(
       : normalizePublicStoreLookupParam(request.path || request.url || '')
     response.set('Content-Type', 'text/html; charset=utf-8')
     response.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
+    if (institutionalMeta?.robots?.startsWith('noindex')) {
+      response.set('X-Robots-Tag', institutionalMeta.robots)
+    }
 
     let html
     try {

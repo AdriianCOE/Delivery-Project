@@ -6,6 +6,7 @@ const {
   getStorePlanLimit,
   hasActiveTrial,
   hasPlanFeature,
+  deriveBillingAccessState,
 } = require('./planAccess')
 
 test('Essential ativo sem trial nao libera scheduling', () => {
@@ -100,4 +101,96 @@ test('isBillingBlocked nao libera mesmo com trialing', () => {
   assert.equal(hasActiveTrial(store), false)
   assert.equal(getEffectivePlan(store), null)
   assert.equal(hasPlanFeature(store, 'scheduling'), false)
+})
+
+test('deriveBillingAccessState diferencia trial disponivel de trial expirado', () => {
+  const now = new Date('2026-06-26T12:00:00.000Z')
+
+  assert.equal(deriveBillingAccessState({}, { now }).state, 'trial_available')
+
+  const expired = deriveBillingAccessState({
+    trialUsed: true,
+    trialEndsAt: '2026-06-20T12:00:00.000Z',
+  }, { now })
+
+  assert.equal(expired.state, 'trial_expired')
+  assert.equal(expired.canReceiveOrders, false)
+})
+
+test('deriveBillingAccessState trata trialing vencido como trial_expired', () => {
+  const state = deriveBillingAccessState({
+    subscriptionStatus: 'trialing',
+    trialEndsAt: '2026-06-20T12:00:00.000Z',
+  }, { now: new Date('2026-06-26T12:00:00.000Z') })
+
+  assert.equal(state.state, 'trial_expired')
+  assert.equal(state.canPublishStore, false)
+})
+
+test('deriveBillingAccessState libera trial ativo', () => {
+  const state = deriveBillingAccessState({
+    subscriptionStatus: 'trialing',
+    trialEndsAt: '2026-06-30T12:00:00.000Z',
+  }, { now: new Date('2026-06-26T12:00:00.000Z') })
+
+  assert.equal(state.state, 'trial_active')
+  assert.equal(state.canReceiveOrders, true)
+})
+
+test('deriveBillingAccessState mapeia estados de assinatura', () => {
+  assert.equal(deriveBillingAccessState({ subscriptionStatus: 'checkout_pending' }).state, 'subscription_pending')
+  assert.equal(deriveBillingAccessState({ subscriptionStatus: 'active' }).state, 'subscription_active')
+  assert.equal(deriveBillingAccessState({ subscriptionStatus: 'past_due' }).state, 'subscription_overdue')
+  assert.equal(deriveBillingAccessState({ subscriptionStatus: 'blocked' }).state, 'blocked')
+  assert.equal(deriveBillingAccessState({ subscriptionStatus: 'canceled' }).state, 'subscription_cancelled')
+})
+
+test('deriveBillingAccessState preserva grace period vigente para past_due', () => {
+  const state = deriveBillingAccessState({
+    subscriptionStatus: 'past_due',
+    billingGraceEndsAt: '2026-06-30T12:00:00.000Z',
+  }, { now: new Date('2026-06-26T12:00:00.000Z') })
+
+  assert.equal(state.state, 'subscription_grace_period')
+  assert.equal(state.canPublishStore, true)
+  assert.equal(state.canReceiveOrders, true)
+  assert.equal(state.reason, 'past_due_grace_period')
+})
+
+test('deriveBillingAccessState bloqueia past_due com grace vencido', () => {
+  const state = deriveBillingAccessState({
+    subscriptionStatus: 'past_due',
+    billingGraceEndsAt: '2026-06-20T12:00:00.000Z',
+  }, { now: new Date('2026-06-26T12:00:00.000Z') })
+
+  assert.equal(state.state, 'subscription_overdue')
+  assert.equal(state.canReceiveOrders, false)
+  assert.equal(state.reason, 'past_due_grace_expired')
+})
+
+test('deriveBillingAccessState assinatura ativa vence trial expirado', () => {
+  const state = deriveBillingAccessState({
+    subscriptionStatus: 'active',
+    trialUsed: true,
+    trialEndsAt: '2026-06-20T12:00:00.000Z',
+  }, { now: new Date('2026-06-26T12:00:00.000Z') })
+
+  assert.equal(state.state, 'subscription_active')
+  assert.equal(state.canReceiveOrders, true)
+})
+
+test('deriveBillingAccessState bloqueio administrativo vence assinatura ativa', () => {
+  const state = deriveBillingAccessState({
+    subscriptionStatus: 'active',
+    isBillingBlocked: true,
+  })
+
+  assert.equal(state.state, 'blocked')
+  assert.equal(state.canReceiveOrders, false)
+})
+
+test('deriveBillingAccessState suporta grant manual e legado explicito', () => {
+  assert.equal(deriveBillingAccessState({ manualGrant: true }).state, 'manual_grant')
+  assert.equal(deriveBillingAccessState({}).state, 'trial_available')
+  assert.equal(deriveBillingAccessState({}, { allowLegacyAccess: true }).state, 'manual_grant')
 })

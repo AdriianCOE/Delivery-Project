@@ -2,12 +2,12 @@ export const SITE_URL = 'https://pratoby.com'
 export const SITE_NAME = 'PratoBy'
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
 export const DEFAULT_IMAGE_ALT =
-  'PratoBy - cardápio digital e delivery sem comissão'
+  'PratoBy - cardápio digital, delivery próprio e pedidos online sem comissão'
 
 export const DEFAULT_SEO = {
-  title: 'PratoBy | Cardápio digital e delivery sem comissão',
+  title: 'PratoBy | Cardápio digital e delivery próprio sem comissão',
   description:
-    'Crie uma loja online para restaurante, lanchonete ou confeitaria. Receba pedidos pelo seu próprio link, organize entregas e venda sem comissão por pedido.',
+    'Crie seu cardápio digital, receba pedidos online pelo próprio link e venda sem comissão por pedido. O PratoBy é feito para restaurantes, lanchonetes, pizzarias e confeitarias.',
   path: '/',
   image: DEFAULT_OG_IMAGE,
   imageAlt: DEFAULT_IMAGE_ALT,
@@ -38,12 +38,14 @@ export const MARKETING_SEO = {
     description:
       'Entenda como o PratoBy coleta, usa e protege dados de lojistas e clientes em sua plataforma de cardápio digital e pedidos online.',
     path: '/privacidade',
+    noIndex: true,
   },
   terms: {
     title: 'Termos de Uso | PratoBy',
     description:
       'Consulte as regras de uso do PratoBy para lojistas, pedidos online, assinaturas, lojas públicas e serviços digitais.',
     path: '/termos',
+    noIndex: true,
   },
   examples: {
     title: 'Exemplos de lojas PratoBy | Cardápio digital e delivery',
@@ -425,7 +427,7 @@ export function buildMarketingJsonLd() {
         logo: `${SITE_URL}/icons/android-chrome-512x512.png`,
         image: DEFAULT_OG_IMAGE,
         description:
-          'Plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias venderem online sem comissão por pedido.',
+          'Plataforma de cardápio digital e delivery próprio para restaurantes, lanchonetes, pizzarias e confeitarias receberem pedidos online pelo próprio link e venderem sem comissão por pedido.',
         areaServed: {
           '@type': 'Country',
           name: 'Brasil',
@@ -446,6 +448,8 @@ export function buildMarketingJsonLd() {
         url: `${SITE_URL}/`,
         name: SITE_NAME,
         alternateName: 'PratoBy Cardápio Digital',
+        description:
+          'Cardápio digital, delivery próprio e pedidos online para restaurantes, lanchonetes, pizzarias e confeitarias venderem pelo próprio link sem comissão por pedido.',
         inLanguage: 'pt-BR',
         publisher: {
           '@id': `${SITE_URL}/#organization`,
@@ -460,7 +464,7 @@ export function buildMarketingJsonLd() {
         operatingSystem: 'Web',
         image: DEFAULT_OG_IMAGE,
         description:
-          'Cardápio digital, loja online por link, pedidos em tempo real e delivery próprio sem comissão do PratoBy por pedido.',
+          'Crie seu cardápio digital, receba pedidos online pelo próprio link e opere delivery próprio sem comissão por pedido. Plataforma feita para restaurantes, lanchonetes, pizzarias e confeitarias.',
         inLanguage: 'pt-BR',
         provider: {
           '@id': `${SITE_URL}/#organization`,

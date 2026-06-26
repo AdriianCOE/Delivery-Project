@@ -15,6 +15,11 @@ import {
   normalizeBillingCycle,
   toDate,
 } from '../../utils/billingStatus'
+import {
+  deriveBillingAccessState,
+  getBillingAccessCopy,
+  mergeBillingAccessData,
+} from '../../utils/billingAccessState'
 import { PLAN_OPTIONS } from '../../utils/planCatalog'
 import {
   cleanBrazilianDocument,
@@ -91,11 +96,47 @@ function normalizeCycleId(cycle) {
   return 'monthly'
 }
 
-function getPrimaryAction({ status, hasAsaasSubscription }) {
+function getPrimaryAction({ status, hasAsaasSubscription, billingAccessState, billingAccessCopy }) {
+  if (billingAccessState?.state === 'trial_expired') {
+    return {
+      label: billingAccessCopy.cta,
+      support: billingAccessCopy.message,
+      needsBillingData: true,
+      tone: 'red',
+    }
+  }
+
+  if (billingAccessState?.state === 'subscription_pending') {
+    return {
+      label: billingAccessCopy.cta,
+      support: billingAccessCopy.message,
+      needsBillingData: true,
+      tone: 'orange',
+    }
+  }
+
+  if (billingAccessState?.state === 'subscription_cancelled') {
+    return {
+      label: billingAccessCopy.cta,
+      support: billingAccessCopy.message,
+      needsBillingData: true,
+      tone: 'red',
+    }
+  }
+
+  if (billingAccessState?.state === 'subscription_overdue') {
+    return {
+      label: billingAccessCopy.cta,
+      support: billingAccessCopy.message,
+      needsBillingData: !hasAsaasSubscription,
+      tone: 'red',
+    }
+  }
+
   if (status === 'checkout_pending') {
     return {
-      label: 'Configurar cobrança e ativar teste grátis',
-      support: 'Você não será cobrado agora. A primeira cobrança acontece após os 14 dias grátis.',
+      label: billingAccessCopy?.cta || 'Configurar cobrança',
+      support: billingAccessCopy?.message || 'Estamos aguardando a confirmação da sua assinatura.',
       needsBillingData: true,
       tone: 'orange',
     }
@@ -567,24 +608,42 @@ export default function BillingPage() {
   const trialDaysLeft = useMemo(() => getTrialDaysRemaining(trialEndsAt), [trialEndsAt])
   const trialEndsDate = useMemo(() => toDate(trialEndsAt), [trialEndsAt])
   const currentPeriodEndDate = useMemo(() => toDate(currentPeriodEnd), [currentPeriodEnd])
+  const allowLegacyAccess = Boolean(store?.id || store?.storeDocId || store?.storeId || store?.slug || store?.storeSlug)
+  const billingAccessState = useMemo(
+    () => deriveBillingAccessState(mergeBillingAccessData(store, userData), { allowLegacyAccess }),
+    [allowLegacyAccess, store, userData]
+  )
+  const billingAccessCopy = useMemo(
+    () => getBillingAccessCopy(billingAccessState),
+    [billingAccessState]
+  )
 
-  const isTrial = subscriptionStatus === 'trialing'
-  const isPastDue = subscriptionStatus === 'past_due'
-  const isBlocked = subscriptionStatus === 'blocked'
-  const isCanceled = subscriptionStatus === 'canceled'
-  const isActive = subscriptionStatus === 'active'
-  const isPending = subscriptionStatus === 'checkout_pending'
-  const isDraftBilling = isPending || !['trialing', 'active', 'past_due', 'blocked', 'canceled'].includes(subscriptionStatus)
-  const showBillingRequiredBanner = searchParams.get('reason') === 'billing_required' && isPending
+  const isTrial = billingAccessState.state === 'trial_active'
+  const isTrialExpired = billingAccessState.state === 'trial_expired'
+  const isPastDue = ['subscription_grace_period', 'subscription_overdue'].includes(billingAccessState.state)
+  const isBlocked = billingAccessState.state === 'blocked'
+  const isCanceled = billingAccessState.state === 'subscription_cancelled'
+  const isActive = billingAccessState.state === 'subscription_active' || billingAccessState.state === 'free_plan' || billingAccessState.state === 'manual_grant'
+  const isPending = billingAccessState.state === 'subscription_pending'
+  const isDraftBilling = !billingAccessState.canPublishStore
+  const showBillingRequiredBanner = searchParams.get('reason') === 'billing_required' && (isPending || isTrialExpired || billingAccessState.state === 'trial_available')
   const trialIsFuture = Boolean(trialEndsDate && trialEndsDate.getTime() > Date.now())
   const firstChargeDate = trialEndsAt || currentPeriodEnd || new Date(Date.now() + 14 * 86400000)
 
   const nextBillingInfo = useMemo(() => {
+    if (isTrialExpired) {
+      return {
+        label: 'Teste grátis',
+        value: 'Encerrado',
+        helper: billingAccessCopy.message,
+      }
+    }
+
     if (!hasAsaasBillingSetup) {
       return {
         label: 'Cobrança',
         value: 'Pendente de configuração',
-        helper: 'Cadastre a forma de pagamento para ativar seu teste grátis.',
+        helper: billingAccessCopy.message,
       }
     }
 
@@ -620,22 +679,30 @@ export default function BillingPage() {
   }, [
     currentPeriodEnd,
     currentPeriodEndDate,
+    billingAccessCopy.message,
     hasAsaasBillingSetup,
     isActive,
     isPastDue,
     isTrial,
+    isTrialExpired,
     trialEndsAt,
     trialIsFuture,
   ])
 
   const primaryAction = useMemo(
-    () => getPrimaryAction({ status: subscriptionStatus, hasAsaasSubscription: hasAsaasBillingSetup }),
-    [subscriptionStatus, hasAsaasBillingSetup]
+    () => getPrimaryAction({
+      status: subscriptionStatus,
+      hasAsaasSubscription: hasAsaasBillingSetup,
+      billingAccessState,
+      billingAccessCopy,
+    }),
+    [billingAccessCopy, billingAccessState, subscriptionStatus, hasAsaasBillingSetup]
   )
   const currentPlanPresentation = getBillingPlanPresentation(plan)
 
   const headerBadge = useMemo(() => {
-    if (isPending) return { label: 'Configure sua cobrança', color: 'orange', dot: true, pulse: true }
+    if (isPending) return { label: 'Assinatura em confirmação', color: 'orange', dot: true, pulse: true }
+    if (isTrialExpired) return { label: 'Teste grátis encerrado', color: 'red', dot: true, pulse: true }
     if (isTrial) {
       return {
         label: hasAsaasBillingSetup ? 'Teste grátis ativo' : 'Teste grátis',
@@ -648,12 +715,14 @@ export default function BillingPage() {
     if (isPastDue) return { label: 'Pagamento pendente', color: 'red', dot: true, pulse: true }
     if (isBlocked || isCanceled) return { label: 'Assinatura bloqueada/cancelada', color: 'red', dot: true }
     return { label: 'Checkout pendente', color: 'gray', dot: true }
-  }, [isActive, isBlocked, isCanceled, isPastDue, isPending, isTrial, hasAsaasBillingSetup])
+  }, [isActive, isBlocked, isCanceled, isPastDue, isPending, isTrial, isTrialExpired, hasAsaasBillingSetup])
 
   const timelineSteps = useMemo(() => {
-    const trialDescription = trialEndsAt
-      ? `Ativo até ${formatBillingDate(trialEndsAt)}`
-      : '14 dias grátis após ativação'
+    const trialDescription = isTrialExpired
+      ? 'Teste grátis encerrado'
+      : trialEndsAt
+        ? `Ativo até ${formatBillingDate(trialEndsAt)}`
+        : '14 dias grátis após ativação'
     const chargeDate = trialEndsAt || currentPeriodEnd
 
     return [
@@ -665,10 +734,10 @@ export default function BillingPage() {
       },
       {
         title: 'Teste grátis',
-        description: isPending ? 'Aguardando ativação' : trialDescription,
+        description: isPending ? billingAccessCopy.message : trialDescription,
         meta: isTrial ? 'Etapa atual' : null,
-        done: !isPending && !isTrial,
-        active: isTrial || isPending,
+        done: !isPending && !isTrial && !isTrialExpired,
+        active: isTrial || isPending || isTrialExpired,
       },
       {
         title: 'Primeira cobrança',
@@ -678,7 +747,7 @@ export default function BillingPage() {
         active: !hasAsaasBillingSetup || isPastDue,
       },
     ]
-  }, [currentPeriodEnd, hasAsaasBillingSetup, isActive, isPastDue, isPending, isTrial, store?.createdAt, trialEndsAt])
+  }, [billingAccessCopy.message, currentPeriodEnd, hasAsaasBillingSetup, isActive, isPastDue, isPending, isTrial, isTrialExpired, store?.createdAt, trialEndsAt])
 
   function openBillingModal(targetPlan, targetCycle) {
     setPendingPlan(targetPlan)
@@ -1067,13 +1136,15 @@ export default function BillingPage() {
                   <FiShield size={20} />
                 </span>
                 <div>
-                  <h2 className="text-sm font-black text-gray-900 dark:text-white">Finalize a configuração da cobrança</h2>
+                  <h2 className="text-sm font-black text-gray-900 dark:text-white">{billingAccessCopy.title}</h2>
                   <p className="mt-1 text-xs font-semibold leading-relaxed text-gray-700 dark:text-zinc-300">
-                    Para manter o seu teste grátis e garantir que sua loja continue ativa após os 14 dias, cadastre sua forma de pagamento.
+                    {billingAccessCopy.message}
                   </p>
-                  <p className="mt-1 text-[11px] font-bold text-[#f97316]">
-                    Nenhuma cobrança é realizada hoje. A primeira fatura só ocorre ao término dos 14 dias grátis.
-                  </p>
+                  {billingAccessState.state === 'trial_available' && (
+                    <p className="mt-1 text-[11px] font-bold text-[#f97316]">
+                      Nenhuma cobrança é realizada hoje. A primeira fatura só ocorre ao término dos 14 dias grátis.
+                    </p>
+                  )}
                 </div>
               </div>
               <button
@@ -1082,7 +1153,7 @@ export default function BillingPage() {
                 className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#f97316] px-5 text-xs font-black text-white shadow-lg shadow-orange-600/10 transition hover:bg-[#ea580c] sm:w-auto"
               >
                 <FiCreditCard size={14} />
-                Cadastrar forma de pagamento
+                {billingAccessCopy.cta}
               </button>
             </div>
           </motion.section>
@@ -1235,8 +1306,8 @@ export default function BillingPage() {
                     <FiAlertTriangle size={16} />
                   </span>
                   <div>
-                    <p className="text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-wider">Configuração Pendente</p>
-                    <p className="text-xs text-gray-600 dark:text-zinc-300 font-semibold mt-1">Para liberar o painel da sua loja, ative os 14 dias grátis informando os dados de cobrança.</p>
+                    <p className="text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-wider">{billingAccessCopy.title}</p>
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 font-semibold mt-1">{billingAccessCopy.message}</p>
                   </div>
                 </div>
               )}
@@ -1650,9 +1721,9 @@ export default function BillingPage() {
                 <FiShield size={18} />
               </span>
               <div>
-                <h3 className="text-base font-black text-[#111827] dark:text-white">Sua loja ainda não está publicada</h3>
+                <h3 className="text-base font-black text-[#111827] dark:text-white">{billingAccessCopy.title}</h3>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-[#6b7280] dark:text-zinc-400">
-                  Você pode explorar o painel agora, mas sua loja só poderá receber pedidos depois que o teste grátis for ativado.
+                  {billingAccessCopy.message}
                 </p>
               </div>
             </div>

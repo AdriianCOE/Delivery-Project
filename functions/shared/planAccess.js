@@ -80,13 +80,29 @@ const BLOCKED_STATUSES = new Set([
   'trial_ended',
 ])
 
+const PENDING_STATUSES = new Set([
+  'checkout_pending',
+  'pending_checkout',
+  'billing_pending',
+  'billing_pending_payment_method',
+])
+
+const OVERDUE_STATUSES = new Set(['past_due', 'overdue'])
+const CANCELLED_STATUSES = new Set(['canceled', 'cancelled', 'deleted'])
+const ACTIVE_STATUSES = new Set(['active', 'paid'])
+const TRIAL_ACTIVE_STATUSES = new Set(['trialing', 'trial', 'active'])
+const TRIAL_EXPIRED_STATUSES = new Set(['expired', 'ended', 'trial_ended'])
+
 function normalizePlanId(value, fallback = PLAN_IDS.ESSENTIAL) {
   const plan = String(value || '').trim().toLowerCase()
   return PLAN_ORDER[plan] ? plan : fallback
 }
 
 function getSubscriptionStatus(data = {}) {
-  return String(data.subscriptionStatus || data.subscription?.status || '').trim().toLowerCase()
+  const status = String(data.subscriptionStatus || data.subscription?.status || '').trim().toLowerCase()
+  return status === 'pending_checkout' || status === 'billing_pending'
+    ? 'checkout_pending'
+    : status
 }
 
 /**
@@ -100,6 +116,254 @@ function getTrialStatus(data = {}) {
     data.billing?.trialStatus ||
     ''
   ).trim().toLowerCase()
+}
+
+function toDate(value) {
+  if (!value) return null
+  if (typeof value.toDate === 'function') return value.toDate()
+  if (typeof value.toMillis === 'function') return new Date(value.toMillis())
+  if (value.seconds) return new Date(Number(value.seconds) * 1000)
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getTrialEndsAt(data = {}) {
+  return (
+    data.trialEndsAt ||
+    data.trialEndAt ||
+    data.trial?.endsAt ||
+    data.trial?.trialEndsAt ||
+    data.billing?.trialEndsAt ||
+    null
+  )
+}
+
+function getBillingGraceEndsAt(data = {}) {
+  return (
+    data.billingGraceEndsAt ||
+    data.pastDueGraceEndsAt ||
+    data.paymentGraceEndsAt ||
+    data.billing?.graceEndsAt ||
+    data.billing?.billingGraceEndsAt ||
+    null
+  )
+}
+
+function hasManualGrant(data = {}) {
+  return Boolean(
+    data.manualGrant === true ||
+      data.manualBillingGrant === true ||
+      data.billingAccessOverride === true ||
+      data.billing?.manualGrant === true ||
+      data.accessGrant?.billing === true
+  )
+}
+
+function hasFreePlan(data = {}) {
+  const plan = String(
+    data.effectivePlan ||
+      data.billingPlan ||
+      data.selectedPlan ||
+      data.plan ||
+      data.planId ||
+      ''
+  ).trim().toLowerCase()
+
+  return plan === 'free' || plan === 'gratuito'
+}
+
+function hasExpiredTrialSignal(data = {}, nowMs = Date.now()) {
+  const subscriptionStatus = getSubscriptionStatus(data)
+  const trialStatus = getTrialStatus(data)
+  const trialEndsAt = toDate(getTrialEndsAt(data))
+
+  if (subscriptionStatus === 'trial_ended' || TRIAL_EXPIRED_STATUSES.has(trialStatus)) return true
+  if (trialEndsAt && trialEndsAt.getTime() <= nowMs) return true
+  return data.trialUsed === true || data.trial?.used === true || data.billing?.trialUsed === true
+}
+
+function buildBillingAccessResult({
+  state,
+  canPublishStore,
+  canReceiveOrders,
+  canAccessDashboard = true,
+  messageKey,
+  reason = null,
+  data = {},
+}) {
+  return {
+    state,
+    canPublishStore,
+    canReceiveOrders,
+    canAccessDashboard,
+    messageKey,
+    reason,
+    planId: data.effectivePlan || data.billingPlan || data.selectedPlan || data.plan || data.planId || null,
+    trialEndsAt: getTrialEndsAt(data),
+    billingGraceEndsAt: getBillingGraceEndsAt(data),
+    subscriptionStatus: getSubscriptionStatus(data) || null,
+  }
+}
+
+function deriveBillingAccessState(data = {}, options = {}) {
+  const now = options.now instanceof Date ? options.now.getTime() : Number(options.now || Date.now())
+  const nowMs = Number.isFinite(now) ? now : Date.now()
+  const subscriptionStatus = getSubscriptionStatus(data)
+  const trialStatus = getTrialStatus(data)
+  const trialEndsAt = toDate(getTrialEndsAt(data))
+  const trialStillActive = Boolean(trialEndsAt && trialEndsAt.getTime() > nowMs)
+
+  if (data.isBillingBlocked === true || data.isBlocked === true || data.isDeleted === true || data.deletedAt) {
+    return buildBillingAccessResult({
+      state: 'blocked',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.blocked',
+      reason: data.blockedReason || data.billingBlockedReason || 'blocked',
+      data,
+    })
+  }
+
+  if (subscriptionStatus === 'blocked') {
+    return buildBillingAccessResult({
+      state: 'blocked',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.blocked',
+      reason: 'blocked',
+      data,
+    })
+  }
+
+  if (hasManualGrant(data)) {
+    return buildBillingAccessResult({
+      state: 'manual_grant',
+      canPublishStore: true,
+      canReceiveOrders: true,
+      messageKey: 'billing.manual_grant',
+      reason: 'manual_grant',
+      data,
+    })
+  }
+
+  if (hasFreePlan(data)) {
+    return buildBillingAccessResult({
+      state: 'free_plan',
+      canPublishStore: true,
+      canReceiveOrders: true,
+      messageKey: 'billing.free_plan',
+      reason: 'free_plan',
+      data,
+    })
+  }
+
+  if (ACTIVE_STATUSES.has(subscriptionStatus)) {
+    return buildBillingAccessResult({
+      state: 'subscription_active',
+      canPublishStore: true,
+      canReceiveOrders: true,
+      messageKey: 'billing.subscription_active',
+      data,
+    })
+  }
+
+  if (subscriptionStatus === 'trialing' || TRIAL_ACTIVE_STATUSES.has(trialStatus) || trialStillActive) {
+    if (trialStillActive || (!trialEndsAt && subscriptionStatus === 'trialing')) {
+      return buildBillingAccessResult({
+        state: 'trial_active',
+        canPublishStore: true,
+        canReceiveOrders: true,
+        messageKey: 'billing.trial_active',
+        data,
+      })
+    }
+
+    return buildBillingAccessResult({
+      state: 'trial_expired',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.trial_expired',
+      reason: 'trial_expired',
+      data,
+    })
+  }
+
+  if (PENDING_STATUSES.has(subscriptionStatus)) {
+    return buildBillingAccessResult({
+      state: 'subscription_pending',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.subscription_pending',
+      reason: 'subscription_pending',
+      data,
+    })
+  }
+
+  if (OVERDUE_STATUSES.has(subscriptionStatus)) {
+    const graceEndsAt = toDate(getBillingGraceEndsAt(data))
+
+    if (graceEndsAt && graceEndsAt.getTime() > nowMs) {
+      return buildBillingAccessResult({
+        state: 'subscription_grace_period',
+        canPublishStore: true,
+        canReceiveOrders: true,
+        messageKey: 'billing.subscription_grace_period',
+        reason: 'past_due_grace_period',
+        data,
+      })
+    }
+
+    return buildBillingAccessResult({
+      state: 'subscription_overdue',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.subscription_overdue',
+      reason: graceEndsAt ? 'past_due_grace_expired' : 'subscription_overdue',
+      data,
+    })
+  }
+
+  if (CANCELLED_STATUSES.has(subscriptionStatus)) {
+    return buildBillingAccessResult({
+      state: 'subscription_cancelled',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.subscription_cancelled',
+      reason: 'subscription_cancelled',
+      data,
+    })
+  }
+
+  if (hasExpiredTrialSignal(data, nowMs)) {
+    return buildBillingAccessResult({
+      state: 'trial_expired',
+      canPublishStore: false,
+      canReceiveOrders: false,
+      messageKey: 'billing.trial_expired',
+      reason: 'trial_expired',
+      data,
+    })
+  }
+
+  if (!subscriptionStatus && options.allowLegacyAccess === true) {
+    return buildBillingAccessResult({
+      state: 'manual_grant',
+      canPublishStore: true,
+      canReceiveOrders: true,
+      messageKey: 'billing.legacy_access',
+      reason: 'legacy_missing_subscription_status',
+      data,
+    })
+  }
+
+  return buildBillingAccessResult({
+    state: 'trial_available',
+    canPublishStore: false,
+    canReceiveOrders: false,
+    messageKey: 'billing.trial_available',
+    reason: 'trial_available',
+    data,
+  })
 }
 
 /**
@@ -216,4 +480,5 @@ module.exports = {
   isPlanAccessBlocked,
   assertPlanFeature,
   normalizePlanId,
+  deriveBillingAccessState,
 }

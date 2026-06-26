@@ -5,6 +5,11 @@ import { db } from '../services/firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { getTrialDaysRemaining } from '../utils/billingStatus'
 import {
+  deriveBillingAccessState,
+  getBillingAccessCopy,
+  mergeBillingAccessData,
+} from '../utils/billingAccessState'
+import {
   createReadEntry,
   getNotificationPreferences,
   getNotificationReadIds,
@@ -522,19 +527,18 @@ export function useDashboardNotifications() {
 
     const list = []
 
-    const rawSubscriptionStatus = store?.subscriptionStatus || userData?.subscriptionStatus || ''
-    const subscriptionStatus =
-      rawSubscriptionStatus === 'pending_checkout' ? 'checkout_pending' : rawSubscriptionStatus
-
-    const isPending = [
-      'checkout_pending',
-      'billing_pending',
-      'billing_pending_payment_method',
-    ].includes(subscriptionStatus)
-    const isTrial = subscriptionStatus === 'trialing'
-    const isPastDue = subscriptionStatus === 'past_due'
-    const isBlocked = subscriptionStatus === 'blocked'
-    const isCanceled = subscriptionStatus === 'canceled'
+    const allowLegacyAccess = Boolean(store?.id || store?.storeDocId || store?.storeId || store?.slug || store?.storeSlug)
+    const billingAccessState = deriveBillingAccessState(
+      mergeBillingAccessData(store, userData),
+      { allowLegacyAccess }
+    )
+    const billingAccessCopy = getBillingAccessCopy(billingAccessState)
+    const isPending = billingAccessState.state === 'subscription_pending'
+    const isTrial = billingAccessState.state === 'trial_active'
+    const isTrialExpired = billingAccessState.state === 'trial_expired'
+    const isPastDue = ['subscription_grace_period', 'subscription_overdue'].includes(billingAccessState.state)
+    const isBlocked = billingAccessState.state === 'blocked'
+    const isCanceled = billingAccessState.state === 'subscription_cancelled'
     const trialEndsAt = store?.trialEndsAt || userData?.trialEndsAt
     const derivedCreatedAt =
       store?.updatedAt ||
@@ -546,8 +550,18 @@ export function useDashboardNotifications() {
     if (isPending) {
       list.push(createBillingNotification({
         id: 'billing_required',
-        title: 'Faturamento pendente',
-        message: 'Finalize sua cobrança para ativar o teste grátis.',
+        title: billingAccessCopy.title,
+        message: billingAccessCopy.message,
+        severity: 'danger',
+        createdAt: derivedCreatedAt,
+      }))
+    }
+
+    if (isTrialExpired) {
+      list.push(createBillingNotification({
+        id: 'trial_expired',
+        title: billingAccessCopy.title,
+        message: billingAccessCopy.message,
         severity: 'danger',
         createdAt: derivedCreatedAt,
       }))
@@ -586,9 +600,9 @@ export function useDashboardNotifications() {
     if (isPastDue) {
       list.push(createBillingNotification({
         id: 'past_due',
-        title: 'Regularize sua assinatura',
-        message: 'Regularize sua assinatura para manter sua loja ativa.',
-        severity: 'danger',
+        title: billingAccessCopy.title,
+        message: billingAccessCopy.message,
+        severity: billingAccessState.state === 'subscription_grace_period' ? 'warning' : 'danger',
         createdAt: derivedCreatedAt,
       }))
     }
@@ -596,8 +610,8 @@ export function useDashboardNotifications() {
     if (isBlocked || isCanceled) {
       list.push(createBillingNotification({
         id: 'blocked_canceled',
-        title: 'Assinatura bloqueada',
-        message: 'Regularize sua assinatura para manter sua loja ativa.',
+        title: billingAccessCopy.title,
+        message: billingAccessCopy.message,
         severity: 'danger',
         createdAt: derivedCreatedAt,
       }))

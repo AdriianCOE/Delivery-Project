@@ -5,6 +5,11 @@ import { getPricingValidation } from '../../utils/orderValidation'
 import { getCallableErrorMessage } from '../../utils/callableError'
 import { getOrderSlaState, isOrderActiveStatus } from '../../utils/orderSla'
 import { getStoreOperationalStatus } from '../../utils/storeOperationalStatus'
+import {
+  deriveBillingAccessState,
+  getBillingAccessCopy,
+  mergeBillingAccessData,
+} from '../../utils/billingAccessState'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -78,8 +83,6 @@ function PricingValidationBadge({ order }) {
 }
 
 const SELECTED_STORE_KEY = '@PratoBy:selectedStoreId'
-const BILLING_PENDING_STATUSES = new Set(['checkout_pending', 'pending_checkout', 'billing_pending', 'billing_pending_payment_method'])
-const OPERATIONAL_STATUSES = new Set(['trialing', 'active'])
 const PUBLIC_STORE_BASE_URL =
   import.meta.env.VITE_PUBLIC_STORE_BASE_URL ||
   (typeof window !== 'undefined' ? window.location.origin : '')
@@ -94,11 +97,6 @@ const DASHBOARD_DAYS = [
   { id: 'sat', short: 'Sáb', label: 'Sábado' },
 ]
 
-function normalizeBillingStatus(status) {
-  const value = String(status || '').trim()
-  return value === 'pending_checkout' ? 'checkout_pending' : value
-}
-
 function normalizeAccessRole(role) {
   const value = String(role || '').trim().toLowerCase()
   if (value === 'lojista') return 'merchant'
@@ -106,62 +104,23 @@ function normalizeAccessRole(role) {
   return value
 }
 
-function canLoadOperationalOrders({ role, selectedStore, userData }) {
+function canLoadOperationalOrders({ role, selectedStore, userData, billingAccessState }) {
   if (!selectedStore) return false
 
   const normalizedRole = normalizeAccessRole(role || userData?.role)
   if (!['merchant', 'admin', 'developer'].includes(normalizedRole)) return false
 
-  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
-  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
-
-  if (
-    selectedStore?.isBillingBlocked === true ||
-    BILLING_PENDING_STATUSES.has(storeStatus) ||
-    BILLING_PENDING_STATUSES.has(userStatus) ||
-    userData?.onboardingStatus === 'billing_pending'
-  ) {
-    return false
-  }
-
-  const effectiveStatus = storeStatus || userStatus
-  return OPERATIONAL_STATUSES.has(effectiveStatus) || !effectiveStatus
+  return billingAccessState?.canReceiveOrders === true
 }
 
-function isDraftStore({ selectedStore, userData }) {
+function isDraftStore({ selectedStore, billingAccessState }) {
   if (!selectedStore) return false
-
-  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
-  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
-
-  return (
-    BILLING_PENDING_STATUSES.has(storeStatus) ||
-    BILLING_PENDING_STATUSES.has(userStatus) ||
-    userData?.onboardingStatus === 'billing_pending'
-  )
+  return ['trial_available', 'subscription_pending'].includes(billingAccessState?.state)
 }
 
-function isTrialExpired(store, userData, now = 0) {
-  const status = normalizeBillingStatus(store?.subscriptionStatus || userData?.subscriptionStatus)
-  if (status !== 'trialing') return false
-
-  const rawDate = store?.trialEndsAt || userData?.trialEndsAt
-  const date = toDate(rawDate)
-  return Boolean(date && now && date.getTime() <= now)
-}
-
-function isPausedStore({ selectedStore, userData, now }) {
-  if (!selectedStore || isDraftStore({ selectedStore, userData })) return false
-
-  const storeStatus = normalizeBillingStatus(selectedStore?.subscriptionStatus)
-  const userStatus = normalizeBillingStatus(userData?.subscriptionStatus)
-  const effectiveStatus = storeStatus || userStatus
-
-  return (
-    selectedStore?.isBillingBlocked === true ||
-    ['blocked', 'canceled', 'cancelled', 'past_due'].includes(effectiveStatus) ||
-    isTrialExpired(selectedStore, userData, now)
-  )
+function isPausedStore({ selectedStore, billingAccessState }) {
+  if (!selectedStore || isDraftStore({ selectedStore, billingAccessState })) return false
+  return billingAccessState?.canReceiveOrders !== true
 }
 
 function hasConfiguredPaymentMethods(store) {
@@ -1567,9 +1526,18 @@ const merchantName =
   'Lojista'
 
 const loading = loadingStores || loadingOrders
-const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData })
-const storeIsDraft = isDraftStore({ selectedStore, userData })
-const storeIsPaused = isPausedStore({ selectedStore, userData, now: slaNow })
+const allowLegacyAccess = Boolean(selectedStore?.id || selectedStore?.storeDocId || selectedStore?.storeId || selectedStore?.slug || selectedStore?.storeSlug)
+const billingAccessState = useMemo(
+  () => deriveBillingAccessState(mergeBillingAccessData(selectedStore, userData), { allowLegacyAccess, now: slaNow }),
+  [allowLegacyAccess, selectedStore, slaNow, userData]
+)
+const billingAccessCopy = useMemo(
+  () => getBillingAccessCopy(billingAccessState),
+  [billingAccessState]
+)
+const canReadOrders = canLoadOperationalOrders({ role, selectedStore, userData, billingAccessState })
+const storeIsDraft = isDraftStore({ selectedStore, billingAccessState })
+const storeIsPaused = isPausedStore({ selectedStore, billingAccessState })
 const selectedStoreOperationalStatus = useMemo(
   () => getMerchantStoreOperationalStatus(selectedStore, slaNow),
   [selectedStore, slaNow]
@@ -1613,12 +1581,12 @@ useEffect(() => {
     if (!selectedStore || storeActionLoading) return
 
     if (storeIsDraft) {
-      showToast('info', 'Ative o teste grátis para publicar sua loja e começar a receber pedidos.')
+      showToast('info', billingAccessCopy.message)
       return
     }
 
     if (storeIsPaused) {
-      showToast('warning', 'Regularize ou reative a assinatura antes de publicar sua loja.')
+      showToast('warning', billingAccessCopy.message)
       return
     }
 
@@ -1683,7 +1651,7 @@ useEffect(() => {
     } finally {
       setStoreActionLoading(false)
     }
-  }, [selectedStore, selectedStoreIsOpen, selectedStoreOperationalStatus, showToast, storeActionLoading, storeIsDraft, storeIsPaused])
+  }, [billingAccessCopy.message, selectedStore, selectedStoreIsOpen, selectedStoreOperationalStatus, showToast, storeActionLoading, storeIsDraft, storeIsPaused])
 
   useEffect(() => {
     const uid = user?.uid
@@ -2165,9 +2133,9 @@ subscribeOrders(query(
 
     if (storeIsPaused) {
       return {
-        title: 'Regularize sua assinatura para voltar a vender',
-        description: 'Sua loja não está publicada para novos pedidos. Reative ou regularize a assinatura antes de divulgar o cardápio.',
-        cta: 'Ver assinatura',
+        title: billingAccessCopy.title,
+        description: billingAccessCopy.message,
+        cta: billingAccessCopy.cta,
         href: '/dashboard/billing',
         tone: 'red',
       }
@@ -2175,9 +2143,9 @@ subscribeOrders(query(
 
     if (storeIsDraft) {
       return {
-        title: 'Ative o teste grátis para publicar sua loja',
-        description: 'Sua loja está em modo rascunho. Conclua a configuração da assinatura para liberar o cardápio público e começar a receber pedidos.',
-        cta: 'Ativar teste grátis',
+        title: billingAccessCopy.title,
+        description: billingAccessCopy.message,
+        cta: billingAccessCopy.cta,
         href: '/dashboard/billing',
         tone: 'orange',
       }
@@ -2230,7 +2198,7 @@ subscribeOrders(query(
       href: '/dashboard/stats',
       tone: 'emerald',
     }
-  }, [products, categories, selectedStore, selectedStoreIsOpen, dashboardData, storeIsDraft, storeIsPaused])
+  }, [billingAccessCopy, products, categories, selectedStore, selectedStoreIsOpen, dashboardData, storeIsDraft, storeIsPaused])
 
   const onboardingChecklist = useMemo(() => {
     const totalProducts = Array.isArray(products) ? products.length : 0
@@ -2257,14 +2225,14 @@ subscribeOrders(query(
       { label: 'Configurar retirada e entrega', done: hasFulfillmentConfig, to: '/dashboard/settings', actionLabel: 'Configurar' },
       { label: 'Configurar horários de funcionamento', done: hasOpeningHours, to: '/dashboard/settings', actionLabel: 'Ajustar horários' },
       { label: 'Revisar link público e QR Code do cardápio', done: hasPublicPreview, to: '/dashboard/qrcodes', actionLabel: 'Ver QR Code' },
-      { label: 'Fazer um pedido de teste', done: hasTestOrder, to: storeIsDraft || storeIsPaused ? '/dashboard/billing' : (storeSlug ? `/${storeSlug}` : '/dashboard/menu'), actionLabel: storeIsDraft ? 'Ativar teste' : storeIsPaused ? 'Reativar' : 'Testar loja' },
+      { label: 'Fazer um pedido de teste', done: hasTestOrder, to: storeIsDraft || storeIsPaused ? '/dashboard/billing' : (storeSlug ? `/${storeSlug}` : '/dashboard/menu'), actionLabel: storeIsDraft || storeIsPaused ? billingAccessCopy.cta : 'Testar loja' },
     ]
 
     const completed = steps.filter((step) => step.done).length
     const percent = Math.round((completed / steps.length) * 100)
 
     return { steps, completed, total: steps.length, percent }
-  }, [products, categories, selectedStore, orders, storeSlug, storeIsDraft, storeIsPaused])
+  }, [billingAccessCopy.cta, products, categories, selectedStore, orders, storeSlug, storeIsDraft, storeIsPaused])
 
   const rawTrialEndsAt = selectedStore?.trialEndsAt || userData?.trialEndsAt
   const trialEndsAt = toDate(rawTrialEndsAt)
@@ -2409,7 +2377,7 @@ subscribeOrders(query(
                       className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-[#f97316] to-[#ea580c] px-4 text-[13px] font-black text-white shadow-[0_4px_12px_-2px_rgba(249,115,22,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] ring-1 ring-inset ring-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:from-[#ea580c] hover:to-[#c2410c] active:scale-[0.98] sm:min-w-[170px]"
                     >
                       <FiCreditCard size={16} className="shrink-0" />
-                      <span className="truncate">Ativar teste grátis</span>
+                      <span className="truncate">{billingAccessCopy.cta}</span>
                     </Link>
                   ) : storeIsPaused ? (
                     <Link
@@ -2417,7 +2385,7 @@ subscribeOrders(query(
                       className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 text-[13px] font-black text-white shadow-sm transition hover:bg-red-700 active:scale-[0.98] sm:min-w-[170px]"
                     >
                       <FiCreditCard size={16} className="shrink-0" />
-                      <span className="truncate">Reativar assinatura</span>
+                      <span className="truncate">{billingAccessCopy.cta}</span>
                     </Link>
                   ) : storePublicUrl && (
                     <>
@@ -2501,9 +2469,9 @@ subscribeOrders(query(
                   <FiShield size={20} />
                 </span>
                 <div>
-                  <h2 className="text-sm font-black text-[#111827] dark:text-zinc-100">Sua loja ainda não está publicada</h2>
+                  <h2 className="text-sm font-black text-[#111827] dark:text-zinc-100">{billingAccessCopy.title}</h2>
                   <p className="mt-1 text-sm font-semibold leading-6 text-[#6b7280] dark:text-zinc-400">
-                    Ative o teste grátis para liberar o link público e começar a receber pedidos.
+                    {billingAccessCopy.message}
                   </p>
                 </div>
               </div>
@@ -2512,7 +2480,7 @@ subscribeOrders(query(
                 className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#ea580c] sm:w-auto"
               >
                 <FiCreditCard size={15} />
-                Ativar teste grátis
+                {billingAccessCopy.cta}
               </Link>
             </div>
           </div>
@@ -2597,8 +2565,8 @@ subscribeOrders(query(
                       Siga estes passos para deixar sua loja pronta para receber pedidos.
                     </p>
                     {storeIsDraft && (
-                      <p className="mt-2 text-xs font-bold text-[#f97316]">
-                        Sua loja ainda está em rascunho. Ative o teste grátis para publicar e começar a receber pedidos.
+                      <p className={`mt-2 text-xs font-bold ${billingAccessCopy.tone === 'red' ? 'text-red-600' : 'text-[#f97316]'}`}>
+                        {billingAccessCopy.message}
                       </p>
                     )}
                   </div>
@@ -2650,13 +2618,13 @@ subscribeOrders(query(
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h4 className="text-sm font-black text-[#111827] dark:text-zinc-100">
-                      {storeIsDraft ? 'Ative o teste grátis para publicar' : storeIsPaused ? 'Regularize a assinatura para publicar' : 'Abra a loja quando estiver pronta'}
+                      {storeIsDraft || storeIsPaused ? billingAccessCopy.title : 'Abra a loja quando estiver pronta'}
                     </h4>
                     <p className="mt-1 text-sm text-[#6b7280] dark:text-zinc-400">
                       {storeIsDraft
-                        ? 'Sua loja está em rascunho. O link público só recebe pedidos depois da ativação.'
+                        ? billingAccessCopy.message
                         : storeIsPaused
-                        ? 'Sua loja está pausada para novos pedidos. Reative ou regularize a assinatura para voltar a publicar.'
+                        ? billingAccessCopy.message
                         : 'Sua loja nasce fechada para você arrumar a casa primeiro.'}
                     </p>
                   </div>
@@ -2666,7 +2634,7 @@ subscribeOrders(query(
                       className={`inline-flex h-11 min-w-[160px] items-center justify-center gap-2 rounded-2xl px-6 text-sm font-black text-white shadow-sm transition active:scale-95 ${storeIsPaused ? 'bg-red-600 hover:bg-red-700' : 'bg-[#f97316] hover:bg-[#ea580c]'}`}
                     >
                       <FiCreditCard />
-                      {storeIsPaused ? 'Reativar assinatura' : 'Ativar teste grátis'}
+                      {billingAccessCopy.cta}
                     </Link>
                   ) : (
                     <button
@@ -2944,8 +2912,8 @@ subscribeOrders(query(
                     Siga estes passos para deixar sua loja pronta para receber pedidos.
                   </p>
                   {storeIsDraft && (
-                    <p className="mt-2 text-xs font-bold text-[#f97316]">
-                      Sua loja ainda está em rascunho. Ative o teste grátis para publicar e começar a receber pedidos.
+                    <p className={`mt-2 text-xs font-bold ${billingAccessCopy.tone === 'red' ? 'text-red-600' : 'text-[#f97316]'}`}>
+                      {billingAccessCopy.message}
                     </p>
                   )}
                 </div>

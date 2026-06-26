@@ -4,9 +4,9 @@ import { Helmet } from 'react-helmet-async'
 const SITE_URL = 'https://pratoby.com'
 const SITE_NAME = 'PratoBy'
 
-const DEFAULT_TITLE = 'PratoBy | Cardápio digital e delivery sem comissão'
+const DEFAULT_TITLE = 'PratoBy | Cardápio digital e delivery próprio sem comissão'
 const DEFAULT_DESCRIPTION =
-  'Crie uma loja online para restaurante, lanchonete ou confeitaria. Receba pedidos pelo seu próprio link, organize entregas e venda sem comissão por pedido.'
+  'Crie seu cardápio digital, receba pedidos online pelo próprio link e venda sem comissão por pedido. O PratoBy é feito para restaurantes, lanchonetes, pizzarias e confeitarias.'
 
 const DEFAULT_IMAGE = `${SITE_URL}/og/pratoby-cover.png`
 const DEFAULT_FAVICON = `${SITE_URL}/icons/android-chrome-192x192.png?v=5`

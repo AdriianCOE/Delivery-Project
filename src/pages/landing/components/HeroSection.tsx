@@ -118,10 +118,8 @@ export function HeroSection() {
             </div>
 
             <h1 className="mt-7 text-[2.15rem] font-black leading-[1.02] tracking-tight text-[#111827] min-[380px]:text-[2.35rem] sm:text-6xl lg:text-7xl">
-              <span className="block whitespace-nowrap">Seu cardápio digital.</span>
-
-              <span className="block whitespace-nowrap text-[#f97316]">Seu delivery.</span>
-
+              <span className="block whitespace-nowrap">Seu cardápio digital</span>{' '}
+              <span className="block whitespace-nowrap text-[#f97316]">Seu delivery próprio</span>{' '}
               <span className="relative inline-block whitespace-nowrap pb-4 text-[#f97316]">
                 Zero comissão.
 
