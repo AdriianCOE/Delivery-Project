@@ -23,6 +23,36 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
 - Webhooks de pagamento continuam protegidos por segredo/assinatura do provedor, nao por App Check.
 - Callables de painel, admin e billing devem entrar em uma etapa separada depois de validar que todos os clients autenticados inicializam App Check antes de chamar Functions.
 
+## Funcoes sensiveis para rollout gradual
+
+Autenticadas/admin candidatas a enforcement primeiro, depois de monitoramento com usuarios logados:
+
+- `createCloudinaryUploadSignature`
+- `deleteCloudinaryAsset`
+- `updateStoreSettings`
+- `updateMerchantOrder`
+- `createMerchantCounterOrder`
+- `adminCreateStore`
+- `startAsaasSubscription`
+- `changeSubscriptionPlan`
+- `cancelSubscription`
+- `createPaymentMethodUpdateCheckout`
+- `getMercadoPagoConnectUrl`
+- `disconnectMercadoPago`
+
+Publicas que podem quebrar loja, carrinho, pedido ou tracking se App Check for ativado antes da build correta:
+
+- `getPublicStoreProfile`
+- `getPublicCatalog`
+- `validatePublicCoupon`
+- `createPublicOrder`
+- `registerCustomerOrderPushToken`
+- `disableCustomerOrderPushToken`
+- `confirmCustomerDelivery`
+- `markCustomerPixProofSent`
+- `requestCustomerOrderCancellation`
+- `submitPublicOrderReview`
+
 ## Plano seguro
 
 1. Configurar App Check no Firebase Console para Web App e Hosting, mantendo monitoramento sem bloqueio.
@@ -38,8 +68,9 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
    - confirmar recebimento no tracking;
    - enviar avaliacao no tracking.
 6. Conferir metricas/logs de App Check no Console.
-7. So depois ativar enforcement nas Functions publicas com `ENFORCE_APP_CHECK=true`.
-8. Repetir os testes publicos depois do enforcement.
+7. Ativar enforcement primeiro nas funcoes autenticadas/admin validadas em monitoramento.
+8. So depois ativar enforcement nas Functions publicas com `ENFORCE_APP_CHECK=true`.
+9. Repetir os testes publicos depois do enforcement.
 
 ## Variavel
 

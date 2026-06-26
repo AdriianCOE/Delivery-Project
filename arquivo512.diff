@@ -1,0 +1,409 @@
+diff --git a/docs/app-check-rollout.md b/docs/app-check-rollout.md
+index 25ea51e8..8220bb06 100644
+--- a/docs/app-check-rollout.md
++++ b/docs/app-check-rollout.md
+@@ -23,6 +23,36 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
+ - Webhooks de pagamento continuam protegidos por segredo/assinatura do provedor, nao por App Check.
+ - Callables de painel, admin e billing devem entrar em uma etapa separada depois de validar que todos os clients autenticados inicializam App Check antes de chamar Functions.
+ 
++## Funcoes sensiveis para rollout gradual
++
++Autenticadas/admin candidatas a enforcement primeiro, depois de monitoramento com usuarios logados:
++
++- `createCloudinaryUploadSignature`
++- `deleteCloudinaryAsset`
++- `updateStoreSettings`
++- `updateMerchantOrder`
++- `createMerchantCounterOrder`
++- `adminCreateStore`
++- `startAsaasSubscription`
++- `changeSubscriptionPlan`
++- `cancelSubscription`
++- `createPaymentMethodUpdateCheckout`
++- `getMercadoPagoConnectUrl`
++- `disconnectMercadoPago`
++
++Publicas que podem quebrar loja, carrinho, pedido ou tracking se App Check for ativado antes da build correta:
++
++- `getPublicStoreProfile`
++- `getPublicCatalog`
++- `validatePublicCoupon`
++- `createPublicOrder`
++- `registerCustomerOrderPushToken`
++- `disableCustomerOrderPushToken`
++- `confirmCustomerDelivery`
++- `markCustomerPixProofSent`
++- `requestCustomerOrderCancellation`
++- `submitPublicOrderReview`
++
+ ## Plano seguro
+ 
+ 1. Configurar App Check no Firebase Console para Web App e Hosting, mantendo monitoramento sem bloqueio.
+@@ -38,8 +68,9 @@ Quando `ENFORCE_APP_CHECK=false` fora do emulador, as Functions registram warnin
+    - confirmar recebimento no tracking;
+    - enviar avaliacao no tracking.
+ 6. Conferir metricas/logs de App Check no Console.
+-7. So depois ativar enforcement nas Functions publicas com `ENFORCE_APP_CHECK=true`.
+-8. Repetir os testes publicos depois do enforcement.
++7. Ativar enforcement primeiro nas funcoes autenticadas/admin validadas em monitoramento.
++8. So depois ativar enforcement nas Functions publicas com `ENFORCE_APP_CHECK=true`.
++9. Repetir os testes publicos depois do enforcement.
+ 
+ ## Variavel
+ 
+diff --git a/functions/fcmNotifications.js b/functions/fcmNotifications.js
+index e8438c75..0e657b20 100644
+--- a/functions/fcmNotifications.js
++++ b/functions/fcmNotifications.js
+@@ -271,31 +271,53 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId })
+   const tag = `pratoby-new-order-${normalizedOrderId}`
+   const dashboardPath = getMerchantOrderDashboardPath(normalizedOrderId)
+   const dashboardUrl = `${MERCHANT_DASHBOARD_URL}${dashboardPath.slice(MERCHANT_DASHBOARD_PATH.length)}`
+-  const response = await admin.messaging().sendEachForMulticast({
+-    tokens: tokenDocs.map((entry) => entry.data.token),
+-    data: {
+-      type: 'new_order',
+-      orderId: normalizedOrderId,
+-      storeId: normalizedStoreId,
+-      url: dashboardPath,
+-      title,
+-      body,
+-    },
+-    webpush: {
+-      notification: {
++  let response
++
++  try {
++    response = await admin.messaging().sendEachForMulticast({
++      tokens: tokenDocs.map((entry) => entry.data.token),
++      data: {
++        type: 'new_order',
++        orderId: normalizedOrderId,
++        storeId: normalizedStoreId,
++        url: dashboardPath,
+         title,
+         body,
+-        icon: WEB_PUSH_ICON,
+-        badge: WEB_PUSH_BADGE,
+-        tag,
+-        renotify: true,
+-        requireInteraction: true,
+       },
+-      fcmOptions: {
+-        link: dashboardUrl,
++      webpush: {
++        notification: {
++          title,
++          body,
++          icon: WEB_PUSH_ICON,
++          badge: WEB_PUSH_BADGE,
++          tag,
++          renotify: true,
++          requireInteraction: true,
++        },
++        fcmOptions: {
++          link: dashboardUrl,
++        },
+       },
+-    },
+-  })
++    })
++  } catch (error) {
++    logger.warn('[fcm] New order push send failed.', {
++      storeId: normalizedStoreId,
++      orderId: normalizedOrderId,
++      tokenCount: tokenDocs.length,
++      errorCode: String(error?.code || error?.errorInfo?.code || 'messaging-error').slice(0, 120),
++      errorMessage: String(error?.message || error).slice(0, 300),
++    })
++
++    return {
++      ok: false,
++      tokenCount: tokenDocs.length,
++      successCount: 0,
++      failureCount: tokenDocs.length,
++      sent: 0,
++      failed: tokenDocs.length,
++      invalidated: 0,
++    }
++  }
+ 
+   const batch = db.batch()
+   let invalidated = 0
+diff --git a/functions/index.js b/functions/index.js
+index 72188fc4..2d76ccf9 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -1491,6 +1491,38 @@ function sanitizeCloudinaryFolder(value) {
+   return folder
+ }
+ 
++function sanitizeCloudinaryFolderSegment(value) {
++  return String(value || '')
++    .trim()
++    .replace(/[^A-Za-z0-9_-]/g, '')
++    .slice(0, 80)
++}
++
++function getCloudinaryStoreFolderPrefixes(storeId, storeData = {}) {
++  const rawSegments = [
++    storeId,
++    storeData.storeId,
++    storeData.storeDocId,
++    storeData.slug,
++    storeData.storeSlug,
++  ]
++  const segments = Array.from(new Set(rawSegments.map(sanitizeCloudinaryFolderSegment).filter(Boolean)))
++
++  return segments.map((segment) => `PratoBy/${segment}`)
++}
++
++function scopeCloudinaryFolderToStore(folder, storeId, storeData = {}) {
++  const prefixes = getCloudinaryStoreFolderPrefixes(storeId, storeData)
++  if (!prefixes.length) return folder
++
++  if (prefixes.some((prefix) => folder === prefix || folder.startsWith(`${prefix}/`))) {
++    return folder
++  }
++
++  const suffix = folder.split('/').slice(1).filter(Boolean).join('/') || 'uploads'
++  return sanitizeCloudinaryFolder(`${prefixes[0]}/${suffix}`)
++}
++
+ function signCloudinaryParams(params, apiSecret) {
+   const payload = Object.keys(params)
+     .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
+@@ -2097,6 +2129,7 @@ exports.createCloudinaryUploadSignature = onCall(
+ 
+     const data = request.data || {}
+     const storeId = String(data.storeId || '').trim()
++    let storeDataForUpload = null
+ 
+     if (storeId) {
+       const storeSnapshot = await db.collection('stores').doc(storeId).get()
+@@ -2105,7 +2138,8 @@ exports.createCloudinaryUploadSignature = onCall(
+         throw new HttpsError('not-found', 'Loja nao encontrada.')
+       }
+ 
+-      assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userData)
++      storeDataForUpload = storeSnapshot.data() || {}
++      assertStoreOwnerOrAdmin(storeDataForUpload, uid, userData)
+     }
+ 
+     const { cloudName, apiKey, apiSecret } = getCloudinaryConfig()
+@@ -2120,13 +2154,23 @@ exports.createCloudinaryUploadSignature = onCall(
+       throw new HttpsError('failed-precondition', 'Upload seguro nao configurado.')
+     }
+ 
+-    const folder = sanitizeCloudinaryFolder(data.folder)
++    const requestedFolder = sanitizeCloudinaryFolder(data.folder)
++    const folder = scopeCloudinaryFolderToStore(requestedFolder, storeId, storeDataForUpload || {})
+     const timestamp = Math.floor(Date.now() / 1000)
+     const paramsToSign = {
+       folder,
+       timestamp,
+     }
+ 
++    logger.info('[cloudinary] Signed upload prepared.', {
++      uid,
++      role,
++      storeId: storeId || null,
++      requestedFolder,
++      folder,
++      scoped: requestedFolder !== folder,
++    })
++
+     return {
+       ok: true,
+       cloudName,
+diff --git a/src/components/layouts/AdminLayout.jsx b/src/components/layouts/AdminLayout.jsx
+index e2aa0618..ab320456 100644
+--- a/src/components/layouts/AdminLayout.jsx
++++ b/src/components/layouts/AdminLayout.jsx
+@@ -42,6 +42,8 @@ import { auth } from '../../services/firebaseAuth'
+ 
+ const BRAND_ORANGE = '#f97316'
+ const APP_ENV = import.meta.env.MODE || 'development'
++const SHOW_ADMIN_STUB_NAV =
++  String(import.meta.env.VITE_SHOW_ADMIN_STUB_NAV || '').toLowerCase() === 'true'
+ 
+ const MAIN_ITEMS = [
+   {
+@@ -67,6 +69,7 @@ const MAIN_ITEMS = [
+     to: '/admin/orders',
+     icon: FiShoppingBag,
+     match: 'section',
++    pilotHidden: true,
+   },
+   {
+     id: 'subscriptions',
+@@ -83,6 +86,7 @@ const MAIN_ITEMS = [
+     to: '/admin/users',
+     icon: FiUsers,
+     match: 'section',
++    pilotHidden: true,
+   },
+   {
+     id: 'settings',
+@@ -91,9 +95,12 @@ const MAIN_ITEMS = [
+     to: '/admin/settings',
+     icon: FiSettings,
+     match: 'section',
++    pilotHidden: true,
+   },
+ ]
+ 
++const VISIBLE_MAIN_ITEMS = MAIN_ITEMS.filter((item) => SHOW_ADMIN_STUB_NAV || item.pilotHidden !== true)
++
+ const QUICK_ACTIONS = [
+   {
+     label: 'Nova loja',
+@@ -509,7 +516,7 @@ function MobileMoreSheet({ open, pathname, onClose, onSoonClick, onLogout }) {
+ 
+         <div className="max-h-[calc(88vh-73px)] space-y-6 overflow-y-auto p-4 pb-28">
+           <SidebarSection title="Principal">
+-            {MAIN_ITEMS.map((item) => (
++            {VISIBLE_MAIN_ITEMS.map((item) => (
+               <MainNavItem
+                 key={item.id}
+                 item={item}
+@@ -564,7 +571,7 @@ function Sidebar({ pathname, onSoonClick, onLogout }) {
+ 
+         <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+           <SidebarSection title="Principal">
+-            {MAIN_ITEMS.map((item) => (
++            {VISIBLE_MAIN_ITEMS.map((item) => (
+               <MainNavItem key={item.id} item={item} pathname={pathname} />
+             ))}
+           </SidebarSection>
+@@ -602,8 +609,8 @@ function Sidebar({ pathname, onSoonClick, onLogout }) {
+ }
+ 
+ function MobileBottomNav({ pathname, onOpenMore }) {
+-  const mobileItems = MAIN_ITEMS.slice(0, 4)
+-  const isMoreActive = MAIN_ITEMS.slice(4).some((item) => isRouteActive(item, pathname))
++  const mobileItems = VISIBLE_MAIN_ITEMS.slice(0, 4)
++  const isMoreActive = VISIBLE_MAIN_ITEMS.slice(4).some((item) => isRouteActive(item, pathname))
+ 
+   return (
+     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/95 px-2 py-2 shadow-2xl shadow-gray-300/60 backdrop-blur-xl lg:hidden">
+diff --git a/src/components/layouts/DashboardLayout.jsx b/src/components/layouts/DashboardLayout.jsx
+index 1ce7357f..d22b8e15 100644
+--- a/src/components/layouts/DashboardLayout.jsx
++++ b/src/components/layouts/DashboardLayout.jsx
+@@ -177,6 +177,8 @@ const NAV_SECTIONS = [
+ ]
+ 
+ const MAIN_ITEMS = NAV_SECTIONS.flatMap((section) => section.items)
++const SHOW_FUTURE_DASHBOARD_NAV =
++  String(import.meta.env.VITE_SHOW_DASHBOARD_FUTURE_NAV || '').toLowerCase() === 'true'
+ 
+ const MOBILE_NAV_PATHS = [
+   '/dashboard/orders',
+@@ -784,7 +786,7 @@ function MobileMoreSheet({
+             </SidebarSection>
+           ))}
+ 
+-          {FUTURE_SECTIONS.map((section) => (
++          {SHOW_FUTURE_DASHBOARD_NAV && FUTURE_SECTIONS.map((section) => (
+             <SidebarSection key={section.title} title={section.title}>
+               {section.items.map((item) => (
+                 <ComingSoonNavItem
+@@ -1129,7 +1131,7 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
+               </SidebarSection>
+             ))}
+ 
+-            {FUTURE_SECTIONS.map((section) => (
++            {SHOW_FUTURE_DASHBOARD_NAV && FUTURE_SECTIONS.map((section) => (
+               <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
+                 {section.items.map((item) => (
+                   <ComingSoonNavItem key={item.to} item={item} collapsed={collapsed} />
+diff --git a/src/services/cloudinary.js b/src/services/cloudinary.js
+index 2c846d5a..7f2ed3c4 100644
+--- a/src/services/cloudinary.js
++++ b/src/services/cloudinary.js
+@@ -6,6 +6,16 @@ const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+ const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+ const ALLOW_UNSIGNED_FALLBACK =
+   String(import.meta.env.VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK || '').toLowerCase() === 'true'
++const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
++const CAN_USE_UNSIGNED_FALLBACK = ALLOW_UNSIGNED_FALLBACK && !import.meta.env.PROD
++
++if (ALLOW_UNSIGNED_FALLBACK && import.meta.env.DEV) {
++  console.warn('[Cloudinary] Fallback unsigned ativo apenas para desenvolvimento local.')
++}
++
++if (ALLOW_UNSIGNED_FALLBACK && import.meta.env.PROD) {
++  console.warn('[Cloudinary] VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK ignorado em producao.')
++}
+ 
+ function assertUploadableImage(file) {
+   if (!file) {
+@@ -15,6 +25,20 @@ function assertUploadableImage(file) {
+   if (!file.type?.startsWith('image/')) {
+     throw new Error('Arquivo inválido. Envie uma imagem.')
+   }
++
++  if (Number(file.size || 0) > MAX_IMAGE_UPLOAD_BYTES) {
++    throw new Error('Imagem muito grande. Envie uma imagem de ate 10 MB.')
++  }
++}
++
++function getSignedUploadError(error) {
++  if (import.meta.env.DEV) {
++    console.warn('[Cloudinary] Upload assinado falhou.', error)
++  }
++
++  return new Error(
++    'Nao foi possivel preparar o envio seguro da imagem. Tente novamente ou avise o suporte.'
++  )
+ }
+ 
+ async function getSignedUploadConfig(folder, options = {}) {
+@@ -96,7 +120,7 @@ export async function uploadImageToCloudinary(file, folder = 'PratoBy', options
+   try {
+     return await uploadSignedImage(file, folder, options)
+   } catch (error) {
+-    if (!ALLOW_UNSIGNED_FALLBACK) throw error
++    if (!CAN_USE_UNSIGNED_FALLBACK) throw getSignedUploadError(error)
+ 
+     if (import.meta.env.DEV) {
+       console.warn('[Cloudinary] Upload assinado falhou; usando fallback unsigned.', error)
+diff --git a/src/services/firebase.js b/src/services/firebase.js
+index 5a13e937..866ae739 100644
+--- a/src/services/firebase.js
++++ b/src/services/firebase.js
+@@ -6,6 +6,18 @@ import { getMessaging, isSupported as isMessagingSupported } from 'firebase/mess
+ import app, { firebaseConfig } from './firebaseApp'
+ 
+ let appCheckInstancePromise = null
++let appCheckConfigWarningShown = false
++
++function warnAppCheckConfig(message) {
++  if (appCheckConfigWarningShown) return
++  appCheckConfigWarningShown = true
++
++  if (import.meta.env.PROD) {
++    console.warn(message)
++  } else if (import.meta.env.DEV) {
++    console.info(message)
++  }
++}
+ 
+ export async function ensureAppCheck() {
+   if (appCheckInstancePromise) return appCheckInstancePromise
+@@ -16,10 +28,10 @@ export async function ensureAppCheck() {
+   const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
+ 
+   if (!enabled || !siteKey || typeof window === 'undefined') {
+-    if (import.meta.env.DEV && !enabled) {
+-      console.info('[AppCheck] VITE_FIREBASE_APPCHECK_ENABLED diferente de true; App Check frontend desativado.')
+-    } else if (import.meta.env.DEV && !siteKey) {
+-      console.info('[AppCheck] VITE_FIREBASE_APPCHECK_SITE_KEY ausente; App Check frontend desativado.')
++    if (!enabled) {
++      warnAppCheckConfig('[AppCheck] VITE_FIREBASE_APPCHECK_ENABLED diferente de true; App Check frontend desativado.')
++    } else if (!siteKey) {
++      warnAppCheckConfig('[AppCheck] VITE_FIREBASE_APPCHECK_SITE_KEY ausente; App Check frontend desativado.')
+     }
+     return null
+   }

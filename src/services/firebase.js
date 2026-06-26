@@ -6,6 +6,18 @@ import { getMessaging, isSupported as isMessagingSupported } from 'firebase/mess
 import app, { firebaseConfig } from './firebaseApp'
 
 let appCheckInstancePromise = null
+let appCheckConfigWarningShown = false
+
+function warnAppCheckConfig(message) {
+  if (appCheckConfigWarningShown) return
+  appCheckConfigWarningShown = true
+
+  if (import.meta.env.PROD) {
+    console.warn(message)
+  } else if (import.meta.env.DEV) {
+    console.info(message)
+  }
+}
 
 export async function ensureAppCheck() {
   if (appCheckInstancePromise) return appCheckInstancePromise
@@ -16,10 +28,10 @@ export async function ensureAppCheck() {
   const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
 
   if (!enabled || !siteKey || typeof window === 'undefined') {
-    if (import.meta.env.DEV && !enabled) {
-      console.info('[AppCheck] VITE_FIREBASE_APPCHECK_ENABLED diferente de true; App Check frontend desativado.')
-    } else if (import.meta.env.DEV && !siteKey) {
-      console.info('[AppCheck] VITE_FIREBASE_APPCHECK_SITE_KEY ausente; App Check frontend desativado.')
+    if (!enabled) {
+      warnAppCheckConfig('[AppCheck] VITE_FIREBASE_APPCHECK_ENABLED diferente de true; App Check frontend desativado.')
+    } else if (!siteKey) {
+      warnAppCheckConfig('[AppCheck] VITE_FIREBASE_APPCHECK_SITE_KEY ausente; App Check frontend desativado.')
     }
     return null
   }

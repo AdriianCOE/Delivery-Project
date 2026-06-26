@@ -6,6 +6,16 @@ const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
 const ALLOW_UNSIGNED_FALLBACK =
   String(import.meta.env.VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK || '').toLowerCase() === 'true'
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
+const CAN_USE_UNSIGNED_FALLBACK = ALLOW_UNSIGNED_FALLBACK && !import.meta.env.PROD
+
+if (ALLOW_UNSIGNED_FALLBACK && import.meta.env.DEV) {
+  console.warn('[Cloudinary] Fallback unsigned ativo apenas para desenvolvimento local.')
+}
+
+if (ALLOW_UNSIGNED_FALLBACK && import.meta.env.PROD) {
+  console.warn('[Cloudinary] VITE_CLOUDINARY_ALLOW_UNSIGNED_FALLBACK ignorado em producao.')
+}
 
 function assertUploadableImage(file) {
   if (!file) {
@@ -15,6 +25,20 @@ function assertUploadableImage(file) {
   if (!file.type?.startsWith('image/')) {
     throw new Error('Arquivo inválido. Envie uma imagem.')
   }
+
+  if (Number(file.size || 0) > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error('Imagem muito grande. Envie uma imagem de ate 10 MB.')
+  }
+}
+
+function getSignedUploadError(error) {
+  if (import.meta.env.DEV) {
+    console.warn('[Cloudinary] Upload assinado falhou.', error)
+  }
+
+  return new Error(
+    'Nao foi possivel preparar o envio seguro da imagem. Tente novamente ou avise o suporte.'
+  )
 }
 
 async function getSignedUploadConfig(folder, options = {}) {
@@ -96,7 +120,7 @@ export async function uploadImageToCloudinary(file, folder = 'PratoBy', options 
   try {
     return await uploadSignedImage(file, folder, options)
   } catch (error) {
-    if (!ALLOW_UNSIGNED_FALLBACK) throw error
+    if (!CAN_USE_UNSIGNED_FALLBACK) throw getSignedUploadError(error)
 
     if (import.meta.env.DEV) {
       console.warn('[Cloudinary] Upload assinado falhou; usando fallback unsigned.', error)

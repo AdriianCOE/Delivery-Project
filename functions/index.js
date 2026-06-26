@@ -1491,6 +1491,38 @@ function sanitizeCloudinaryFolder(value) {
   return folder
 }
 
+function sanitizeCloudinaryFolderSegment(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_-]/g, '')
+    .slice(0, 80)
+}
+
+function getCloudinaryStoreFolderPrefixes(storeId, storeData = {}) {
+  const rawSegments = [
+    storeId,
+    storeData.storeId,
+    storeData.storeDocId,
+    storeData.slug,
+    storeData.storeSlug,
+  ]
+  const segments = Array.from(new Set(rawSegments.map(sanitizeCloudinaryFolderSegment).filter(Boolean)))
+
+  return segments.map((segment) => `PratoBy/${segment}`)
+}
+
+function scopeCloudinaryFolderToStore(folder, storeId, storeData = {}) {
+  const prefixes = getCloudinaryStoreFolderPrefixes(storeId, storeData)
+  if (!prefixes.length) return folder
+
+  if (prefixes.some((prefix) => folder === prefix || folder.startsWith(`${prefix}/`))) {
+    return folder
+  }
+
+  const suffix = folder.split('/').slice(1).filter(Boolean).join('/') || 'uploads'
+  return sanitizeCloudinaryFolder(`${prefixes[0]}/${suffix}`)
+}
+
 function signCloudinaryParams(params, apiSecret) {
   const payload = Object.keys(params)
     .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
@@ -2097,6 +2129,7 @@ exports.createCloudinaryUploadSignature = onCall(
 
     const data = request.data || {}
     const storeId = String(data.storeId || '').trim()
+    let storeDataForUpload = null
 
     if (storeId) {
       const storeSnapshot = await db.collection('stores').doc(storeId).get()
@@ -2105,7 +2138,8 @@ exports.createCloudinaryUploadSignature = onCall(
         throw new HttpsError('not-found', 'Loja nao encontrada.')
       }
 
-      assertStoreOwnerOrAdmin(storeSnapshot.data() || {}, uid, userData)
+      storeDataForUpload = storeSnapshot.data() || {}
+      assertStoreOwnerOrAdmin(storeDataForUpload, uid, userData)
     }
 
     const { cloudName, apiKey, apiSecret } = getCloudinaryConfig()
@@ -2120,12 +2154,22 @@ exports.createCloudinaryUploadSignature = onCall(
       throw new HttpsError('failed-precondition', 'Upload seguro nao configurado.')
     }
 
-    const folder = sanitizeCloudinaryFolder(data.folder)
+    const requestedFolder = sanitizeCloudinaryFolder(data.folder)
+    const folder = scopeCloudinaryFolderToStore(requestedFolder, storeId, storeDataForUpload || {})
     const timestamp = Math.floor(Date.now() / 1000)
     const paramsToSign = {
       folder,
       timestamp,
     }
+
+    logger.info('[cloudinary] Signed upload prepared.', {
+      uid,
+      role,
+      storeId: storeId || null,
+      requestedFolder,
+      folder,
+      scoped: requestedFolder !== folder,
+    })
 
     return {
       ok: true,

@@ -271,31 +271,53 @@ async function sendNewOrderPushToStore({ db, admin, logger, storeId, orderId }) 
   const tag = `pratoby-new-order-${normalizedOrderId}`
   const dashboardPath = getMerchantOrderDashboardPath(normalizedOrderId)
   const dashboardUrl = `${MERCHANT_DASHBOARD_URL}${dashboardPath.slice(MERCHANT_DASHBOARD_PATH.length)}`
-  const response = await admin.messaging().sendEachForMulticast({
-    tokens: tokenDocs.map((entry) => entry.data.token),
-    data: {
-      type: 'new_order',
-      orderId: normalizedOrderId,
-      storeId: normalizedStoreId,
-      url: dashboardPath,
-      title,
-      body,
-    },
-    webpush: {
-      notification: {
+  let response
+
+  try {
+    response = await admin.messaging().sendEachForMulticast({
+      tokens: tokenDocs.map((entry) => entry.data.token),
+      data: {
+        type: 'new_order',
+        orderId: normalizedOrderId,
+        storeId: normalizedStoreId,
+        url: dashboardPath,
         title,
         body,
-        icon: WEB_PUSH_ICON,
-        badge: WEB_PUSH_BADGE,
-        tag,
-        renotify: true,
-        requireInteraction: true,
       },
-      fcmOptions: {
-        link: dashboardUrl,
+      webpush: {
+        notification: {
+          title,
+          body,
+          icon: WEB_PUSH_ICON,
+          badge: WEB_PUSH_BADGE,
+          tag,
+          renotify: true,
+          requireInteraction: true,
+        },
+        fcmOptions: {
+          link: dashboardUrl,
+        },
       },
-    },
-  })
+    })
+  } catch (error) {
+    logger.warn('[fcm] New order push send failed.', {
+      storeId: normalizedStoreId,
+      orderId: normalizedOrderId,
+      tokenCount: tokenDocs.length,
+      errorCode: String(error?.code || error?.errorInfo?.code || 'messaging-error').slice(0, 120),
+      errorMessage: String(error?.message || error).slice(0, 300),
+    })
+
+    return {
+      ok: false,
+      tokenCount: tokenDocs.length,
+      successCount: 0,
+      failureCount: tokenDocs.length,
+      sent: 0,
+      failed: tokenDocs.length,
+      invalidated: 0,
+    }
+  }
 
   const batch = db.batch()
   let invalidated = 0

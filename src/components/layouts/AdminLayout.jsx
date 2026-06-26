@@ -42,6 +42,8 @@ import { auth } from '../../services/firebaseAuth'
 
 const BRAND_ORANGE = '#f97316'
 const APP_ENV = import.meta.env.MODE || 'development'
+const SHOW_ADMIN_STUB_NAV =
+  String(import.meta.env.VITE_SHOW_ADMIN_STUB_NAV || '').toLowerCase() === 'true'
 
 const MAIN_ITEMS = [
   {
@@ -67,6 +69,7 @@ const MAIN_ITEMS = [
     to: '/admin/orders',
     icon: FiShoppingBag,
     match: 'section',
+    pilotHidden: true,
   },
   {
     id: 'subscriptions',
@@ -83,6 +86,7 @@ const MAIN_ITEMS = [
     to: '/admin/users',
     icon: FiUsers,
     match: 'section',
+    pilotHidden: true,
   },
   {
     id: 'settings',
@@ -91,8 +95,11 @@ const MAIN_ITEMS = [
     to: '/admin/settings',
     icon: FiSettings,
     match: 'section',
+    pilotHidden: true,
   },
 ]
+
+const VISIBLE_MAIN_ITEMS = MAIN_ITEMS.filter((item) => SHOW_ADMIN_STUB_NAV || item.pilotHidden !== true)
 
 const QUICK_ACTIONS = [
   {
@@ -509,7 +516,7 @@ function MobileMoreSheet({ open, pathname, onClose, onSoonClick, onLogout }) {
 
         <div className="max-h-[calc(88vh-73px)] space-y-6 overflow-y-auto p-4 pb-28">
           <SidebarSection title="Principal">
-            {MAIN_ITEMS.map((item) => (
+            {VISIBLE_MAIN_ITEMS.map((item) => (
               <MainNavItem
                 key={item.id}
                 item={item}
@@ -564,7 +571,7 @@ function Sidebar({ pathname, onSoonClick, onLogout }) {
 
         <nav className="mt-5 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
           <SidebarSection title="Principal">
-            {MAIN_ITEMS.map((item) => (
+            {VISIBLE_MAIN_ITEMS.map((item) => (
               <MainNavItem key={item.id} item={item} pathname={pathname} />
             ))}
           </SidebarSection>
@@ -602,8 +609,8 @@ function Sidebar({ pathname, onSoonClick, onLogout }) {
 }
 
 function MobileBottomNav({ pathname, onOpenMore }) {
-  const mobileItems = MAIN_ITEMS.slice(0, 4)
-  const isMoreActive = MAIN_ITEMS.slice(4).some((item) => isRouteActive(item, pathname))
+  const mobileItems = VISIBLE_MAIN_ITEMS.slice(0, 4)
+  const isMoreActive = VISIBLE_MAIN_ITEMS.slice(4).some((item) => isRouteActive(item, pathname))
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/95 px-2 py-2 shadow-2xl shadow-gray-300/60 backdrop-blur-xl lg:hidden">

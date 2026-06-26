@@ -177,6 +177,8 @@ const NAV_SECTIONS = [
 ]
 
 const MAIN_ITEMS = NAV_SECTIONS.flatMap((section) => section.items)
+const SHOW_FUTURE_DASHBOARD_NAV =
+  String(import.meta.env.VITE_SHOW_DASHBOARD_FUTURE_NAV || '').toLowerCase() === 'true'
 
 const MOBILE_NAV_PATHS = [
   '/dashboard/orders',
@@ -784,7 +786,7 @@ function MobileMoreSheet({
             </SidebarSection>
           ))}
 
-          {FUTURE_SECTIONS.map((section) => (
+          {SHOW_FUTURE_DASHBOARD_NAV && FUTURE_SECTIONS.map((section) => (
             <SidebarSection key={section.title} title={section.title}>
               {section.items.map((item) => (
                 <ComingSoonNavItem
@@ -1129,7 +1131,7 @@ function Sidebar({ onLogout, isLoggingOut, user, userData, onOpenProfileModal, c
               </SidebarSection>
             ))}
 
-            {FUTURE_SECTIONS.map((section) => (
+            {SHOW_FUTURE_DASHBOARD_NAV && FUTURE_SECTIONS.map((section) => (
               <SidebarSection key={section.title} title={section.title} collapsed={collapsed}>
                 {section.items.map((item) => (
                   <ComingSoonNavItem key={item.to} item={item} collapsed={collapsed} />
