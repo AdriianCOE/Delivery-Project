@@ -6,11 +6,32 @@ async function waitForStorefrontReady(page: any) {
   await expect(page.getByText(/Capivaras Lanches|Capivara Burger|Hamb|Card/i).first()).toBeVisible({
     timeout: 15_000,
   })
-  await expect(page.getByText(/carregando/i)).not.toBeVisible()
+  await expectNoVisibleLoading(page)
 }
 
 async function getCanonical(page: any) {
   return page.locator('link[rel="canonical"]').getAttribute('href')
+}
+
+async function expectNoVisibleLoading(page: any) {
+  await expect
+    .poll(
+      async () => {
+        const loadingTexts = page.getByText(/carregando/i)
+        const count = await loadingTexts.count()
+        let visibleCount = 0
+
+        for (let index = 0; index < count; index += 1) {
+          if (await loadingTexts.nth(index).isVisible()) {
+            visibleCount += 1
+          }
+        }
+
+        return visibleCount
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(0)
 }
 
 test('loja pública abre por slug e não fica presa no loading', async ({ page }) => {
@@ -19,9 +40,7 @@ test('loja pública abre por slug e não fica presa no loading', async ({ page }
   await expect(page.locator('body')).toBeVisible()
   await waitForStorefrontReady(page)
 
-  await expect(page.getByText(/carregando cardápio/i)).not.toBeVisible({
-    timeout: 15_000,
-  })
+  await expectNoVisibleLoading(page)
 
   const bodyText = await page.locator('body').innerText()
   expect(bodyText).not.toMatch(/loja não encontrada/i)
@@ -48,9 +67,7 @@ test('loja pública tem SEO dinâmico e canonical do slug', async ({ page }) => 
 test('loja pública tem produtos ou estado vazio amigável', async ({ page }) => {
   await page.goto(`/${STORE_SLUG}`)
 
-  await expect(page.getByText(/carregando cardápio/i)).not.toBeVisible({
-    timeout: 15_000,
-  })
+  await expectNoVisibleLoading(page)
 
   await waitForStorefrontReady(page)
   const bodyText = await page.locator('body').innerText()

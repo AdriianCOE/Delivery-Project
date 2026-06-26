@@ -297,6 +297,15 @@ function getPaymentStatusId(order) {
     .trim()
 }
 
+function isPaymentLinkCreationFailure(order) {
+  return ['failed_link_creation', 'link_creation_failed'].includes(getPaymentStatusId(order))
+}
+
+function canRetryPaymentLinkCreation(order) {
+  if (isPaymentPaid(order)) return false
+  return Boolean(order?.payment?.retryable || order?.retryable || isPaymentLinkCreationFailure(order))
+}
+
 function isPixManualOrder(order) {
   const method = getPaymentMethodId(order)
 
@@ -1427,7 +1436,17 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
   const status = getPaymentStatusId(order)
   const paid = isPaymentPaid(order)
   const pending = isAsaasPaymentPending(order)
-  const failed = ['failed', 'expired', 'canceled', 'refunded', 'chargeback_requested'].includes(status)
+  const retryableLinkFailure = canRetryPaymentLinkCreation(order)
+  const canOpenPayment = pending || retryableLinkFailure
+  const failed = [
+    'failed',
+    'failed_link_creation',
+    'link_creation_failed',
+    'expired',
+    'canceled',
+    'refunded',
+    'chargeback_requested',
+  ].includes(status)
 
   const handleOpenPayment = useCallback(async () => {
     if (paymentUrl) {
@@ -1508,7 +1527,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
           </div>
         </div>
 
-        {pending && (
+        {canOpenPayment && (
           <button
             type="button"
             onClick={handleOpenPayment}
@@ -1523,7 +1542,7 @@ function AsaasOnlinePaymentCard({ order, trackingToken }) {
             ) : (
               <>
                 <FiCreditCard />
-                Pagar agora
+                {retryableLinkFailure && !paymentUrl ? 'Tentar gerar link novamente' : 'Pagar agora'}
               </>
             )}
           </button>
@@ -1552,6 +1571,8 @@ function MercadoPagoOnlinePaymentCard({
   const status = getPaymentStatusId(order)
   const paid = isPaymentPaid(order)
   const pending = isMercadoPagoPaymentPending(order)
+  const retryableLinkFailure = canRetryPaymentLinkCreation(order)
+  const canOpenPayment = pending || retryableLinkFailure
   const failed = [
     'failed',
     'failed_link_creation',
@@ -1637,7 +1658,7 @@ function MercadoPagoOnlinePaymentCard({
           </div>
         </div>
 
-        {pending && (
+        {canOpenPayment && (
           <div className="grid gap-2 sm:grid-cols-2">
             <button
               type="button"
@@ -1653,7 +1674,7 @@ function MercadoPagoOnlinePaymentCard({
               ) : (
                 <>
                   <FiCreditCard />
-                  Pagar agora
+                  {retryableLinkFailure && !paymentUrl ? 'Tentar gerar checkout' : 'Pagar agora'}
                 </>
               )}
             </button>

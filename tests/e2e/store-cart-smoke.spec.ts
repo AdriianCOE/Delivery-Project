@@ -2,6 +2,27 @@ import { expect, test } from '@playwright/test'
 
 const STORE_SLUG = process.env.PLAYWRIGHT_STORE_SLUG || 'capivaras-lanches'
 
+async function expectNoVisibleLoading(page: any) {
+  await expect
+    .poll(
+      async () => {
+        const loadingTexts = page.getByText(/carregando/i)
+        const count = await loadingTexts.count()
+        let visibleCount = 0
+
+        for (let index = 0; index < count; index += 1) {
+          if (await loadingTexts.nth(index).isVisible()) {
+            visibleCount += 1
+          }
+        }
+
+        return visibleCount
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(0)
+}
+
 test('cliente consegue abrir produto ou card do cardápio sem quebrar UI', async ({ page }) => {
   await page.goto(`/${STORE_SLUG}`)
 
@@ -9,9 +30,7 @@ test('cliente consegue abrir produto ou card do cardápio sem quebrar UI', async
   await expect(page.getByText(/Capivaras Lanches|Capivara Burger|Hamb|Card/i).first()).toBeVisible({
     timeout: 15_000,
   })
-  await expect(page.getByText(/carregando cardápio/i)).not.toBeVisible({
-    timeout: 15_000,
-  })
+  await expectNoVisibleLoading(page)
 
   const possibleProductButtons = page
     .locator('button, article, [role="button"]')
