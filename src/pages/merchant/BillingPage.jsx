@@ -7,6 +7,7 @@ import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
+import PratoByLogoIcon from '../../components/ui/PratoByLogoIcon'
 import SubscriptionStatusBadge from '../../components/billing/SubscriptionStatusBadge'
 import {
   formatBillingDate,
@@ -77,10 +78,10 @@ function openCheckoutUrl(url) {
 
 function getBillingInputClass(hasError = false) {
   return [
-    'h-11 w-full rounded-xl border px-3 text-sm font-semibold text-[#111827] outline-none transition disabled:bg-gray-50',
+    'billing-form-input h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-[#111827] outline-none transition placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:opacity-100',
     'dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:disabled:bg-zinc-900/70',
     hasError
-      ? 'border-red-300 bg-red-50/30 focus:border-red-400 dark:border-red-500/60 dark:bg-red-950/20'
+      ? 'billing-form-input-error border-red-300 bg-red-50/30 focus:border-red-400 dark:border-red-500/60 dark:bg-red-950/20'
       : 'border-gray-200 focus:border-[#f97316] dark:border-zinc-700 dark:focus:border-[#f97316]',
   ].join(' ')
 }
@@ -312,11 +313,7 @@ function BillingFooter() {
     <footer className="mt-10 rounded-[1.5rem] border border-gray-100 bg-white/90 p-4 shadow-sm ring-1 ring-white/70 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80 dark:ring-zinc-800 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <img
-            src="/icons/android-chrome-192x192.png"
-            alt="PratoBy"
-            className="h-10 w-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-orange-600/15"
-          />
+          <PratoByLogoIcon size="sm" />
           <div className="min-w-0">
             <p className="truncate text-sm font-black text-[#111827] dark:text-white">
               PratoBy · Cardápio digital

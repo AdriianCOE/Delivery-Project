@@ -16,6 +16,7 @@ import { DashboardPageSkeleton } from '../shared/Skeletons'
 import DashboardNotificationBell from '../notifications/DashboardNotificationBell'
 import DashboardTrialRibbon from '../notifications/DashboardTrialRibbon'
 import FloatingToast from '../ui/FloatingToast'
+import PratoByLogoIcon from '../ui/PratoByLogoIcon'
 import { useDashboardNotifications } from '../../hooks/useDashboardNotifications'
 import { getDashboardAreaForPath } from '../../utils/notificationFormatters'
 import { notificationPreferenceEnabled } from '../../utils/notificationPreferences'
@@ -299,14 +300,7 @@ function NotificationBadge({ count = 0, active = false }) {
 function PratoByMark({ compact = false, collapsed = false }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <img
-        src="/icons/android-chrome-192x192.png"
-        alt="PratoBy"
-        className={cn(
-          compact || collapsed ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-3xl',
-          'shrink-0 object-cover shadow-lg shadow-orange-600/15'
-        )}
-      />
+      <PratoByLogoIcon size={compact || collapsed ? 'sm' : 'lg'} />
 
       {!collapsed && (
         <div className="min-w-0">
@@ -673,11 +667,7 @@ function MobileMoreSheet({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3">
-                <img
-                  src="/icons/android-chrome-192x192.png"
-                  alt="PratoBy"
-                  className="h-10 w-10 rounded-2xl shrink-0 object-cover shadow-md shadow-orange-600/10"
-                />
+                <PratoByLogoIcon size="sm" className="shadow-md shadow-orange-600/10" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-base font-black tracking-tight text-[#111827] dark:text-white">

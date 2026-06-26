@@ -19,10 +19,10 @@ import {
   FiZap as Zap,
 } from 'react-icons/fi'
 
+import PratoByLogoIcon from '../../../components/ui/PratoByLogoIcon'
+
 const CAPIVARA_LOGO =
   'https://res.cloudinary.com/dsionrn26/image/upload/f_auto,q_auto,w_64,h_64,c_fill/v1778007863/borapedir/capivaras-lanches/branding/logoUrl/spu3llgr354fvcqshgmd.png'
-
-const PRATOBY_LOGO = '/icons/favicon-32x32.png'
 
 type NavItem = {
   icon: IconType
@@ -84,11 +84,7 @@ function DashboardScreen() {
       <aside className="flex w-[148px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0b1120]">
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 py-3 border-b border-white/[0.07]">
-          <img
-            src={PRATOBY_LOGO}
-            alt="PratoBy"
-            className="h-7 w-7 shrink-0 rounded-lg object-contain"
-          />
+          <PratoByLogoIcon size="tiny" className="shadow-none" />
           <div className="min-w-0">
             <p className="text-[10px] font-black text-white leading-tight">PratoBy</p>
             <p className="text-[8px] font-semibold text-slate-500 leading-tight">Painel do lojista</p>

@@ -38,6 +38,7 @@ import {
 import { db } from '../../services/firebase'
 import { auth, googleProvider } from '../../services/firebaseAuth'
 import SEO from '../../components/seo/SEO'
+import PratoByLogoIcon from '../../components/ui/PratoByLogoIcon'
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -194,12 +195,10 @@ const staggerContainer = {
 function PratoByLogo({ dark = false, compact = false }) {
   return (
     <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
-      <img
-        src="/icons/android-chrome-192x192.png"
-        alt="PratoBy"
-        className={`${
-          compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-[1.35rem]'
-        } object-cover shadow-lg shadow-orange-600/20 ring-1 ring-black/5 transition duration-300 group-hover:scale-105`}
+      <PratoByLogoIcon
+        size={compact ? 'sm' : 'lg'}
+        className="shadow-orange-600/20 ring-black/5"
+        interactive
       />
       <div className="min-w-0 leading-none">
         <p
@@ -241,11 +240,7 @@ function LoginMobileHeader() {
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link to="/" className="shrink-0" aria-label="Ir para início">
           <div className="flex items-center gap-3">
-            <img
-              src="/icons/android-chrome-192x192.png"
-              alt="PratoBy"
-              className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
-            />
+            <PratoByLogoIcon size="md" className="shadow-orange-600/20" />
             <div className="leading-none">
               <p className="text-2xl font-black tracking-tighter text-[#111827]">
                 Prato<span className="text-[#f97316]">By</span>

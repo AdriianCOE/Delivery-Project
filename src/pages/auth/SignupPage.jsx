@@ -19,6 +19,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { FiAlertCircle, FiCheck, FiArrowLeft, FiStar, FiCheckCircle, FiChevronDown, FiZap, FiUser, FiMail, FiPhone, FiShoppingBag, FiLock, FiMapPin, FiArrowRight, FiShield, FiLoader, FiEye, FiEyeOff } from 'react-icons/fi'
 import AnimatedSegmentedControl from '../../components/ui/AnimatedSegmentedControl'
 import SEO from '../../components/seo/SEO'
+import PratoByLogoIcon from '../../components/ui/PratoByLogoIcon'
 
 // ─────────────────────────────────────────────────────────────
 // DADOS DOS PLANOS
@@ -189,12 +190,10 @@ const floatAnimation3 = {
 function PratoByLogo({ dark = false, compact = false }) {
   return (
     <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
-      <img
-        src="/icons/android-chrome-192x192.png"
-        alt="PratoBy"
-        className={`${
-          compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-[1.35rem]'
-        } object-cover shadow-lg shadow-orange-600/20 ring-1 ring-black/5 transition duration-300 group-hover:scale-105`}
+      <PratoByLogoIcon
+        size={compact ? 'sm' : 'lg'}
+        className="shadow-orange-600/20 ring-black/5"
+        interactive
       />
       <div className="min-w-0 leading-none">
         <p

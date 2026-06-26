@@ -41,6 +41,7 @@ import {
   validateBrazilianMobilePhone,
 } from '../../utils/phone'
 import SEO from '../../components/seo/SEO'
+import PratoByLogoIcon from '../../components/ui/PratoByLogoIcon'
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -213,11 +214,7 @@ function OnboardingMobileHeader() {
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link to="/" className="shrink-0" aria-label="Ir para início">
           <div className="flex items-center gap-3">
-            <img
-              src="/icons/android-chrome-192x192.png"
-              alt="PratoBy"
-              className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-orange-600/20"
-            />
+            <PratoByLogoIcon size="md" className="shadow-orange-600/20" />
             <div className="leading-none">
               <p className="text-2xl font-black tracking-tighter text-[#111827]">
                 Prato<span className="text-[#f97316]">By</span>
@@ -335,10 +332,10 @@ function OnboardingSidebar({ displayName, email, emailVerified, phoneVerified, p
 
       <div className="relative z-10 flex h-full flex-col">
         <Link to="/" className="group inline-flex w-fit items-center gap-3" aria-label="Ir para início">
-          <img
-            src="/icons/android-chrome-192x192.png"
-            alt="PratoBy"
-            className="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-orange-600/25 ring-1 ring-white/10 transition duration-300 group-hover:scale-105"
+          <PratoByLogoIcon
+            size="lg"
+            className="shadow-orange-600/25 ring-white/10"
+            interactive
           />
           <div className="leading-none">
             <p className="text-2xl font-black tracking-tighter">
@@ -1120,10 +1117,10 @@ async function getRecaptchaVerifier() {
                 className="mb-6 flex rounded-[1.5rem] border border-gray-100 bg-[#fafafa] p-3 shadow-sm lg:hidden lg:items-center lg:justify-between lg:gap-4"
               >
                 <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
-                  <img
-                    src="/icons/android-chrome-192x192.png"
-                    alt="PratoBy"
-                    className="h-10 w-10 rounded-2xl object-cover shadow-lg shadow-orange-600/20 ring-1 ring-black/5 transition duration-300 group-hover:scale-105"
+                  <PratoByLogoIcon
+                    size="sm"
+                    className="shadow-orange-600/20 ring-black/5"
+                    interactive
                   />
                   <div className="min-w-0 leading-none">
                     <p className="text-xl font-black tracking-tighter text-[#111827]">

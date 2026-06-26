@@ -36,6 +36,8 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
+import PratoByLogoIcon from '../ui/PratoByLogoIcon'
+
 import { auth } from '../../services/firebaseAuth'
 
 const BRAND_ORANGE = '#f97316'
@@ -258,14 +260,7 @@ function AdminMark({ compact = false }) {
       to="/admin"
       className="flex min-w-0 items-center gap-3 rounded-[1.35rem] transition hover:bg-gray-50/80"
     >
-      <img
-        src="/icons/android-chrome-192x192.png?v=4"
-        alt="PratoBy"
-        className={cn(
-          compact ? 'h-10 w-10 rounded-2xl' : 'h-12 w-12 rounded-3xl',
-          'shrink-0 object-cover shadow-lg shadow-orange-600/15'
-        )}
-      />
+      <PratoByLogoIcon size={compact ? 'sm' : 'lg'} />
 
       <div className="min-w-0">
         <p

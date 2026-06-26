@@ -26,6 +26,27 @@ function getFallbackRouteByRole(role) {
   return '/'
 }
 
+function getProtectedRouteSeo(pathname = '') {
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    return {
+      title: 'Painel administrativo | PratoBy',
+      description: 'Painel administrativo do PratoBy.',
+    }
+  }
+
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    return {
+      title: 'Painel do lojista | PratoBy',
+      description: 'Painel do lojista PratoBy.',
+    }
+  }
+
+  return {
+    title: 'Painel PratoBy',
+    description: 'Painel interno do PratoBy.',
+  }
+}
+
 function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950 px-6">
@@ -60,6 +81,7 @@ export default function ProtectedRoute({
 }) {
   const auth = useAuth()
   const location = useLocation()
+  const protectedRouteSeo = getProtectedRouteSeo(location.pathname)
 
   const isLoading =
     auth?.loading === true ||
@@ -70,8 +92,8 @@ export default function ProtectedRoute({
     return (
       <>
         <SEO
-          title="Area protegida | PratoBy"
-          description="Area protegida do PratoBy."
+          title={protectedRouteSeo.title}
+          description={protectedRouteSeo.description}
           path={location.pathname}
           noIndex
           noFollow
@@ -162,8 +184,8 @@ export default function ProtectedRoute({
   return (
     <>
       <SEO
-        title="Area protegida | PratoBy"
-        description="Area protegida do PratoBy."
+        title={protectedRouteSeo.title}
+        description={protectedRouteSeo.description}
         path={location.pathname}
         noIndex
         noFollow

@@ -688,6 +688,65 @@
   color: #a1a1aa !important; /* Zinc-400 */
 }
 
+.billing-form-input {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+  color-scheme: light;
+}
+
+.billing-form-input::placeholder {
+  color: #9ca3af !important;
+}
+
+.billing-form-input:disabled {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+  opacity: 1 !important;
+}
+
+.billing-form-input.billing-form-input-error {
+  background-color: rgba(254, 242, 242, 0.55) !important;
+  border-color: #fca5a5 !important;
+}
+
+.billing-form-input:-webkit-autofill,
+.billing-form-input:-webkit-autofill:hover,
+.billing-form-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111827 !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  caret-color: #111827 !important;
+}
+
+.dark .billing-form-input {
+  background-color: #09090b !important;
+  border-color: #3f3f46 !important;
+  color: #f4f4f5 !important;
+  color-scheme: dark;
+}
+
+.dark .billing-form-input::placeholder {
+  color: #71717a !important;
+}
+
+.dark .billing-form-input:disabled {
+  background-color: rgba(39, 39, 42, 0.7) !important;
+  color: #a1a1aa !important;
+}
+
+.dark .billing-form-input.billing-form-input-error {
+  background-color: rgba(69, 10, 10, 0.2) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+.dark .billing-form-input:-webkit-autofill,
+.dark .billing-form-input:-webkit-autofill:hover,
+.dark .billing-form-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f4f4f5 !important;
+  box-shadow: 0 0 0 1000px #09090b inset !important;
+  caret-color: #f4f4f5 !important;
+}
+
 /* Premium interactive hover states in dark mode */
 .dark .dashboard-shell .hover\:bg-gray-50:hover {
   background-color: #27272a !important; /* Zinc-800 */
