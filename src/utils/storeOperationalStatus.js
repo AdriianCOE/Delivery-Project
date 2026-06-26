@@ -187,7 +187,7 @@ function getAutomaticHoursStatus(store, now, timeZone) {
   return {
     isOpen: false,
     reason: hasAnyConfiguredDay ? 'outside-business-hours' : 'no-business-hours',
-    label: hasAnyConfiguredDay ? 'Fechada fora do horário de funcionamento' : 'Fechada: nenhum horário ativo',
+    label: hasAnyConfiguredDay ? 'Loja fechada agora. Você ainda pode ver o cardápio.' : 'Fechada: nenhum horário ativo',
   }
 }
 

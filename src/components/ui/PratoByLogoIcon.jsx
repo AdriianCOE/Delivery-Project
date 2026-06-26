@@ -42,12 +42,12 @@ export default function PratoByLogoIcon({
     <span
       className={cx(
         classes.frame,
-        'grid shrink-0 place-items-center bg-[#111827] shadow-lg shadow-orange-600/15 ring-1 ring-orange-500/20 dark:bg-zinc-950',
+        'grid shrink-0 place-items-center bg-white shadow-lg shadow-orange-600/15 ring-1 ring-orange-100/80',
         className
       )}
     >
       <img
-        src="/icons/android-chrome-192x192.png"
+        src="/icons/pratoby-mark-96.png"
         alt={alt}
         decoding="async"
         className={cx(

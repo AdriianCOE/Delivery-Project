@@ -303,7 +303,12 @@ function isPaymentLinkCreationFailure(order) {
 
 function canRetryPaymentLinkCreation(order) {
   if (isPaymentPaid(order)) return false
-  return Boolean(order?.payment?.retryable || order?.retryable || isPaymentLinkCreationFailure(order))
+
+  return Boolean(
+    isPaymentLinkCreationFailure(order) ||
+      order?.payment?.retryable === true ||
+      order?.payment?.linkCreationRetryable === true
+  )
 }
 
 function isPixManualOrder(order) {

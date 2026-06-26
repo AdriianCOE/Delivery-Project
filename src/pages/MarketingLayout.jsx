@@ -342,7 +342,7 @@ function FooterLink({ item, isActivePath }) {
       to={item.to}
       aria-current={active ? 'page' : undefined}
       className={[
-        'block truncate rounded-full px-0 py-1 text-[13px] font-bold transition-colors sm:text-sm',
+        'block rounded-full px-0 py-1 text-[12px] font-bold leading-snug transition-colors sm:text-sm',
         active ? 'text-orange-300' : 'text-white/60 hover:text-white',
       ].join(' ')}
     >
@@ -508,7 +508,7 @@ export default function MarketingLayout({ children }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-6">
+            <div className="grid grid-cols-3 gap-3 min-[390px]:gap-4 sm:gap-6">
               {footerGroups.map((group) => (
                 <div key={group.title} className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300 sm:text-xs">

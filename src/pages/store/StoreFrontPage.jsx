@@ -2028,6 +2028,7 @@ function PublicStoreDesktopDock({
   isHidden,
   isOpen,
   onOpenCart,
+  store,
   themeColor,
   todayHoursLabel,
 }) {
@@ -2037,11 +2038,17 @@ function PublicStoreDesktopDock({
   const cartItemsLabel = cartItemsCount > 0
     ? `${cartItemsCount} ${cartItemsCount === 1 ? 'item' : 'itens'}`
     : 'Seu pedido'
+  const dockLogoUrl = String(store?.logoUrl || '').trim()
   const statusLabel = isOpen ? 'Aberta' : 'Fechada'
-  const compactTodayHoursLabel = todayHoursLabel.replace(/^Hoje:\s*/, 'Hoje ')
+  const compactTodayHoursLabel = String(todayHoursLabel || '').trim().replace(/^Hoje:\s*/i, 'Hoje ')
   const previousCartCountRef = useRef(cartItemsCount)
   const hasMountedCartAnimationRef = useRef(false)
   const [cartJustUpdated, setCartJustUpdated] = useState(false)
+  const [dockLogoFailed, setDockLogoFailed] = useState(false)
+
+  useEffect(() => {
+    setDockLogoFailed(false)
+  }, [dockLogoUrl])
 
   useEffect(() => {
     if (!hasMountedCartAnimationRef.current) {
@@ -2087,8 +2094,27 @@ function PublicStoreDesktopDock({
       aria-hidden={isHidden}
       aria-label="Comandos do cardápio público"
     >
-      <div className="mx-auto inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-orange-100/80 bg-gradient-to-r from-white via-white to-orange-50/45 px-2 py-1.5 text-[#111827] shadow-[0_14px_34px_rgba(15,23,42,0.11)] backdrop-blur-xl lg:max-w-[980px]">
-        <div className="flex h-9 shrink-0 items-center gap-1.5 px-2 text-xs font-black text-slate-700">
+      <div className="mx-auto inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-orange-100/80 bg-white/96 px-2 py-1.5 text-[#111827] shadow-[0_14px_34px_rgba(15,23,42,0.11)] backdrop-blur-xl lg:max-w-[980px]">
+        {dockLogoUrl && !dockLogoFailed && (
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-orange-100/80">
+            <img
+              src={dockLogoUrl}
+              alt={store?.name ? `Logo de ${store.name}` : 'Logo da loja'}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-contain p-1"
+              onError={() => setDockLogoFailed(true)}
+            />
+          </span>
+        )}
+
+        <div
+          className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-black ring-1 ${
+            isOpen
+              ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+              : 'bg-red-50 text-red-700 ring-red-100'
+          }`}
+        >
           <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
             {isOpen && (
               <span className="absolute h-2.5 w-2.5 rounded-full bg-emerald-400/30 motion-safe:animate-pulse" />
@@ -2096,12 +2122,12 @@ function PublicStoreDesktopDock({
             <span className={`relative h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-emerald-500' : 'bg-red-500'}`} />
           </span>
           <span className="shrink-0">{statusLabel}</span>
-          <span className="shrink-0 text-slate-300">·</span>
-          <span className="shrink-0 text-slate-500">{compactTodayHoursLabel}</span>
-          {!isOpen && (
+          {compactTodayHoursLabel && (
             <>
-              <span className="hidden shrink-0 text-slate-300 xl:inline">·</span>
-              <span className="hidden max-w-[150px] truncate text-slate-400 xl:inline">{compactTodayHoursLabel}</span>
+              <span className={isOpen ? 'shrink-0 text-emerald-300' : 'shrink-0 text-red-300'}>·</span>
+              <span className={isOpen ? 'max-w-[190px] truncate text-emerald-700/75' : 'max-w-[190px] truncate text-red-700/75'}>
+                {compactTodayHoursLabel}
+              </span>
             </>
           )}
         </div>
@@ -2232,6 +2258,7 @@ function PublicStoreBottomNav({
         isHidden={isHidden}
         isOpen={store?.isOpen === true}
         onOpenCart={onOpenCart}
+        store={store}
         themeColor={themeColor}
         todayHoursLabel={todayHoursLabel}
       />
@@ -3216,7 +3243,7 @@ return (
     />
 
     <div
-  className="min-h-screen bg-[#fff8f1] text-[#111827]"
+  className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#fff8f1_0%,#fff7ed_42%,#f8fafc_100%)] text-[#111827]"
   style={{
     '--theme-color': themeColor,
   }}
@@ -3336,10 +3363,7 @@ return (
             isOwner ? 'top-[44px]' : 'top-0'
           }`}
         >
-          <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100/80 backdrop-blur-xl">
-            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-white via-white/90 to-transparent" />
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-9 bg-gradient-to-l from-white via-white/90 to-transparent" />
-
+          <div className="relative mx-auto max-w-[1120px] overflow-hidden rounded-[1.45rem] border border-white/80 bg-white/95 p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-gray-100/80 backdrop-blur-xl">
             <div
               ref={categoryScrollRef}
               className="flex w-full min-w-0 snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-smooth pr-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -3411,7 +3435,7 @@ return (
         </section>
       )}
 
-      <main id="menu-start" className="mx-auto mt-5 max-w-[1440px] px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] sm:mt-7 md:pb-28 lg:pb-32 xl:px-6">
+      <main id="menu-start" className="relative z-10 mx-auto mt-5 max-w-[1440px] px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] sm:mt-7 md:pb-28 lg:pb-32 xl:px-6">
         {loadingMenu ? (
           <div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((item) => (
@@ -3426,7 +3450,7 @@ return (
                 className="storefront-section-reveal mb-8 lg:mb-10"
                 style={{ '--storefront-section-index': 0 }}
               >
-                <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
+                <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.6rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(255,247,237,0.82))] px-4 py-3 shadow-[0_12px_32px_rgba(15,23,42,0.06)] ring-1 ring-white/80 backdrop-blur-sm">
                   <div>
                     <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-[#f97316]">
                       <FiStar />
@@ -3500,7 +3524,7 @@ return (
                   className="storefront-section-reveal scroll-mt-28 mb-8 lg:mb-10"
                   style={sectionStyle}
                 >
-                  <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-100/80 backdrop-blur-sm">
+                  <div className="mb-5 flex items-end justify-between gap-4 rounded-[1.5rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(255,247,237,0.78))] px-4 py-3 shadow-[0_12px_32px_rgba(15,23,42,0.06)] ring-1 ring-white/80 backdrop-blur-sm">
                     <div>
                       <h2 className="text-[1.35rem] font-black tracking-tight text-[#111827] sm:text-3xl">
                         {section.name}
@@ -3511,7 +3535,7 @@ return (
                       </p>
                     </div>
 
-                    <div className="hidden items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-[#6b7280] shadow-sm sm:flex">
+                    <div className="hidden items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-black text-[#6b7280] shadow-sm ring-1 ring-gray-100/80 sm:flex">
                       {formatItemCount(section.products.length)}
                       <FiChevronRight />
                     </div>

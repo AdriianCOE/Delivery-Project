@@ -631,12 +631,12 @@ function ProductCard({
     <article
       onClick={handleOpen}
       className={`
-        group relative overflow-hidden rounded-[1.8rem] border bg-white p-3.5 shadow-sm ring-1 ring-black/[0.02] sm:p-4
+        group relative overflow-hidden rounded-[1.8rem] border bg-[linear-gradient(145deg,#ffffff_0%,#ffffff_58%,#fff7ed_100%)] p-3.5 shadow-[0_14px_38px_rgba(15,23,42,0.06)] ring-1 ring-black/[0.02] sm:p-4
         transition-all duration-300 flex flex-col
         h-full min-h-[246px] sm:min-h-[268px] lg:h-[288px]
         ${
           canAdd
-            ? 'cursor-pointer border-gray-100 hover:-translate-y-1 hover:border-orange-100 hover:shadow-2xl hover:shadow-orange-100/40 active:scale-[0.995]'
+            ? 'cursor-pointer border-white/90 hover:-translate-y-1 hover:border-orange-100 hover:shadow-2xl hover:shadow-orange-100/40 active:scale-[0.995]'
             : (unavailable || outOfStock)
               ? 'cursor-default border-gray-100 opacity-75'
               : 'cursor-not-allowed border-gray-100 opacity-60 grayscale'
@@ -645,7 +645,7 @@ function ProductCard({
       `}
       style={{ '--theme-color': themeColor }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-orange-50/60 via-white/50 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-orange-50/70 via-white/45 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
 
       {/* 👈 2. h-full no wrapper interno para preencher o espaço do article */}
       <div className="relative flex h-full gap-3 sm:gap-4">
@@ -756,7 +756,7 @@ function ProductCard({
         {/* CONTAINER DA IMAGEM */}
         <div
           className={`
-            relative shrink-0 overflow-hidden rounded-[1.45rem] bg-white shadow-sm ring-1 ring-black/[0.04]
+            relative shrink-0 overflow-hidden rounded-[1.45rem] bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_12px_28px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.04]
             ${compact ? 'h-28 w-28' : 'h-32 w-32 sm:h-40 sm:w-40'}
           `}
         >
