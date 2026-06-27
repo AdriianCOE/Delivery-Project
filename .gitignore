@@ -25,3 +25,6 @@ node_modules/
 .secret.local
 functions/.secret.local
 /dist/
+
+# Security/audit artifacts must not be published by the SPA.
+public/artifacts/

@@ -218,6 +218,45 @@ describe('agregação e restauração', () => {
     assert.equal(result, null)
     assert.equal(reads, 0)
   })
+
+  test('restore não bloqueia cancelamento quando produto foi removido', async () => {
+    const harness = createInventoryHarness({})
+
+    const result = await restoreStockInTransaction({
+      db: harness.db,
+      admin: {},
+      transaction: harness.transaction,
+      orderRef: { id: 'o1' },
+      orderData: {
+        storeId: 'store-1',
+        inventory: {
+          decremented: true,
+          restored: false,
+          items: [{
+            productId: 'missing-product',
+            productName: 'Produto removido',
+            quantity: 2,
+            storeId: 'store-1',
+            stockFormat: 'object',
+          }],
+        },
+      },
+      restoredBy: 'uid',
+      reason: 'cancelamento',
+      now: 'now',
+    })
+
+    assert.equal(result['inventory.restored'], true)
+    assert.deepEqual(result['inventory.restoreMovements'], [])
+    assert.deepEqual(result['inventory.restoreSkippedItems'], [{
+      productId: 'missing-product',
+      productName: 'Produto removido',
+      quantity: 2,
+      reason: 'product_missing',
+    }])
+    assert.equal(harness.updates.length, 0)
+    assert.equal(harness.sets.length, 0)
+  })
 })
 
 describe('baixa transacional', () => {
@@ -270,6 +309,59 @@ describe('baixa transacional', () => {
     )
     assert.equal(harness.updates.length, 0)
     assert.equal(harness.sets.length, 0)
+  })
+
+  test('ignora storeKeys forjado no produto como prova de pertencimento', async () => {
+    const harness = createInventoryHarness({
+      p1: {
+        name: 'Pizza',
+        storeId: 'attacker-store',
+        storeKeys: ['victim-store'],
+        stock: { enabled: true, quantity: 4 },
+      },
+    })
+
+    await assert.rejects(
+      decrementStockInTransaction({
+        db: harness.db,
+        admin: {},
+        transaction: harness.transaction,
+        items: [{ productId: 'p1', productName: 'Pizza', quantity: 1, storeId: 'attacker-store' }],
+        orderId: 'order-1',
+        storeId: 'victim-store',
+        storeKeys: ['victim-store'],
+        createdBy: 'system',
+        now: 'now',
+      }),
+      (error) => error instanceof InventoryError && error.code === 'stock_unavailable'
+    )
+    assert.equal(harness.updates.length, 0)
+    assert.equal(harness.sets.length, 0)
+  })
+
+  test('aceita produto legado quando storeId do produto é o slug confiável da loja', async () => {
+    const harness = createInventoryHarness({
+      p1: {
+        name: 'Pizza',
+        storeId: 'store-slug',
+        stock: { enabled: true, quantity: 4 },
+      },
+    })
+
+    const result = await decrementStockInTransaction({
+      db: harness.db,
+      admin: {},
+      transaction: harness.transaction,
+      items: [{ productId: 'p1', productName: 'Pizza', quantity: 1, storeId: 'store-slug' }],
+      orderId: 'order-1',
+      storeId: 'store-doc',
+      storeKeys: ['store-doc', 'store-slug'],
+      createdBy: 'system',
+      now: 'now',
+    })
+
+    assert.equal(result.decremented, true)
+    assert.equal(harness.updates[0].patch['stock.quantity'], 3)
   })
 
   test('ignora produto atualmente sem controle sem quebrar o pedido', async () => {

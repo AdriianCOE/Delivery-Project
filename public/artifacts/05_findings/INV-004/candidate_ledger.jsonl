@@ -1,3 +1,0 @@
-{"phase":"discovery","candidate_id":"INV-004","status":"candidate","scope":"functions inventory integrations","affected":["functions/publicOrder.js:815-920","functions/publicOrder.js:1620-1933","functions/shared/inventory.js:255-280"],"artifact":"artifacts/02_discovery/raw_candidates.jsonl"}
-{"phase":"validation","candidate_id":"INV-004","status":"reportable","confidence":"medium","method":"static transaction-boundary trace","artifact":"artifacts/05_findings/INV-004/validation_report.md"}
-{"phase":"attack_path","candidate_id":"INV-004","decision":"report","severity":"low","priority":"P3","facts":"remote public timing-dependent stale price and eligibility commit","artifact":"artifacts/05_findings/INV-004/attack_path_analysis.md"}

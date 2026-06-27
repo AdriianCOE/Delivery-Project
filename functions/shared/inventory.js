@@ -199,28 +199,22 @@ async function readTransactionDocuments(transaction, refs) {
   return Promise.all(refs.map((ref) => transaction.get(ref)))
 }
 
-function productBelongsToExpectedStore(productData, expectedStoreId, candidateStoreId) {
+function productBelongsToExpectedStore(productData, expectedStoreId, expectedStoreKeys = []) {
   const expectedKeys = new Set(
-    [expectedStoreId, candidateStoreId]
+    [expectedStoreId, ...(Array.isArray(expectedStoreKeys) ? expectedStoreKeys : [])]
       .map((value) => String(value || '').trim())
       .filter(Boolean)
   )
   if (!expectedKeys.size) return false
 
-  const directKeys = [productData?.storeId, productData?.storeDocId]
+  const directKeys = [
+    productData?.storeId,
+    productData?.storeDocId,
+  ]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
-  if (directKeys.length) return directKeys.every((key) => expectedKeys.has(key))
-
-  const storeKeys = Array.isArray(productData?.storeKeys)
-    ? productData.storeKeys
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-    : []
-  if (storeKeys.length) return storeKeys.some((key) => expectedKeys.has(key))
-
-  const storeSlug = String(productData?.storeSlug || '').trim()
-  return Boolean(storeSlug && expectedKeys.has(storeSlug))
+  if (!directKeys.length) return false
+  return directKeys.every((key) => expectedKeys.has(key))
 }
 
 async function decrementStockInTransaction({
@@ -230,6 +224,7 @@ async function decrementStockInTransaction({
   items,
   orderId,
   storeId,
+  storeKeys,
   createdBy,
   now,
 }) {
@@ -253,7 +248,7 @@ async function decrementStockInTransaction({
     }
 
     const productData = productSnapshot.data() || {}
-    if (!productBelongsToExpectedStore(productData, storeId, item.storeId)) {
+    if (!productBelongsToExpectedStore(productData, storeId, storeKeys)) {
       throw new InventoryError(
         'stock_unavailable',
         `Produto indisponível: ${item.productName || productData.name || item.productId}.`,
@@ -356,6 +351,7 @@ async function restoreStockInTransaction({
   const productRefs = items.map((item) => db.collection('products').doc(item.productId))
   const productSnapshots = await readTransactionDocuments(transaction, productRefs)
   const movementIds = []
+  const skippedItems = []
 
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index]
@@ -363,14 +359,26 @@ async function restoreStockInTransaction({
     const productSnapshot = productSnapshots[index]
 
     if (!productSnapshot?.exists) {
-      throw new Error(`[inventory] Produto ${item.productId} não encontrado ao restaurar o pedido ${orderRef.id}.`)
+      skippedItems.push({
+        productId: item.productId,
+        productName: item.productName || '',
+        quantity: item.quantity,
+        reason: 'product_missing',
+      })
+      continue
     }
 
     const productData = productSnapshot.data() || {}
     const normalized = normalizeStock(productData.stock)
     const stockFormat = item.stockFormat || normalized.format
     if (stockFormat === 'none') {
-      throw new Error(`[inventory] Formato de estoque ausente para o produto ${item.productId}.`)
+      skippedItems.push({
+        productId: item.productId,
+        productName: item.productName || productData.name || '',
+        quantity: item.quantity,
+        reason: 'stock_format_missing',
+      })
+      continue
     }
 
     const quantityBefore = normalized.quantity ?? 0
@@ -416,12 +424,15 @@ async function restoreStockInTransaction({
     movementIds.push(movementRef.id)
   }
 
-  return {
+  const patch = {
     'inventory.restored': true,
     'inventory.restoredAt': now,
     'inventory.restoredBy': restoredBy || 'system',
     'inventory.restoreMovements': movementIds,
   }
+  if (skippedItems.length > 0) patch['inventory.restoreSkippedItems'] = skippedItems
+
+  return patch
 }
 
 function normalizeStockForForm(rawStock) {

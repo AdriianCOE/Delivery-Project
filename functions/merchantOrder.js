@@ -826,6 +826,7 @@ function createMerchantOrderFunctions({
       assertStoreOwnerOrAdmin(storeData, uid, userData, HttpsError)
 
       const storeSlug = String(storeData.storeSlug || storeData.slug || storeId).trim()
+      const storeKeys = uniqueTruthy([storeId, storeSlug])
 
       // 4. Rate limit
       await assertCounterOrderRateLimit({ db, admin, HttpsError, logger, uid, storeId })
@@ -837,7 +838,6 @@ function createMerchantOrderFunctions({
       let stockItems = []
 
       try {
-        const storeKeys = uniqueTruthy([storeId, storeSlug])
         const serverResult = await buildServerOrderItems(db, rawItems, storeKeys)
         builtItems = serverResult.items
         subtotalCents = serverResult.subtotalCents
@@ -950,6 +950,7 @@ function createMerchantOrderFunctions({
               items: stockItems,
               orderId,
               storeId,
+              storeKeys,
               createdBy: uid,
               now,
             })

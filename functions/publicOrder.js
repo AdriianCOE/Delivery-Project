@@ -447,10 +447,7 @@ async function incrementPublicOrderAttemptLimit({ db, admin, storeDocId, phoneHa
 function productBelongsToStore(product, storeKeys) {
   const productStoreKeys = uniqueArray([
     product?.storeId,
-    product?.storeSlug,
     product?.storeDocId,
-    product?.store?.id,
-    ...(Array.isArray(product?.storeKeys) ? product.storeKeys : []),
   ])
 
   return productStoreKeys.some((key) => storeKeys.includes(key))
@@ -477,8 +474,11 @@ function productAcceptsCoupons(product) {
   return true
 }
 
-async function getProduct(db, productId, storeKeys) {
-  const directSnap = await db.collection('products').doc(productId).get()
+async function getProduct(db, productId, storeKeys, readOptions = {}) {
+  const directRef = db.collection('products').doc(productId)
+  const directSnap = readOptions.transaction
+    ? await readOptions.transaction.get(directRef)
+    : await directRef.get()
 
   if (directSnap.exists) {
     const product = { id: directSnap.id, ...directSnap.data() }
@@ -486,12 +486,14 @@ async function getProduct(db, productId, storeKeys) {
   }
 
   for (const storeKey of storeKeys.slice(0, 10)) {
-    const byStoreSnap = await db
+    const byStoreQuery = db
       .collection('products')
       .where('storeId', '==', storeKey)
       .where('id', '==', productId)
       .limit(1)
-      .get()
+    const byStoreSnap = readOptions.transaction
+      ? await readOptions.transaction.get(byStoreQuery)
+      : await byStoreQuery.get()
 
     if (!byStoreSnap.empty) {
       const doc = byStoreSnap.docs[0]
@@ -812,7 +814,7 @@ function sanitizeOrderInputItems(rawItems) {
   })).filter((item) => item.productId)
 }
 
-async function buildServerOrderItems(db, rawItems, storeKeys) {
+async function buildServerOrderItems(db, rawItems, storeKeys, readOptions = {}) {
   const inputItems = sanitizeOrderInputItems(rawItems)
   if (!inputItems.length) fail('invalid-argument', 'Pedido sem itens validos.')
 
@@ -822,7 +824,7 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
   const stockItems = []
 
   for (const item of inputItems) {
-    const product = await getProduct(db, item.productId, storeKeys)
+    const product = await getProduct(db, item.productId, storeKeys, readOptions)
 
     if (!product || !productBelongsToStore(product, storeKeys)) {
       fail('failed-precondition', 'Produto nao pertence a loja.')
@@ -905,7 +907,6 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
       storeId: String(
         product.storeId ||
         product.storeDocId ||
-        product.storeSlug ||
         storeKeys[0] ||
         ''
       ),
@@ -1600,12 +1601,6 @@ function createPublicOrderHandler({
         }
       }
 
-      const { items, subtotalCents, schedulingProducts, stockItems } = await buildServerOrderItems(db, input.items, storeKeys)
-
-      if (subtotalCents <= 0 || subtotalCents > maxOrderCents) {
-        fail('failed-precondition', 'Subtotal do pedido invalido.')
-      }
-
       const delivery = getDeliveryFeeCents({
         store,
         deliveryType: input.deliveryType || input.orderType,
@@ -1630,6 +1625,17 @@ function createPublicOrderHandler({
 
         if (!isPublicStoreActive(liveStore)) fail('failed-precondition', 'Loja indisponivel para pedidos.')
         assertStoreBillingAllowsPublicOrder(liveStore, logger)
+
+        const { items, subtotalCents, schedulingProducts, stockItems } = await buildServerOrderItems(
+          db,
+          input.items,
+          storeKeys,
+          { transaction }
+        )
+
+        if (subtotalCents <= 0 || subtotalCents > maxOrderCents) {
+          fail('failed-precondition', 'Subtotal do pedido invalido.')
+        }
 
         const schedulingDecision = buildOrderSchedulingDecision({
           store: liveStore,
@@ -1878,6 +1884,7 @@ function createPublicOrderHandler({
               items: stockItems,
               orderId: orderRef.id,
               storeId: storeDocId,
+              storeKeys,
               createdBy: 'system',
               now: admin.firestore.FieldValue.serverTimestamp(),
             })

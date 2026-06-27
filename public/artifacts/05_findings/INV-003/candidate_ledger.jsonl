@@ -1,3 +1,0 @@
-{"phase":"discovery","candidate_id":"INV-003","status":"candidate","scope":"functions inventory integrations","affected":["functions/shared/inventory.js:350-390"],"artifact":"artifacts/02_discovery/raw_candidates.jsonl"}
-{"phase":"validation","candidate_id":"INV-003","status":"reportable","confidence":"high","method":"focused transaction harness and static reverse-direction trace","artifact":"artifacts/05_findings/INV-003/validation_report.md"}
-{"phase":"attack_path","candidate_id":"INV-003","decision":"ignore_security_retain_correctness","facts":"same-owner protected cancellation and migration workflow; no lower-privileged attacker path","artifact":"artifacts/05_findings/INV-003/attack_path_analysis.md"}

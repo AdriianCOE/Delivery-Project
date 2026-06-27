@@ -2626,7 +2626,7 @@ export default function StoreFrontPage() {
     const element = categoryScrollRef.current
 
     if (!element || element.scrollWidth <= element.clientWidth) return
-    if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+    if (!event.shiftKey) return
 
     event.preventDefault()
     element.scrollBy({
@@ -2652,10 +2652,13 @@ export default function StoreFrontPage() {
 
     if (!element || !activeButton) return
 
-    activeButton.scrollIntoView({
+    const buttonLeft = activeButton.offsetLeft
+    const buttonWidth = activeButton.offsetWidth
+    const targetLeft = buttonLeft - (element.clientWidth - buttonWidth) / 2
+
+    element.scrollTo({
+      left: Math.max(targetLeft, 0),
       behavior: 'smooth',
-      block: 'nearest',
-      inline: 'center',
     })
   }, [activeCategory, categories.length])
 

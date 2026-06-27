@@ -1,3 +1,0 @@
-{"phase":"discovery","candidate_id":"INV-002","status":"candidate","scope":"functions inventory integrations","affected":["functions/shared/inventory.js:24-26","functions/shared/inventory.js:277-280","functions/shared/inventory.js:369-377"],"artifact":"artifacts/02_discovery/raw_candidates.jsonl"}
-{"phase":"validation","candidate_id":"INV-002","status":"reportable","confidence":"high","method":"focused transaction harness","artifact":"artifacts/05_findings/INV-002/validation_report.md"}
-{"phase":"attack_path","candidate_id":"INV-002","decision":"ignore_security_retain_correctness","facts":"protected uncommon backorder configuration; no independent tenant or privilege boundary","artifact":"artifacts/05_findings/INV-002/attack_path_analysis.md"}
