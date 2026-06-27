@@ -1,0 +1,6 @@
+{"path":"functions/shared/inventory.js","status":"completed","evidence":"Full file reviewed; transaction reads, ownership, decrement, restore, normalization and movements checked."}
+{"path":"functions/publicOrder.js","status":"completed_scoped","evidence":"Inventory-relevant product lookup, order construction, rate limits and transaction integration reviewed; unrelated payment implementation excluded."}
+{"path":"functions/merchantOrder.js","status":"completed_scoped","evidence":"Authorization, counter order decrement and cancellation restore chain reviewed."}
+{"path":"functions/index.js","status":"completed_scoped","evidence":"publicStock sanitizer, visibility filter, reconcile/materialize merge semantics and cancellation audit trigger reviewed."}
+{"path":"functions/scripts/backfillPublicCatalog.js","status":"completed_scoped","evidence":"Product visibility, public projection and overwrite semantics reviewed."}
+{"path":"firestore.rules","status":"completed_scoped","evidence":"Product create/update tenant fields and inventory movement ACLs reviewed."}

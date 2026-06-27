@@ -1,0 +1,6 @@
+{"path":"functions/shared/inventory.js","area":"inventory core","preview":"normalization, decrement, restore, movements"}
+{"path":"functions/publicOrder.js","area":"public order entrypoint","preview":"public product lookup, pricing, transaction integration"}
+{"path":"functions/merchantOrder.js","area":"merchant order entrypoints","preview":"counter order decrement and cancellation restore"}
+{"path":"functions/index.js","area":"public catalog","preview":"publicStock sanitization and materialization"}
+{"path":"functions/scripts/backfillPublicCatalog.js","area":"catalog backfill","preview":"public product sanitization"}
+{"path":"firestore.rules","area":"tenant boundary support","preview":"product write scope and movement ACLs"}

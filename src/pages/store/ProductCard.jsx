@@ -26,7 +26,7 @@ import {
   shouldShowProductInStorefront,
   canAddProductToCart,
   isProductUnavailable,
-  hasOutOfStock,
+  getPublicStockStatus,
 } from '../../utils/productStatus'
 import { getProductSchedulingBadges } from '../../utils/publicScheduling'
 
@@ -382,8 +382,11 @@ function ProductCard({
   // canAdd: pode adicionar ao carrinho? (considera isAvailable e stock)
   const canAdd = shouldShow && canAddProductToCart(product)
   // flags de UX
+  // stockStatus: usa publicStock do catálogo (nunca expõe quantity)
+  const stockStatus = getPublicStockStatus(product)
+  const outOfStock = shouldShow && stockStatus === 'sold_out'
+  const lowStock = shouldShow && stockStatus === 'low_stock'
   const unavailable = shouldShow && isProductUnavailable(product)
-  const outOfStock = shouldShow && hasOutOfStock(product)
   const hasOptions = hasProductOptions(product)
 
   const price = getProductPrice(product)
@@ -416,11 +419,6 @@ function ProductCard({
     imageTransformOptions
   )
 
-  const lowStock =
-    product?.stock !== undefined &&
-    Number(product.stock) > 0 &&
-    Number(product.stock) <= 5
-
   const topBadges = (() => {
     const badges = []
 
@@ -437,6 +435,13 @@ function ProductCard({
         label: 'Esgotado',
         icon: FiInfo,
         className: 'bg-gray-100 text-gray-600 ring-gray-200',
+      }))
+    } else if (lowStock) {
+      badges.push(makeCardBadge({
+        id: 'low-stock',
+        label: 'Últimas unidades',
+        icon: FiInfo,
+        className: 'bg-amber-50 text-amber-700 ring-amber-200',
       }))
     } else if (unavailable) {
       badges.push(makeCardBadge({

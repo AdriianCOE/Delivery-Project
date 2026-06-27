@@ -1,4 +1,4 @@
-﻿const {
+const {
     onDocumentCreated,
     onDocumentWritten,
     onDocumentUpdated,
@@ -41,6 +41,10 @@ const {
   updateStoreTableHandler,
   archiveStoreTableHandler,
 } = require('./storeTables')
+const {
+  computePublicStock,
+  shouldHideWhenSoldOut,
+} = require('./shared/inventory')
 const {
   getEffectivePlan,
   getStorePlanLimit,
@@ -676,8 +680,10 @@ const PUBLIC_PRODUCT_FIELDS = [
   'showInStorefront', 'acceptsCoupons', 'acceptsCoupon', 'couponEligible', 'showCouponBadge', 'isFeatured',
   'isPopular', 'isPromotion', 'isPromotional',
   'promotion', 'extras', 'addons', 'optionGroups', 'additionalOptions', 'variations',
-  'unit', 'tags', 'availableDays', 'availability', 'stock', 'preparationTime', 'serving',
+  'unit', 'tags', 'availableDays', 'availability', 'preparationTime', 'serving',
   'visualBadges', 'scheduling',
+  // NOTA: 'stock' foi removido intencionalmente. Em seu lugar, 'publicStock' é calculado
+  // em sanitizePublicProduct e nunca expõe stock.quantity ao público.
 ]
 
 const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
@@ -977,7 +983,7 @@ function sanitizePublicStore(data) {
 }
 
 function publicProductIsVisible(data) {
-  return isPublicItemVisible(data)
+  return isPublicItemVisible(data) && !shouldHideWhenSoldOut(data?.stock)
 }
 
 const PUBLIC_VISUAL_BADGE_LABELS = {
@@ -1203,6 +1209,12 @@ function sanitizePublicProduct(data, storeData = {}) {
   product.additionalOptions = sanitizePublicExtras(data?.additionalOptions)
   product.variations = sanitizePublicExtras(data?.variations)
 
+  // Estoque público: nunca expor stock.quantity diretamente
+  // publicStock contem apenas: { enabled, status, soldOutBehavior }
+  product.publicStock = computePublicStock(data?.stock)
+  // Garantir que o campo stock (legado ou objeto interno) NÃO seja exposto no catálogo público
+  delete product.stock
+
   return product
 }
 
@@ -1392,7 +1404,9 @@ function isPublicItemVisible(item) {
     item?.active !== false &&
     item?.isVisible !== false &&
     item?.visible !== false &&
-    item?.showInStorefront !== false
+    item?.showInStorefront !== false &&
+    // Ocultar produto esgotado quando soldOutBehavior === 'hide'
+    !shouldHideWhenSoldOut(item?.stock)
 }
 
 async function loadPublicSubcollection(storeRecord, subcollection, sanitizePublic) {

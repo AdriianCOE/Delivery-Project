@@ -23,19 +23,28 @@ const {
   orderRequiresMercadoPagoOnline,
 } = require('./shared/mercadoPagoOrders')
 const { deriveBillingAccessState, hasPlanFeature } = require('./shared/planAccess')
+const {
+  InventoryError,
+  aggregateStockItems,
+  getStockQuantity,
+  isStockOrderable,
+  validateStockQuantity,
+  decrementStockInTransaction,
+} = require('./shared/inventory')
 
 class PublicOrderError extends Error {
-  constructor(code, message) {
+  constructor(code, message, details = undefined) {
     super(message)
     this.code = code
+    this.details = details
   }
 }
 
 const DEFAULT_SCHEDULED_SLOT_CAPACITY = 20
 const MAX_SCHEDULED_SLOT_CAPACITY = 500
 
-function fail(code, message) {
-  throw new PublicOrderError(code, message)
+function fail(code, message, details = undefined) {
+  throw new PublicOrderError(code, message, details)
 }
 
 function isLegacyAsaasOrdersEnabled() {
@@ -455,8 +464,8 @@ function productIsOrderable(product) {
   if (product.paused === true) return false
   if (product.isAvailable === false || product.available === false) return false
 
-  const stock = product.stock
-  if (stock !== undefined && stock !== null && stock !== '' && Number(stock) <= 0) return false
+  // Compatibilidade com stock legado (número) e novo formato (objeto)
+  if (!isStockOrderable(product.stock)) return false
 
   return true
 }
@@ -810,12 +819,23 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
   let subtotalCents = 0
   const items = []
   const schedulingProducts = []
+  const stockItems = []
 
   for (const item of inputItems) {
     const product = await getProduct(db, item.productId, storeKeys)
 
     if (!product || !productBelongsToStore(product, storeKeys)) {
       fail('failed-precondition', 'Produto nao pertence a loja.')
+    }
+
+    const stockErr = validateStockQuantity(product.stock, item.quantity, product.name)
+    if (stockErr) {
+      fail('failed-precondition', stockErr, {
+        code: (getStockQuantity(product.stock) || 0) <= 0
+          ? 'stock_unavailable'
+          : 'stock_insufficient',
+        productId: product.id,
+      })
     }
 
     if (!productIsOrderable(product)) {
@@ -876,10 +896,30 @@ async function buildServerOrderItems(db, rawItems, storeKeys) {
       total: centsToMoney(totalCents),
       totalCents,
     })
+
+    // Todos os produtos são candidatos: o estado definitivo do estoque é relido na transaction.
+    stockItems.push({
+      productId: product.id,
+      productName: sanitizeText(product.name || 'Produto', 120),
+      quantity: item.quantity,
+      storeId: String(
+        product.storeId ||
+        product.storeDocId ||
+        product.storeSlug ||
+        storeKeys[0] ||
+        ''
+      ),
+    })
   }
 
-  return { items, subtotalCents, schedulingProducts }
+  return {
+    items,
+    subtotalCents,
+    schedulingProducts,
+    stockItems: aggregateStockItems(stockItems),
+  }
 }
+
 
 function buildFirestoreSchedulingFields(admin, decision) {
   const toTimestamp = (value) => value ? admin.firestore.Timestamp.fromDate(value) : null
@@ -914,7 +954,7 @@ function getScheduledSlotCapacity(store) {
   return DEFAULT_SCHEDULED_SLOT_CAPACITY
 }
 
-async function reserveScheduledSlotInTransaction({
+async function prepareScheduledSlotReservationInTransaction({
   db,
   admin,
   transaction,
@@ -935,28 +975,29 @@ async function reserveScheduledSlotInTransaction({
     fail('failed-precondition', 'Este horario acabou de lotar. Escolha outro horario.')
   }
 
-  transaction.set(slotRef, {
-    storeId,
-    slotKey: schedulingDecision.scheduledSlotKey,
-    scheduledDateKey: schedulingDecision.scheduledDateKey,
-    scheduledTimeLabel: schedulingDecision.scheduledTimeLabel,
-    deliveryType: String(schedulingDecision.scheduledSlotKey || '').split('_').pop() || '',
-    capacity,
-    activeOrderCount: admin.firestore.FieldValue.increment(1),
-    orderIds: admin.firestore.FieldValue.arrayUnion(orderRef.id),
-    scheduledFor: schedulingDecision.scheduledFor
-      ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledFor)
-      : null,
-    scheduledWindowEnd: schedulingDecision.scheduledWindowEnd
-      ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledWindowEnd)
-      : null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    ...(slotSnapshot.exists ? {} : {
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    }),
-  }, { merge: true })
-
-  return slotRef
+  return {
+    ref: slotRef,
+    data: {
+      storeId,
+      slotKey: schedulingDecision.scheduledSlotKey,
+      scheduledDateKey: schedulingDecision.scheduledDateKey,
+      scheduledTimeLabel: schedulingDecision.scheduledTimeLabel,
+      deliveryType: String(schedulingDecision.scheduledSlotKey || '').split('_').pop() || '',
+      capacity,
+      activeOrderCount: admin.firestore.FieldValue.increment(1),
+      orderIds: admin.firestore.FieldValue.arrayUnion(orderRef.id),
+      scheduledFor: schedulingDecision.scheduledFor
+        ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledFor)
+        : null,
+      scheduledWindowEnd: schedulingDecision.scheduledWindowEnd
+        ? admin.firestore.Timestamp.fromDate(schedulingDecision.scheduledWindowEnd)
+        : null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(slotSnapshot.exists ? {} : {
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }),
+    },
+  }
 }
 
 async function releaseScheduledSlotInTransaction({
@@ -1559,7 +1600,7 @@ function createPublicOrderHandler({
         }
       }
 
-      const { items, subtotalCents, schedulingProducts } = await buildServerOrderItems(db, input.items, storeKeys)
+      const { items, subtotalCents, schedulingProducts, stockItems } = await buildServerOrderItems(db, input.items, storeKeys)
 
       if (subtotalCents <= 0 || subtotalCents > maxOrderCents) {
         fail('failed-precondition', 'Subtotal do pedido invalido.')
@@ -1816,6 +1857,57 @@ function createPublicOrderHandler({
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }
 
+        const scheduledSlotReservation = await prepareScheduledSlotReservationInTransaction({
+          db,
+          admin,
+          transaction,
+          store: liveStore,
+          storeId: storeDocId,
+          orderRef,
+          schedulingDecision,
+        })
+
+        // Baixa de estoque atômica dentro da transação
+        let inventoryDecrement = { decremented: false, movementIds: [] }
+        if (stockItems.length > 0) {
+          try {
+            const invResult = await decrementStockInTransaction({
+              db,
+              admin,
+              transaction,
+              items: stockItems,
+              orderId: orderRef.id,
+              storeId: storeDocId,
+              createdBy: 'system',
+              now: admin.firestore.FieldValue.serverTimestamp(),
+            })
+            inventoryDecrement = {
+              decremented: invResult.decremented,
+              movementIds: invResult.movementIds || [],
+              items: invResult.items || [],
+            }
+          } catch (stockError) {
+            if (stockError instanceof InventoryError) {
+              fail('failed-precondition', stockError.message, {
+                code: stockError.code,
+                productId: stockError.productId || null,
+              })
+            }
+            throw stockError
+          }
+        }
+
+        if (inventoryDecrement.decremented) {
+          orderPayload.inventory = {
+            decremented: true,
+            decrementedAt: admin.firestore.FieldValue.serverTimestamp(),
+            restored: false,
+            restoredAt: null,
+            movements: inventoryDecrement.movementIds,
+            items: inventoryDecrement.items,
+          }
+        }
+
         transaction.set(rateLimitRef, {
           count: newCount,
           windowStart: newWindowStart,
@@ -1830,15 +1922,13 @@ function createPublicOrderHandler({
           }, { merge: true })
         }
 
-        await reserveScheduledSlotInTransaction({
-          db,
-          admin,
-          transaction,
-          store: liveStore,
-          storeId: storeDocId,
-          orderRef,
-          schedulingDecision,
-        })
+        if (scheduledSlotReservation) {
+          transaction.set(
+            scheduledSlotReservation.ref,
+            scheduledSlotReservation.data,
+            { merge: true }
+          )
+        }
 
         transaction.set(orderRef, orderPayload)
 
@@ -2036,7 +2126,7 @@ function createPublicOrderHandler({
       }
     } catch (error) {
       if (error instanceof PublicOrderError) {
-        throw new HttpsError(error.code, error.message)
+        throw new HttpsError(error.code, error.message, error.details)
       }
       throw error
     }

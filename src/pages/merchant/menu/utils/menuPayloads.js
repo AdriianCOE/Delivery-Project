@@ -39,6 +39,13 @@ export const EMPTY_PRODUCT_FORM = {
     blockedDates: [],
     prepaymentPolicy: 'store_default',
   },
+  stock: {
+    enabled: false,
+    quantity: '0',
+    lowStockThreshold: '5',
+    soldOutBehavior: 'show_sold_out',
+    allowBackorder: false,
+  },
 }
 
 export const STATUS_FILTERS = [
@@ -330,4 +337,80 @@ export function cleanObject(obj) {
     if (v !== undefined) result[k] = v
   }
   return result
+}
+
+const SOLD_OUT_BEHAVIORS = ['show_sold_out', 'hide']
+
+/**
+ * Normaliza o campo stock de um produto Firestore para o estado do formulário do lojista.
+ * Compatível com stock legado (número) e novo formato (objeto).
+ * @param {unknown} rawStock
+ */
+export function normalizeStockForForm(rawStock) {
+  const isLegacyNumeric = (
+    (typeof rawStock === 'number' && Number.isFinite(rawStock)) ||
+    (typeof rawStock === 'string' && rawStock.trim() !== '' && Number.isFinite(Number(rawStock)))
+  )
+
+  if (isLegacyNumeric) {
+    return {
+      enabled: true,
+      quantity: String(Math.max(0, Math.floor(Number(rawStock)))),
+      lowStockThreshold: '5',
+      soldOutBehavior: 'show_sold_out',
+      allowBackorder: false,
+    }
+  }
+
+  if (rawStock !== null && typeof rawStock === 'object' && !Array.isArray(rawStock)) {
+    const threshold = Number(rawStock.lowStockThreshold)
+    return {
+      enabled: rawStock.enabled === true,
+      quantity: rawStock.enabled === true
+        ? String(Math.max(0, Math.floor(Number(rawStock.quantity) || 0)))
+        : '0',
+      lowStockThreshold: String(
+        Number.isFinite(threshold) ? Math.max(0, Math.floor(threshold)) : 5
+      ),
+      soldOutBehavior: SOLD_OUT_BEHAVIORS.includes(rawStock.soldOutBehavior)
+        ? rawStock.soldOutBehavior
+        : 'show_sold_out',
+      allowBackorder: false,
+    }
+  }
+
+  return {
+    enabled: false,
+    quantity: '0',
+    lowStockThreshold: '5',
+    soldOutBehavior: 'show_sold_out',
+    allowBackorder: false,
+  }
+}
+
+/**
+ * Sanitiza o estado do formulário para salvar no Firestore.
+ * @param {{ enabled: boolean, quantity: string|number, lowStockThreshold: string|number, soldOutBehavior: string, allowBackorder: boolean }} formStock
+ * @param {string} updatedBy
+ */
+export function sanitizeStockForSave(formStock, updatedBy) {
+  const enabled = formStock?.enabled === true
+  const quantity = Math.max(0, Math.floor(Number(formStock?.quantity) || 0))
+  const threshold = Number(formStock?.lowStockThreshold)
+  const lowStockThreshold = Number.isFinite(threshold)
+    ? Math.max(0, Math.floor(threshold))
+    : 5
+  const soldOutBehavior = SOLD_OUT_BEHAVIORS.includes(formStock?.soldOutBehavior)
+    ? formStock.soldOutBehavior
+    : 'show_sold_out'
+
+  return {
+    enabled,
+    quantity: enabled ? quantity : 0,
+    lowStockThreshold,
+    soldOutBehavior,
+    allowBackorder: false,
+    updatedBy: String(updatedBy || '').slice(0, 128),
+    // O drawer ainda recebe apenas a loja; usa ownerId/ownerUid até o uid autenticado virar prop.
+  }
 }

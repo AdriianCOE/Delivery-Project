@@ -1,0 +1,6 @@
+{"path":"functions/shared/inventory.js","area":"inventory core","reason":"Primary state transition and tenant control"}
+{"path":"functions/publicOrder.js","area":"public order entrypoint","reason":"Anonymous source and server-side order construction"}
+{"path":"functions/merchantOrder.js","area":"merchant order entrypoints","reason":"Authenticated counter sale and cancellation restore"}
+{"path":"functions/index.js","area":"public catalog","reason":"Public data exposure and materialization"}
+{"path":"functions/scripts/backfillPublicCatalog.js","area":"catalog backfill","reason":"Bulk public data projection"}
+{"path":"firestore.rules","area":"tenant boundary support","reason":"Client product writes can shape tenant identifiers"}

@@ -13,6 +13,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FiAlertTriangle,
+  FiArchive,
   FiCalendar,
   FiCheck,
   FiCoffee,
@@ -58,10 +59,12 @@ import {
   normalizeVisualBadgesForForm,
   normalizeProductOptionGroupsForForm,
   normalizeProductSchedulingForForm,
+  normalizeStockForForm,
   sanitizeProductServingForSave,
   sanitizeVisualBadgesForSave,
   sanitizeOptionGroupsForSave,
   sanitizeProductSchedulingForSave,
+  sanitizeStockForSave,
   cleanObject,
 } from '../utils/menuPayloads'
 import { parseCurrency, formatMoney, moneyToInput } from '../utils/menuFormatters'
@@ -679,6 +682,7 @@ const DRAWER_SECTIONS = [
   { id: 'image', label: 'Imagem', icon: FiImage },
   { id: 'status', label: 'Status', icon: FiPackage },
   { id: 'options', label: 'Opções', icon: FiLayers },
+  { id: 'stock', label: 'Estoque', icon: FiArchive },
   { id: 'scheduling', label: 'Encomenda', icon: FiCalendar },
 ]
 
@@ -740,6 +744,7 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         optionGroups: normalizeProductOptionGroupsForForm(editingProduct),
         extras: editingProduct.extras || [],
         scheduling: normalizeProductSchedulingForForm(editingProduct.scheduling),
+        stock: normalizeStockForForm(editingProduct.stock),
       })
     } else {
       setForm({
@@ -919,6 +924,11 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
       })
       if (schedulingAllowed) {
         data.scheduling = sanitizeProductSchedulingForSave(form.scheduling)
+      }
+      // Estoque: sempre salvar (não depende de plano)
+      data.stock = {
+        ...sanitizeStockForSave(form.stock, store?.ownerId || store?.ownerUid || ''),
+        updatedAt: serverTimestamp(),
       }
 
       if (editingProduct?.id) {
@@ -1459,6 +1469,119 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
                   />
                 </div>
               )}
+
+              {/* ==== SEÇÃO ESTOQUE ==== */}
+              {section === 'stock' && (
+                <div className="space-y-5">
+                  <InfoCallout>
+                    Controle as quantidades disponíveis deste produto. O cliente verá &quot;Esgotado&quot; ou o produto ficará oculto automaticamente.
+                  </InfoCallout>
+
+                  <SectionCard title="Controle de estoque" description="Ative para limitar quantidades vendidas deste produto." icon={FiArchive}>
+                    <label className="flex cursor-pointer items-center gap-4 rounded-2xl border border-orange-100 bg-orange-50/40 p-4 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex-1">
+                        <p className="text-sm font-black text-slate-800 dark:text-slate-100">Controlar estoque deste produto</p>
+                        <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          Quando ativo, pedidos são bloqueados ao esgotar.
+                        </p>
+                      </div>
+                      <button
+                        id="product-stock-enabled"
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(form.stock?.enabled)}
+                        onClick={() => setForm((prev) => ({
+                          ...prev,
+                          stock: { ...(prev.stock || {}), enabled: !prev.stock?.enabled },
+                        }))}
+                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-[#f97316] focus:ring-offset-2 ${
+                          form.stock?.enabled
+                            ? 'bg-[#f97316]'
+                            : 'bg-slate-200 dark:bg-slate-700'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                            form.stock?.enabled ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </label>
+
+                    {form.stock?.enabled && (
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <FieldLabel>Quantidade em estoque</FieldLabel>
+                          <input
+                            id="product-stock-quantity"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={form.stock?.quantity ?? '0'}
+                            onChange={(e) => setForm((prev) => ({
+                              ...prev,
+                              stock: { ...(prev.stock || {}), quantity: e.target.value },
+                            }))}
+                            className={ui.input}
+                            placeholder="Ex: 20"
+                          />
+                          <p className={ui.hint}>Número de unidades disponíveis agora.</p>
+                        </div>
+
+                        <div>
+                          <FieldLabel>Alerta de estoque baixo</FieldLabel>
+                          <input
+                            id="product-stock-threshold"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={form.stock?.lowStockThreshold ?? '5'}
+                            onChange={(e) => setForm((prev) => ({
+                              ...prev,
+                              stock: { ...(prev.stock || {}), lowStockThreshold: e.target.value },
+                            }))}
+                            className={ui.input}
+                            placeholder="Ex: 5"
+                          />
+                          <p className={ui.hint}>Exibe &quot;Últimas unidades&quot; quando igual ou abaixo deste número.</p>
+                        </div>
+                      </div>
+                    )}
+                  </SectionCard>
+
+                  {form.stock?.enabled && (
+                    <SectionCard title="Ao esgotar" description="O que fazer quando o estoque chegar a zero." icon={FiAlertTriangle}>
+                      <div className="grid gap-3">
+                        {[
+                          ['show_sold_out', 'Mostrar como esgotado', 'O produto aparece com badge "Esgotado" e não pode ser adicionado ao carrinho.'],
+                          ['hide', 'Ocultar da loja', 'O produto desaparece automaticamente da loja quando o estoque zera.'],
+                        ].map(([value, title, desc]) => {
+                          const active = (form.stock?.soldOutBehavior || 'show_sold_out') === value
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setForm((prev) => ({
+                                ...prev,
+                                stock: { ...(prev.stock || {}), soldOutBehavior: value },
+                              }))}
+                              className={`rounded-2xl border p-4 text-left transition-all ${
+                                active
+                                  ? 'border-orange-300 bg-orange-50 text-[#f97316] ring-4 ring-orange-100 dark:border-orange-500/50 dark:bg-orange-500/10 dark:ring-orange-500/15'
+                                  : 'border-orange-100 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/60 dark:border-white/10 dark:bg-[#1A1F2B] dark:text-slate-200 dark:hover:border-orange-500/30'
+                              }`}
+                            >
+                              <p className="text-sm font-black">{title}</p>
+                              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">{desc}</p>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </SectionCard>
+                  )}
+                </div>
+              )}
+
               {section === 'scheduling' && (
                 <div className="space-y-5">
                   <InfoCallout>

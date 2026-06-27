@@ -30,7 +30,7 @@ import {
 import { formatMoney, normalizeMoney } from '../utils/menuFormatters'
 import { STATUS_FILTERS, VISUAL_BADGE_OPTIONS } from '../utils/menuPayloads'
 import MenuEmptyState from './MenuEmptyState'
-import { hasOutOfStock } from '../../../../utils/productStatus'
+import { getPublicStockStatus, hasOutOfStock } from '../../../../utils/productStatus'
 import { getProductSchedulingBadges } from '../../../../utils/publicScheduling'
 import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
 
@@ -190,7 +190,14 @@ function ProductQuickInfo({ product }) {
   if (requiredOptionsPrice > 0) chips.push({ label: `Opções +${formatMoney(requiredOptionsPrice)}`, Icon: FiPackage })
   if (servingLabel) chips.push({ label: servingLabel, Icon: FiUsers })
   if (product.scheduling?.mode === 'asap_only') chips.push({ label: 'Somente imediato', Icon: FiCalendar })
-  if (product.stock !== undefined && product.stock !== null && product.stock !== '') chips.push({ label: `Estoque ${Number(product.stock)}`, Icon: FiPackage })
+  const stockStatus = getPublicStockStatus(product)
+  const stockLabel = {
+    not_tracked: 'Sem controle',
+    in_stock: 'Em estoque',
+    low_stock: 'Estoque baixo',
+    sold_out: 'Esgotado',
+  }[stockStatus]
+  if (stockLabel) chips.push({ label: stockLabel, Icon: FiPackage })
 
   if (chips.length === 0) return null
 

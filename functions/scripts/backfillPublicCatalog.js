@@ -8,6 +8,10 @@ const {
 const {
   sanitizePublicStorePayments,
 } = require('../shared/asaasOrders')
+const {
+  computePublicStock,
+  shouldHideWhenSoldOut,
+} = require('../shared/inventory')
 
 admin.initializeApp({
   projectId:
@@ -247,7 +251,8 @@ function isPublicProductData(data = {}) {
     data.active !== false &&
     data.isVisible !== false &&
     data.visible !== false &&
-    data.hidden !== true
+    data.hidden !== true &&
+    !shouldHideWhenSoldOut(data.stock)
 }
 
 function buildPublicCategory(data = {}, categoryId, storeId) {
@@ -379,7 +384,6 @@ function buildPublicProduct(data = {}, productId, storeId) {
       'tags',
       'availableDays',
       'availability',
-      'stock',
       'updatedAt',
       'createdAt',
     ]),
@@ -394,6 +398,7 @@ function buildPublicProduct(data = {}, productId, storeId) {
 
   const scheduling = sanitizePublicProductScheduling(data.scheduling)
   if (scheduling) product.scheduling = scheduling
+  product.publicStock = computePublicStock(data.stock)
 
   const serving = sanitizePublicProductServing(data.serving, data)
   if (serving.enabled) {

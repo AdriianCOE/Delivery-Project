@@ -1,5 +1,10 @@
 const { onCall } = require('firebase-functions/v2/https')
 const { buildServerOrderItems, PublicOrderError } = require('./publicOrder')
+const {
+  InventoryError,
+  decrementStockInTransaction,
+  restoreStockInTransaction,
+} = require('./shared/inventory')
 
 const MERCHANT_ORDER_STATUS_FLOW = ['pendente', 'confirmado', 'preparando', 'pronto', 'em_rota', 'entregue', 'cancelado']
 const MERCHANT_ORDER_STATUSES = new Set(MERCHANT_ORDER_STATUS_FLOW)
@@ -143,7 +148,7 @@ function isScheduledPreparationWindowOpen(orderData, nowMs = Date.now()) {
   return nowMs >= preparationStartsAtMs
 }
 
-async function releaseScheduledSlotReservationIfCanceled({
+async function prepareScheduledSlotReleaseIfCanceled({
   db,
   admin,
   transaction,
@@ -152,21 +157,24 @@ async function releaseScheduledSlotReservationIfCanceled({
   previousStatus,
   nextStatus,
 }) {
-  if (nextStatus !== 'cancelado' || previousStatus === 'cancelado' || orderData?.scheduledSlotReleasedAt) return
+  if (nextStatus !== 'cancelado' || previousStatus === 'cancelado' || orderData?.scheduledSlotReleasedAt) return null
 
   const scheduledSlotKey = String(orderData?.scheduledSlotKey || '').trim()
-  if (!scheduledSlotKey) return
+  if (!scheduledSlotKey) return null
 
   const slotRef = db.collection('scheduledOrderSlots').doc(scheduledSlotKey)
   const slotSnapshot = await transaction.get(slotRef)
-  if (!slotSnapshot.exists) return
+  if (!slotSnapshot.exists) return null
 
   const currentCount = Number(slotSnapshot.data()?.activeOrderCount || 0)
-  transaction.set(slotRef, {
-    activeOrderCount: Math.max(0, currentCount - 1),
-    orderIds: admin.firestore.FieldValue.arrayRemove(orderId),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true })
+  return {
+    ref: slotRef,
+    data: {
+      activeOrderCount: Math.max(0, currentCount - 1),
+      orderIds: admin.firestore.FieldValue.arrayRemove(orderId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+  }
 }
 
 function getUserStoreKeysFromProfile(userData) {
@@ -678,7 +686,7 @@ function createMerchantOrderFunctions({
           throw new HttpsError('invalid-argument', 'Acao invalida.')
         }
 
-        await releaseScheduledSlotReservationIfCanceled({
+        const scheduledSlotRelease = await prepareScheduledSlotReleaseIfCanceled({
           db,
           admin,
           transaction,
@@ -688,7 +696,37 @@ function createMerchantOrderFunctions({
           nextStatus,
         })
 
-        transaction.update(orderRef, patch)
+        // Restauração de estoque ao cancelar (idempotente via inventory.restored)
+        let inventoryRestorePatch = null
+        if (nextStatus === 'cancelado') {
+          try {
+            inventoryRestorePatch = await restoreStockInTransaction({
+              db,
+              admin,
+              transaction,
+              orderRef,
+              orderData,
+              restoredBy: uid,
+              reason: `Cancelamento pelo lojista: ${data.cancellationReason || ''}`.trim(),
+              now,
+            })
+          } catch (restoreError) {
+            logger?.error?.('[updateMerchantOrder] stock restore failed; cancel aborted', {
+              orderId,
+              error: restoreError?.message || String(restoreError),
+            })
+            throw restoreError
+          }
+        }
+
+        if (scheduledSlotRelease) {
+          transaction.set(scheduledSlotRelease.ref, scheduledSlotRelease.data, { merge: true })
+        }
+
+        transaction.update(orderRef, {
+          ...patch,
+          ...(inventoryRestorePatch || {}),
+        })
 
         return {
           previousStatus: normalizeMerchantOrderStatus(orderData?.status),
@@ -796,6 +834,7 @@ function createMerchantOrderFunctions({
       let builtItems = []
       let subtotalCents = 0
       let schedulingProducts = []
+      let stockItems = []
 
       try {
         const storeKeys = uniqueTruthy([storeId, storeSlug])
@@ -803,9 +842,10 @@ function createMerchantOrderFunctions({
         builtItems = serverResult.items
         subtotalCents = serverResult.subtotalCents
         schedulingProducts = serverResult.schedulingProducts
+        stockItems = serverResult.stockItems
       } catch (err) {
         if (err instanceof PublicOrderError) {
-          throw new HttpsError(err.code || 'failed-precondition', err.message)
+          throw new HttpsError(err.code || 'failed-precondition', err.message, err.details)
         }
         throw err
       }
@@ -900,7 +940,43 @@ function createMerchantOrderFunctions({
         statusUpdatedTo: 'confirmado',
       }
 
-      await orderRef.set(orderPayload)
+      await db.runTransaction(async (transaction) => {
+        if (stockItems.length > 0) {
+          try {
+            const inventoryResult = await decrementStockInTransaction({
+              db,
+              admin,
+              transaction,
+              items: stockItems,
+              orderId,
+              storeId,
+              createdBy: uid,
+              now,
+            })
+
+            if (inventoryResult.decremented) {
+              orderPayload.inventory = {
+                decremented: true,
+                decrementedAt: now,
+                restored: false,
+                restoredAt: null,
+                movements: inventoryResult.movementIds,
+                items: inventoryResult.items,
+              }
+            }
+          } catch (stockError) {
+            if (stockError instanceof InventoryError) {
+              throw new HttpsError('failed-precondition', stockError.message, {
+                code: stockError.code,
+                productId: stockError.productId || null,
+              })
+            }
+            throw stockError
+          }
+        }
+
+        transaction.set(orderRef, orderPayload)
+      })
 
       // 8. Audit log
       try {

@@ -666,6 +666,13 @@ function validPublicOrderCreate(orderId) {
         allow get, list: if canManageStoreId(storeId);
         allow create, update, delete: if false;
       }
+
+      // Movimentações de estoque — geradas pelo Admin SDK nas Cloud Functions.
+      // Lojista pode ler; nenhum cliente pode criar ou alterar diretamente.
+      match /inventoryMovements/{movementId} {
+        allow get, list: if canManageStoreId(storeId);
+        allow create, update, delete: if false;
+      }
     }
 
     match /publicStores/{storeId} {

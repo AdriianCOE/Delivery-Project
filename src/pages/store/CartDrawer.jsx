@@ -149,6 +149,20 @@ function isMercadoPagoCheckoutCreationFailed(order = {}) {
 
 function getCheckoutSubmitErrorMessage(error, paymentMethod) {
   const message = String(error?.message || '').trim()
+  const code = String(error?.code || '').toLowerCase()
+  const detailsCode = String(error?.details?.code || '').toLowerCase()
+  const isStockError = (
+    ['stock_unavailable', 'stock_insufficient'].includes(detailsCode) ||
+    ['stock_unavailable', 'stock_insufficient'].includes(code) ||
+    (
+      code.includes('failed-precondition') &&
+      /estoque|esgotado|produto indisponível|produto indisponivel/i.test(message)
+    )
+  )
+
+  if (isStockError) {
+    return 'Um ou mais produtos ficaram indisponíveis. Atualize o carrinho e tente novamente.'
+  }
 
   if (
     paymentMethod === 'mercadopago_online' &&
