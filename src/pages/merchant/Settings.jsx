@@ -57,6 +57,7 @@ const DEFAULT_THEME = '#f97316'
 // ativação quando a loja estiver bloqueada, deletada ou billingBlocked.
 
 import FloatingToast from '../../components/ui/FloatingToast'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 
 const DAYS_OF_WEEK = [
   { id: 'sun', short: 'Dom', label: 'Domingo' },
@@ -1185,6 +1186,7 @@ function ImageUploadField({
   onSelectFromLibrary,
   onRemove,
 }) {
+  const { notify } = useConfirmDialog()
   const [isDraggingFile, setIsDraggingFile] = useState(false)
 
   const normalizedLabel = String(label || '').toLowerCase()
@@ -1279,7 +1281,7 @@ function ImageUploadField({
     const isImage = file.type?.startsWith('image/')
 
     if (!isImage) {
-      window.alert('Envie apenas imagens nos formatos PNG, JPG, JPEG ou WEBP.')
+      notify({ type: 'error', message: 'Envie apenas imagens nos formatos PNG, JPG, JPEG ou WEBP.' })
       return
     }
 

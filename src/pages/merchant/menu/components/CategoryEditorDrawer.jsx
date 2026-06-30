@@ -2,17 +2,11 @@
 // Modal de criação/edição de categoria (centrado na tela).
 
 import { useEffect, useState } from 'react'
-import {
-  addDoc,
-  collection,
-  doc,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore'
 import { AnimatePresence, motion } from 'motion/react'
 import { FiCheck, FiLoader, FiX } from 'react-icons/fi'
 
-import { db } from '../../../../services/firebase'
+import { saveMenuItem } from '../../../../services/menuManagement'
+import { getCallableErrorMessage } from '../../../../utils/callableError'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
 import { cleanObject } from '../utils/menuPayloads'
 
@@ -64,25 +58,32 @@ export default function CategoryEditorDrawer({ open, onClose, editingCategory, s
         description: form.description.trim().slice(0, 300),
         isActive:    Boolean(form.isActive),
         isDeleted:   false,
-        updatedAt:   serverTimestamp(),
       })
 
       if (editingCategory?.id) {
         if (editingCategory.isVisible !== undefined) data.isVisible = editingCategory.isVisible
-        await updateDoc(doc(db, 'categories', editingCategory.id), data)
+        await saveMenuItem({
+          storeId,
+          entityType: 'category',
+          entityId: editingCategory.id,
+          payload: data,
+        })
         onToast({ type: 'success', message: 'Categoria atualizada!' })
       } else {
         data.order = nextOrder
         data.position = nextOrder
         data.isVisible = true
-        data.createdAt = serverTimestamp()
-        await addDoc(collection(db, 'categories'), data)
+        await saveMenuItem({
+          storeId,
+          entityType: 'category',
+          payload: data,
+        })
         onToast({ type: 'success', message: 'Categoria criada!' })
       }
       onClose()
     } catch (err) {
       console.error('[CategoryEditorDrawer] handleSave:', err)
-      onToast({ type: 'error', message: 'Erro ao salvar categoria.' })
+      onToast({ type: 'error', message: getCallableErrorMessage(err, 'Erro ao salvar categoria.') })
     } finally {
       setSaving(false)
     }

@@ -12,6 +12,7 @@ import { FiImage, FiLoader, FiTrash2, FiX } from 'react-icons/fi'
 
 import { db, functions } from '../../services/firebase'
 import { getCloudinaryImageUrl } from '../../utils/cloudinaryImages'
+import { useConfirmDialog } from '../ui/ConfirmDialogProvider'
 
 function formatDate(value) {
   const date = value?.toDate?.() || (value ? new Date(value) : null)
@@ -40,6 +41,7 @@ export default function MediaLibraryPicker({
   className = '',
   children,
 }) {
+  const { confirm } = useConfirmDialog()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -108,9 +110,12 @@ export default function MediaLibraryPicker({
 
   const handleDelete = useCallback(
     async (item) => {
-      const confirmed = window.confirm(
-        'Antes de excluir, confirme que esta imagem não está sendo usada em produtos, logo ou banner. Esta ação remove a imagem da biblioteca da loja.'
-      )
+      const confirmed = await confirm({
+        title: 'Excluir imagem?',
+        description: 'Confirme antes que ela não está sendo usada em produtos, logo ou banner.',
+        confirmLabel: 'Excluir imagem',
+        tone: 'danger',
+      })
 
       if (!confirmed) return
 
@@ -134,7 +139,7 @@ export default function MediaLibraryPicker({
         setDeletingId('')
       }
     },
-    [onDeleted, storeId]
+    [confirm, onDeleted, storeId]
   )
 
   useEffect(() => {

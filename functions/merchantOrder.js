@@ -433,15 +433,6 @@ function buildMerchantStatusPatch({ HttpsError, orderData, nextStatus, uid, reas
     }
   }
 
-  if (nextStatus === 'entregue') {
-    patch['payment.status'] = 'paid'
-    patch['payment.confirmedAt'] = now
-    patch['payment.paidAt'] = now
-    patch['payment.confirmedBy'] = uid
-    patch.paymentStatus = 'paid'
-    patch.paidAt = now
-  }
-
   return patch
 }
 
@@ -1012,5 +1003,6 @@ function createMerchantOrderFunctions({
 }
 
 module.exports = {
+  buildMerchantStatusPatch,
   createMerchantOrderFunctions,
 }

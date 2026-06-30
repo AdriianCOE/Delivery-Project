@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import SubscriptionStatusBadge from '../../components/billing/SubscriptionStatusBadge'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 import {
   formatBillingDate,
   formatPlanName,
@@ -50,6 +51,7 @@ function RequestStatusBadge({ status }) {
 }
 
 export default function AdminSubscriptionsPage() {
+  const { notify } = useConfirmDialog()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -175,7 +177,7 @@ export default function AdminSubscriptionsPage() {
   const handleSaveRequest = async () => {
     if (!editingRequest) return
     if (requiresAsaasDoneConfirmation && !hasAsaasDoneChecklist) {
-      alert('Confirme o checklist e informe uma nota de conclusão antes de marcar como concluída.')
+      notify({ type: 'warning', message: 'Confirme o checklist e informe uma nota de conclusão antes de marcar como concluída.' })
       return
     }
 
@@ -199,7 +201,7 @@ export default function AdminSubscriptionsPage() {
       setEditingRequest(null)
     } catch (err) {
       console.error('Error updating request', err)
-      alert(err.message || 'Erro ao atualizar solicitação')
+      notify({ type: 'error', message: err.message || 'Erro ao atualizar solicitação' })
     } finally {
       setSavingRequest(false)
     }

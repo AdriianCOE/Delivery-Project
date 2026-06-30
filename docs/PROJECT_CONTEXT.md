@@ -29,7 +29,7 @@ Principais riscos ainda conhecidos:
 - Confirmar deploy/backfill/indexes antes do piloto.
 - App Check frontend opcional via `VITE_FIREBASE_APPCHECK_ENABLED=true` + `VITE_FIREBASE_APPCHECK_SITE_KEY`; ainda deve ser testado em monitor mode antes de enforcement.
 - CustomerDisplay lê `orders` completos em client autenticado; futuro ideal é `publicDisplays` sem PII.
-- Regra de `entregue` marcando pagamento como `paid` precisa ser entendida/documentada.
+- Status logístico `entregue` não confirma pagamento; pagamento só muda por fluxo financeiro explícito.
 - Bundle grande; usar lazy loading no pós-MVP.
 
 Decisões operacionais atuais:
@@ -369,6 +369,7 @@ functions/merchantOrder.js
 Função:
 
 - Muda status de pedido de forma auditada.
+- Mantém status logístico separado do status financeiro.
 - Usado por OrdersPage, KDS e outros fluxos merchant.
 - Não usar `updateDoc` direto em `orders`.
 

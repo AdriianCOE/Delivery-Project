@@ -50,6 +50,7 @@ import {
 } from 'react-icons/fi'
 import { db, functions } from '../../services/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 import {
   getDisplayStoreName,
   getMerchantDisplayLogoUrl,
@@ -342,6 +343,7 @@ function OrderTypeBadge({ order, t }) {
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
 function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark, now }) {
+  const { confirm } = useConfirmDialog()
   const normalizedStatus = normalizeKdsStatus(order.status)
   const cfg = STATUS_CFG[normalizedStatus] || STATUS_CFG.pendente
   const nextAction = getKdsNextAction(order, normalizedStatus, cfg)
@@ -377,7 +379,12 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark, now }) {
 
   const handleFinish = useCallback(async () => {
     if (loading) return
-    if (!window.confirm('Finalizar este pedido? Ele será removido da cozinha.')) return
+    const confirmed = await confirm({
+      title: 'Finalizar pedido?',
+      description: 'O pedido será marcado como entregue e removido da cozinha.',
+      confirmLabel: 'Finalizar pedido',
+    })
+    if (!confirmed) return
     setActionError('')
     setLoading(true)
     try {
@@ -388,7 +395,7 @@ function OrderCard({ order, onUpdateStatus, compact, isNew, t, isDark, now }) {
     } finally {
       setLoading(false)
     }
-  }, [order.id, loading, onUpdateStatus])
+  }, [confirm, order.id, loading, onUpdateStatus])
 
   const num = order.orderNumber || order.ticketNumber || order.number
     || `#${String(order.id).slice(-4).toUpperCase()}`

@@ -3,24 +3,28 @@
 // Encapsula resolução de storeId, fetch do store, e listeners de categories/products/coupons.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { httpsCallable } from 'firebase/functions'
 import {
   addDoc,
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '../../../../services/firebase'
+import { db, functions } from '../../../../services/firebase'
+import { saveMenuItem } from '../../../../services/menuManagement'
+import { getCallableErrorMessage } from '../../../../utils/callableError'
+import { useConfirmDialog } from '../../../../components/ui/ConfirmDialogProvider'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { buildStoreScopedPayload } from '../../../../utils/storeIdentity'
 import { cleanObject } from '../utils/menuPayloads'
 import { sanitizeCouponForSave } from '../utils/couponPayloads'
 
 export function useMenuManagementData() {
+  const { confirm } = useConfirmDialog()
   const { storeId: authStoreId, storeIds, userData, user, loading: authLoading } = useAuth()
 
   const [store,       setStore]       = useState(null)
@@ -175,9 +179,16 @@ export function useMenuManagementData() {
   // Handlers: Products
   const handleToggleProductField = useCallback(async (productId, field, currentValue, showToast) => {
     try {
-      await updateDoc(doc(db, 'products', productId), { [field]: !currentValue, updatedAt: serverTimestamp() })
-    } catch { showToast?.({ type: 'error', message: 'Erro ao atualizar produto.' }) }
-  }, [])
+      await saveMenuItem({
+        storeId,
+        entityType: 'product',
+        entityId: productId,
+        payload: { [field]: !currentValue },
+      })
+    } catch (error) {
+      showToast?.({ type: 'error', message: getCallableErrorMessage(error, 'Erro ao atualizar produto.') })
+    }
+  }, [storeId])
 
   const handleDuplicateProduct = useCallback(async (product, store, showToast) => {
     if (!storeId || !store) return
@@ -185,24 +196,38 @@ export function useMenuManagementData() {
       const scope = buildStoreScopedPayload(store)
       if (import.meta.env.DEV) console.log('[useMenuManagementData] Duplicando produto scope:', scope)
       const { id: _id, createdAt: _ca, ...rest } = product
-      await addDoc(collection(db, 'products'), cleanObject({
-        ...rest, ...scope,
-        name:      `${product.name} (cópia)`,
-        isDeleted: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }))
+      await saveMenuItem({
+        storeId,
+        entityType: 'product',
+        payload: cleanObject({
+          ...rest,
+          ...scope,
+          name: `${product.name} (cópia)`,
+          priceCents: Number.isInteger(product.priceCents)
+            ? product.priceCents
+            : Math.round(Number(product.price || 0) * 100),
+          isDeleted: false,
+        }),
+      })
       showToast?.({ type: 'success', message: 'Produto duplicado!' })
-    } catch { showToast?.({ type: 'error', message: 'Erro ao duplicar produto.' }) }
+    } catch (error) {
+      showToast?.({ type: 'error', message: getCallableErrorMessage(error, 'Erro ao duplicar produto.') })
+    }
   }, [storeId])
 
   const handleDeleteProduct = useCallback(async (productId, showToast) => {
-    if (!window.confirm('Excluir este produto? Ele ficará oculto mas pode ser recuperado pelo suporte.')) return
+    const confirmed = await confirm({
+      title: 'Excluir produto?',
+      description: 'Ele ficará oculto e só poderá ser recuperado pelo suporte.',
+      confirmLabel: 'Excluir produto',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await updateDoc(doc(db, 'products', productId), { isDeleted: true, deletedAt: serverTimestamp(), updatedAt: serverTimestamp() })
       showToast?.({ type: 'success', message: 'Produto excluído.' })
     } catch { showToast?.({ type: 'error', message: 'Erro ao excluir produto.' }) }
-  }, [])
+  }, [confirm])
 
   // Handlers: Categories
   const handleDeleteCategory = useCallback(async (category, productCountByCategory, showToast) => {
@@ -210,18 +235,31 @@ export function useMenuManagementData() {
       showToast?.({ type: 'error', message: 'Mova os produtos desta categoria antes de excluí-la.' })
       return
     }
-    if (!window.confirm(`Excluir a categoria "${category.name}"?`)) return
+    const confirmed = await confirm({
+      title: 'Excluir categoria?',
+      description: `A categoria "${category.name}" será removida do cardápio.`,
+      confirmLabel: 'Excluir categoria',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await updateDoc(doc(db, 'categories', category.id), { isDeleted: true, deletedAt: serverTimestamp(), updatedAt: serverTimestamp() })
       showToast?.({ type: 'success', message: 'Categoria excluída.' })
     } catch { showToast?.({ type: 'error', message: 'Erro ao excluir categoria.' }) }
-  }, [])
+  }, [confirm])
 
   const handleToggleCategoryActive = useCallback(async (catId, currentValue, showToast) => {
     try {
-      await updateDoc(doc(db, 'categories', catId), { isActive: !currentValue, updatedAt: serverTimestamp() })
-    } catch { showToast?.({ type: 'error', message: 'Erro ao atualizar categoria.' }) }
-  }, [])
+      await saveMenuItem({
+        storeId,
+        entityType: 'category',
+        entityId: catId,
+        payload: { isActive: !currentValue },
+      })
+    } catch (error) {
+      showToast?.({ type: 'error', message: getCallableErrorMessage(error, 'Erro ao atualizar categoria.') })
+    }
+  }, [storeId])
 
   const handleMoveCategoryOrder = useCallback(async (category, direction, sortedCategories, showToast) => {
     const idx     = sortedCategories.findIndex((c) => c.id === category.id)
@@ -293,7 +331,13 @@ export function useMenuManagementData() {
   }, [])
 
   const handleDeleteCoupon = useCallback(async (couponId, showToast) => {
-    if (!window.confirm('Tem certeza de que deseja arquivar/excluir este cupom?')) return
+    const confirmed = await confirm({
+      title: 'Arquivar cupom?',
+      description: 'O cupom deixará de ser aceito imediatamente.',
+      confirmLabel: 'Arquivar cupom',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await updateDoc(doc(db, 'coupons', couponId), {
         active: false,
@@ -306,7 +350,7 @@ export function useMenuManagementData() {
       console.error(err)
       showToast?.({ type: 'error', message: 'Erro ao arquivar o cupom.' })
     }
-  }, [])
+  }, [confirm])
 
   const handleSaveDeliveryFees = useCallback(async (newFees) => {
     if (!storeId) return false
@@ -323,9 +367,10 @@ export function useMenuManagementData() {
         }
       })
 
-      await updateDoc(doc(db, 'stores', storeId), {
-        deliveryFees: sanitized,
-        updatedAt: serverTimestamp(),
+      const updateStoreSettings = httpsCallable(functions, 'updateStoreSettings')
+      await updateStoreSettings({
+        storeId,
+        payload: { deliveryFees: sanitized },
       })
       return true
     } catch (err) {

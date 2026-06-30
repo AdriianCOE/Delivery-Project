@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi'
 import { BAIRROS_ARACAJU, formatMoneyBrl } from '../utils/deliveryPayloads'
 import AnimatedSegmentedControl from '../../../../components/ui/AnimatedSegmentedControl'
+import { useConfirmDialog } from '../../../../components/ui/ConfirmDialogProvider'
 
 function getDeliverySaveErrorMessage(err) {
   if (err?.code === 'permission-denied') {
@@ -43,6 +44,7 @@ export default function MenuDeliveryAreasTab({
   onAddArea,
   onToast,
 }) {
+  const { confirm } = useConfirmDialog()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [savingKey, setSavingKey] = useState(null)
@@ -132,9 +134,13 @@ export default function MenuDeliveryAreasTab({
   }
 
   const handleDeleteCustom = async (area) => {
-    if (!window.confirm(`Excluir permanentemente o bairro "${area.neighborhood}"?`)) {
-      return
-    }
+    const confirmed = await confirm({
+      title: 'Excluir bairro?',
+      description: `O bairro "${area.neighborhood}" será removido permanentemente da área de entrega.`,
+      confirmLabel: 'Excluir bairro',
+      tone: 'danger',
+    })
+    if (!confirmed) return
 
     const newFees = { ...deliveryFees }
     delete newFees[area.neighborhood]

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
 import AppRoutes from './routes/AppRoutes'
+import { ConfirmDialogProvider } from './components/ui/ConfirmDialogProvider'
 
 const AuthProvider = lazy(() =>
   import('./contexts/AuthContext').then((module) => ({
@@ -53,15 +54,17 @@ function matchesRoutePrefix(pathname = '', prefixes = []) {
   )
 }
 
-function shouldLoadAuthProvider(pathname = '') {
-  return matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)
-}
-
 function isLikelyPublicStorefrontPath(pathname = '') {
   const segments = pathname.split('/').filter(Boolean)
   if (segments.length !== 1) return false
 
   return !PUBLIC_MARKETING_PATHS.has(segments[0])
+}
+
+function shouldLoadAuthProvider(pathname = '') {
+  return matchesRoutePrefix(pathname, AUTH_ROUTE_PREFIXES)
+    || matchesRoutePrefix(pathname, ['/store'])
+    || isLikelyPublicStorefrontPath(pathname)
 }
 
 function AuthBoundary({ children }) {
@@ -133,9 +136,11 @@ function DeferredCookieConsent() {
 
 export default function App() {
   return (
-    <AuthBoundary>
-      <AppRoutes />
-      <DeferredCookieConsent />
-    </AuthBoundary>
+    <ConfirmDialogProvider>
+      <AuthBoundary>
+        <AppRoutes />
+        <DeferredCookieConsent />
+      </AuthBoundary>
+    </ConfirmDialogProvider>
   )
 }

@@ -184,9 +184,16 @@ function orderStoreKeys(data) {
         && afterData.get('gallery', []) == beforeData.get('gallery', []);
     }
 
-    function productCreateAllowedByPlan(data) {
-      return (!productUsesScheduling(data) || storeHasPlanFeature(data.get('storeId', ''), 'scheduling'))
-        && productImagesWithinPlan(data);
+    function menuItemCountsTowardPlan(data) {
+      return data.get('isDeleted', false) != true
+        && data.get('deletedAt', null) == null
+        && data.get('isActive', true) != false
+        && data.get('isVisible', true) != false
+        && data.get('hidden', false) != true;
+    }
+
+    function menuItemDoesNotIncreasePlanUsage(beforeData, afterData) {
+      return menuItemCountsTowardPlan(beforeData) || !menuItemCountsTowardPlan(afterData);
     }
 
     function productUpdateAllowedByPlan(beforeData, afterData) {
@@ -333,6 +340,7 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('createdAt')
         && storeFieldUnchanged('createdBy')
         && storeFieldUnchanged('isOpen')
+        && storeFieldUnchanged('deliveryFees')
         && storeFieldUnchanged('isBlocked')
         && storeFieldUnchanged('isBillingBlocked')
         && storeFieldUnchanged('isDeleted')
@@ -392,14 +400,6 @@ function orderStoreKeys(data) {
         && storeFieldUnchanged('trialTransitionProcessedAt')
         && storeFieldUnchanged('amountCents')
         && storeFieldUnchanged('billingType');
-    }
-
-    function validStoreDeliveryFeesUpdate() {
-      let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return changed.hasOnly(['deliveryFees', 'updatedAt'])
-        && changed.hasAny(['deliveryFees'])
-        && request.resource.data.get('deliveryFees', {}) is map
-        && (!changed.hasAny(['updatedAt']) || request.resource.data.updatedAt is timestamp);
     }
 
 function ownsOrderData(data) {
@@ -602,7 +602,6 @@ function validPublicOrderCreate(orderId) {
       allow get, list: if canManageStoreData(resource.data);
       allow create: if isAdmin();
       allow update: if (isAdmin() && storeFieldUnchanged('isOpen'))
-        || (isStoreOwnerData(resource.data) && validStoreDeliveryFeesUpdate())
         || (isStoreOwnerData(resource.data) && protectedStoreFieldsUnchanged());
       allow delete: if isAdmin();
 
@@ -694,19 +693,20 @@ function validPublicOrderCreate(orderId) {
 
     match /categories/{categoryId} {
       allow read: if canManageStoreId(resource.data.get('storeId', ''));
-      allow create: if canManageStoreId(request.resource.data.get('storeId', ''));
+      allow create: if false;
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
-        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '');
+        && request.resource.data.get('storeId', '') == resource.data.get('storeId', '')
+        && menuItemDoesNotIncreasePlanUsage(resource.data, request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /products/{productId} {
       allow read: if canManageStoreId(resource.data.get('storeId', ''));
-      allow create: if canManageStoreId(request.resource.data.get('storeId', ''))
-        && productCreateAllowedByPlan(request.resource.data);
+      allow create: if false;
       allow update: if canManageStoreId(resource.data.get('storeId', ''))
         && request.resource.data.get('storeId', '') == resource.data.get('storeId', '')
-        && productUpdateAllowedByPlan(resource.data, request.resource.data);
+        && productUpdateAllowedByPlan(resource.data, request.resource.data)
+        && menuItemDoesNotIncreasePlanUsage(resource.data, request.resource.data);
       allow delete: if isAdmin();
     }
 

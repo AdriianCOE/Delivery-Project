@@ -34,6 +34,7 @@ import {
 
 import { db, functions } from '../../services/firebase'
 import { useCart } from '../../contexts/CartContext'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 
 const CUSTOMER_KEY = '@PratoBy:customer'
 const LEGACY_CUSTOMER_KEY = '@DeliveryApp:customer'
@@ -375,6 +376,7 @@ export default function CustomerDrawer({
   products = [],
   store = null,
 }) {
+  const { confirm } = useConfirmDialog()
   const { slug } = useParams()
   const { addToCart, clearCart } = useCart()
   const reduceMotion = useReducedMotion()
@@ -558,10 +560,13 @@ const greeting = useMemo(() => {
   }
 }, [isOpen])
 
-  const handleClearProfile = useCallback(() => {
-    const confirmed = window.confirm(
-      'Deseja limpar os dados salvos neste aparelho?'
-    )
+  const handleClearProfile = useCallback(async () => {
+    const confirmed = await confirm({
+      title: 'Limpar dados deste aparelho?',
+      description: 'Seu perfil local e o histórico de pedidos salvos neste navegador serão removidos.',
+      confirmLabel: 'Limpar dados',
+      tone: 'danger',
+    })
 
     if (!confirmed) return
 
@@ -569,7 +574,7 @@ const greeting = useMemo(() => {
     setProfile(null)
     setOrders([])
     showToast('Dados removidos deste aparelho.')
-  }, [showToast])
+  }, [confirm, showToast])
 
   const fetchProductsForOrder = useCallback(
     async (order) => {
@@ -605,9 +610,11 @@ const greeting = useMemo(() => {
     async (order) => {
       if (!order?.id || reorderingId) return
 
-      const confirmed = window.confirm(
-        'Deseja refazer este pedido? Seu carrinho atual será esvaziado.'
-      )
+      const confirmed = await confirm({
+        title: 'Refazer pedido?',
+        description: 'Seu carrinho atual será esvaziado antes de adicionar os itens deste pedido.',
+        confirmLabel: 'Refazer pedido',
+      })
 
       if (!confirmed) return
 
@@ -682,6 +689,7 @@ const greeting = useMemo(() => {
     [
       addToCart,
       clearCart,
+      confirm,
       fetchProductsForOrder,
       onClose,
       reorderingId,

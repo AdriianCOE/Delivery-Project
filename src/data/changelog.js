@@ -57,6 +57,32 @@ export const changelogTypeOrder = [
  */
 const entries = [
   {
+    id: '2026-06-30-seguranca-cardapio-operacao',
+    date: '2026-06-30',
+    title: 'Cardápio e operação com mais segurança',
+    summary:
+      'Reforçamos limites do plano, configurações de entrega e confirmações importantes no painel.',
+    tags: ['Cardápio', 'Pedidos', 'Segurança'],
+    items: [
+      {
+        type: changelogTypes.IMPROVED,
+        text: 'Padronizamos confirmações importantes no cardápio, pagamentos e acompanhamento de pedidos.',
+      },
+      {
+        type: changelogTypes.FIXED,
+        text: 'O dono autenticado volta a ser reconhecido ao acessar a visualização pública da própria loja.',
+      },
+      {
+        type: changelogTypes.SECURITY,
+        text: 'Limites de produtos e categorias e taxas de entrega agora são validados pelo servidor.',
+      },
+      {
+        type: changelogTypes.SECURITY,
+        text: 'Entregar um pedido não altera automaticamente o status do pagamento online.',
+      },
+    ],
+  },
+  {
     id: '2026-06-27-estoque-pedidos-seguros',
     date: '2026-06-27',
     title: 'Pedidos com estoque mais confiável',

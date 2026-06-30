@@ -22,6 +22,7 @@ import {
 import DashboardFooter from '../../components/layouts/DashboardFooter'
 import DashboardPageHeader from '../../components/layouts/DashboardPageHeader'
 import FloatingToast from '../../components/ui/FloatingToast'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 import { useAuth } from '../../contexts/AuthContext'
 import { db, functions } from '../../services/firebase'
 import {
@@ -543,6 +544,7 @@ function EmptyState() {
 }
 
 export default function PaymentsPage() {
+  const { confirm } = useConfirmDialog()
   const { user, storeId: authStoreId, storeIds: authStoreIds = [] } = useAuth()
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -723,10 +725,13 @@ export default function PaymentsPage() {
   const handleConnectMercadoPago = useCallback(async ({ reconnect = false } = {}) => {
     if (!selectedStore || connectingMercadoPago) return
 
-    if (reconnect && typeof window !== 'undefined') {
-      const confirmed = window.confirm(
-        'Trocar a conta Mercado Pago substitui a conexão atual. Faça isso apenas se não houver pedidos online em andamento.'
-      )
+    if (reconnect) {
+      const confirmed = await confirm({
+        title: 'Trocar conta Mercado Pago?',
+        description: 'A conexão atual será substituída. Faça isso apenas se não houver pedidos online em andamento.',
+        confirmLabel: 'Trocar conta',
+        tone: 'danger',
+      })
       if (!confirmed) return
     }
 
@@ -743,17 +748,18 @@ export default function PaymentsPage() {
     } finally {
       setConnectingMercadoPago(false)
     }
-  }, [connectingMercadoPago, selectedStore, showToast])
+  }, [confirm, connectingMercadoPago, selectedStore, showToast])
 
   const handleDisconnectMercadoPago = useCallback(async () => {
     if (!selectedStore || disconnectingMercadoPago) return
 
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm(
-        'Desconectar o Mercado Pago remove o pagamento online do cardápio. Pedidos online ativos precisam ser finalizados ou cancelados antes.'
-      )
-      if (!confirmed) return
-    }
+    const confirmed = await confirm({
+      title: 'Desconectar Mercado Pago?',
+      description: 'O pagamento online será removido do cardápio. Finalize ou cancele pedidos online ativos antes.',
+      confirmLabel: 'Desconectar',
+      tone: 'danger',
+    })
+    if (!confirmed) return
 
     try {
       setDisconnectingMercadoPago(true)
@@ -776,7 +782,7 @@ export default function PaymentsPage() {
     } finally {
       setDisconnectingMercadoPago(false)
     }
-  }, [disconnectingMercadoPago, selectedStore, showToast])
+  }, [confirm, disconnectingMercadoPago, selectedStore, showToast])
 
   const handleSave = useCallback(async () => {
     if (!selectedStore || saving) return

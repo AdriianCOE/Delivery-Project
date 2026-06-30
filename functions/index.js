@@ -13,6 +13,7 @@ const crypto = require('crypto')
 const { createPublicOrderHandler } = require('./publicOrder')
 const { createAsaasFunctions } = require('./asaas')
 const { createMerchantOrderFunctions } = require('./merchantOrder')
+const { createMenuManagementFunctions, sanitizeDeliveryFees } = require('./menuManagement')
 const {
   createAsaasOrderFunctions,
   sanitizePublicStorePayments,
@@ -107,6 +108,7 @@ const merchantOrderFunctions = createMerchantOrderFunctions({
     orderData,
   }),
 })
+const menuManagementFunctions = createMenuManagementFunctions({ db, admin, logger })
 const asaasOrderFunctions = createAsaasOrderFunctions({
   db,
   admin,
@@ -285,6 +287,7 @@ exports.asaasWebhook = asaasFunctions.asaasWebhook
 exports.adminUpdateSubscriptionRequestStatus = asaasFunctions.adminUpdateSubscriptionRequestStatus
 exports.updateMerchantOrder = merchantOrderFunctions.updateMerchantOrder
 exports.createMerchantCounterOrder = merchantOrderFunctions.createMerchantCounterOrder
+exports.saveMenuItem = menuManagementFunctions.saveMenuItem
 exports.createAsaasOrderPayment = asaasOrderFunctions.createAsaasOrderPayment
 exports.asaasOrderWebhook = asaasOrderFunctions.asaasOrderWebhook
 exports.getMercadoPagoConnectUrl = mercadoPagoOrderFunctions.getMercadoPagoConnectUrl
@@ -695,7 +698,7 @@ const STORE_SETTINGS_ALLOWED_FIELDS = new Set([
   'minOrder', 'minOrderCents', 'acceptDelivery', 'acceptPickup',
   'acceptDineIn', 'paymentMethods', 'pix', 'address', 'cep', 'street',
   'number', 'neighborhood', 'complement', 'city', 'state', 'scheduling',
-  'payments',
+  'payments', 'deliveryFees',
 ])
 
 const STORE_SETTINGS_FORBIDDEN_FIELDS = new Set([
@@ -1836,6 +1839,11 @@ function sanitizeStoreSettingsPayload(payload, currentStoreData = {}) {
 
     if (key === 'payments') {
       acc.payments = sanitizeStorePaymentsSettingsPatch(value, currentStoreData.payments)
+      return acc
+    }
+
+    if (key === 'deliveryFees') {
+      acc.deliveryFees = sanitizeDeliveryFees(value)
       return acc
     }
 

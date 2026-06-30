@@ -97,7 +97,7 @@ firebase deploy --only functions:getPublicCatalog,functions:getPublicStoreProfil
 
 ### Lote 4: Configurações e Onboarding
 ```bash
-firebase deploy --only functions:updateStoreSettings,functions:updateMyProfile,functions:createCloudinaryUploadSignature,functions:adminCreateStore,functions:materializePublicStoreProfile,functions:materializePublicProduct,functions:materializePublicCategory,functions:precheckFirebasePhoneClaim,functions:confirmFirebasePhoneVerified,functions:startFreeTrial,functions:acceptLatestTerms,functions:updateBillingNotificationPreferences
+firebase deploy --only functions:updateStoreSettings,functions:saveMenuItem,functions:updateMyProfile,functions:createCloudinaryUploadSignature,functions:adminCreateStore,functions:materializePublicStoreProfile,functions:materializePublicProduct,functions:materializePublicCategory,functions:precheckFirebasePhoneClaim,functions:confirmFirebasePhoneVerified,functions:startFreeTrial,functions:acceptLatestTerms,functions:updateBillingNotificationPreferences
 ```
 
 ### Lote 5: Presença e Auditorias

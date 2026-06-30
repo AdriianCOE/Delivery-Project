@@ -35,6 +35,7 @@ import {
 
 import { db, ensureAppCheck, functions } from '../../services/firebase'
 import StoreFooter from '../../components/layouts/StoreFooter'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 import { formatScheduledOrderDate, isScheduledOrder } from '../../utils/publicScheduling'
 import {
   disableCustomerOrderFcmToken,
@@ -1714,6 +1715,7 @@ function MercadoPagoOnlinePaymentCard({
 }
 
 function PixQrCodeBox({ pixCopyPaste, orderDisplayNumber }) {
+  const { notify } = useConfirmDialog()
   if (!pixCopyPaste) return null
 
   const qrCodeId = `pix-qrcode-${String(orderDisplayNumber || 'pedido')
@@ -1723,9 +1725,9 @@ function PixQrCodeBox({ pixCopyPaste, orderDisplayNumber }) {
   async function handleCopyPix() {
     try {
       await navigator.clipboard.writeText(pixCopyPaste)
-      alert('Pix copia e cola copiado.')
+      notify({ type: 'success', message: 'Pix copia e cola copiado.' })
     } catch {
-      alert('Não foi possível copiar o Pix.')
+      notify({ type: 'error', message: 'Não foi possível copiar o Pix.' })
     }
   }
 
@@ -1841,6 +1843,7 @@ function getTrackingFooterStore(order, store) {
 }
 
 export default function OrderTrackingPage() {
+  const { confirm, notify } = useConfirmDialog()
   const { slug, orderId } = useParams()
   const [searchParams] = useSearchParams()
 
@@ -2329,11 +2332,13 @@ const isDelivered = status === 'entregue'
   const handleConfirmDelivery = useCallback(async () => {
     if (!order?.id || actionLoading) return
 
-    const confirmed = window.confirm(
-      getOrderType(order) === 'delivery'
-        ? 'Você confirma que recebeu o pedido?'
-        : 'Você confirma que retirou/recebeu o pedido?'
-    )
+    const confirmed = await confirm({
+      title: 'Confirmar recebimento?',
+      description: getOrderType(order) === 'delivery'
+        ? 'Confirme somente se o pedido já foi entregue.'
+        : 'Confirme somente se você já retirou ou recebeu o pedido.',
+      confirmLabel: 'Confirmar recebimento',
+    })
 
     if (!confirmed) return
 
@@ -2347,11 +2352,11 @@ const isDelivered = status === 'entregue'
       })
     } catch (error) {
       console.error(error)
-      alert('Não foi possível confirmar o recebimento agora.')
+      notify({ type: 'error', message: 'Não foi possível confirmar o recebimento agora.' })
     } finally {
       setActionLoading(false)
     }
-  }, [actionLoading, order])
+  }, [actionLoading, confirm, notify, order])
 
   const reconcileMercadoPagoPayment = useCallback(async ({ automatic = false } = {}) => {
     if (!order?.id || !trackingToken || mercadoPagoReconcileLoading) return
@@ -2443,12 +2448,12 @@ const isDelivered = status === 'entregue'
     const url = buildWhatsAppUrl(storePhone, message)
 
     if (!url) {
-      alert('A loja ainda não possui WhatsApp configurado para contato.')
+      notify({ type: 'warning', message: 'A loja ainda não possui WhatsApp configurado para contato.' })
       return
     }
 
     window.open(url, '_blank', 'noopener,noreferrer')
-  }, [storePhone])
+  }, [notify, storePhone])
 
   const handleCopyPix = useCallback(async () => {
     if (!pixCopyPaste) return
@@ -2459,9 +2464,9 @@ const isDelivered = status === 'entregue'
       window.setTimeout(() => setPixCopied(false), 2200)
     } catch (error) {
       console.error(error)
-      alert('Não foi possível copiar o Pix automaticamente. Toque e segure no código para copiar manualmente.')
+      notify({ type: 'error', message: 'Não foi possível copiar o Pix automaticamente. Toque e segure no código para copiar manualmente.' })
     }
-  }, [pixCopyPaste])
+  }, [notify, pixCopyPaste])
 
   const handleSendPixProof = useCallback(async () => {
     if (!order?.id || proofLoading) return
@@ -2490,9 +2495,12 @@ const isDelivered = status === 'entregue'
   const handleCancelRequest = useCallback(async () => {
     if (!order?.id || cancelRequestLoading) return
 
-    const confirmed = window.confirm(
-      'O cancelamento precisa ser confirmado pela loja. Deseja solicitar pelo WhatsApp?'
-    )
+    const confirmed = await confirm({
+      title: 'Solicitar cancelamento?',
+      description: 'O cancelamento precisa ser confirmado pela loja e a conversa será aberta no WhatsApp.',
+      confirmLabel: 'Solicitar pelo WhatsApp',
+      tone: 'danger',
+    })
 
     if (!confirmed) return
 
@@ -2510,7 +2518,7 @@ const isDelivered = status === 'entregue'
       setCancelRequestLoading(false)
       openStoreWhatsApp(getCancelContactMessage(order, store))
     }
-  }, [cancelRequestLoading, openStoreWhatsApp, order, store])
+  }, [cancelRequestLoading, confirm, openStoreWhatsApp, order, store])
 
   const toggleReviewTag = useCallback((tagId) => {
     setReview((current) => {

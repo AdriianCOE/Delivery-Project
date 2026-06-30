@@ -3,13 +3,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  addDoc,
-  collection,
-  doc,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FiAlertTriangle,
@@ -41,7 +34,8 @@ import {
   FiZap,
 } from 'react-icons/fi'
 
-import { db } from '../../../../services/firebase'
+import { saveMenuItem } from '../../../../services/menuManagement'
+import { getCallableErrorMessage } from '../../../../utils/callableError'
 import { uploadImageToCloudinary } from '../../../../services/cloudinary'
 import { registerStoreMediaAsset } from '../../../../services/storeMediaLibrary'
 import { hasPlanFeature } from '../../../../utils/planCatalog'
@@ -920,7 +914,6 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
         optionGroups: sanitizeOptionGroupsForSave(form.optionGroups),
         extras: Array.isArray(form.extras) ? form.extras : [],
         isDeleted: false,
-        updatedAt: serverTimestamp(),
       })
       if (schedulingAllowed) {
         data.scheduling = sanitizeProductSchedulingForSave(form.scheduling)
@@ -928,21 +921,24 @@ export default function ProductEditorDrawer({ open, onClose, editingProduct, cat
       // Estoque: sempre salvar (não depende de plano)
       data.stock = {
         ...sanitizeStockForSave(form.stock, store?.ownerId || store?.ownerUid || ''),
-        updatedAt: serverTimestamp(),
       }
 
+      await saveMenuItem({
+        storeId,
+        entityType: 'product',
+        entityId: editingProduct?.id,
+        payload: data,
+      })
+
       if (editingProduct?.id) {
-        await updateDoc(doc(db, 'products', editingProduct.id), data)
         onToast({ type: 'success', message: 'Produto atualizado com sucesso!' })
       } else {
-        data.createdAt = serverTimestamp()
-        await addDoc(collection(db, 'products'), data)
         onToast({ type: 'success', message: 'Produto criado!' })
       }
       onClose()
     } catch (err) {
       console.error('[ProductEditorDrawer] handleSave:', err)
-      onToast({ type: 'error', message: 'Erro ao salvar. Tente novamente.' })
+      onToast({ type: 'error', message: getCallableErrorMessage(err, 'Erro ao salvar. Tente novamente.') })
     } finally {
       setSaving(false)
       setImageUploading(false)

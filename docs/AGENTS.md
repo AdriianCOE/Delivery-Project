@@ -518,7 +518,7 @@ Regras:
 - Firestore Rules precisam testes com Emulator.
 - Playwright E2E recomendado.
 - Smart TVs antigas podem ter problemas com áudio/animações.
-- Revisar regra de `entregue` marcar pagamento como `paid`.
+- `entregue` não marca pagamento como `paid`; confirmação financeira exige ação/integração explícita.
 - Deploy/backfill/indexes precisam ser confirmados antes de piloto.
 - Bundle grande deve ser tratado com lazy loading em etapa própria.
 

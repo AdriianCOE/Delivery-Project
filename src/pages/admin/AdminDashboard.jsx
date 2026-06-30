@@ -13,6 +13,7 @@ import { httpsCallable } from 'firebase/functions'
 
 import { db, functions } from '../../services/firebase'
 import { getCallableErrorMessage } from '../../utils/callableError'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 
 import {
   FiActivity,
@@ -766,6 +767,7 @@ function StoreCard({ store, onCopyLink, onToggleStore, onArchiveStore, onEditSto
 }
 
 export default function AdminDashboard() {
+  const { confirm } = useConfirmDialog()
   const [stores, setStores] = useState([])
   const [users, setUsers] = useState([])
   const [activeTab, setActiveTab] = useState('stores') // 'stores' or 'pending_users'
@@ -1000,11 +1002,14 @@ export default function AdminDashboard() {
         return
       }
 
-      const confirmed = window.confirm(
-        store.isDeleted
-          ? 'Deseja restaurar esta loja?'
-          : 'Deseja arquivar esta loja? Ela sairá da lista principal, mas continuará salva no Firestore.'
-      )
+      const confirmed = await confirm({
+        title: store.isDeleted ? 'Restaurar loja?' : 'Arquivar loja?',
+        description: store.isDeleted
+          ? 'A loja voltará para a lista principal.'
+          : 'A loja sairá da lista principal, mas continuará salva no Firestore.',
+        confirmLabel: store.isDeleted ? 'Restaurar loja' : 'Arquivar loja',
+        tone: store.isDeleted ? 'default' : 'danger',
+      })
 
       if (!confirmed) return
 
@@ -1024,7 +1029,7 @@ export default function AdminDashboard() {
         showToast('error', 'Erro ao arquivar/restaurar loja.')
       }
     },
-    [showToast]
+    [confirm, showToast]
   )
 
   const openEditModal = useCallback((store) => {

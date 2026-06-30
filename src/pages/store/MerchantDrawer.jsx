@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import {
   FiActivity,
@@ -25,6 +25,7 @@ import {
 } from 'react-icons/fi'
 
 import { db, functions } from '../../services/firebase'
+import { saveMenuItem } from '../../services/menuManagement'
 import {
   getStoreDocId,
   getStorePublicSlug,
@@ -32,6 +33,7 @@ import {
   buildStoreScopedPayload,
 } from '../../utils/storeIdentity'
 import { getCallableErrorMessage } from '../../utils/callableError'
+import { useConfirmDialog } from '../../components/ui/ConfirmDialogProvider'
 
 import {
   isProductDeleted,
@@ -253,6 +255,7 @@ export default function MerchantDrawer({
   quickEditProduct = null,
   onQuickEditHandled,
 }) {
+  const { confirm } = useConfirmDialog()
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState('')
   
@@ -422,9 +425,11 @@ export default function MerchantDrawer({
       return
     }
     try {
-      await updateDoc(doc(db, 'products', product.id), {
-        [field]: value,
-        updatedAt: serverTimestamp(),
+      await saveMenuItem({
+        storeId: storeDocId,
+        entityType: 'product',
+        entityId: product.id,
+        payload: { [field]: value },
       })
       showToast(`Produto "${product.name}" atualizado com sucesso.`)
     } catch (error) {
@@ -457,19 +462,22 @@ export default function MerchantDrawer({
       const priceCents = Math.round(price * 100)
       const category = categoryById.get(productForm.categoryId)
 
-      await updateDoc(doc(db, 'products', quickEditProductState.id), {
-        name: productForm.name.trim(),
-        price,
-        priceCents,
-        categoryId: productForm.categoryId || '',
-        categoryName: category?.name || '',
-        isAvailable: productForm.isAvailable,
-        isVisible: productForm.isVisible,
-        isFeatured: Boolean(productForm.isFeatured),
-        isPopular: Boolean(productForm.isPopular),
-        isPromotion: Boolean(productForm.isPromotion),
-        acceptsCoupons: productForm.acceptsCoupons !== false,
-        updatedAt: serverTimestamp(),
+      await saveMenuItem({
+        storeId: storeDocId,
+        entityType: 'product',
+        entityId: quickEditProductState.id,
+        payload: {
+          name: productForm.name.trim(),
+          priceCents,
+          categoryId: productForm.categoryId || '',
+          categoryName: category?.name || '',
+          isAvailable: productForm.isAvailable,
+          isVisible: productForm.isVisible,
+          isFeatured: Boolean(productForm.isFeatured),
+          isPopular: Boolean(productForm.isPopular),
+          isPromotion: Boolean(productForm.isPromotion),
+          acceptsCoupons: productForm.acceptsCoupons !== false,
+        },
       })
       showToast('Produto atualizado com sucesso!')
       setQuickEditProductState(null)
@@ -504,7 +512,10 @@ export default function MerchantDrawer({
       const priceCents = Math.round(price * 100)
       const category = categoryById.get(newProductForm.categoryId)
 
-      await addDoc(collection(db, 'products'), {
+      await saveMenuItem({
+        storeId: storeDocId,
+        entityType: 'product',
+        payload: {
         ...scope,
         name: newProductForm.name.trim(),
         description: '',
@@ -533,8 +544,7 @@ export default function MerchantDrawer({
           prepaymentPolicy: 'store_default',
         },
         stock: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        },
       })
 
       showToast('Produto criado com sucesso!')
@@ -557,7 +567,13 @@ export default function MerchantDrawer({
       showToast('Este item não pertence a esta loja.')
       return
     }
-    if (!window.confirm(`Tem certeza de que deseja arquivar o produto "${product.name}"? Ele será removido do cardápio.`)) return
+    const confirmed = await confirm({
+      title: 'Arquivar produto?',
+      description: `O produto "${product.name}" será removido do cardápio.`,
+      confirmLabel: 'Arquivar produto',
+      tone: 'danger',
+    })
+    if (!confirmed) return
 
     try {
       await updateDoc(doc(db, 'products', product.id), {
@@ -579,9 +595,11 @@ export default function MerchantDrawer({
       return
     }
     try {
-      await updateDoc(doc(db, 'categories', category.id), {
-        [field]: value,
-        updatedAt: serverTimestamp(),
+      await saveMenuItem({
+        storeId: storeDocId,
+        entityType: 'category',
+        entityId: category.id,
+        payload: { [field]: value },
       })
       showToast(`Categoria "${category.name}" atualizada.`)
     } catch (error) {
@@ -625,12 +643,16 @@ export default function MerchantDrawer({
     }
     setLoading(true)
     try {
-      await updateDoc(doc(db, 'categories', editingCategoryId), {
-        name: categoryForm.name.trim(),
-        description: categoryForm.description.trim(),
-        isVisible: categoryForm.isVisible,
-        isActive: categoryForm.isActive,
-        updatedAt: serverTimestamp(),
+      await saveMenuItem({
+        storeId: storeDocId,
+        entityType: 'category',
+        entityId: editingCategoryId,
+        payload: {
+          name: categoryForm.name.trim(),
+          description: categoryForm.description.trim(),
+          isVisible: categoryForm.isVisible,
+          isActive: categoryForm.isActive,
+        },
       })
       showToast('Categoria atualizada com sucesso!')
       setEditingCategoryId(null)
@@ -665,7 +687,10 @@ export default function MerchantDrawer({
       const order = sortedCategories.length
       const position = order
 
-      await addDoc(collection(db, 'categories'), {
+      await saveMenuItem({
+        storeId: storeDocId,
+        entityType: 'category',
+        payload: {
         ...scope,
         name: newCategoryForm.name.trim(),
         description: newCategoryForm.description.trim(),
@@ -674,8 +699,7 @@ export default function MerchantDrawer({
         isDeleted: false,
         order,
         position,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        },
       })
 
       showToast('Categoria criada com sucesso!')
@@ -702,7 +726,13 @@ export default function MerchantDrawer({
       msg = `Esta categoria possui ${count} produto(s) ativo(s) vinculado(s). Se você a arquivar, esses produtos ficarão órfãos e sem categoria visível no cardápio público. Deseja continuar?`
     }
 
-    if (!window.confirm(msg)) return
+    const confirmed = await confirm({
+      title: 'Arquivar categoria?',
+      description: msg,
+      confirmLabel: 'Arquivar categoria',
+      tone: 'danger',
+    })
+    if (!confirmed) return
 
     try {
       await updateDoc(doc(db, 'categories', category.id), {
