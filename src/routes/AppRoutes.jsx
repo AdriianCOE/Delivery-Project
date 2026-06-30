@@ -28,6 +28,7 @@ const AboutPage = lazy(() => import('../pages/AboutPage'))
 const ContactPage = lazy(() => import('../pages/ContactPage'))
 const LandingPage = lazy(() => import('../pages/landing/LandingPage'))
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'))
+const ChangelogPage = lazy(() => import('../pages/ChangelogPage'))
 const StoreFrontPage = lazy(() => import('../pages/store/StoreFrontPage'))
 const OrderTrackingPage = lazy(() => import('../pages/store/OrderTrackingPage'))
 const PlansPage = lazy(() => import('../pages/PlansPage'))
@@ -188,6 +189,8 @@ export default function AppRoutes() {
         <Route path="/contato" element={<ContactPage />} />
         <Route path="/planos" element={<PlansPage />} />
         <Route path="/planos]" element={<Navigate to="/planos" replace />} />
+        <Route path="/novidades" element={<ChangelogPage />} />
+        <Route path="/changelog" element={<Navigate to="/novidades" replace />} />
         <Route path="/exemplos" element={<RestaurantExamplesPage />} />
         <Route path="/privacidade" element={<PrivacyPage />} />
         <Route path="/termos" element={<TermsPage />} />

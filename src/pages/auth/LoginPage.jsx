@@ -23,7 +23,6 @@ import {
   FiArrowRight,
   FiCheckCircle,
   FiClock,
-  FiCreditCard,
   FiEye,
   FiEyeOff,
   FiGlobe,
@@ -32,7 +31,6 @@ import {
   FiLoader,
   FiLock,
   FiMail,
-  FiMapPin,
   FiMessageCircle,
   FiShield,
   FiShoppingBag,
@@ -206,7 +204,7 @@ const fadeUp = {
   },
 }
 
-const softIn = {
+const _softIn = {
   hidden: { opacity: 0, scale: 0.96, y: 18, filter: 'blur(8px)' },
   visible: {
     opacity: 1,
@@ -226,7 +224,7 @@ const staggerContainer = {
 
 function PratoByLogo({ dark = false, compact = false }) {
   return (
-    <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="Ir para início">
+    <Link to="/" className="flex items-center min-w-0 gap-3 group" aria-label="Ir para início">
       <PratoByLogoIcon
         size={compact ? 'sm' : 'lg'}
         className={dark ? 'shadow-orange-950/30 ring-white/10' : 'shadow-orange-600/20 ring-black/5'}
@@ -258,14 +256,14 @@ function LoginMobileHeader() {
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.32, ease: 'easeOut' }}
-      className="fixed inset-x-0 top-0 z-50 border-b border-orange-100/80 bg-white/90 shadow-sm shadow-orange-950/5 backdrop-blur-2xl lg:hidden"
+      className="fixed inset-x-0 top-0 z-50 border-b shadow-sm border-orange-100/80 bg-white/90 shadow-orange-950/5 backdrop-blur-2xl lg:hidden"
     >
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-orange-400 to-transparent" />
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="absolute inset-x-0 bottom-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-orange-400 to-transparent" />
+      <div className="flex items-center justify-between h-20 gap-4 px-4 mx-auto max-w-7xl sm:px-6">
         <PratoByLogo compact />
         <Link
           to="/"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-orange-100 bg-white px-4 text-sm font-black text-slate-900 shadow-sm shadow-orange-950/5 transition active:scale-95"
+          className="inline-flex items-center justify-center gap-2 px-4 text-sm font-black transition bg-white border border-orange-100 shadow-sm h-11 rounded-2xl text-slate-900 shadow-orange-950/5 active:scale-95"
           aria-label="Voltar para o site"
         >
           <FiArrowLeft size={16} />
@@ -369,9 +367,9 @@ function BenefitCard({ icon: Icon, title, helper }) {
       variants={fadeUp}
       className="group relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/10 backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.1] hover:ring-1 hover:ring-orange-300/20"
     >
-      <div className="pointer-events-none absolute -right-8 -top-8 h-20 w-20 rounded-full bg-orange-400/10 blur-2xl transition group-hover:bg-orange-400/20" />
+      <div className="absolute w-20 h-20 transition rounded-full pointer-events-none -right-8 -top-8 bg-orange-400/10 blur-2xl group-hover:bg-orange-400/20" />
       <div className="relative flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/10 text-orange-300 ring-1 ring-white/10">
+        <span className="grid w-10 h-10 text-orange-300 shrink-0 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/10">
           <Icon size={18} />
         </span>
         <div>
@@ -401,10 +399,10 @@ function WorkflowPanel() {
       variants={fadeUp}
       className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.075] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl"
     >
-      <div className="pointer-events-none absolute -right-14 bottom-0 h-40 w-40 rounded-full bg-orange-500/10 blur-3xl" />
+      <div className="absolute bottom-0 w-40 h-40 rounded-full pointer-events-none -right-14 bg-orange-500/10 blur-3xl" />
       <div className="relative flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-black text-white">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10">
+          <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/10 ring-1 ring-white/10">
             <FiTrendingUp className="text-orange-300" />
           </span>
           Fluxo de trabalho
@@ -414,17 +412,17 @@ function WorkflowPanel() {
         </span>
       </div>
 
-      <div className="relative mt-5 grid gap-3">
+      <div className="relative grid gap-3 mt-5">
         <div className="absolute left-[17px] top-4 h-[calc(100%-2rem)] w-px bg-gradient-to-b from-orange-400/50 via-white/10 to-transparent" />
         {OPERATION_STEPS.map((step, index) => (
           <div
             key={step.label}
-            className="group relative flex items-start gap-3 rounded-2xl bg-slate-950/35 p-3 ring-1 ring-white/5 transition duration-200 hover:bg-slate-950/45 hover:ring-orange-300/20"
+            className="relative flex items-start gap-3 p-3 transition duration-200 group rounded-2xl bg-slate-950/35 ring-1 ring-white/5 hover:bg-slate-950/45 hover:ring-orange-300/20"
           >
-            <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xs font-black text-white shadow-lg shadow-orange-950/25 ring-1 ring-white/20">
+            <span className="relative z-10 grid text-xs font-black text-white shadow-lg h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-950/25 ring-1 ring-white/20">
               {index + 1}
             </span>
-            <div className="min-w-0 flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-black leading-5 text-white">{step.label}</p>
               <p className="mt-0.5 text-xs font-semibold leading-5 text-orange-100/65">
                 {step.helper}
@@ -597,7 +595,7 @@ export default function LoginPage() {
 
   if (loading || postLoginRedirectPath) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-orange-50 text-slate-950">
+      <main className="relative flex items-center justify-center min-h-screen overflow-hidden bg-orange-50 text-slate-950">
         <SEO
           title="Entrar no PratoBy | Painel do lojista"
           description="Acesse o painel do PratoBy para gerenciar cardápio digital, pedidos online, configurações da loja e operação do delivery próprio."
@@ -605,16 +603,16 @@ export default function LoginPage() {
           noIndex
           noFollow
         />
-        <div className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-orange-300/30 blur-3xl" />
-        <div className="pointer-events-none absolute -right-32 bottom-10 h-80 w-80 rounded-full bg-orange-500/20 blur-3xl" />
+        <div className="absolute rounded-full pointer-events-none -left-32 top-10 h-80 w-80 bg-orange-300/30 blur-3xl" />
+        <div className="absolute rounded-full pointer-events-none -right-32 bottom-10 h-80 w-80 bg-orange-500/20 blur-3xl" />
         <motion.div
           initial={{ opacity: 0, y: 12, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           className="relative flex flex-col items-center justify-center gap-5 rounded-[2rem] border border-orange-100 bg-white/90 p-8 shadow-2xl shadow-orange-950/10 backdrop-blur"
         >
-          <div className="relative grid h-16 w-16 place-items-center rounded-3xl bg-orange-50 ring-1 ring-orange-100">
+          <div className="relative grid w-16 h-16 place-items-center rounded-3xl bg-orange-50 ring-1 ring-orange-100">
             <div className="absolute inset-0 animate-ping rounded-3xl bg-orange-400/20" />
-            <FiLoader className="relative animate-spin text-orange-500" size={26} />
+            <FiLoader className="relative text-orange-500 animate-spin" size={26} />
           </div>
           <div className="text-center">
             <p className="text-sm font-black text-slate-900">Verificando sessão...</p>
@@ -636,15 +634,15 @@ export default function LoginPage() {
       />
       <LoginMobileHeader />
 
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute left-1/2 top-[-18rem] h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-orange-300/25 blur-3xl lg:hidden" />
         <div className="absolute -bottom-32 right-[-8rem] h-80 w-80 rounded-full bg-orange-500/15 blur-3xl" />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.72),rgba(255,247,237,0.94))] lg:hidden" />
       </div>
 
       <div className="relative z-10 grid min-h-dvh lg:grid-cols-[minmax(0,1.02fr)_minmax(430px,0.72fr)] xl:grid-cols-[minmax(0,1.1fr)_minmax(460px,0.72fr)]">
-        <section className="relative hidden overflow-hidden bg-slate-950 px-8 py-8 text-white lg:flex lg:flex-col lg:justify-between xl:px-12">
-          <div className="pointer-events-none absolute inset-0">
+        <section className="relative hidden px-8 py-8 overflow-hidden text-white bg-slate-950 lg:flex lg:flex-col lg:justify-between xl:px-12">
+          <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-orange-300 via-orange-500 to-orange-700" />
             <div className="absolute -right-40 top-16 h-[30rem] w-[30rem] rounded-full bg-orange-500/20 blur-3xl" />
             <div className="absolute -left-40 bottom-12 h-[28rem] w-[28rem] rounded-full bg-white/5 blur-3xl" />
@@ -673,29 +671,29 @@ export default function LoginPage() {
             animate="visible"
             className="relative z-10 mx-auto flex w-full max-w-[64rem] flex-1 flex-col justify-center py-10"
           >
-            <motion.div variants={fadeUp} className="inline-flex w-fit items-center gap-2 rounded-full border border-orange-300/25 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-100 shadow-lg shadow-orange-950/10 backdrop-blur-xl">
+            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-black text-orange-100 border rounded-full shadow-lg w-fit border-orange-300/25 bg-orange-500/10 shadow-orange-950/10 backdrop-blur-xl">
               <FiShield className="text-orange-300" />
               Acesso operacional do lojista
             </motion.div>
 
-            <motion.h1
-              variants={fadeUp}
-              className="mt-7 max-w-3xl text-5xl font-black leading-[1.02] tracking-[-0.055em] xl:text-6xl"
+            <motion.h1 
+              variants={fadeUp} 
+              className="max-w-3xl mt-6 text-4xl font-extrabold leading-tight tracking-tighter text-white md:text-6xl"
             >
-              Entre no painel que mantém
-              <span className="block bg-gradient-to-r from-orange-200 via-orange-400 to-orange-600 bg-clip-text text-transparent">
+              Entre no painel que mantém{' '}
+              <span className="text-orange-500">
                 sua loja vendendo.
               </span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
-              className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-slate-300"
+              className="max-w-2xl mt-6 text-lg font-semibold leading-8 text-slate-300"
             >
               Controle cardápio, pedidos, status, horários, entrega e pagamentos em um ambiente rápido, seguro e feito para operação real.
             </motion.p>
 
-            <motion.div variants={staggerContainer} className="mt-9 grid max-w-3xl gap-3 sm:grid-cols-2">
+            <motion.div variants={staggerContainer} className="grid max-w-3xl gap-3 mt-9 sm:grid-cols-2">
               {BENEFITS.map((benefit) => (
                 <BenefitCard key={benefit.title} {...benefit} />
               ))}
@@ -713,11 +711,11 @@ export default function LoginPage() {
               variants={fadeUp}
               className="relative flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.075] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl"
             >
-              <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-orange-500/20 blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-12 -left-12 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
+              <div className="absolute w-32 h-32 rounded-full pointer-events-none -right-10 -top-10 bg-orange-500/20 blur-3xl" />
+              <div className="absolute w-32 h-32 rounded-full pointer-events-none -bottom-12 -left-12 bg-emerald-400/10 blur-3xl" />
 
               <div className="relative flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-950/30 ring-1 ring-white/20">
+                <div className="flex items-center justify-center w-12 h-12 text-white shadow-lg shrink-0 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-950/30 ring-1 ring-white/20">
                   <FiZap size={22} />
                 </div>
                 <div className="min-w-0">
@@ -733,7 +731,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="relative mt-5 grid grid-cols-3 gap-2">
+              <div className="relative grid grid-cols-3 gap-2 mt-5">
                 {DASHBOARD_METRICS.map((metric) => (
                   <MetricCard key={metric.label} {...metric} />
                 ))}
@@ -744,7 +742,7 @@ export default function LoginPage() {
           </motion.div>
         </section>
 
-        <section className="relative flex min-h-dvh items-center justify-center border-l border-orange-100/70 bg-white/80 px-4 py-6 backdrop-blur-xl sm:px-6 lg:px-10 lg:py-10">
+        <section className="relative flex items-center justify-center px-4 py-6 border-l min-h-dvh border-orange-100/70 bg-white/80 backdrop-blur-xl sm:px-6 lg:px-10 lg:py-10">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.11),transparent_26rem)]" />
           <div className="relative w-full max-w-[31rem]">
             <motion.div
@@ -753,19 +751,6 @@ export default function LoginPage() {
               animate="visible"
               className="mb-5 lg:hidden"
             >
-              <div className="overflow-hidden rounded-[1.75rem] border border-orange-100 bg-white/85 p-4 shadow-xl shadow-orange-950/10 backdrop-blur-xl">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-600/20">
-                    <FiZap size={20} />
-                  </span>
-                  <div>
-                    <p className="text-sm font-black text-slate-950">Painel PratoBy</p>
-                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                      Entre para gerenciar pedidos, cardápio e operação da sua loja.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </motion.div>
 
             <motion.div
@@ -821,19 +806,19 @@ export default function LoginPage() {
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white px-5 py-3.5 text-sm font-black text-slate-700 shadow-sm shadow-slate-950/5 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-orange-50/70 to-transparent opacity-0 transition group-hover:opacity-100" />
+                    <span className="absolute inset-0 transition opacity-0 pointer-events-none bg-gradient-to-r from-transparent via-orange-50/70 to-transparent group-hover:opacity-100" />
                     <span className="relative flex items-center gap-3">
                       <GoogleIcon size={18} />
                       Entrar com Google
                     </span>
                   </motion.button>
 
-                  <div className="mt-5 flex items-center gap-3">
-                    <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-200" />
+                  <div className="flex items-center gap-3 mt-5">
+                    <div className="flex-1 h-px bg-gradient-to-r from-transparent to-slate-200" />
                     <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
                       ou use e-mail e senha
                     </span>
-                    <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-200" />
+                    <div className="flex-1 h-px bg-gradient-to-l from-transparent to-slate-200" />
                   </div>
                 </motion.div>
 
@@ -867,7 +852,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-4 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="absolute z-10 flex items-center justify-center w-8 h-8 transition -translate-y-1/2 right-4 top-1/2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                         disabled={isLoading}
                       >
@@ -894,13 +879,13 @@ export default function LoginPage() {
                   />
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-500">
+                    <label className="inline-flex items-center gap-2 text-xs font-bold cursor-pointer text-slate-500">
                       <input
                         type="checkbox"
                         checked={rememberAccess}
                         onChange={(event) => setRememberAccess(event.target.checked)}
                         disabled={isLoading}
-                        className="h-4 w-4 rounded border-orange-200 text-orange-500 accent-orange-500 focus:ring-orange-500"
+                        className="w-4 h-4 text-orange-500 border-orange-200 rounded accent-orange-500 focus:ring-orange-500"
                       />
                       Manter conectado neste dispositivo
                     </label>
@@ -909,7 +894,7 @@ export default function LoginPage() {
                       type="button"
                       onClick={handlePasswordReset}
                       disabled={isResettingPassword || isLoading}
-                      className="w-fit text-xs font-black text-orange-600 transition hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="text-xs font-black text-orange-600 transition w-fit hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isResettingPassword ? 'Enviando...' : 'Esqueci minha senha'}
                     </button>
@@ -927,7 +912,7 @@ export default function LoginPage() {
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     className="group relative mt-2 flex w-full items-center justify-center gap-2 overflow-hidden rounded-[1.25rem] bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-orange-600/25 transition disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 disabled:shadow-none"
                   >
-                    <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition group-hover:translate-x-full group-hover:opacity-100" />
+                    <span className="absolute inset-0 transition opacity-0 pointer-events-none bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:translate-x-full group-hover:opacity-100" />
                     {isLoading ? (
                       <>
                         <FiLoader className="relative animate-spin" size={16} />
@@ -946,7 +931,7 @@ export default function LoginPage() {
                   variants={fadeUp}
                   className="mt-6 overflow-hidden rounded-[1.45rem] border border-orange-100/80 bg-gradient-to-br from-orange-50/80 to-white shadow-sm shadow-orange-950/5"
                 >
-                  <div className="flex gap-3 border-b border-orange-100/70 p-4">
+                  <div className="flex gap-3 p-4 border-b border-orange-100/70">
                     <FiInfo className="mt-0.5 shrink-0 text-orange-500" size={16} />
                     <div>
                       <p className="text-sm font-black text-slate-950">Plataforma para operação real</p>
@@ -957,10 +942,10 @@ export default function LoginPage() {
                   </div>
 
                   <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                    <FiHelpCircle className="shrink-0 text-orange-500" size={16} />
-                    <div className="min-w-0 flex-1">
+                    <FiHelpCircle className="text-orange-500 shrink-0" size={16} />
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-black text-slate-950">Ainda não tem conta?</p>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                      <p className="mt-0.5 text-xs font-semibold text-slate-500"> 
                         Crie sua loja e comece seu teste grátis com recursos Premium.
                       </p>
                     </div>
@@ -976,7 +961,7 @@ export default function LoginPage() {
 
                 <motion.div
                   variants={fadeUp}
-                  className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-5 text-xs font-bold text-slate-500"
+                  className="flex flex-wrap items-center justify-between gap-2 pt-5 mt-6 text-xs font-bold border-t border-slate-100 text-slate-500"
                 >
                   <span>PratoBy Cloud · {APP_ENV}</span>
                   <span className="inline-flex items-center gap-1">
@@ -990,7 +975,7 @@ export default function LoginPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.55, duration: 0.4 }}
-              className="mt-5 flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-slate-500"
+              className="flex flex-wrap items-center justify-center gap-4 mt-5 text-xs font-bold text-slate-500"
             >
               <Link to="/" className="transition hover:text-slate-950">
                 Início

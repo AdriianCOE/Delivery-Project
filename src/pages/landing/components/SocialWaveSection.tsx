@@ -3,7 +3,7 @@ import { FiArrowUpRight, FiCheckCircle } from 'react-icons/fi'
 import { RiInstagramFill, RiWhatsappFill } from 'react-icons/ri'
 import type { IconType } from 'react-icons'
 
-const WHATSAPP_URL = `https://wa.me/5579999786984?text=${encodeURIComponent(
+const WHATSAPP_URL = `https://wa.me/5579998681594?text=${encodeURIComponent(
   'Olá! Vim pelo site do PratoBy e quero saber mais.'
 )}`
 

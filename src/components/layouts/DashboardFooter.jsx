@@ -13,7 +13,7 @@ import { hasPlanFeature } from '../../utils/planCatalog'
 
 const DEFAULT_THEME = '#f97316'
 const PRATOBY_URL = 'https://pratoby.com'
-const SUPPORT_WHATSAPP = '5579999786984'
+const SUPPORT_WHATSAPP = '5579998681594'
 
 function firstValid(...values) {
   return values.find(

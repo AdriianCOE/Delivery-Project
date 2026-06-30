@@ -118,7 +118,7 @@ function getBillingPlanPresentation(planId) {
   }
 }
 
-const SUPPORT_WHATSAPP = '5579999786984'
+const SUPPORT_WHATSAPP = '5579998681594'
 const DEFAULT_SUBSCRIPTION_ACTIONS = {
   canChangePlan: false,
   canCancel: false,

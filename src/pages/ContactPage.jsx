@@ -31,7 +31,7 @@ import {
 import MarketingLayout from '../pages/MarketingLayout'
 
 const CONTACT_EMAIL = 'contato@pratoby.com'
-const CONTACT_WHATSAPP = '5579999786984'
+const CONTACT_WHATSAPP = '5579998681594'
 
 const subjectOptions = [
   { label: 'Quero conhecer o PratoBy', value: 'Quero conhecer o PratoBy' },

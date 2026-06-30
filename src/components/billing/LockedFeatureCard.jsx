@@ -23,15 +23,15 @@ export default function LockedFeatureCard({
   const planName = getPlanConfig(requiredPlanId).name
 
   return (
-    <div className={`rounded-2xl border border-orange-100 bg-orange-50/80 p-4 text-orange-950 shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100 ${className}`}>
+    <div className={`rounded-2xl border border-orange-100 bg-white p-4 text-slate-950 shadow-sm ring-1 ring-orange-50 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100 dark:ring-0 ${className}`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[#f97316] shadow-sm dark:bg-zinc-950">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 text-[#f97316] shadow-sm ring-1 ring-orange-100 dark:bg-zinc-950 dark:ring-orange-500/20">
             <FiLock size={18} />
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-black">{title || message.title}</p>
-            <p className="mt-1 text-xs font-bold leading-5 text-orange-900/80 dark:text-orange-100/80">
+            <p className="text-sm font-black text-slate-950 dark:text-orange-100">{title || message.title}</p>
+            <p className="mt-1 text-xs font-bold leading-5 text-slate-600 dark:text-orange-100/80">
               {description || message.text}
             </p>
             {requiredPlanId ? (

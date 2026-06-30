@@ -1595,7 +1595,7 @@ export default function DashboardLayout() {
       navigate(cmd.path)
     }
     } else if (cmd.action === 'SUPPORT') {
-      window.open('https://wa.me/5579999786984?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy.', '_blank')
+      window.open('https://wa.me/5579998681594?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy.', '_blank')
     } else if (cmd.action === 'LOGOUT') {
       handleLogout()
     }
@@ -2090,7 +2090,7 @@ export default function DashboardLayout() {
                   </button>
                 )}
                 <a
-                  href="https://wa.me/5579999786984?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy."
+                  href="https://wa.me/5579998681594?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20do%20PratoBy."
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setSpeedDialOpen(false)}
