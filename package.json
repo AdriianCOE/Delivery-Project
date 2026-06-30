@@ -4,6 +4,12 @@
   "version": "0.0.8",
   "type": "module",
   "scripts": {
+    "ai:mkdir": "node -e \"require('fs').mkdirSync('.ai/repomix',{recursive:true})\"",
+    "ai:pack:store": "npm run ai:mkdir && repomix src/pages/store src/contexts src/services src/utils functions/index.js functions/merchantOrder.js firestore.rules -o .ai/repomix/store.md",
+    "ai:pack:menu": "npm run ai:mkdir && repomix src/pages/merchant/menu src/services/menuManagement.js functions/menuManagement.js src/utils/planCatalog.js firestore.rules -o .ai/repomix/menu.md",
+    "ai:pack:functions": "npm run ai:mkdir && repomix functions firestore.rules storage.rules firebase.json package.json -o .ai/repomix/functions.md",
+    "ai:pack:ui": "npm run ai:mkdir && repomix src/components src/pages/landing src/index.css tailwind.config.js -o .ai/repomix/ui.md",
+    "ai:pack:docs": "npm run ai:mkdir && repomix README.md AGENTS.md docs .agents -o .ai/repomix/docs.md",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
@@ -12,6 +18,7 @@
     "test:e2e": "node scripts/run-playwright.mjs",
     "test:e2e:ui": "node scripts/run-playwright.mjs --ui",
     "test:e2e:headed": "node scripts/run-playwright.mjs --headed"
+    
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
