@@ -47,7 +47,7 @@ export function PricingSection() {
           </div>
 
           <h2 className="text-4xl lg:text-5xl font-black text-gray-900 mb-4 leading-tight">
-            Quanto custa ter seu
+            Quanto custa ter seu{' '}
             <br />
             <span className="text-orange-500">próprio delivery?</span>
           </h2>

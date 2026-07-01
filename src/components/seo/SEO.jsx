@@ -291,46 +291,54 @@ export default function SEO({
 
   useEffect(() => {
     const dedupeRouteSeoTags = () => {
-      dedupeHeadElements(
-        'meta[name="description"]',
-        (node) => node.getAttribute('content') === finalDescription
-      )
-      dedupeHeadElements(
-        'meta[name="robots"]',
-        (node) => node.getAttribute('content') === robotsContent
-      )
-      dedupeHeadElements(
-        'meta[name="googlebot"]',
-        (node) => node.getAttribute('content') === robotsContent
-      )
-      dedupeHeadElements(
-        'meta[name="theme-color"]',
-        (node) => node.getAttribute('content') === finalThemeColor
-      )
-      dedupeHeadElements(
-        'link[rel="canonical"]',
-        (node) => node.getAttribute('href') === canonicalUrl
-      )
-      dedupeHeadElements(
-        'meta[property="og:url"]',
-        (node) => node.getAttribute('content') === canonicalUrl
-      )
-      dedupeHeadElements(
-        'meta[property="og:title"]',
-        (node) => node.getAttribute('content') === finalTitle
-      )
-      dedupeHeadElements(
-        'meta[property="og:description"]',
-        (node) => node.getAttribute('content') === finalDescription
-      )
-      dedupeHeadElements(
-        'meta[name="twitter:title"]',
-        (node) => node.getAttribute('content') === finalTitle
-      )
-      dedupeHeadElements(
-        'meta[name="twitter:description"]',
-        (node) => node.getAttribute('content') === finalDescription
-      )
+      const contentTags = [
+        ['meta[name="description"]', finalDescription],
+        ['meta[name="robots"]', robotsContent],
+        ['meta[name="googlebot"]', robotsContent],
+        ['meta[name="theme-color"]', finalThemeColor],
+        ['meta[name="application-name"]', SITE_NAME],
+        ['meta[property="og:locale"]', 'pt_BR'],
+        ['meta[property="og:type"]', finalType],
+        ['meta[property="og:site_name"]', SITE_NAME],
+        ['meta[property="og:url"]', canonicalUrl],
+        ['meta[property="og:title"]', finalTitle],
+        ['meta[property="og:description"]', finalDescription],
+        ['meta[property="og:image"]', absoluteImage],
+        ['meta[property="og:image:url"]', absoluteImage],
+        ['meta[property="og:image:secure_url"]', absoluteImage],
+        ['meta[property="og:image:type"]', imageType],
+        ['meta[property="og:image:width"]', String(SOCIAL_IMAGE_WIDTH)],
+        ['meta[property="og:image:height"]', String(SOCIAL_IMAGE_HEIGHT)],
+        ['meta[property="og:image:alt"]', finalImageAlt],
+        ['meta[name="twitter:card"]', 'summary_large_image'],
+        ['meta[name="twitter:site"]', TWITTER_HANDLE],
+        ['meta[name="twitter:creator"]', TWITTER_HANDLE],
+        ['meta[name="twitter:title"]', finalTitle],
+        ['meta[name="twitter:description"]', finalDescription],
+        ['meta[name="twitter:image"]', absoluteImage],
+        ['meta[name="twitter:image:alt"]', finalImageAlt],
+      ]
+
+      contentTags.forEach(([selector, content]) => {
+        dedupeHeadElements(
+          selector,
+          (node) => node.getAttribute('content') === content
+        )
+      })
+
+      const hrefTags = [
+        ['link[rel="canonical"]', canonicalUrl],
+        ['link[rel="icon"]', faviconUrl],
+        ['link[rel="shortcut icon"]', faviconUrl],
+        ['link[rel="apple-touch-icon"]', appleTouchIconUrl],
+      ]
+
+      hrefTags.forEach(([selector, href]) => {
+        dedupeHeadElements(
+          selector,
+          (node) => node.getAttribute('href') === href
+        )
+      })
     }
 
     dedupeRouteSeoTags()
@@ -341,7 +349,19 @@ export default function SEO({
         window.cancelAnimationFrame?.(frame)
       }
     }
-  }, [canonicalUrl, finalDescription, finalThemeColor, finalTitle, robotsContent])
+  }, [
+    absoluteImage,
+    appleTouchIconUrl,
+    canonicalUrl,
+    faviconUrl,
+    finalDescription,
+    finalImageAlt,
+    finalThemeColor,
+    finalTitle,
+    finalType,
+    imageType,
+    robotsContent,
+  ])
 
   return (
     <Helmet prioritizeSeoTags>

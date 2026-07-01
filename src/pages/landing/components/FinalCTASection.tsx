@@ -1,68 +1,65 @@
-import { motion } from 'motion/react';
 import { Link } from 'react-router-dom'
-import { FiArrowRight as ArrowRight, FiMessageCircle as MessageCircle } from 'react-icons/fi';
+import {
+  FiArrowRight as ArrowRight,
+  FiCheckCircle as CheckCircle,
+  FiMessageCircle as MessageCircle,
+} from 'react-icons/fi'
 
 export function FinalCTASection() {
   return (
-    <section className="py-16 lg:py-24 bg-gradient-to-br from-orange-500 to-orange-600 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
+    <section className="relative isolate overflow-hidden bg-[#0f172a] py-20 text-white lg:py-28">
+      <div
+        aria-hidden="true"
+        className="absolute -right-32 -top-40 h-[30rem] w-[30rem] rounded-full border-[5rem] border-orange-400/10"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute -bottom-52 -left-36 h-[32rem] w-[32rem] rounded-full bg-orange-500/15 blur-3xl"
+      />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl lg:text-5xl font-black text-white mb-6">
-            Pronto para vender pelo seu próprio delivery?
-          </h2>
-          <p className="text-lg lg:text-xl text-white/90 mb-10 max-w-2xl mx-auto">
-            Crie sua loja, compartilhe seu link e comece a receber pedidos com uma experiência profissional.
-          </p>
+      <div className="relative mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
+        <p className="text-sm font-black uppercase tracking-[0.16em] text-orange-300">
+          Seu próximo pedido pode vir pelo seu link
+        </p>
+        <h2 className="mx-auto mt-5 max-w-4xl text-3xl font-black leading-[1.03] tracking-[-0.04em] sm:text-5xl lg:text-6xl">
+          Venda direto. Fortaleça sua marca. Fique com a sua margem.
+        </h2>
+        <p className="mx-auto mt-6 max-w-2xl text-base font-medium leading-7 text-white/70 sm:text-lg">
+          Crie sua loja, compartilhe seu cardápio e concentre os pedidos em uma operação simples.
+        </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/cadastro" className="px-8 py-4 bg-white text-orange-500 rounded-lg font-bold hover:bg-gray-50 transition-all hover:shadow-xl inline-flex items-center justify-center gap-2">
-              Criar minha loja
-              <ArrowRight size={20} />
-            </Link>
-            <Link to="/contato" className="px-8 py-4 bg-orange-600/50 backdrop-blur-sm text-white border-2 border-white/30 rounded-lg font-semibold hover:bg-orange-600/70 transition-all inline-flex items-center justify-center gap-2">
-              <MessageCircle size={20} />
-              Falar com o PratoBy
-            </Link>
-          </div>
+        <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link
+            to="/cadastro"
+            className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-8 text-base font-black text-white shadow-[0_18px_40px_rgba(249,115,22,.28)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#ea580c] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]"
+          >
+            Criar minha loja grátis
+            <ArrowRight
+              size={19}
+              className="transition-transform group-hover:translate-x-1"
+              aria-hidden="true"
+            />
+          </Link>
+          <Link
+            to="/contato"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/[0.07] px-8 text-base font-black text-white transition duration-200 hover:-translate-y-0.5 hover:bg-white/[0.12] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]"
+          >
+            <MessageCircle size={18} aria-hidden="true" />
+            Falar com o PratoBy
+          </Link>
+        </div>
 
-          {/* Trust badges */}
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-white/80 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center">
-                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <span>Sem taxa por pedido</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center">
-                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <span>Configuração em minutos</span>
-            </div>
-          </div>
-        </motion.div>
+        <ul className="mt-9 flex flex-col items-center justify-center gap-3 text-sm font-bold text-white/70 sm:flex-row sm:gap-7">
+          <li className="flex items-center gap-2">
+            <CheckCircle size={16} className="text-orange-300" aria-hidden="true" />
+            14 dias grátis
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle size={16} className="text-orange-300" aria-hidden="true" />
+            Zero comissão por pedido
+          </li>
+        </ul>
       </div>
     </section>
-  );
+  )
 }

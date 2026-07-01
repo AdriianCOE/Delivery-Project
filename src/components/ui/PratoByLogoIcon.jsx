@@ -49,6 +49,8 @@ export default function PratoByLogoIcon({
       <img
         src="/icons/pratoby-mark-96.png"
         alt={alt}
+        width="96"
+        height="96"
         decoding="async"
         className={cx(
           classes.mark,

@@ -184,8 +184,8 @@ function LandingDeferredSections() {
       <ComparisonSection />
       <PricingSection />
       <FAQSection />
-      <SocialWaveSection />
       <FinalCTASection />
+      <SocialWaveSection />
     </Suspense>
   )
 }
@@ -217,10 +217,10 @@ export default function LandingPage() {
     <MarketingLayout>
       <SEO {...MARKETING_SEO.home} structuredData={homeJsonLd} />
 
-      <main className="bg-white text-gray-900">
+      <div className="bg-white text-gray-900">
         <HeroSection />
         <LandingDeferredSections />
-      </main>
+      </div>
     </MarketingLayout>
   )
 }

@@ -121,7 +121,15 @@ function DashboardScreen() {
         {/* User footer */}
         <div className="border-t border-white/[0.07] p-2">
           <div className="flex items-center gap-2">
-            <img src={CAPIVARA_LOGO} alt="Pedro" className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/10" />
+            <img
+              src={CAPIVARA_LOGO}
+              alt="Pedro Alcantara"
+              width={24}
+              height={24}
+              loading="lazy"
+              decoding="async"
+              className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/10"
+            />
             <div className="min-w-0 flex-1">
               <p className="text-[8px] font-black text-white truncate">Pedro Alcantara</p>
               <p className="text-[7px] text-slate-500 truncate">capivara@pratoby.com</p>
@@ -155,7 +163,15 @@ function DashboardScreen() {
               <div className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#f97316] ring-1 ring-[#0b1120]" />
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2 py-1 ring-1 ring-white/10">
-              <img src={CAPIVARA_LOGO} alt="Perfil" className="h-5 w-5 rounded-md object-cover" />
+              <img
+                src={CAPIVARA_LOGO}
+                alt=""
+                width={20}
+                height={20}
+                loading="lazy"
+                decoding="async"
+                className="h-5 w-5 rounded-md object-cover"
+              />
               <span className="text-[8px] font-black text-white">Perfil</span>
             </div>
           </div>
@@ -185,7 +201,15 @@ function DashboardScreen() {
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] p-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <img src={CAPIVARA_LOGO} alt="Logo" className="h-9 w-9 shrink-0 rounded-xl bg-white object-cover" />
+                <img
+                  src={CAPIVARA_LOGO}
+                  alt="Capivara's Lanches"
+                  width={36}
+                  height={36}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-9 w-9 shrink-0 rounded-xl bg-white object-cover"
+                />
                 <div>
                   <p className="text-[8px] font-semibold text-slate-500">Olá, capivara</p>
                   <p className="text-sm font-black text-white leading-tight">Capivara&apos;s Lanches</p>

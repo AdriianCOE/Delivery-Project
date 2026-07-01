@@ -93,9 +93,8 @@ export function ComparisonSection() {
           </div>
 
           <h2 className="mt-5 text-3xl font-black leading-tight tracking-tight text-[#111827] sm:text-5xl">
-            {/* Cada span com 'block' força uma quebra de linha */}
-            <span className="block">WhatsApp organiza pouco</span>
-            <span className="block">Apps cobram muito</span>
+            <span className="block">WhatsApp organiza pouco</span>{' '}
+            <span className="block">Apps cobram muito</span>{' '}
             <span className="block text-[#f97316]">PratoBy é o ideal</span>
           </h2>
 
